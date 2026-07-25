@@ -9,6 +9,19 @@ interface CreateSiteConnectionResponse {
       id: string;
       name: string;
       siteUrl: string;
+      status: 'connected' | 'revoked';
+      tokenPreview: string;
+    };
+    apiToken: string;
+  };
+}
+
+interface RegenerateTokenResponse {
+  success: boolean;
+  data: {
+    site: {
+      id: string;
+      status: 'connected' | 'revoked';
       tokenPreview: string;
     };
     apiToken: string;
@@ -176,6 +189,96 @@ describe('site connection routes', () => {
             featuredImageId: '501'
           }
         ]
+      }
+    });
+  });
+
+  it('regenerates a site token and rejects the previous token', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/token/regenerate`
+    });
+    const regenerated = response.json<RegenerateTokenResponse>();
+
+    expect(response.statusCode).toBe(200);
+    expect(regenerated).toMatchObject({
+      success: true,
+      data: {
+        site: {
+          id: body.data.site.id,
+          status: 'connected'
+        }
+      }
+    });
+    expect(regenerated.data.apiToken).toMatch(/^rw_[a-f0-9]{32}$/);
+    expect(regenerated.data.apiToken).not.toBe(body.data.apiToken);
+    expect(regenerated.data.site.tokenPreview).toBe(`${regenerated.data.apiToken.slice(0, 8)}...`);
+
+    const oldTokenSyncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [],
+        media: []
+      }
+    });
+
+    expect(oldTokenSyncResponse.statusCode).toBe(401);
+
+    const newTokenSyncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${regenerated.data.apiToken}`
+      },
+      payload: {
+        articles: [],
+        media: []
+      }
+    });
+
+    expect(newTokenSyncResponse.statusCode).toBe(200);
+  });
+
+  it('revokes a site token and rejects future sync calls', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/token/revoke`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        site: {
+          id: body.data.site.id,
+          status: 'revoked'
+        }
+      }
+    });
+
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [],
+        media: []
+      }
+    });
+
+    expect(syncResponse.statusCode).toBe(401);
+    expect(syncResponse.json()).toMatchObject({
+      success: false,
+      error: {
+        code: 'SITE_TOKEN_INVALID'
       }
     });
   });

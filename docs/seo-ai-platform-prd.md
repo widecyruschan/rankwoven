@@ -581,6 +581,8 @@ cancelled
 | `POST` | `/api/v1/site-connections` | 創建站點連接 |
 | `GET` | `/api/v1/site-connections` | 獲取站點列表 |
 | `GET` | `/api/v1/site-connections/:siteId` | 獲取站點詳情 |
+| `POST` | `/api/v1/site-connections/:siteId/token/regenerate` | 重新生成站點 API Token，舊 Token 立即失效 |
+| `POST` | `/api/v1/site-connections/:siteId/token/revoke` | 吊銷站點 API Token，站點狀態改為 `revoked` |
 | `POST` | `/api/v1/site-connections/:siteId/sync` | 接收插件推送的文章與媒體同步資料 |
 | `GET` | `/api/v1/site-connections/:siteId/articles` | 帶 Bearer Token 獲取文章列表 |
 | `GET` | `/api/v1/articles/:articleId` | 獲取文章詳情 |
@@ -1208,9 +1210,9 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 為站點 Token 增加重新生成、吊銷和最後使用時間記錄。
-2. 把客戶後台 `/app/sites` 接入 `GET /api/v1/site-connections`。
-3. 把客戶後台 `/app/article-sync` 接入同步狀態和最近同步結果。
+1. 把客戶後台 `/app/article-sync` 接入同步狀態和最近同步結果。
+2. 在 WordPress 插件中支援 Token 重新連接提示，讓吊銷或重生 Token 後可重新保存新 Token。
+3. 為站點 Token 增加最後使用時間記錄，方便後台判斷插件是否仍在同步。
 4. 為 WordPress 插件補充分頁同步，避免每次只同步第一批 100 篇文章和 100 個圖片媒體。
 5. 增加增量同步參數，例如 `updatedAfter` 和單篇文章手動刷新。
 6. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。

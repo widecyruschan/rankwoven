@@ -51,6 +51,7 @@ export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
+export type SiteConnectionStatus = 'connected' | 'revoked';
 
 export interface SiteConnection {
   id: string;
@@ -59,7 +60,7 @@ export interface SiteConnection {
   siteUrl: string;
   cmsVersion?: string;
   pluginVersion?: string;
-  status: 'connected';
+  status: SiteConnectionStatus;
   createdAt: string;
   lastSyncAt?: string;
   lastSyncStats?: {
@@ -82,6 +83,8 @@ export interface SiteConnectionRepository {
   }>;
   list(): Promise<SiteConnection[]>;
   find(siteId: string): Promise<SiteConnection | undefined>;
+  regenerateToken(siteId: string): Promise<{ site: SiteConnection; apiToken: string } | undefined>;
+  revokeToken(siteId: string): Promise<SiteConnection | undefined>;
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
   saveSync(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
   listArticles(siteId: string): Promise<SyncedArticle[]>;
@@ -102,7 +105,7 @@ CREATE TABLE IF NOT EXISTS site_connections (
   plugin_version varchar(40),
   api_token_hash text NOT NULL UNIQUE,
   token_preview varchar(16) NOT NULL,
-  status text NOT NULL DEFAULT 'connected' CHECK (status IN ('connected')),
+  status text NOT NULL DEFAULT 'connected' CHECK (status IN ('connected', 'revoked')),
   created_at timestamptz NOT NULL,
   last_sync_at timestamptz,
   last_sync_stats jsonb
@@ -110,6 +113,13 @@ CREATE TABLE IF NOT EXISTS site_connections (
 
 CREATE INDEX IF NOT EXISTS idx_site_connections_platform
   ON site_connections(platform);
+
+ALTER TABLE site_connections
+  DROP CONSTRAINT IF EXISTS site_connections_status_check;
+
+ALTER TABLE site_connections
+  ADD CONSTRAINT site_connections_status_check
+  CHECK (status IN ('connected', 'revoked'));
 
 CREATE TABLE IF NOT EXISTS sync_runs (
   id uuid PRIMARY KEY,
@@ -301,8 +311,37 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       const site = sites.get(siteId);
       return site ? toPublicConnection(site) : undefined;
     },
+    async regenerateToken(siteId) {
+      const site = sites.get(siteId);
+
+      if (!site) {
+        return undefined;
+      }
+
+      const apiToken = generateSiteToken();
+      site.apiToken = apiToken;
+      site.tokenPreview = getTokenPreview(apiToken);
+      site.status = 'connected';
+
+      return {
+        site: toPublicConnection(site),
+        apiToken
+      };
+    },
+    async revokeToken(siteId) {
+      const site = sites.get(siteId);
+
+      if (!site) {
+        return undefined;
+      }
+
+      site.status = 'revoked';
+
+      return toPublicConnection(site);
+    },
     async verifyToken(siteId, apiToken) {
-      return sites.get(siteId)?.apiToken === apiToken;
+      const site = sites.get(siteId);
+      return site?.status === 'connected' && site.apiToken === apiToken;
     },
     async saveSync(siteId, payload) {
       const site = sites.get(siteId);
@@ -435,6 +474,48 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
   }
 
+  async regenerateToken(siteId: string) {
+    await this.ensureSchema();
+
+    const apiToken = generateSiteToken();
+    const result = await this.pool.query(
+      `
+        UPDATE site_connections
+        SET api_token_hash = $2,
+            token_preview = $3,
+            status = 'connected'
+        WHERE id = $1
+        RETURNING *
+      `,
+      [siteId, hashSiteToken(apiToken), getTokenPreview(apiToken)]
+    );
+
+    if (!result.rows[0]) {
+      return undefined;
+    }
+
+    return {
+      site: mapSiteRow(result.rows[0]),
+      apiToken
+    };
+  }
+
+  async revokeToken(siteId: string) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        UPDATE site_connections
+        SET status = 'revoked'
+        WHERE id = $1
+        RETURNING *
+      `,
+      [siteId]
+    );
+
+    return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
+  }
+
   async verifyToken(siteId: string, apiToken: string) {
     await this.ensureSchema();
 
@@ -444,6 +525,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         FROM site_connections
         WHERE id = $1
           AND api_token_hash = $2
+          AND status = 'connected'
         LIMIT 1
       `,
       [siteId, hashSiteToken(apiToken)]
@@ -774,6 +856,56 @@ export function registerSiteConnectionRoutes(
     return {
       success: true,
       message: '操作成功',
+      data: {
+        site
+      }
+    };
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/token/regenerate', async (request, reply) => {
+    const result = await repository.regenerateToken(request.params.siteId);
+
+    if (!result) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '站點 Token 已重新生成',
+      data: result
+    };
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/token/revoke', async (request, reply) => {
+    const site = await repository.revokeToken(request.params.siteId);
+
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '站點 Token 已吊銷',
       data: {
         site
       }

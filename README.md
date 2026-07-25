@@ -217,10 +217,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections`：建立 WordPress、Joomla 或 OpenCart 站點連接，MVP 先由 WordPress 插件使用。
 - `GET /api/v1/site-connections`：查看已連接站點列表，不返回完整 Token。
 - `GET /api/v1/site-connections/:siteId`：查看單個站點連接詳情。
+- `POST /api/v1/site-connections/:siteId/token/regenerate`：重新生成站點 API Token，只在回應中返回一次完整 Token，舊 Token 立即失效。
+- `POST /api/v1/site-connections/:siteId/token/revoke`：吊銷站點 API Token，站點狀態改為 `revoked`，插件同步接口不再接受該站點 Token。
 - `POST /api/v1/site-connections/:siteId/sync`：由插件帶 Bearer Token 推送文章與媒體同步資料。
 - `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
 
-站點連接、Token Hash、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。
+站點連接、Token Hash、Token Preview、Token 狀態、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。
 
 詳細產品 API 規劃詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
 
@@ -498,3 +500,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/src/server.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/package.json`、`package-lock.json`、`README.md` 和 `docs/seo-ai-platform-prd.md`；新增 `apps/api/tests/siteConnections.postgres.test.ts`。
 - 驗證結果：`npm run lint`、`npm run test`、`npm run build` 均通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；Docker API smoke 測試確認 `localhost:3011` 可將站點、文章、媒體與 sync run 寫入 PostgreSQL。
 - 下一步行動清單：為站點 Token 增加重新生成與吊銷 API；將客戶後台站點列表接入 API；將文章同步頁接入最近同步結果；補充分頁同步與增量同步；開始 SEO 審計規則模型。
+
+### 2026-07-26：站點 Token 管理與客戶後台站點 API 接入
+
+- 會話的主要目的：為站點連接增加 Token 重新生成與吊銷 API，並將客戶後台 `/app/sites` 從靜態原型改為讀取真實 API。
+- 完成的主要任務：新增站點 Token 重新生成和吊銷 Repository 方法；新增 `POST /api/v1/site-connections/:siteId/token/regenerate` 和 `POST /api/v1/site-connections/:siteId/token/revoke`；讓 Token 驗證只接受 `connected` 站點；將 PostgreSQL `site_connections.status` 擴展為 `connected` / `revoked`；新增前端站點連接 API helper；更新 `/app/sites` 的載入、錯誤、空狀態和真實站點列表映射。
+- 關鍵決策和解決方案：MVP 尚未接入用戶認證與租戶權限，因此 Token 管理接口暫沿用現有後台原型直接調用模式；完整 Token 只在創建或重新生成時返回一次；吊銷後同步接口維持 `SITE_TOKEN_INVALID`，避免插件繼續推送資料。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL、pg、Zod、Vitest、Vue 3、Vue I18n、Vite。
+- 新增或修改文件：新增 `apps/web/src/api/siteConnections.ts`；修改 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/views/SitesView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；Docker Desktop 已重建 API/Web 容器，`localhost:3011` smoke 測試確認舊 Token 失效、新 Token 可同步、吊銷後同步被拒絕。
+- 下一步行動清單：把客戶後台 `/app/article-sync` 接入最近同步結果；在 WordPress 插件中支援 Token 重新連接提示；補充分頁同步與增量同步；建立第一批 SEO 審計規則模型。

@@ -1,41 +1,72 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getSiteConnections, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
-const sites = computed(() => [
-  {
-    name: 'rankwoven.com',
-    platform: 'WordPress',
-    health: '92',
-    articles: '486',
-    lastSync: '10:42',
-    status: t('sites.statusConnected')
-  },
-  {
-    name: 'docs.rankwoven.com',
-    platform: 'Joomla',
-    health: '81',
-    articles: '312',
-    lastSync: '09:18',
-    status: t('sites.statusWarning')
-  },
-  {
-    name: 'shop.rankwoven.com',
-    platform: 'OpenCart',
-    health: '76',
-    articles: '486',
-    lastSync: '08:55',
-    status: t('sites.statusConnected')
-  }
-]);
+const apiSites = ref<SiteConnection[]>([]);
+const isLoading = ref(false);
+const loadError = ref('');
+
+const platformLabels: Record<CmsPlatform, string> = {
+  wordpress: 'WordPress',
+  joomla: 'Joomla',
+  opencart: 'OpenCart'
+};
+
+const sites = computed(() =>
+  apiSites.value.map((site) => ({
+    id: site.id,
+    name: site.name,
+    platform: platformLabels[site.platform],
+    health: site.status === 'connected' ? t('sites.healthReady') : t('sites.healthRevoked'),
+    articles: String(site.lastSyncStats?.articlesReceived ?? 0),
+    lastSync: formatLastSync(site.lastSyncAt),
+    status: site.status === 'connected' ? t('sites.statusConnected') : t('sites.statusRevoked')
+  }))
+);
 
 const connectionSteps = computed(() => [
   t('sites.connectStepOne'),
   t('sites.connectStepTwo'),
   t('sites.connectStepThree')
 ]);
+
+function formatLastSync(lastSyncAt?: string) {
+  if (!lastSyncAt) {
+    return '--';
+  }
+
+  const date = new Date(lastSyncAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(date);
+}
+
+async function loadSites() {
+  isLoading.value = true;
+  loadError.value = '';
+
+  try {
+    const result = await getSiteConnections();
+    apiSites.value = result.sites;
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : t('sites.loadFailed');
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadSites();
+});
 </script>
 
 <template>
@@ -45,7 +76,9 @@ const connectionSteps = computed(() => [
         <h2>{{ t('sites.title') }}</h2>
         <p>{{ t('sites.body') }}</p>
       </div>
-      <button class="primary-button" type="button">{{ t('sites.primaryAction') }}</button>
+      <button class="primary-button" type="button" :disabled="isLoading" @click="loadSites">
+        {{ isLoading ? t('sites.loading') : t('sites.refresh') }}
+      </button>
     </div>
 
     <div class="prototype-grid">
@@ -59,14 +92,40 @@ const connectionSteps = computed(() => [
             <span>{{ t('sites.lastSync') }}</span>
             <span>{{ t('cmsAdapters.status') }}</span>
           </div>
-          <div v-for="site in sites" :key="site.name" class="data-row" role="row">
-            <strong>{{ site.name }}</strong>
-            <span>{{ site.platform }}</span>
-            <span>{{ site.health }}</span>
-            <span>{{ site.articles }}</span>
-            <span>{{ site.lastSync }}</span>
-            <span class="status-pill">{{ site.status }}</span>
+          <div v-if="isLoading" class="data-row" role="row">
+            <strong>{{ t('sites.loading') }}</strong>
+            <span>--</span>
+            <span>--</span>
+            <span>--</span>
+            <span>--</span>
+            <span class="status-pill">{{ t('sites.statusLoading') }}</span>
           </div>
+          <div v-else-if="loadError" class="data-row" role="row">
+            <strong>{{ t('sites.loadFailed') }}</strong>
+            <span>--</span>
+            <span>--</span>
+            <span>--</span>
+            <span>--</span>
+            <span class="status-pill">{{ loadError }}</span>
+          </div>
+          <div v-else-if="sites.length === 0" class="data-row" role="row">
+            <strong>{{ t('sites.empty') }}</strong>
+            <span>--</span>
+            <span>--</span>
+            <span>--</span>
+            <span>--</span>
+            <span class="status-pill">{{ t('sites.statusEmpty') }}</span>
+          </div>
+          <template v-else>
+            <div v-for="site in sites" :key="site.id" class="data-row" role="row">
+              <strong>{{ site.name }}</strong>
+              <span>{{ site.platform }}</span>
+              <span>{{ site.health }}</span>
+              <span>{{ site.articles }}</span>
+              <span>{{ site.lastSync }}</span>
+              <span class="status-pill">{{ site.status }}</span>
+            </div>
+          </template>
         </div>
       </section>
 

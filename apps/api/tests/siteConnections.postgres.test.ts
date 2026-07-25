@@ -16,6 +16,17 @@ interface CreateSiteConnectionResponse {
   };
 }
 
+interface RegenerateTokenResponse {
+  data: {
+    site: {
+      id: string;
+      status: 'connected' | 'revoked';
+      tokenPreview: string;
+    };
+    apiToken: string;
+  };
+}
+
 describePostgres('PostgreSQL site connection repository', () => {
   it('persists site connections, token hash, sync runs, articles, and media', async () => {
     const databaseUrl = postgresTestDatabaseUrl as string;
@@ -139,6 +150,78 @@ describePostgres('PostgreSQL site connection repository', () => {
         sync_run_count: 2
       });
       expect(persisted.rows[0].api_token_hash).not.toBe(createBody.data.apiToken);
+
+      const regenerateResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/token/regenerate`
+      });
+      const regenerateBody = regenerateResponse.json<RegenerateTokenResponse>();
+
+      expect(regenerateResponse.statusCode).toBe(200);
+      expect(regenerateBody.data.site).toMatchObject({
+        id: siteId,
+        status: 'connected',
+        tokenPreview: `${regenerateBody.data.apiToken.slice(0, 8)}...`
+      });
+      expect(regenerateBody.data.apiToken).not.toBe(createBody.data.apiToken);
+
+      const oldTokenSyncResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/sync`,
+        headers: {
+          authorization: `Bearer ${createBody.data.apiToken}`
+        },
+        payload: {
+          articles: [],
+          media: []
+        }
+      });
+
+      expect(oldTokenSyncResponse.statusCode).toBe(401);
+
+      const revokeResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/token/revoke`
+      });
+
+      expect(revokeResponse.statusCode).toBe(200);
+      expect(revokeResponse.json()).toMatchObject({
+        data: {
+          site: {
+            id: siteId,
+            status: 'revoked'
+          }
+        }
+      });
+
+      const revokedTokenSyncResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/sync`,
+        headers: {
+          authorization: `Bearer ${regenerateBody.data.apiToken}`
+        },
+        payload: {
+          articles: [],
+          media: []
+        }
+      });
+
+      expect(revokedTokenSyncResponse.statusCode).toBe(401);
+
+      const tokenStatus = await pool.query(
+        `
+          SELECT status, token_preview, api_token_hash
+          FROM site_connections
+          WHERE id = $1
+        `,
+        [siteId]
+      );
+
+      expect(tokenStatus.rows[0]).toMatchObject({
+        status: 'revoked',
+        token_preview: `${regenerateBody.data.apiToken.slice(0, 8)}...`
+      });
+      expect(tokenStatus.rows[0].api_token_hash).not.toBe(regenerateBody.data.apiToken);
     } finally {
       if (siteId) {
         await pool.query('DELETE FROM site_connections WHERE id = $1', [siteId]);
