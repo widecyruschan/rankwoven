@@ -827,7 +827,124 @@ OpenCart 擴展要特別限制可修改欄位，避免 SEO 任務誤改商品價
 - `/login`：登入。
 - `/sites`：登入後站點工作台。
 
-## 12. MVP 開發步驟
+## 12. AI 與圖片服務商建議
+
+本平台不應把業務邏輯直接綁死在單一模型 API 上。MVP 可以先接入一個主供應商和一個備援供應商，但後端設計必須保留 `TextGenerationProvider`、`EmbeddingProvider`、`ImageGenerationProvider`、`MediaStorageProvider` 和 `ImageOptimizationProvider` 適配器，方便後續按成本、品質、地區可用性和客戶合規要求切換。
+
+### 12.1 MVP 首選組合
+
+| 類型 | 首選服務商 | 用途 | 推薦原因 | 注意事項 |
+|---|---|---|---|---|
+| AI 文字生成 | OpenAI API | SEO 標題、Meta Description、文章大綱、文章草稿、內容改寫、結構化 JSON 輸出 | 文本品質穩定，Structured Output、工具調用、Embedding 和圖片生成可放在同一供應商體系內，首版整合成本最低 | 所有生成內容預設進入草稿和人工審核，不直接批量發佈 |
+| Embedding | OpenAI Embeddings | 文章相似度、內部連結推薦、內容聚類、重複內容檢查 | `text-embedding-3-small` 適合成本敏感的大量文章索引，`text-embedding-3-large` 適合更高精度場景 | Embedding 結果要緩存；文章內容未變更時不可重複計費 |
+| AI 備援/高品質長文 | Anthropic Claude | 長文改寫、審稿、品質評分、風險檢查 | Claude 在長上下文、語氣控制和審稿任務上適合作為高品質備選 | 不建議首版每次都調用，應用於高價套餐或人工選擇 |
+| 成本優化文字模型 | Google Gemini 或 DeepSeek | 批量標題改寫、低風險 Meta 生成、草稿初稿 | Gemini Flash/Lite 與 DeepSeek 適合成本敏感任務，可降低批量任務成本 | 需建立品質評分與抽樣審核，不合格時回退到主模型 |
+| 圖片生成 | Google Gemini 2.5 Flash Image 或 OpenAI Images | 文章特色圖、社交分享圖、工具頁示例圖 | Gemini 圖片價格透明且適合快速生成；OpenAI Images 可與文字供應商統一管理 | 每張圖片必須保存 prompt、模型、生成時間和審核狀態 |
+| 圖片商用安全備選 | Adobe Firefly Services | 品牌客戶、電商和代理商需要更強商用授權敘事時使用 | Adobe 官方定位偏企業內容生產和商用安全，適合高價套餐或企業客戶 | API 接入、速率和商務條款需在正式採購前確認 |
+| 圖片存儲 | Cloudflare R2 | 保存 AI 生成原圖、壓縮圖、站點同步媒體備份 | S3 相容，對外傳輸費友好，適合作為平台原始媒體倉庫 | 仍需搭配圖片轉換或 CDN 規則處理尺寸與格式 |
+| 圖片優化/CDN | Cloudinary | 圖片壓縮、格式轉換、裁切、響應式尺寸、媒體管理 | 圖片 API、轉換和 CDN 成熟，可快速提供 WebP/AVIF、縮圖和自動裁切 | 成本按用量和方案增加；MVP 可先只在付費套餐啟用 |
+
+### 12.2 分階段接入建議
+
+Phase 1 MVP：
+
+- 接入 OpenAI 作為 `primaryTextProvider` 和 `embeddingProvider`。
+- 接入 Google Gemini 2.5 Flash Image 或 OpenAI Images 作為 `primaryImageProvider`，二選一即可，不要同時做完整功能。
+- 使用 Cloudflare R2 保存生成圖片、原圖備份和任務產物。
+- 暫不把 OpenRouter、Replicate、Adobe Firefly 做成用戶可選項，只保留適配器設計。
+
+Phase 2 成本與品質優化：
+
+- 增加 Claude 作為高品質審稿和長文改寫供應商。
+- 增加 Gemini Flash/Lite 或 DeepSeek 作為批量低成本文本任務供應商。
+- 建立模型路由規則：按任務類型、套餐等級、語言、成本上限和失敗重試選擇模型。
+- 引入 Cloudinary 或 ImageKit 做圖片轉換、壓縮和 CDN。
+
+Phase 3 企業與多模型：
+
+- 接入 Adobe Firefly Services，服務需要商用安全、品牌治理或企業合約的客戶。
+- 接入 Replicate 作為模型實驗場，測試 Flux、Recraft、Ideogram 等不同圖像模型。
+- 評估 OpenRouter 作為模型聚合和 fallback 層，但不作為核心唯一入口，避免價格、路由和供應商可觀測性被中間層遮蔽。
+
+### 12.3 不建議第一階段作為核心依賴
+
+| 服務商 | 不建議首發核心依賴的原因 | 適合何時使用 |
+|---|---|---|
+| OpenRouter | 方便聚合多模型，但會增加模型路由、成本歸因、故障定位和資料流向審計複雜度 | Phase 3 多模型 marketplace 或內部模型評測 |
+| Replicate | 模型選擇多，適合快速試驗，但生產穩定性、延遲和成本會因模型而異 | 圖片模型 A/B Test、風格探索、非核心功能 |
+| Stability AI | 適合風格化圖片、開源模型體系和圖片編輯，但首版 SEO SaaS 不需要太多風格模型 | 需要 Stable Diffusion 生態、局部重繪、特殊風格時 |
+| Midjourney | 視覺品質高，但正式 API、自動化、審計和商業工作流可控性不適合 MVP 核心鏈路 | 人工設計參考，不放入 SaaS 自動流程 |
+
+### 12.4 Provider Adapter 設計要求
+
+後端應提供統一供應商接口，業務服務只描述任務，不直接拼接某個供應商的請求格式。
+
+建議接口：
+
+- `TextGenerationProvider`：`generateTitle`、`generateMetaDescription`、`generateOutline`、`generateArticleDraft`、`rewriteContent`、`scoreContentQuality`。
+- `EmbeddingProvider`：`embedText`、`embedArticleChunk`、`embedKeyword`。
+- `ImageGenerationProvider`：`generateFeaturedImage`、`generateSocialImage`、`editImage`。
+- `MediaStorageProvider`：`uploadOriginal`、`uploadVariant`、`getSignedUrl`、`deleteAsset`。
+- `ImageOptimizationProvider`：`resizeImage`、`convertFormat`、`compressImage`、`generateResponsiveVariants`。
+
+每次 AI 或圖片調用必須記錄：
+
+- `provider`、`model`、`operation`、`siteId`、`userId`。
+- 輸入 token、輸出 token、圖片張數、估算成本。
+- prompt 版本、語言、關鍵字、審核狀態。
+- 失敗原因、重試次數、fallback 供應商。
+- 生成圖片的原始 prompt、負面 prompt、尺寸、格式和授權備註。
+
+### 12.5 環境變量建議
+
+```text
+AI_TEXT_PROVIDER=openai
+AI_FALLBACK_TEXT_PROVIDER=anthropic
+AI_EMBEDDING_PROVIDER=openai
+AI_IMAGE_PROVIDER=google
+AI_IMAGE_FALLBACK_PROVIDER=openai
+MEDIA_STORAGE_PROVIDER=cloudflare-r2
+IMAGE_OPTIMIZATION_PROVIDER=cloudinary
+
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GOOGLE_AI_API_KEY=
+DEEPSEEK_API_KEY=
+ADOBE_FIREFLY_CLIENT_ID=
+ADOBE_FIREFLY_CLIENT_SECRET=
+CLOUDFLARE_R2_ENDPOINT=
+CLOUDFLARE_R2_BUCKET=
+CLOUDFLARE_R2_ACCESS_KEY_ID=
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+### 12.6 成本控制要求
+
+- 生成前必須顯示預估 AI 用量和圖片生成張數。
+- 每個套餐必須限制每月文本 token、Embedding token、圖片生成張數和圖片存儲容量。
+- 批量任務必須支持每日上限、單站點上限和失敗熔斷。
+- 相同文章內容、相同關鍵字、相同 prompt 版本的審計結果應可緩存。
+- 低價套餐使用成本模型；高價套餐可使用高品質模型；企業套餐才開放 Adobe Firefly 或多供應商策略。
+- 圖片生成失敗時，不應阻塞文字 SEO 優化任務；應在任務日誌中標記圖片失敗並允許重試。
+
+### 12.7 參考來源
+
+- OpenAI API Pricing：<https://platform.openai.com/docs/pricing>
+- OpenAI Embeddings：<https://platform.openai.com/docs/guides/embeddings>
+- Anthropic Claude Pricing：<https://docs.anthropic.com/en/docs/about-claude/pricing>
+- Google Gemini API Pricing：<https://ai.google.dev/gemini-api/docs/pricing>
+- DeepSeek API Pricing：<https://api-docs.deepseek.com/quick_start/pricing/>
+- Stability AI Pricing：<https://platform.stability.ai/pricing>
+- Adobe Firefly API：<https://developer.adobe.com/firefly-services/docs/firefly-api/>
+- Adobe Firefly API Usage Notes：<https://developer.adobe.com/firefly-services/docs/firefly-api/getting-started/usage-notes/>
+- Replicate Pricing：<https://replicate.com/pricing>
+- Cloudflare R2 Pricing：<https://developers.cloudflare.com/r2/pricing/>
+- Cloudinary Pricing：<https://cloudinary.com/pricing>
+
+## 13. MVP 開發步驟
 
 ### 第 0 階段：產品定稿
 
@@ -1052,7 +1169,7 @@ OpenCart 擴展要特別限制可修改欄位，避免 SEO 任務誤改商品價
 - 產品 SEO 欄位可同步、審計、建議、應用、回滾。
 - 測試確認價格、庫存、訂單和客戶資料不會被 SEO 任務修改。
 
-## 13. 里程碑建議
+## 14. 里程碑建議
 
 | 里程碑 | 週期 | 可交付結果 |
 |---|---:|---|
@@ -1070,7 +1187,7 @@ OpenCart 擴展要特別限制可修改欄位，避免 SEO 任務誤改商品價
 合理 MVP 週期：約 13 到 15 週。
 Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再排期。
 
-## 14. 驗收標準總表
+## 15. 驗收標準總表
 
 - 用戶可以註冊登入。
 - 用戶可以連接一個 WordPress 站點。
@@ -1089,7 +1206,7 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 - 不存在寫死密鑰。
 - 所有外部輸入有驗證。
 
-## 15. 主要風險與對策
+## 16. 主要風險與對策
 
 | 風險 | 影響 | 對策 |
 |---|---|---|
@@ -1101,7 +1218,7 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 | AI 成本失控 | 毛利下降 | 用量預估、額度限制、緩存和任務限流 |
 | Search Console 資料延遲 | 報表誤解 | 頁面說明資料延遲，不承諾因果 |
 
-## 16. 下一步行動清單
+## 17. 下一步行動清單
 
 1. 在註冊商確認 `rankloom.ai`、`seolume.ai`、`rankwoven.com` 是否可購買。
 2. 做商標檢索和社交媒體帳號檢索。

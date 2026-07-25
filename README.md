@@ -129,13 +129,31 @@ DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=
 OPENAI_API_KEY=
-IMAGE_PROVIDER_API_KEY=
+ANTHROPIC_API_KEY=
+GOOGLE_AI_API_KEY=
+DEEPSEEK_API_KEY=
+ADOBE_FIREFLY_CLIENT_ID=
+ADOBE_FIREFLY_CLIENT_SECRET=
+AI_TEXT_PROVIDER=openai
+AI_FALLBACK_TEXT_PROVIDER=anthropic
+AI_EMBEDDING_PROVIDER=openai
+AI_IMAGE_PROVIDER=google
+AI_IMAGE_FALLBACK_PROVIDER=openai
+MEDIA_STORAGE_PROVIDER=cloudflare-r2
+IMAGE_OPTIMIZATION_PROVIDER=cloudinary
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 S3_ENDPOINT=
 S3_BUCKET=
 S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
+CLOUDFLARE_R2_ENDPOINT=
+CLOUDFLARE_R2_BUCKET=
+CLOUDFLARE_R2_ACCESS_KEY_ID=
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 ```
 
 敏感資訊必須放在環境變量或密鑰管理系統中，不得提交 `.env`。
@@ -252,7 +270,7 @@ S3_SECRET_ACCESS_KEY=
 - 完成的主要任務：查看 AITDK 的工具型首頁和功能入口；在 PRD 中新增 SaaS 前台與工具頁參考、前台路由建議、生成器頁面互動要求。
 - 關鍵決策和解決方案：只參考資訊架構和工具型排版，不照抄對方品牌、文案、圖片、配色和細節；前台首屏必須提供可操作輸入或明確產品入口，避免做純展示 landing page。
 - 使用的技術棧：Vue 3、Vite、Vue Router、Markdown。
-- 新增或修改文件：修改 `docs/seo-ai-platform-prd.md`；修改 `README.md`。
+- 新增或修改文件：修改 `docs/seo-ai-platform-prd.md`、`README.md` 和 `.env.example`。
 - 後續建議：下一步可根據新增前台路由，實作首頁、工具集合頁、Pricing 和 Extension 介紹頁。
 
 ### 2026-07-25：新增前端 i18n 多語言要求
@@ -263,3 +281,12 @@ S3_SECRET_ACCESS_KEY=
 - 使用的技術棧：Vue 3、Vue I18n、Lucide Vue、TypeScript。
 - 新增或修改文件：新增 `apps/web/src/i18n.ts`、`apps/web/src/components/LanguageSwitcher.vue`；修改 Web 入口、頁面和樣式；修改 `docs/seo-ai-platform-prd.md` 和 `README.md`。
 - 後續建議：下一步把所有新前台工具頁文案放入 i18n key，並補齊各語言翻譯檔。
+
+### 2026-07-25：AI 與圖片服務商推薦
+
+- 會話的主要目的：為 AIEO 平台推薦 MVP 和後續階段需要接入的 AI 服務商、圖片生成服務商、圖片存儲與優化服務商。
+- 完成的主要任務：補充 PRD 的 AI 與圖片服務商建議章節；明確 MVP 首選 OpenAI、Google 圖片生成、Cloudflare R2 和 Cloudinary 的組合；列出 Anthropic、Gemini、DeepSeek、Adobe Firefly、Replicate、Stability AI、OpenRouter 的適用階段。
+- 關鍵決策和解決方案：業務邏輯不直接綁定單一供應商，後端需建立 `TextGenerationProvider`、`EmbeddingProvider`、`ImageGenerationProvider`、`MediaStorageProvider` 和 `ImageOptimizationProvider` 適配器；MVP 先保持一主一備，後續再做模型路由。
+- 使用的技術棧：OpenAI API、Anthropic Claude API、Google Gemini API、DeepSeek API、Adobe Firefly Services、Cloudflare R2、Cloudinary。
+- 新增或修改文件：修改 `docs/seo-ai-platform-prd.md`；修改 `README.md`。
+- 後續建議：下一步在後端建立 AI Provider Adapter 的最小接口、成本記錄模型和任務調用日誌。
