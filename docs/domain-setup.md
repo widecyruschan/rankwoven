@@ -23,7 +23,7 @@ Hostinger Cloud/Hosting 曾創建 `rankwoven.com` 網站：
 - Hostinger 用戶名：`u963014207`
 - 網站根目錄：`/home/u963014207/domains/rankwoven.com/public_html`
 - 關聯訂單：`52632730`
-- 刪除狀態：Hostinger MCP 刪除接口要求 `confirm`，但當前工具 schema 未成功傳遞該字段；DNS 已先改為指向 VPS。
+- 刪除狀態：Hostinger MCP 刪除接口要求 `confirm`，但當前工具 schema 未暴露該字段，調用返回 `The confirm field is required.`；DNS 已先改為指向 VPS。
 
 Hostinger VPS 目標：
 
@@ -31,6 +31,10 @@ Hostinger VPS 目標：
 - IPv4：`72.62.253.72`
 - Docker Compose 專案名：`rankwoven`
 - 部署來源：<https://github.com/widecyruschan/rankwoven>
+- 臨時 Web 入口：`http://72.62.253.72:8080`
+- 臨時 API 入口：`http://72.62.253.72:3011`
+
+注意：VPS 的 80 端口目前被其他服務佔用，Docker Compose 的 Web 服務先使用 `8080:5173` 避免破壞既有服務。若要讓 `https://rankwoven.com` 直接訪問 RankWoven，需要在 VPS 上釋放 80/443，或配置 Nginx/Caddy 反向代理到 Web 容器與 API 容器。
 
 ## 3. 建議子域名規劃
 
@@ -91,3 +95,9 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 - 暫不新增 `api.rankwoven.com`，因為尚未確認 API 對外入口 IP 或 CNAME。
 - 暫不配置郵件 DNS，因為尚未選定郵件服務商。
+
+## 8. 目前待處理事項
+
+- 在 Hostinger hPanel 手動刪除 Cloud/Hosting 上的 `rankwoven.com` addon website，或等待 MCP 刪除工具支援 `confirm` 參數後重試。
+- 檢查 VPS 上佔用 80/443 的服務，決定是停止該服務，還是用它作為反向代理。
+- 將 `rankwoven.com` 反向代理到 Web 服務，將 `api.rankwoven.com` 反向代理到 API 服務，並申請 HTTPS 憑證。
