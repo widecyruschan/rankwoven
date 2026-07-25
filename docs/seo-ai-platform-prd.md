@@ -578,10 +578,11 @@ cancelled
 |---|---|---|
 | `POST` | `/api/v1/auth/login` | 登入 |
 | `GET` | `/api/v1/workspaces` | 獲取工作區 |
-| `POST` | `/api/v1/sites/connect` | 創建站點連接 |
-| `GET` | `/api/v1/sites/:siteId` | 獲取站點詳情 |
-| `POST` | `/api/v1/sites/:siteId/sync` | 發起文章同步 |
-| `GET` | `/api/v1/sites/:siteId/articles` | 獲取文章列表 |
+| `POST` | `/api/v1/site-connections` | 創建站點連接 |
+| `GET` | `/api/v1/site-connections` | 獲取站點列表 |
+| `GET` | `/api/v1/site-connections/:siteId` | 獲取站點詳情 |
+| `POST` | `/api/v1/site-connections/:siteId/sync` | 接收插件推送的文章與媒體同步資料 |
+| `GET` | `/api/v1/site-connections/:siteId/articles` | 帶 Bearer Token 獲取文章列表 |
 | `GET` | `/api/v1/articles/:articleId` | 獲取文章詳情 |
 | `POST` | `/api/v1/articles/:articleId/audit` | 發起 SEO 審計 |
 | `POST` | `/api/v1/articles/:articleId/suggestions` | 生成優化建議 |
@@ -598,14 +599,14 @@ cancelled
 
 | Method | URL | 用途 |
 |---|---|---|
-| `GET` | `/wp-json/aieo/v1/site` | 獲取站點基礎資訊 |
-| `GET` | `/wp-json/aieo/v1/posts` | 分頁讀取文章 |
-| `GET` | `/wp-json/aieo/v1/posts/:id` | 讀取單篇文章 |
-| `POST` | `/wp-json/aieo/v1/posts/:id/preview` | 預覽修改 |
-| `POST` | `/wp-json/aieo/v1/posts/:id/apply` | 應用修改 |
-| `POST` | `/wp-json/aieo/v1/posts/:id/rollback` | 回滾修改 |
-| `GET` | `/wp-json/aieo/v1/media` | 分頁讀取媒體 |
-| `POST` | `/wp-json/aieo/v1/media` | 上傳圖片 |
+| `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
+| `GET` | `/wp-json/rankwoven/v1/posts` | 分頁讀取文章 |
+| `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇文章，後續實現 |
+| `POST` | `/wp-json/rankwoven/v1/posts/:id/preview` | 預覽修改，後續實現 |
+| `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 應用修改，後續實現 |
+| `POST` | `/wp-json/rankwoven/v1/posts/:id/rollback` | 回滾修改，後續實現 |
+| `GET` | `/wp-json/rankwoven/v1/media` | 分頁讀取媒體 |
+| `POST` | `/wp-json/rankwoven/v1/media` | 上傳圖片，後續實現 |
 
 ### 10.3 Joomla 擴展 API
 

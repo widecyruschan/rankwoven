@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import { createNoopAiProviderRegistry } from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import { apiConfig } from './config';
+import { registerSiteConnectionRoutes } from './siteConnections';
 
 export function createServer() {
   const app = Fastify({
@@ -104,6 +105,8 @@ export function createServer() {
       }
     }
   }));
+
+  registerSiteConnectionRoutes(app);
 
   return app;
 }

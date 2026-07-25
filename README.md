@@ -214,6 +214,11 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /health`：服務健康檢查。
 - `GET /api/v1/cms-adapters`：查看 CMS 適配器狀態。
 - `GET /api/v1/ai-providers`：查看當前 AI、Embedding、圖片、媒體存儲與圖片優化 Provider 配置。
+- `POST /api/v1/site-connections`：建立 WordPress、Joomla 或 OpenCart 站點連接，MVP 先由 WordPress 插件使用。
+- `GET /api/v1/site-connections`：查看已連接站點列表，不返回完整 Token。
+- `GET /api/v1/site-connections/:siteId`：查看單個站點連接詳情。
+- `POST /api/v1/site-connections/:siteId/sync`：由插件帶 Bearer Token 推送文章與媒體同步資料。
+- `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
 
 詳細產品 API 規劃詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
 
@@ -460,3 +465,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Vue 3、TypeScript、Vue Router、Vue I18n、lucide-vue-next。
 - 新增或修改文件：修改 `apps/web/src/router/index.ts`、`apps/web/src/App.vue`、`apps/web/src/i18n.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/views/ApplySuggestionsView.vue`、`docs/saas-dashboard-prototype.md` 和 `README.md`；刪除 `apps/web/src/views/TitleMetaView.vue`。
 - 後續建議：後續接入 API 時，媒體建議模型應拆分 `imageTitle`、`imageMeta`、`altText` 和 `filename` 欄位，方便逐項批准和套用。
+
+### 2026-07-26：WordPress 插件骨架與文章同步實測
+
+- 會話的主要目的：建立 WordPress 插件骨架、後端站點連接 API 和文章同步接口，並在 Docker Desktop 的 `cyruschancom` WordPress 環境完成實測。
+- 完成的主要任務：新增 `POST /api/v1/site-connections`、站點列表、站點詳情、文章同步和文章列表 API；新增 WordPress 插件 `rankwoven-seo`，提供後台設定頁、站點連接、手動同步、站點側 REST API；在 `cyruschan-wp` 容器中啟用插件並完成連接與同步測試。
+- 關鍵決策和解決方案：MVP 先使用內存 Repository 保存站點、Token、文章和媒體；同步接口使用 Bearer Token 保護；插件在 Docker Desktop 測試時使用 `http://host.docker.internal:3011` 連接 AIEO API；針對真實 WordPress 文章日期可能返回 `false` 的情況，插件統一將日期欄位轉為字符串。
+- 使用的技術棧：Fastify、TypeScript、Zod、Vitest、WordPress PHP Plugin、WordPress REST API、Docker Desktop、WP-CLI。
+- 新增或修改文件：新增 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`；修改 `apps/api/src/server.ts`、`plugins/wordpress/README.md`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
+- 驗證結果：`cyruschancom` 測試站成功連接到 AIEO API；插件同步 59 篇文章和 100 個圖片媒體；後端受保護文章列表 API 可通過站點 Token 讀取 59 篇文章。
+- 後續建議：下一步將站點連接、Token 和同步文章落到 PostgreSQL，並在前端客戶後台接入站點列表與文章同步結果。
