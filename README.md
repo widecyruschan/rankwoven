@@ -68,6 +68,7 @@ AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域�
 ├── docs/
 │   ├── brand-guidelines.md
 │   ├── domain-setup.md
+│   ├── saas-dashboard-prototype.md
 │   └── seo-ai-platform-prd.md
 ├── docker-compose.yml
 ├── Dockerfile
@@ -245,6 +246,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md)
 - [RankWoven 域名與 DNS 接入方案](docs/domain-setup.md)
 - [RankWoven 品牌與基礎 UI 視覺規範](docs/brand-guidelines.md)
+- [RankWoven SaaS 後台核心頁面原型](docs/saas-dashboard-prototype.md)
 
 ## 會話總結記錄
 
@@ -400,3 +402,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Certbot、Let’s Encrypt、Nginx、SVG、Vue 3、Vite、CSS。
 - 新增或修改文件：新增 `apps/web/src/assets/rankwoven-logo.svg`、`docs/brand-guidelines.md`；修改 `apps/web/src/App.vue`、`apps/web/src/styles.css`、`apps/web/index.html`、`docs/domain-setup.md` 和 `README.md`。
 - 後續建議：後續可新增 favicon、Open Graph 圖片和登入頁品牌化；另需決定是否清理 VPS 上無效的 `cloud.imgkit.io` 舊證書。
+
+### 2026-07-25：SaaS 後台核心頁面原型
+
+- 會話的主要目的：繪製 RankWoven SaaS 後台核心頁面原型，用於確認資訊架構、頁面排版和主要工作流。
+- 完成的主要任務：新增文章審計、內容審核、內部連結和任務隊列頁；擴展站點概覽、站點管理、CMS 適配器和設定頁；更新側邊欄導航和路由；新增原型說明文件。
+- 關鍵決策和解決方案：本階段只做純頁面原型，不連接真實資料、不接 API、不新增 Store 複雜度；頁面內列表和數字均為靜態占位資料；所有新增顯示文案仍走 i18n。
+- 使用的技術棧：Vue 3、Vue Router、Vue I18n、Lucide Vue、CSS。
+- 新增或修改文件：新增 `apps/web/src/views/ArticlesView.vue`、`apps/web/src/views/ReviewView.vue`、`apps/web/src/views/LinksView.vue`、`apps/web/src/views/TasksView.vue` 和 `docs/saas-dashboard-prototype.md`；修改 `apps/web/src/App.vue`、`apps/web/src/router/index.ts`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`apps/web/src/views/DashboardView.vue`、`apps/web/src/views/SitesView.vue`、`apps/web/src/views/CmsAdaptersView.vue`、`apps/web/src/views/SettingsView.vue` 和 `README.md`。
+- 後續建議：下一步可根據原型評審結果抽出共用 `PageHeading`、`DataTable`、`StatusPill`、`ProgressBar` 組件，再開始接入 API。

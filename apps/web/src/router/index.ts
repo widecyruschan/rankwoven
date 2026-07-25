@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import DashboardView from '../views/DashboardView.vue';
 import SitesView from '../views/SitesView.vue';
+import ArticlesView from '../views/ArticlesView.vue';
+import ReviewView from '../views/ReviewView.vue';
+import LinksView from '../views/LinksView.vue';
+import TasksView from '../views/TasksView.vue';
 import CmsAdaptersView from '../views/CmsAdaptersView.vue';
 import SettingsView from '../views/SettingsView.vue';
 
@@ -10,7 +14,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Dashboard',
     component: DashboardView,
     meta: {
-      title: '站點概覽',
+      titleKey: 'nav.dashboard',
       requiresAuth: false
     }
   },
@@ -19,7 +23,43 @@ const routes: RouteRecordRaw[] = [
     name: 'Sites',
     component: SitesView,
     meta: {
-      title: '站點管理',
+      titleKey: 'nav.sites',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/articles',
+    name: 'Articles',
+    component: ArticlesView,
+    meta: {
+      titleKey: 'nav.articles',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/review',
+    name: 'Review',
+    component: ReviewView,
+    meta: {
+      titleKey: 'nav.review',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/links',
+    name: 'Links',
+    component: LinksView,
+    meta: {
+      titleKey: 'nav.links',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/tasks',
+    name: 'Tasks',
+    component: TasksView,
+    meta: {
+      titleKey: 'nav.tasks',
       requiresAuth: false
     }
   },
@@ -28,7 +68,7 @@ const routes: RouteRecordRaw[] = [
     name: 'CmsAdapters',
     component: CmsAdaptersView,
     meta: {
-      title: 'CMS 適配器',
+      titleKey: 'nav.cmsAdapters',
       requiresAuth: false
     }
   },
@@ -37,7 +77,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Settings',
     component: SettingsView,
     meta: {
-      title: '設定',
+      titleKey: 'nav.settings',
       requiresAuth: false
     }
   }
