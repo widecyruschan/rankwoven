@@ -14,9 +14,11 @@
     "@aieo/cms-adapters": "0.1.0",
     "@fastify/cors": "^11.0.1",
     "fastify": "^5.4.0",
+    "pg": "^8.22.0",
     "zod": "^4.0.14"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "tsx": "^4.20.3"
   }
 }

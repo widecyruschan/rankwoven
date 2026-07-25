@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
+import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
 
 interface CreateSiteConnectionResponse {
   success: boolean;
@@ -15,7 +16,9 @@ interface CreateSiteConnectionResponse {
 }
 
 async function createWordPressConnection() {
-  const server = createServer();
+  const server = createServer({
+    siteConnectionRepository: createInMemorySiteConnectionRepository()
+  });
   const response = await server.inject({
     method: 'POST',
     url: '/api/v1/site-connections',

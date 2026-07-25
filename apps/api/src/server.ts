@@ -3,9 +3,17 @@ import Fastify from 'fastify';
 import { createNoopAiProviderRegistry } from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import { apiConfig } from './config';
-import { registerSiteConnectionRoutes } from './siteConnections';
+import {
+  createDefaultSiteConnectionRepository,
+  type SiteConnectionRepository,
+  registerSiteConnectionRoutes
+} from './siteConnections';
 
-export function createServer() {
+interface CreateServerOptions {
+  siteConnectionRepository?: SiteConnectionRepository;
+}
+
+export function createServer(options: CreateServerOptions = {}) {
   const app = Fastify({
     logger: true
   });
@@ -106,7 +114,10 @@ export function createServer() {
     }
   }));
 
-  registerSiteConnectionRoutes(app);
+  registerSiteConnectionRoutes(
+    app,
+    options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL)
+  );
 
   return app;
 }

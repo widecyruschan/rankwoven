@@ -220,6 +220,8 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections/:siteId/sync`：由插件帶 Bearer Token 推送文章與媒體同步資料。
 - `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
 
+站點連接、Token Hash、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。
+
 詳細產品 API 規劃詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
 
 ## AI Provider 使用說明
@@ -486,3 +488,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Markdown。
 - 新增或修改文件：修改 `README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 下一步行動清單：建立 PostgreSQL migration；將站點連接與同步文章落庫；把客戶後台站點列表接入 API；補齊同步分頁和增量同步；開始 SEO 審計規則模型。
+
+### 2026-07-26：PostgreSQL 持久化站點連接與同步資料
+
+- 會話的主要目的：建立 PostgreSQL 持久化能力，替換目前 API 的內存 Repository，並保留既有測試與補充整合測試。
+- 完成的主要任務：新增 PostgreSQL Repository；建立 `site_connections`、`sync_runs`、`synced_articles`、`synced_media` 表；站點 Token 改為保存 SHA-256 Hash 和 Preview；站點、文章、媒體同步資料和同步批次均寫入 PostgreSQL；保留內存 Repository 供單元測試使用。
+- 關鍵決策和解決方案：不引入 ORM，先使用 `pg` 和參數化 SQL；`DATABASE_URL` 存在時 API 使用 PostgreSQL，否則使用內存 Repository；整合測試使用 `RUN_POSTGRES_TESTS=1` 顯式啟用，避免普通測試依賴外部資料庫。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL、pg、Zod、Vitest、Docker Compose。
+- 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/src/server.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/package.json`、`package-lock.json`、`README.md` 和 `docs/seo-ai-platform-prd.md`；新增 `apps/api/tests/siteConnections.postgres.test.ts`。
+- 驗證結果：`npm run lint`、`npm run test`、`npm run build` 均通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；Docker API smoke 測試確認 `localhost:3011` 可將站點、文章、媒體與 sync run 寫入 PostgreSQL。
+- 下一步行動清單：為站點 Token 增加重新生成與吊銷 API；將客戶後台站點列表接入 API；將文章同步頁接入最近同步結果；補充分頁同步與增量同步；開始 SEO 審計規則模型。
