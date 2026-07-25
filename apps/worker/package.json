@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aieo/ai-providers": "0.1.0",
     "@aieo/cms-adapters": "0.1.0",
     "zod": "^4.0.14"
   },

@@ -50,6 +50,7 @@ AIEO 是一個規劃中的 AI SEO 自動優化平台，目標是通過 SaaS 雲�
 │   ├── web/
 │   └── worker/
 ├── packages/
+│   ├── ai-providers/
 │   └── cms-adapters/
 ├── plugins/
 │   ├── joomla/
@@ -186,8 +187,13 @@ CLOUDINARY_API_SECRET=
 
 - `GET /health`：服務健康檢查。
 - `GET /api/v1/cms-adapters`：查看 CMS 適配器狀態。
+- `GET /api/v1/ai-providers`：查看當前 AI、Embedding、圖片、媒體存儲與圖片優化 Provider 配置。
 
 詳細產品 API 規劃詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
+
+## AI Provider 使用說明
+
+目前已新增 `@aieo/ai-providers` 共享包，先提供最小 Provider Adapter 介面、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。真實 OpenAI、Claude、Gemini、DeepSeek、Adobe Firefly、Cloudflare R2 和 Cloudinary SDK 尚未接入，後續應在此介面下逐步增加具體 Adapter。
 
 ## 元件使用說明
 
@@ -290,3 +296,12 @@ CLOUDINARY_API_SECRET=
 - 使用的技術棧：OpenAI API、Anthropic Claude API、Google Gemini API、DeepSeek API、Adobe Firefly Services、Cloudflare R2、Cloudinary。
 - 新增或修改文件：修改 `docs/seo-ai-platform-prd.md`；修改 `README.md`。
 - 後續建議：下一步在後端建立 AI Provider Adapter 的最小接口、成本記錄模型和任務調用日誌。
+
+### 2026-07-25：後端 Provider Adapter 最小接口
+
+- 會話的主要目的：進入後端 Provider Adapter 最小接口和成本記錄模型開發。
+- 完成的主要任務：新增 `@aieo/ai-providers` 共享包；建立文字生成、Embedding、圖片生成、媒體存儲和圖片優化 Provider 介面；建立 AI 用量成本估算、用量記錄、內存 Repository 和 Noop Provider Registry；在 API 新增 `GET /api/v1/ai-providers`。
+- 關鍵決策和解決方案：先定義可復用接口與審計模型，不直接接入真實供應商 SDK；API 和 Worker 共用同一個 Provider 包，後續批量任務可直接復用。
+- 使用的技術棧：TypeScript、Fastify、Vitest、npm workspaces。
+- 新增或修改文件：新增 `packages/ai-providers/`；修改 `apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/tests/health.test.ts`、`apps/api/package.json`、`apps/worker/package.json`、`package.json`、`package-lock.json`、`README.md`。
+- 後續建議：下一步實作 OpenAI Text/Embedding Adapter，並把用量記錄落到 PostgreSQL 資料表。

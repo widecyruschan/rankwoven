@@ -610,6 +610,7 @@ cancelled
 | `POST` | `/api/v1/articles/generate` | 生成文章草稿 |
 | `GET` | `/api/v1/tasks/:taskId` | 查詢任務狀態 |
 | `POST` | `/api/v1/search-console/connect` | 連接 Search Console |
+| `GET` | `/api/v1/ai-providers` | 查看當前 AI、Embedding、圖片、媒體存儲與圖片優化 Provider 配置 |
 
 ### 10.2 WordPress 插件 API
 

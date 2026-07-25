@@ -18,3 +18,37 @@ describe('api health route', () => {
     });
   });
 });
+
+describe('api provider route', () => {
+  it('returns configured AI provider adapters', async () => {
+    const server = createServer();
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/ai-providers'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        text: {
+          provider: 'openai',
+          fallbackProvider: 'anthropic'
+        },
+        embedding: {
+          provider: 'openai'
+        },
+        image: {
+          provider: 'google',
+          fallbackProvider: 'openai'
+        },
+        mediaStorage: {
+          provider: 'cloudflare-r2'
+        },
+        imageOptimization: {
+          provider: 'cloudinary'
+        }
+      }
+    });
+  });
+});
