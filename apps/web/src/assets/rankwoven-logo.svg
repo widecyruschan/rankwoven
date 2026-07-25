@@ -1,0 +1,9 @@
+<svg width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">RankWoven</title>
+  <desc id="desc">RankWoven logo with woven growth paths</desc>
+  <rect width="40" height="40" rx="8" fill="#0B6F63"/>
+  <path d="M11 27C16.5 27 17.5 13 23 13C28.5 13 29.5 27 35 27" stroke="#F6D365" stroke-width="3" stroke-linecap="round"/>
+  <path d="M11 13C16.5 13 17.5 27 23 27C28.5 27 29.5 13 35 13" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22.5 8V32" stroke="#17312B" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+  <text x="52" y="25" fill="#14231F" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">RankWoven</text>
+</svg>

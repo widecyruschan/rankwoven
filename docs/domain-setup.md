@@ -37,6 +37,7 @@ Hostinger VPS 目標：
 - 正式 Web 入口：`https://rankwoven.com`
 - 正式 API 入口：`https://api.rankwoven.com`
 - SSL 狀態：`rankwoven.com`、`www.rankwoven.com`、`api.rankwoven.com` 已使用 Certbot / Let’s Encrypt 啟用 HTTPS，自動續期由 Certbot 管理。
+- 續期驗證：`certbot renew --dry-run --no-random-sleep-on-renew --cert-name rankwoven.com` 與 `certbot renew --dry-run --no-random-sleep-on-renew --cert-name api.rankwoven.com` 均通過。
 
 注意：VPS 的 80/443 端口由 Nginx 接管，Docker Compose 的 Web 服務使用 `8080:5173`，API 使用 `3011:3000`。Nginx 負責將正式域名反向代理到容器服務。
 
@@ -102,5 +103,5 @@ SUPPORT_EMAIL=support@rankwoven.com
 ## 8. 目前待處理事項
 
 - 在 Hostinger hPanel 手動刪除 Cloud/Hosting 上的 `rankwoven.com` addon website，或等待 MCP 刪除工具支援 `confirm` 參數後重試。
-- 檢查 HTTPS 憑證自動續期狀態。
+- 整機級 `certbot renew --dry-run` 目前會被 VPS 上舊的 `cloud.imgkit.io` 證書阻塞，原因是該域名 DNS 已返回 NXDOMAIN；如不再使用該域名，應另行清理該舊證書。
 - 後續如拆分 `app.rankwoven.com`，需新增對應 DNS 與 Nginx 反向代理。

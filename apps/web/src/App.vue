@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import rankwovenLogo from './assets/rankwoven-logo.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
 
 const route = useRoute();
@@ -19,11 +20,8 @@ function toggleNavigation() {
   <div class="app-shell">
     <aside class="sidebar" :class="{ 'sidebar-open': isNavigationOpen }">
       <div class="brand">
-        <span class="brand-mark">A</span>
-        <div>
-          <strong>AIEO</strong>
-          <small>{{ t('app.brandSubtitle') }}</small>
-        </div>
+        <img class="brand-logo" :src="rankwovenLogo" alt="RankWoven">
+        <small>{{ t('app.brandSubtitle') }}</small>
       </div>
 
       <nav class="nav-list" aria-label="主導覽">

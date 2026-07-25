@@ -66,6 +66,7 @@ AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域�
 │   └── wordpress/
 ├── README.md
 ├── docs/
+│   ├── brand-guidelines.md
 │   ├── domain-setup.md
 │   └── seo-ai-platform-prd.md
 ├── docker-compose.yml
@@ -243,6 +244,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 - [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md)
 - [RankWoven 域名與 DNS 接入方案](docs/domain-setup.md)
+- [RankWoven 品牌與基礎 UI 視覺規範](docs/brand-guidelines.md)
 
 ## 會話總結記錄
 
@@ -389,3 +391,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Hostinger DNS、Nginx、Certbot、Let’s Encrypt、Docker Compose、Vite。
 - 新增或修改文件：修改 `docker-compose.yml`、`apps/web/vite.config.ts`、`docs/domain-setup.md` 和 `README.md`。
 - 後續建議：檢查 Certbot 自動續期任務，並在正式生產化時將 Web 容器改為靜態構建產物或生產服務器。
+
+### 2026-07-25：Certbot 續期檢查與品牌視覺規範
+
+- 會話的主要目的：檢查 RankWoven SSL 自動續期鏈路，並建立 Logo、品牌色與基礎 UI 視覺規範。
+- 完成的主要任務：針對 `rankwoven.com` / `www.rankwoven.com` 和 `api.rankwoven.com` 分別執行 Certbot renewal dry-run，兩張 RankWoven 證書均通過；新增 RankWoven SVG Logo；新增品牌與基礎 UI 視覺規範文件；將前端側邊欄品牌標識切換為 RankWoven Logo；將基礎色彩抽為 CSS 變量。
+- 關鍵決策和解決方案：保留簡潔工具型 SaaS 視覺，不建立過重設計系統；整機級 `certbot renew --dry-run` 會因舊的 `cloud.imgkit.io` 證書 DNS NXDOMAIN 失敗，因此以 RankWoven 證書單獨 dry-run 作為本項目的有效驗證。
+- 使用的技術棧：Certbot、Let’s Encrypt、Nginx、SVG、Vue 3、Vite、CSS。
+- 新增或修改文件：新增 `apps/web/src/assets/rankwoven-logo.svg`、`docs/brand-guidelines.md`；修改 `apps/web/src/App.vue`、`apps/web/src/styles.css`、`apps/web/index.html`、`docs/domain-setup.md` 和 `README.md`。
+- 後續建議：後續可新增 favicon、Open Graph 圖片和登入頁品牌化；另需決定是否清理 VPS 上無效的 `cloud.imgkit.io` 舊證書。
