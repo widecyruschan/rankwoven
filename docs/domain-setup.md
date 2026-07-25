@@ -12,17 +12,24 @@
 
 | Name | Type | Value | TTL | 說明 |
 |---|---|---|---:|---|
-| `@` | A | `2.57.91.91` | 50 | 根域名當前指向的 IPv4 地址 |
+| `@` | A | `72.62.253.72` | 300 | 根域名指向 Hostinger VPS |
 | `www` | CNAME | `rankwoven.com.` | 300 | `www.rankwoven.com` 指向根域名 |
 
 目前未檢測到 `api`、`app`、`cdn`、`mail`、SPF、DKIM、DMARC 等記錄。
 
-Hostinger 已創建 `rankwoven.com` 網站：
+Hostinger Cloud/Hosting 曾創建 `rankwoven.com` 網站：
 
 - Website 類型：addon website
 - Hostinger 用戶名：`u963014207`
 - 網站根目錄：`/home/u963014207/domains/rankwoven.com/public_html`
 - 關聯訂單：`52632730`
+- 刪除狀態：Hostinger MCP 刪除接口要求 `confirm`，但當前工具 schema 未成功傳遞該字段；DNS 已先改為指向 VPS。
+
+Hostinger VPS 目標：
+
+- VPS ID：`1307693`
+- IPv4：`72.62.253.72`
+- Docker Compose 專案名：`rankwoven`
 
 ## 3. 建議子域名規劃
 
@@ -81,6 +88,5 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## 7. 暫不執行的操作
 
-- 暫不修改根域名 A 記錄，因為尚未確認 `2.57.91.91` 是否為正式部署服務器。
 - 暫不新增 `api.rankwoven.com`，因為尚未確認 API 對外入口 IP 或 CNAME。
 - 暫不配置郵件 DNS，因為尚未選定郵件服務商。
