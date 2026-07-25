@@ -17,6 +17,13 @@
 
 目前未檢測到 `api`、`app`、`cdn`、`mail`、SPF、DKIM、DMARC 等記錄。
 
+Hostinger 已創建 `rankwoven.com` 網站：
+
+- Website 類型：addon website
+- Hostinger 用戶名：`u963014207`
+- 網站根目錄：`/home/u963014207/domains/rankwoven.com/public_html`
+- 關聯訂單：`52632730`
+
 ## 3. 建議子域名規劃
 
 | 子域名 | 用途 | 建議記錄類型 | 目標 |

@@ -19,6 +19,7 @@ AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域�
 - 主域名：`rankwoven.com`
 - 域名狀態：已購買
 - 中文品牌方向：排名織引
+- Hostinger 網站狀態：已創建
 
 ## 技術棧建議
 
@@ -343,3 +344,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Hostinger DNS、Docker Compose、Markdown。
 - 新增或修改文件：新增 `docs/domain-setup.md`；修改 `.env.example`、`docker-compose.yml` 和 `README.md`。
 - 後續建議：確認正式 Web/API 部署目標後，再新增或更新 `api.rankwoven.com`、`app.rankwoven.com`、`assets.rankwoven.com` 和郵件 DNS 記錄。
+
+### 2026-07-25：創建 rankwoven.com Hostinger 網站
+
+- 會話的主要目的：在 Hostinger Hosting 中創建 `rankwoven.com` 網站。
+- 完成的主要任務：成功創建 addon website；Hostinger 用戶名為 `u963014207`；網站根目錄為 `/home/u963014207/domains/rankwoven.com/public_html`；關聯訂單為 `52632730`。
+- 關鍵決策和解決方案：先創建網站資源，再進行 GitHub 代碼部署和 DNS 子域名配置；暫不修改現有根域名 A 記錄。
+- 使用的技術棧：Hostinger Hosting、GitHub、Docker Compose。
+- 新增或修改文件：修改 `docs/domain-setup.md` 和 `README.md`。
+- 後續建議：將 GitHub 代碼部署到新建網站，確認 Web/API 部署方式後再配置 DNS。
