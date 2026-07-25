@@ -92,18 +92,24 @@ describe('AI usage cost model', () => {
 describe('noop provider registry', () => {
   it('exposes configured providers before real SDK adapters are installed', async () => {
     const registry = createNoopAiProviderRegistry({
-      textProvider: 'openai',
-      fallbackTextProvider: 'anthropic',
-      embeddingProvider: 'openai',
-      imageProvider: 'google',
-      imageFallbackProvider: 'openai',
-      mediaStorageProvider: 'cloudflare-r2',
-      imageOptimizationProvider: 'cloudinary'
+      textProvider: 'wenwen',
+      fallbackTextProvider: 'wenwen',
+      embeddingProvider: 'wenwen',
+      imageProvider: 'wenwen',
+      imageFallbackProvider: 'wenwen',
+      mediaStorageProvider: 'qiniu-kodo',
+      imageOptimizationProvider: 'cloudinary',
+      textModel: 'gpt-4.1-mini',
+      embeddingModel: 'text-embedding-3-small',
+      imageModel: 'gemini-2.5-flash-image'
     });
 
-    expect(registry.text.provider).toBe('openai');
-    expect(registry.embedding.provider).toBe('openai');
-    expect(registry.image.provider).toBe('google');
+    expect(registry.text.provider).toBe('wenwen');
+    expect(registry.text.model).toBe('gpt-4.1-mini');
+    expect(registry.embedding.provider).toBe('wenwen');
+    expect(registry.embedding.model).toBe('text-embedding-3-small');
+    expect(registry.image.provider).toBe('wenwen');
+    expect(registry.image.model).toBe('gemini-2.5-flash-image');
     await expect(
       registry.text.generateTitle({
         siteId: 'site-1',

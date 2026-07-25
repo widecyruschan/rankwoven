@@ -836,22 +836,24 @@ OpenCart 擴展要特別限制可修改欄位，避免 SEO 任務誤改商品價
 
 | 類型 | 首選服務商 | 用途 | 推薦原因 | 注意事項 |
 |---|---|---|---|---|
-| AI 文字生成 | OpenAI API | SEO 標題、Meta Description、文章大綱、文章草稿、內容改寫、結構化 JSON 輸出 | 文本品質穩定，Structured Output、工具調用、Embedding 和圖片生成可放在同一供應商體系內，首版整合成本最低 | 所有生成內容預設進入草稿和人工審核，不直接批量發佈 |
-| Embedding | OpenAI Embeddings | 文章相似度、內部連結推薦、內容聚類、重複內容檢查 | `text-embedding-3-small` 適合成本敏感的大量文章索引，`text-embedding-3-large` 適合更高精度場景 | Embedding 結果要緩存；文章內容未變更時不可重複計費 |
-| AI 備援/高品質長文 | Anthropic Claude | 長文改寫、審稿、品質評分、風險檢查 | Claude 在長上下文、語氣控制和審稿任務上適合作為高品質備選 | 不建議首版每次都調用，應用於高價套餐或人工選擇 |
-| 成本優化文字模型 | Google Gemini 或 DeepSeek | 批量標題改寫、低風險 Meta 生成、草稿初稿 | Gemini Flash/Lite 與 DeepSeek 適合成本敏感任務，可降低批量任務成本 | 需建立品質評分與抽樣審核，不合格時回退到主模型 |
-| 圖片生成 | Google Gemini 2.5 Flash Image 或 OpenAI Images | 文章特色圖、社交分享圖、工具頁示例圖 | Gemini 圖片價格透明且適合快速生成；OpenAI Images 可與文字供應商統一管理 | 每張圖片必須保存 prompt、模型、生成時間和審核狀態 |
+| AI 文字生成 | 問問 API 代理 | SEO 標題、Meta Description、文章大綱、文章草稿、內容改寫、結構化 JSON 輸出 | 問問 API 文檔提供 OpenAI 兼容格式，可通過同一 Base URL 調用 OpenAI、Google Gemini、DeepSeek 等模型，MVP 整合成本最低 | 所有生成內容預設進入草稿和人工審核，不直接批量發佈 |
+| Embedding | 問問 API 代理 | 文章相似度、內部連結推薦、內容聚類、重複內容檢查 | 使用 OpenAI 兼容 `/v1/embeddings` 接口，首版可沿用現有 Embedding 抽象 | Embedding 結果要緩存；文章內容未變更時不可重複計費 |
+| AI 備援/高品質長文 | 問問 API 代理下的 OpenAI/Claude/Gemini 模型 | 長文改寫、審稿、品質評分、風險檢查 | 先通過代理層切換模型，減少多套官方 SDK、密鑰和帳單邏輯 | 需記錄實際模型名；高價套餐才開放更高成本模型 |
+| 成本優化文字模型 | 問問 API 代理下的 DeepSeek 或 Gemini 模型 | 批量標題改寫、低風險 Meta 生成、草稿初稿 | 可在同一代理接口下按任務選擇成本模型 | 需建立品質評分與抽樣審核，不合格時回退到主模型 |
+| 圖片生成 | 問問 API 代理下的 Google Gemini 或 OpenAI 圖片模型 | 文章特色圖、社交分享圖、工具頁示例圖 | 使用 OpenAI 兼容 `/v1/images/generations` 接口，與文字生成共用代理密鑰和調用日誌 | 每張圖片必須保存 prompt、模型、生成時間和審核狀態 |
 | 圖片商用安全備選 | Adobe Firefly Services | 品牌客戶、電商和代理商需要更強商用授權敘事時使用 | Adobe 官方定位偏企業內容生產和商用安全，適合高價套餐或企業客戶 | API 接入、速率和商務條款需在正式採購前確認 |
-| 圖片存儲 | Cloudflare R2 | 保存 AI 生成原圖、壓縮圖、站點同步媒體備份 | S3 相容，對外傳輸費友好，適合作為平台原始媒體倉庫 | 仍需搭配圖片轉換或 CDN 規則處理尺寸與格式 |
+| 圖片存儲 | 七牛雲 Kodo | 保存 AI 生成原圖、壓縮圖、站點同步媒體備份 | 七牛 Kodo 提供對象存儲、上傳憑證和資源管理 API，適合國內圖片存儲與 CDN 場景 | 需要配置 Bucket、Region、公開域名和上傳 Token；不可把 AK/SK 暴露給前端 |
 | 圖片優化/CDN | Cloudinary | 圖片壓縮、格式轉換、裁切、響應式尺寸、媒體管理 | 圖片 API、轉換和 CDN 成熟，可快速提供 WebP/AVIF、縮圖和自動裁切 | 成本按用量和方案增加；MVP 可先只在付費套餐啟用 |
 
 ### 12.2 分階段接入建議
 
 Phase 1 MVP：
 
-- 接入 OpenAI 作為 `primaryTextProvider` 和 `embeddingProvider`。
-- 接入 Google Gemini 2.5 Flash Image 或 OpenAI Images 作為 `primaryImageProvider`，二選一即可，不要同時做完整功能。
-- 使用 Cloudflare R2 保存生成圖片、原圖備份和任務產物。
+- 接入問問 API 作為 `primaryTextProvider`、`embeddingProvider` 和 `primaryImageProvider`。
+- 文字模型首版支持 OpenAI、Google Gemini、DeepSeek 中的可用模型，通過 `WENWEN_TEXT_MODEL` 切換。
+- Embedding 通過問問 API 的 OpenAI 兼容 Embedding 接口調用，通過 `WENWEN_EMBEDDING_MODEL` 切換。
+- 圖片生成通過問問 API 的 OpenAI 兼容圖片接口調用，通過 `WENWEN_IMAGE_MODEL` 切換。
+- 使用七牛雲 Kodo 保存生成圖片、原圖備份和任務產物。
 - 暫不把 OpenRouter、Replicate、Adobe Firefly 做成用戶可選項，只保留適配器設計。
 
 Phase 2 成本與品質優化：
@@ -899,24 +901,24 @@ Phase 3 企業與多模型：
 ### 12.5 環境變量建議
 
 ```text
-AI_TEXT_PROVIDER=openai
-AI_FALLBACK_TEXT_PROVIDER=anthropic
-AI_EMBEDDING_PROVIDER=openai
-AI_IMAGE_PROVIDER=google
-AI_IMAGE_FALLBACK_PROVIDER=openai
-MEDIA_STORAGE_PROVIDER=cloudflare-r2
+AI_TEXT_PROVIDER=wenwen
+AI_FALLBACK_TEXT_PROVIDER=wenwen
+AI_EMBEDDING_PROVIDER=wenwen
+AI_IMAGE_PROVIDER=wenwen
+AI_IMAGE_FALLBACK_PROVIDER=wenwen
+MEDIA_STORAGE_PROVIDER=qiniu-kodo
 IMAGE_OPTIMIZATION_PROVIDER=cloudinary
 
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GOOGLE_AI_API_KEY=
-DEEPSEEK_API_KEY=
-ADOBE_FIREFLY_CLIENT_ID=
-ADOBE_FIREFLY_CLIENT_SECRET=
-CLOUDFLARE_R2_ENDPOINT=
-CLOUDFLARE_R2_BUCKET=
-CLOUDFLARE_R2_ACCESS_KEY_ID=
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+WENWEN_API_BASE_URL=https://breakout.wenwen-ai.com
+WENWEN_API_KEY=
+WENWEN_TEXT_MODEL=gpt-4.1-mini
+WENWEN_EMBEDDING_MODEL=text-embedding-3-small
+WENWEN_IMAGE_MODEL=gemini-2.5-flash-image
+QINIU_ACCESS_KEY=
+QINIU_SECRET_KEY=
+QINIU_BUCKET=
+QINIU_REGION=
+QINIU_PUBLIC_DOMAIN=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
@@ -933,6 +935,9 @@ CLOUDINARY_API_SECRET=
 
 ### 12.7 參考來源
 
+- 問問 API 接口文檔：<https://breakoutapi.apifox.cn/>
+- 問問 API OpenAI 兼容 Base URL：<https://breakout.wenwen-ai.com>
+- 七牛雲 Kodo API 概覽：<https://developer.qiniu.com/kodo/1731/api-overview>
 - OpenAI API Pricing：<https://platform.openai.com/docs/pricing>
 - OpenAI Embeddings：<https://platform.openai.com/docs/guides/embeddings>
 - Anthropic Claude Pricing：<https://docs.anthropic.com/en/docs/about-claude/pricing>
@@ -942,7 +947,6 @@ CLOUDINARY_API_SECRET=
 - Adobe Firefly API：<https://developer.adobe.com/firefly-services/docs/firefly-api/>
 - Adobe Firefly API Usage Notes：<https://developer.adobe.com/firefly-services/docs/firefly-api/getting-started/usage-notes/>
 - Replicate Pricing：<https://replicate.com/pricing>
-- Cloudflare R2 Pricing：<https://developers.cloudflare.com/r2/pricing/>
 - Cloudinary Pricing：<https://cloudinary.com/pricing>
 
 ## 13. MVP 開發步驟

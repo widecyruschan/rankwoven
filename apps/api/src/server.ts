@@ -15,7 +15,11 @@ export function createServer() {
     imageProvider: apiConfig.AI_IMAGE_PROVIDER,
     imageFallbackProvider: apiConfig.AI_IMAGE_FALLBACK_PROVIDER,
     mediaStorageProvider: apiConfig.MEDIA_STORAGE_PROVIDER,
-    imageOptimizationProvider: apiConfig.IMAGE_OPTIMIZATION_PROVIDER
+    imageOptimizationProvider: apiConfig.IMAGE_OPTIMIZATION_PROVIDER,
+    proxyBaseUrl: apiConfig.WENWEN_API_BASE_URL,
+    textModel: apiConfig.WENWEN_TEXT_MODEL,
+    embeddingModel: apiConfig.WENWEN_EMBEDDING_MODEL,
+    imageModel: apiConfig.WENWEN_IMAGE_MODEL
   });
 
   app.register(cors, {
@@ -58,6 +62,9 @@ export function createServer() {
         provider: aiProviders.text.provider,
         model: aiProviders.text.model,
         fallbackProvider: apiConfig.AI_FALLBACK_TEXT_PROVIDER,
+        proxyBaseUrl: apiConfig.WENWEN_API_BASE_URL,
+        endpoint: '/v1/chat/completions',
+        apiKeyConfigured: Boolean(apiConfig.WENWEN_API_KEY),
         operations: [
           'generate-title',
           'generate-meta-description',
@@ -70,16 +77,27 @@ export function createServer() {
       embedding: {
         provider: aiProviders.embedding.provider,
         model: aiProviders.embedding.model,
+        proxyBaseUrl: apiConfig.WENWEN_API_BASE_URL,
+        endpoint: '/v1/embeddings',
+        apiKeyConfigured: Boolean(apiConfig.WENWEN_API_KEY),
         operations: ['embed-text', 'embed-article-chunk', 'embed-keyword']
       },
       image: {
         provider: aiProviders.image.provider,
         model: aiProviders.image.model,
         fallbackProvider: apiConfig.AI_IMAGE_FALLBACK_PROVIDER,
+        proxyBaseUrl: apiConfig.WENWEN_API_BASE_URL,
+        endpoint: '/v1/images/generations',
+        apiKeyConfigured: Boolean(apiConfig.WENWEN_API_KEY),
         operations: ['generate-featured-image', 'generate-social-image', 'edit-image']
       },
       mediaStorage: {
-        provider: apiConfig.MEDIA_STORAGE_PROVIDER
+        provider: apiConfig.MEDIA_STORAGE_PROVIDER,
+        bucket: apiConfig.QINIU_BUCKET,
+        publicDomain: apiConfig.QINIU_PUBLIC_DOMAIN,
+        credentialsConfigured: Boolean(
+          apiConfig.QINIU_ACCESS_KEY && apiConfig.QINIU_SECRET_KEY && apiConfig.QINIU_BUCKET
+        )
       },
       imageOptimization: {
         provider: apiConfig.IMAGE_OPTIMIZATION_PROVIDER

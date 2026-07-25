@@ -1,7 +1,12 @@
-export type AiTextProviderName = 'openai' | 'anthropic' | 'google' | 'deepseek';
-export type AiEmbeddingProviderName = 'openai' | 'google';
-export type AiImageProviderName = 'openai' | 'google' | 'adobe-firefly' | 'stability-ai';
-export type MediaStorageProviderName = 'cloudflare-r2' | 's3';
+export type AiTextProviderName = 'wenwen' | 'openai' | 'anthropic' | 'google' | 'deepseek';
+export type AiEmbeddingProviderName = 'wenwen' | 'openai' | 'google';
+export type AiImageProviderName =
+  | 'wenwen'
+  | 'openai'
+  | 'google'
+  | 'adobe-firefly'
+  | 'stability-ai';
+export type MediaStorageProviderName = 'qiniu-kodo' | 'cloudflare-r2' | 's3';
 export type ImageOptimizationProviderName = 'cloudinary' | 'imagekit';
 
 export type AiOperation =
@@ -234,6 +239,10 @@ export interface ProviderRuntimeConfig {
   imageFallbackProvider: AiImageProviderName;
   mediaStorageProvider: MediaStorageProviderName;
   imageOptimizationProvider: ImageOptimizationProviderName;
+  proxyBaseUrl?: string;
+  textModel?: string;
+  embeddingModel?: string;
+  imageModel?: string;
 }
 
 const bytesPerGb = 1024 * 1024 * 1024;
@@ -316,16 +325,17 @@ export function summarizeUsageRecords(records: AiUsageRecord[]): UsageSummary {
 
 export function createNoopAiProviderRegistry(config: ProviderRuntimeConfig): AiProviderRegistry {
   return {
-    text: createNoopTextGenerationProvider(config.textProvider),
-    embedding: createNoopEmbeddingProvider(config.embeddingProvider),
-    image: createNoopImageGenerationProvider(config.imageProvider)
+    text: createNoopTextGenerationProvider(config.textProvider, config.textModel),
+    embedding: createNoopEmbeddingProvider(config.embeddingProvider, config.embeddingModel),
+    image: createNoopImageGenerationProvider(config.imageProvider, config.imageModel)
   };
 }
 
 function createNoopTextGenerationProvider(
-  provider: AiTextProviderName
+  provider: AiTextProviderName,
+  configuredModel?: string
 ): TextGenerationProvider {
-  const model = `${provider}-not-configured`;
+  const model = configuredModel ?? `${provider}-not-configured`;
 
   return {
     provider,
@@ -339,8 +349,11 @@ function createNoopTextGenerationProvider(
   };
 }
 
-function createNoopEmbeddingProvider(provider: AiEmbeddingProviderName): EmbeddingProvider {
-  const model = `${provider}-not-configured`;
+function createNoopEmbeddingProvider(
+  provider: AiEmbeddingProviderName,
+  configuredModel?: string
+): EmbeddingProvider {
+  const model = configuredModel ?? `${provider}-not-configured`;
 
   return {
     provider,
@@ -352,9 +365,10 @@ function createNoopEmbeddingProvider(provider: AiEmbeddingProviderName): Embeddi
 }
 
 function createNoopImageGenerationProvider(
-  provider: AiImageProviderName
+  provider: AiImageProviderName,
+  configuredModel?: string
 ): ImageGenerationProvider {
-  const model = `${provider}-not-configured`;
+  const model = configuredModel ?? `${provider}-not-configured`;
 
   return {
     provider,

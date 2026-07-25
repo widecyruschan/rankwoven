@@ -32,18 +32,29 @@ describe('api provider route', () => {
       success: true,
       data: {
         text: {
-          provider: 'openai',
-          fallbackProvider: 'anthropic'
+          provider: 'wenwen',
+          model: 'gpt-4.1-mini',
+          fallbackProvider: 'wenwen',
+          proxyBaseUrl: 'https://breakout.wenwen-ai.com',
+          endpoint: '/v1/chat/completions',
+          apiKeyConfigured: false
         },
         embedding: {
-          provider: 'openai'
+          provider: 'wenwen',
+          model: 'text-embedding-3-small',
+          endpoint: '/v1/embeddings',
+          apiKeyConfigured: false
         },
         image: {
-          provider: 'google',
-          fallbackProvider: 'openai'
+          provider: 'wenwen',
+          model: 'gemini-2.5-flash-image',
+          fallbackProvider: 'wenwen',
+          endpoint: '/v1/images/generations',
+          apiKeyConfigured: false
         },
         mediaStorage: {
-          provider: 'cloudflare-r2'
+          provider: 'qiniu-kodo',
+          credentialsConfigured: false
         },
         imageOptimization: {
           provider: 'cloudinary'

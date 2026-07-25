@@ -129,29 +129,25 @@ API_BASE_URL=http://localhost:3011
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GOOGLE_AI_API_KEY=
-DEEPSEEK_API_KEY=
-ADOBE_FIREFLY_CLIENT_ID=
-ADOBE_FIREFLY_CLIENT_SECRET=
-AI_TEXT_PROVIDER=openai
-AI_FALLBACK_TEXT_PROVIDER=anthropic
-AI_EMBEDDING_PROVIDER=openai
-AI_IMAGE_PROVIDER=google
-AI_IMAGE_FALLBACK_PROVIDER=openai
-MEDIA_STORAGE_PROVIDER=cloudflare-r2
+AI_TEXT_PROVIDER=wenwen
+AI_FALLBACK_TEXT_PROVIDER=wenwen
+AI_EMBEDDING_PROVIDER=wenwen
+AI_IMAGE_PROVIDER=wenwen
+AI_IMAGE_FALLBACK_PROVIDER=wenwen
+MEDIA_STORAGE_PROVIDER=qiniu-kodo
 IMAGE_OPTIMIZATION_PROVIDER=cloudinary
+WENWEN_API_BASE_URL=https://breakout.wenwen-ai.com
+WENWEN_API_KEY=
+WENWEN_TEXT_MODEL=gpt-4.1-mini
+WENWEN_EMBEDDING_MODEL=text-embedding-3-small
+WENWEN_IMAGE_MODEL=gemini-2.5-flash-image
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
-S3_ENDPOINT=
-S3_BUCKET=
-S3_ACCESS_KEY_ID=
-S3_SECRET_ACCESS_KEY=
-CLOUDFLARE_R2_ENDPOINT=
-CLOUDFLARE_R2_BUCKET=
-CLOUDFLARE_R2_ACCESS_KEY_ID=
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+QINIU_ACCESS_KEY=
+QINIU_SECRET_KEY=
+QINIU_BUCKET=
+QINIU_REGION=
+QINIU_PUBLIC_DOMAIN=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
@@ -193,7 +189,7 @@ CLOUDINARY_API_SECRET=
 
 ## AI Provider 使用說明
 
-目前已新增 `@aieo/ai-providers` 共享包，先提供最小 Provider Adapter 介面、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。真實 OpenAI、Claude、Gemini、DeepSeek、Adobe Firefly、Cloudflare R2 和 Cloudinary SDK 尚未接入，後續應在此介面下逐步增加具體 Adapter。
+目前已新增 `@aieo/ai-providers` 共享包，先提供最小 Provider Adapter 介面、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；圖片存儲使用七牛雲 Kodo。真實請求 Adapter 尚未接入，後續應在此介面下逐步增加具體 Adapter。
 
 ## 元件使用說明
 
@@ -305,3 +301,12 @@ CLOUDINARY_API_SECRET=
 - 使用的技術棧：TypeScript、Fastify、Vitest、npm workspaces。
 - 新增或修改文件：新增 `packages/ai-providers/`；修改 `apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/tests/health.test.ts`、`apps/api/package.json`、`apps/worker/package.json`、`package.json`、`package-lock.json`、`README.md`。
 - 後續建議：下一步實作 OpenAI Text/Embedding Adapter，並把用量記錄落到 PostgreSQL 資料表。
+
+### 2026-07-25：MVP 改用問問 API 與七牛雲 Kodo
+
+- 會話的主要目的：按 MVP 要求將 OpenAI、Google Gemini、DeepSeek 統一改為通過問問 API 代理接入，並將圖片存儲改為七牛雲 Kodo。
+- 完成的主要任務：更新 Provider 枚舉、API 配置、Provider 狀態端點和測試預期；補充問問 API Base URL、模型配置、七牛 Access Key、Bucket、Region 和公開域名環境變量。
+- 關鍵決策和解決方案：MVP 默認 `AI_TEXT_PROVIDER`、`AI_EMBEDDING_PROVIDER` 和 `AI_IMAGE_PROVIDER` 均為 `wenwen`；底層模型通過 `WENWEN_TEXT_MODEL`、`WENWEN_EMBEDDING_MODEL`、`WENWEN_IMAGE_MODEL` 控制；圖片原始文件和衍生文件由七牛 Kodo 保存。
+- 使用的技術棧：問問 API、OpenAI 兼容 API、七牛雲 Kodo、TypeScript、Fastify、Vitest。
+- 新增或修改文件：修改 `packages/ai-providers/src/index.ts`、`packages/ai-providers/tests/usageRecords.test.ts`、`apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/tests/health.test.ts`、`.env.example`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 後續建議：下一步實作 `WenwenTextGenerationProvider`、`WenwenEmbeddingProvider`、`WenwenImageGenerationProvider` 和 `QiniuKodoMediaStorageProvider`。

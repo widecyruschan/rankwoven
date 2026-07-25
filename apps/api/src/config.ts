@@ -5,17 +5,31 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().optional(),
-  AI_TEXT_PROVIDER: z.enum(['openai', 'anthropic', 'google', 'deepseek']).default('openai'),
-  AI_FALLBACK_TEXT_PROVIDER: z.enum(['openai', 'anthropic', 'google', 'deepseek']).default('anthropic'),
-  AI_EMBEDDING_PROVIDER: z.enum(['openai', 'google']).default('openai'),
+  WENWEN_API_BASE_URL: z.url().default('https://breakout.wenwen-ai.com'),
+  WENWEN_API_KEY: z.string().optional(),
+  WENWEN_TEXT_MODEL: z.string().default('gpt-4.1-mini'),
+  WENWEN_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  WENWEN_IMAGE_MODEL: z.string().default('gemini-2.5-flash-image'),
+  AI_TEXT_PROVIDER: z
+    .enum(['wenwen', 'openai', 'anthropic', 'google', 'deepseek'])
+    .default('wenwen'),
+  AI_FALLBACK_TEXT_PROVIDER: z
+    .enum(['wenwen', 'openai', 'anthropic', 'google', 'deepseek'])
+    .default('wenwen'),
+  AI_EMBEDDING_PROVIDER: z.enum(['wenwen', 'openai', 'google']).default('wenwen'),
   AI_IMAGE_PROVIDER: z
-    .enum(['openai', 'google', 'adobe-firefly', 'stability-ai'])
-    .default('google'),
+    .enum(['wenwen', 'openai', 'google', 'adobe-firefly', 'stability-ai'])
+    .default('wenwen'),
   AI_IMAGE_FALLBACK_PROVIDER: z
-    .enum(['openai', 'google', 'adobe-firefly', 'stability-ai'])
-    .default('openai'),
-  MEDIA_STORAGE_PROVIDER: z.enum(['cloudflare-r2', 's3']).default('cloudflare-r2'),
-  IMAGE_OPTIMIZATION_PROVIDER: z.enum(['cloudinary', 'imagekit']).default('cloudinary')
+    .enum(['wenwen', 'openai', 'google', 'adobe-firefly', 'stability-ai'])
+    .default('wenwen'),
+  MEDIA_STORAGE_PROVIDER: z.enum(['qiniu-kodo', 'cloudflare-r2', 's3']).default('qiniu-kodo'),
+  IMAGE_OPTIMIZATION_PROVIDER: z.enum(['cloudinary', 'imagekit']).default('cloudinary'),
+  QINIU_ACCESS_KEY: z.string().optional(),
+  QINIU_SECRET_KEY: z.string().optional(),
+  QINIU_BUCKET: z.string().optional(),
+  QINIU_REGION: z.string().optional(),
+  QINIU_PUBLIC_DOMAIN: z.string().optional()
 });
 
 export const apiConfig = envSchema.parse(process.env);
