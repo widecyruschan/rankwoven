@@ -186,6 +186,8 @@ Google 官方說明中，生成式 AI 可以用於研究主題和增加內容結
 - SaaS 後台顯示待連接站點。
 - 用戶確認後生成站點 API Token。
 - 插件端或擴展端保存 Token，不保存 SaaS 主帳號密碼。
+- WordPress 用戶需自行在個人資料頁建立管理員 Application Password，並在插件或 SaaS 後台錄入。
+- SaaS 只保存 WordPress 管理員用戶名與加密後 Application Password，用於後續以該管理員身份寫回已批准修改。
 - 支援斷開連接和重新生成 Token。
 - 站點記錄必須包含 `platform` 欄位，例如 `wordpress`、`joomla`、`opencart`。
 
@@ -193,6 +195,8 @@ Google 官方說明中，生成式 AI 可以用於研究主題和增加內容結
 
 - 連接成功後，SaaS 能讀取站點基礎資訊。
 - Token 洩露時可立即吊銷。
+- Token 被吊銷或重生後，插件需提示重新填寫新 Token 或重新連接站點。
+- 後續寫回 WordPress 時，修改應歸屬到用戶錄入的管理員身份，方便在 WordPress 端追蹤修改來源。
 - 連接失敗時顯示明確原因，例如 HTTPS 不可用、REST API 被禁用、權限不足。
 - 不同 CMS 的連接錯誤要保留平台差異，例如 Joomla API Token 權限不足、OpenCart API IP 白名單未配置。
 
@@ -581,6 +585,7 @@ cancelled
 | `POST` | `/api/v1/site-connections` | 創建站點連接 |
 | `GET` | `/api/v1/site-connections` | 獲取站點列表 |
 | `GET` | `/api/v1/site-connections/:siteId` | 獲取站點詳情 |
+| `PUT` | `/api/v1/site-connections/:siteId/wordpress-credentials` | 保存 WordPress 管理員用戶名和加密後 Application Password |
 | `POST` | `/api/v1/site-connections/:siteId/token/regenerate` | 重新生成站點 API Token，舊 Token 立即失效 |
 | `POST` | `/api/v1/site-connections/:siteId/token/revoke` | 吊銷站點 API Token，站點狀態改為 `revoked` |
 | `POST` | `/api/v1/site-connections/:siteId/sync` | 接收插件推送的文章與媒體同步資料 |
@@ -1210,13 +1215,13 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 在 WordPress 插件中支援 Token 重新連接提示，讓吊銷或重生 Token 後可重新保存新 Token。
-2. 為站點 Token 增加最後使用時間記錄，方便後台判斷插件是否仍在同步。
-3. 為 WordPress 插件補充分頁同步，避免每次只同步第一批 100 篇文章和 100 個圖片媒體。
-4. 增加增量同步參數，例如 `updatedAfter` 和單篇文章手動刷新。
-5. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
-6. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
-7. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、最近同步和錯誤原因。
+1. 為站點 Token 增加最後使用時間記錄，方便後台判斷插件是否仍在同步。
+2. 為 WordPress 插件補充分頁同步，避免每次只同步第一批 100 篇文章和 100 個圖片媒體。
+3. 增加增量同步參數，例如 `updatedAfter` 和單篇文章手動刷新。
+4. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
+5. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
+6. 實作已批准建議的 WordPress REST API 寫回任務，使用站點保存的管理員 Application Password。
+7. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、最近同步、應用程式密碼配置狀態和錯誤原因。
 8. 為 PostgreSQL Repository 補充分頁查詢和按站點篩選條件，避免文章列表資料量增長後一次讀取過多。
 9. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
 10. 將客戶後台同步頁後續接入真正的手動同步任務 API，而不是只刷新同步狀態。

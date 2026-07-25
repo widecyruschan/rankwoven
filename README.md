@@ -143,6 +143,7 @@ PUBLIC_ASSETS_URL=https://assets.rankwoven.com
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=
+WORDPRESS_CREDENTIAL_ENCRYPTION_KEY=
 AI_TEXT_PROVIDER=wenwen
 AI_FALLBACK_TEXT_PROVIDER=wenwen
 AI_EMBEDDING_PROVIDER=wenwen
@@ -217,12 +218,15 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections`：建立 WordPress、Joomla 或 OpenCart 站點連接，MVP 先由 WordPress 插件使用。
 - `GET /api/v1/site-connections`：查看已連接站點列表，不返回完整 Token。
 - `GET /api/v1/site-connections/:siteId`：查看單個站點連接詳情。
+- `PUT /api/v1/site-connections/:siteId/wordpress-credentials`：保存 WordPress 管理員用戶名和應用程式密碼，用於後續以該管理員身份調用 WordPress REST API 寫回已批准修改。
 - `POST /api/v1/site-connections/:siteId/token/regenerate`：重新生成站點 API Token，只在回應中返回一次完整 Token，舊 Token 立即失效。
 - `POST /api/v1/site-connections/:siteId/token/revoke`：吊銷站點 API Token，站點狀態改為 `revoked`，插件同步接口不再接受該站點 Token。
 - `POST /api/v1/site-connections/:siteId/sync`：由插件帶 Bearer Token 推送文章與媒體同步資料。
 - `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
 
-站點連接、Token Hash、Token Preview、Token 狀態、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 和 `/app/article-sync` 已使用 `GET /api/v1/site-connections` 顯示站點列表、同步狀態和最近同步結果。
+站點連接、Token Hash、Token Preview、Token 狀態、WordPress 管理員應用程式密碼加密密文、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 和 `/app/article-sync` 已使用 `GET /api/v1/site-connections` 顯示站點列表、同步狀態和最近同步結果。
+
+`WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
 詳細產品 API 規劃詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
 
@@ -520,3 +524,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run lint` 通過；`npm run build -w @aieo/web` 通過；`npm run test` 通過；`npm run build` 通過。
 - 下一步行動清單：在 WordPress 插件中支援 Token 重新連接提示；為站點 Token 增加最後使用時間記錄；補充分頁同步與增量同步；建立第一批 SEO 審計規則模型。
+
+### 2026-07-26：WordPress 應用程式密碼與 Token 重新連接提示
+
+- 會話的主要目的：讓 WordPress 插件提示 Token 失效後重新連接，並錄入 WordPress 管理員 Application Password，供 SaaS 後續以該管理員身份寫回已批准修改。
+- 完成的主要任務：插件新增 WordPress 管理員用戶名和應用程式密碼欄位；連接站點時要求先保存應用程式密碼；已連接站點更新應用程式密碼時同步寫入 SaaS；同步遇到 `SITE_TOKEN_INVALID` 時顯示重新生成或重新填寫 Token 的提示；API 新增 WordPress 憑據更新接口；PostgreSQL 新增管理員用戶名和加密後應用程式密碼欄位。
+- 關鍵決策和解決方案：應用程式密碼必須由 WordPress 管理員自行在個人資料頁建立；SaaS 僅保存加密密文，不在 API 回應中返回明文；後續 WordPress 寫回任務使用該管理員身份調用 REST API，使修改可在 WordPress 端追蹤到具體管理員。
+- 使用的技術棧：WordPress PHP Plugin、WordPress Application Passwords、Fastify、TypeScript、PostgreSQL、AES-256-GCM、Vitest。
+- 新增或修改文件：修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`.env.example`、`docker-compose.yml`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；使用 WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過；Docker Desktop 已重建 API/Worker，`localhost:3011` smoke 測試確認應用程式密碼不在 API 回應中洩露，PostgreSQL 保存值為 `v1:` 加密密文。
+- 下一步行動清單：為站點 Token 增加最後使用時間記錄；補充分頁同步與增量同步；建立第一批 SEO 審計規則模型；實作已批准建議的 WordPress REST API 寫回任務。

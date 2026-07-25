@@ -16,6 +16,8 @@ export interface SiteConnection {
     mediaReceived: number;
   };
   tokenPreview: string;
+  wordpressAdminUsername?: string;
+  wordpressApplicationPasswordConfigured: boolean;
 }
 
 interface ApiResponse<T> {

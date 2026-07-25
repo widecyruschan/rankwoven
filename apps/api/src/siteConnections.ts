@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 import { z } from 'zod';
@@ -10,7 +10,22 @@ const createConnectionSchema = z.object({
   name: z.string().trim().min(1).max(160),
   siteUrl: z.url(),
   cmsVersion: z.string().trim().max(40).optional(),
-  pluginVersion: z.string().trim().max(40).optional()
+  pluginVersion: z.string().trim().max(40).optional(),
+  wordpressAdminUsername: z.string().trim().min(1).max(160).optional(),
+  wordpressApplicationPassword: z.string().trim().min(1).max(240).optional()
+}).superRefine((input, context) => {
+  if (Boolean(input.wordpressAdminUsername) !== Boolean(input.wordpressApplicationPassword)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'WordPress 管理員用戶名和應用程式密碼必須同時提供',
+      path: ['wordpressApplicationPassword']
+    });
+  }
+});
+
+const updateWordPressCredentialsSchema = z.object({
+  wordpressAdminUsername: z.string().trim().min(1).max(160),
+  wordpressApplicationPassword: z.string().trim().min(1).max(240)
 });
 
 const syncedArticleSchema = z.object({
@@ -68,6 +83,8 @@ export interface SiteConnection {
     mediaReceived: number;
   };
   tokenPreview: string;
+  wordpressAdminUsername?: string;
+  wordpressApplicationPasswordConfigured: boolean;
 }
 
 export interface SaveSyncResult {
@@ -83,6 +100,10 @@ export interface SiteConnectionRepository {
   }>;
   list(): Promise<SiteConnection[]>;
   find(siteId: string): Promise<SiteConnection | undefined>;
+  updateWordPressCredentials(
+    siteId: string,
+    credentials: WordPressCredentialsInput
+  ): Promise<SiteConnection | undefined>;
   regenerateToken(siteId: string): Promise<{ site: SiteConnection; apiToken: string } | undefined>;
   revokeToken(siteId: string): Promise<SiteConnection | undefined>;
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
@@ -93,7 +114,10 @@ export interface SiteConnectionRepository {
 
 interface InMemorySiteConnection extends SiteConnection {
   apiToken: string;
+  wordpressApplicationPassword?: string;
 }
+
+type WordPressCredentialsInput = z.infer<typeof updateWordPressCredentialsSchema>;
 
 const siteConnectionMigrationSql = `
 CREATE TABLE IF NOT EXISTS site_connections (
@@ -108,7 +132,9 @@ CREATE TABLE IF NOT EXISTS site_connections (
   status text NOT NULL DEFAULT 'connected' CHECK (status IN ('connected', 'revoked')),
   created_at timestamptz NOT NULL,
   last_sync_at timestamptz,
-  last_sync_stats jsonb
+  last_sync_stats jsonb,
+  wordpress_admin_username varchar(160),
+  wordpress_application_password_encrypted text
 );
 
 CREATE INDEX IF NOT EXISTS idx_site_connections_platform
@@ -120,6 +146,12 @@ ALTER TABLE site_connections
 ALTER TABLE site_connections
   ADD CONSTRAINT site_connections_status_check
   CHECK (status IN ('connected', 'revoked'));
+
+ALTER TABLE site_connections
+  ADD COLUMN IF NOT EXISTS wordpress_admin_username varchar(160);
+
+ALTER TABLE site_connections
+  ADD COLUMN IF NOT EXISTS wordpress_application_password_encrypted text;
 
 CREATE TABLE IF NOT EXISTS sync_runs (
   id uuid PRIMARY KEY,
@@ -191,6 +223,29 @@ function hashSiteToken(apiToken: string) {
   return createHash('sha256').update(apiToken).digest('hex');
 }
 
+function getCredentialEncryptionKey() {
+  const secret =
+    process.env.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY ??
+    process.env.JWT_SECRET ??
+    'rankwoven-local-development-key';
+
+  return createHash('sha256').update(secret).digest();
+}
+
+function encryptWordPressCredential(value: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', getCredentialEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return [
+    'v1',
+    iv.toString('base64url'),
+    authTag.toString('base64url'),
+    encrypted.toString('base64url')
+  ].join(':');
+}
+
 function toIsoString(value: unknown) {
   if (!value) {
     return undefined;
@@ -231,7 +286,9 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
     createdAt: connection.createdAt,
     lastSyncAt: connection.lastSyncAt,
     lastSyncStats: connection.lastSyncStats,
-    tokenPreview: connection.tokenPreview
+    tokenPreview: connection.tokenPreview,
+    wordpressAdminUsername: connection.wordpressAdminUsername,
+    wordpressApplicationPasswordConfigured: Boolean(connection.wordpressApplicationPassword)
   };
 }
 
@@ -247,7 +304,9 @@ function mapSiteRow(row: QueryResultRow): SiteConnection {
     createdAt: toIsoString(row.created_at) ?? '',
     lastSyncAt: toIsoString(row.last_sync_at),
     lastSyncStats: toLastSyncStats(row.last_sync_stats),
-    tokenPreview: row.token_preview
+    tokenPreview: row.token_preview,
+    wordpressAdminUsername: row.wordpress_admin_username ?? undefined,
+    wordpressApplicationPasswordConfigured: Boolean(row.wordpress_application_password_encrypted)
   };
 }
 
@@ -281,7 +340,10 @@ function createSiteConnection(id: string, input: CreateConnectionInput, apiToken
     apiToken,
     tokenPreview: getTokenPreview(apiToken),
     status: 'connected',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    wordpressAdminUsername: input.wordpressAdminUsername,
+    wordpressApplicationPasswordConfigured: Boolean(input.wordpressApplicationPassword),
+    wordpressApplicationPassword: input.wordpressApplicationPassword
   };
 }
 
@@ -310,6 +372,19 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
     async find(siteId) {
       const site = sites.get(siteId);
       return site ? toPublicConnection(site) : undefined;
+    },
+    async updateWordPressCredentials(siteId, credentials) {
+      const site = sites.get(siteId);
+
+      if (!site) {
+        return undefined;
+      }
+
+      site.wordpressAdminUsername = credentials.wordpressAdminUsername;
+      site.wordpressApplicationPassword = credentials.wordpressApplicationPassword;
+      site.wordpressApplicationPasswordConfigured = true;
+
+      return toPublicConnection(site);
     },
     async regenerateToken(siteId) {
       const site = sites.get(siteId);
@@ -422,9 +497,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           api_token_hash,
           token_preview,
           status,
-          created_at
+          created_at,
+          wordpress_admin_username,
+          wordpress_application_password_encrypted
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'connected', $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'connected', $9, $10, $11)
         RETURNING *
       `,
       [
@@ -436,7 +513,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         input.pluginVersion ?? null,
         hashSiteToken(apiToken),
         getTokenPreview(apiToken),
-        now
+        now,
+        input.wordpressAdminUsername ?? null,
+        input.wordpressApplicationPassword
+          ? encryptWordPressCredential(input.wordpressApplicationPassword)
+          : null
       ]
     );
 
@@ -469,6 +550,27 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         LIMIT 1
       `,
       [siteId]
+    );
+
+    return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
+  }
+
+  async updateWordPressCredentials(siteId: string, credentials: WordPressCredentialsInput) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        UPDATE site_connections
+        SET wordpress_admin_username = $2,
+            wordpress_application_password_encrypted = $3
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        siteId,
+        credentials.wordpressAdminUsername,
+        encryptWordPressCredential(credentials.wordpressApplicationPassword)
+      ]
     );
 
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
@@ -856,6 +958,38 @@ export function registerSiteConnectionRoutes(
     return {
       success: true,
       message: '操作成功',
+      data: {
+        site
+      }
+    };
+  });
+
+  app.put<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/wordpress-credentials', async (request, reply) => {
+    const parsed = updateWordPressCredentialsSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const site = await repository.updateWordPressCredentials(request.params.siteId, parsed.data);
+
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: 'WordPress 管理員應用程式密碼已保存',
       data: {
         site
       }

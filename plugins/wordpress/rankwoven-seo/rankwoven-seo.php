@@ -19,6 +19,8 @@ final class RankWoven_SEO_Plugin
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
+    private const OPTION_WP_ADMIN_USERNAME = 'rankwoven_wp_admin_username';
+    private const OPTION_WP_APPLICATION_PASSWORD = 'rankwoven_wp_application_password';
     private const OPTION_LAST_SYNC_RESULT = 'rankwoven_last_sync_result';
     private const REST_NAMESPACE = 'rankwoven/v1';
 
@@ -51,6 +53,8 @@ final class RankWoven_SEO_Plugin
         $api_base_url = get_option(self::OPTION_API_BASE_URL, 'http://localhost:3011');
         $site_id = get_option(self::OPTION_SITE_ID, '');
         $site_token = get_option(self::OPTION_SITE_TOKEN, '');
+        $wp_admin_username = get_option(self::OPTION_WP_ADMIN_USERNAME, '');
+        $wp_application_password = get_option(self::OPTION_WP_APPLICATION_PASSWORD, '');
         $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
         ?>
         <div class="wrap">
@@ -104,6 +108,50 @@ final class RankWoven_SEO_Plugin
                                 value="<?php echo esc_attr($site_token); ?>"
                                 autocomplete="off"
                             />
+                            <p class="description">
+                                <?php echo esc_html__('If this token was regenerated or revoked in RankWoven, paste the new Site Token here and save settings before syncing again.', 'rankwoven-seo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <h2><?php echo esc_html__('WordPress Application Password', 'rankwoven-seo'); ?></h2>
+                <p>
+                    <?php echo esc_html__('Create an application password from your WordPress administrator profile, then save the username and application password here. RankWoven will use this administrator identity for approved future content updates so WordPress keeps an audit trail.', 'rankwoven-seo'); ?>
+                </p>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">
+                            <label for="rankwoven_wp_admin_username"><?php echo esc_html__('Administrator Username', 'rankwoven-seo'); ?></label>
+                        </th>
+                        <td>
+                            <input
+                                id="rankwoven_wp_admin_username"
+                                name="rankwoven_wp_admin_username"
+                                type="text"
+                                class="regular-text"
+                                value="<?php echo esc_attr($wp_admin_username); ?>"
+                                autocomplete="username"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="rankwoven_wp_application_password"><?php echo esc_html__('Application Password', 'rankwoven-seo'); ?></label>
+                        </th>
+                        <td>
+                            <input
+                                id="rankwoven_wp_application_password"
+                                name="rankwoven_wp_application_password"
+                                type="password"
+                                class="regular-text"
+                                value=""
+                                autocomplete="new-password"
+                                placeholder="<?php echo esc_attr($wp_application_password !== '' ? __('Already saved; leave blank to keep current password', 'rankwoven-seo') : __('Paste application password', 'rankwoven-seo')); ?>"
+                            />
+                            <p class="description">
+                                <?php echo esc_html__('Users must create this password themselves in WordPress: Users -> Profile -> Application Passwords. Do not use your normal login password.', 'rankwoven-seo'); ?>
+                            </p>
                         </td>
                     </tr>
                 </table>
@@ -163,6 +211,25 @@ final class RankWoven_SEO_Plugin
             self::OPTION_SITE_TOKEN,
             sanitize_text_field(wp_unslash($_POST['rankwoven_site_token'] ?? ''))
         );
+        $wp_admin_username = sanitize_text_field(wp_unslash($_POST['rankwoven_wp_admin_username'] ?? ''));
+        $wp_application_password = sanitize_text_field(wp_unslash($_POST['rankwoven_wp_application_password'] ?? ''));
+
+        update_option(self::OPTION_WP_ADMIN_USERNAME, $wp_admin_username);
+
+        if ($wp_admin_username === '') {
+            delete_option(self::OPTION_WP_APPLICATION_PASSWORD);
+        } elseif ($wp_application_password !== '') {
+            update_option(self::OPTION_WP_APPLICATION_PASSWORD, $wp_application_password);
+        }
+
+        $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
+        if ($site_id !== '' && $wp_admin_username !== '' && $wp_application_password !== '') {
+            if (!$this->sync_wordpress_credentials_to_saas($site_id, $wp_admin_username, $wp_application_password)) {
+                $this->redirect_with_status('wordpress_credentials_update_failed');
+            }
+
+            $this->redirect_with_status('wordpress_credentials_updated');
+        }
 
         $this->redirect_with_status('settings_saved');
     }
@@ -176,6 +243,11 @@ final class RankWoven_SEO_Plugin
             $this->redirect_with_status('missing_api_base_url');
         }
 
+        $wp_credentials = $this->get_wordpress_admin_credentials();
+        if ($wp_credentials['username'] === '' || $wp_credentials['applicationPassword'] === '') {
+            $this->redirect_with_status('missing_wordpress_application_password');
+        }
+
         $response = wp_remote_post($this->build_api_url('/api/v1/site-connections'), [
             'timeout' => 30,
             'headers' => [
@@ -186,7 +258,9 @@ final class RankWoven_SEO_Plugin
                 'name' => get_bloginfo('name'),
                 'siteUrl' => home_url('/'),
                 'cmsVersion' => get_bloginfo('version'),
-                'pluginVersion' => self::VERSION
+                'pluginVersion' => self::VERSION,
+                'wordpressAdminUsername' => $wp_credentials['username'],
+                'wordpressApplicationPassword' => $wp_credentials['applicationPassword']
             ])
         ]);
 
@@ -237,6 +311,11 @@ final class RankWoven_SEO_Plugin
 
         $body = $this->decode_response_body($response);
         if (!($body['success'] ?? false)) {
+            $error_code = $body['error']['code'] ?? '';
+            if (wp_remote_retrieve_response_code($response) === 401 || $error_code === 'SITE_TOKEN_INVALID') {
+                $this->redirect_with_status('site_token_invalid');
+            }
+
             $this->redirect_with_status('sync_failed');
         }
 
@@ -431,9 +510,49 @@ final class RankWoven_SEO_Plugin
         return untrailingslashit(esc_url_raw(get_option(self::OPTION_API_BASE_URL, '')));
     }
 
+    private function get_wordpress_admin_credentials(): array
+    {
+        return [
+            'username' => sanitize_text_field(get_option(self::OPTION_WP_ADMIN_USERNAME, '')),
+            'applicationPassword' => sanitize_text_field(get_option(self::OPTION_WP_APPLICATION_PASSWORD, ''))
+        ];
+    }
+
     private function build_api_url(string $path): string
     {
         return $this->get_api_base_url() . '/' . ltrim($path, '/');
+    }
+
+    private function sync_wordpress_credentials_to_saas(
+        string $site_id,
+        string $wp_admin_username,
+        string $wp_application_password
+    ): bool {
+        if ($this->get_api_base_url() === '') {
+            return false;
+        }
+
+        $response = wp_remote_request(
+            $this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/wordpress-credentials'),
+            [
+                'method' => 'PUT',
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type' => 'application/json'
+                ],
+                'body' => wp_json_encode([
+                    'wordpressAdminUsername' => $wp_admin_username,
+                    'wordpressApplicationPassword' => $wp_application_password
+                ])
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $body = $this->decode_response_body($response);
+        return (bool) ($body['success'] ?? false);
     }
 
     private function decode_response_body(array $response): array
@@ -469,10 +588,14 @@ final class RankWoven_SEO_Plugin
 
         $messages = [
             'settings_saved' => ['updated', __('Settings saved.', 'rankwoven-seo')],
+            'wordpress_credentials_updated' => ['updated', __('WordPress application password saved locally and updated in RankWoven.', 'rankwoven-seo')],
             'site_connected' => ['updated', __('Site connected successfully.', 'rankwoven-seo')],
             'sync_completed' => ['updated', __('Content sync completed.', 'rankwoven-seo')],
             'missing_api_base_url' => ['error', __('Please set the API Base URL first.', 'rankwoven-seo')],
             'missing_site_credentials' => ['error', __('Please connect this site before syncing content.', 'rankwoven-seo')],
+            'missing_wordpress_application_password' => ['error', __('Please save a WordPress administrator username and application password before connecting this site.', 'rankwoven-seo')],
+            'wordpress_credentials_update_failed' => ['error', __('WordPress application password was saved locally, but RankWoven could not update the SaaS credential record. Please check the API service.', 'rankwoven-seo')],
+            'site_token_invalid' => ['error', __('The Site Token is invalid or has been revoked. Regenerate the token in RankWoven, paste the new token here, then sync again.', 'rankwoven-seo')],
             'connection_failed' => ['error', __('Site connection failed. Please check the API service.', 'rankwoven-seo')],
             'sync_failed' => ['error', __('Content sync failed. Please check the Site Token and API service.', 'rankwoven-seo')]
         ];

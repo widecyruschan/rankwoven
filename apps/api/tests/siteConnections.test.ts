@@ -11,6 +11,8 @@ interface CreateSiteConnectionResponse {
       siteUrl: string;
       status: 'connected' | 'revoked';
       tokenPreview: string;
+      wordpressAdminUsername?: string;
+      wordpressApplicationPasswordConfigured: boolean;
     };
     apiToken: string;
   };
@@ -28,7 +30,23 @@ interface RegenerateTokenResponse {
   };
 }
 
-async function createWordPressConnection() {
+interface UpdateWordPressCredentialsResponse {
+  success: boolean;
+  data: {
+    site: {
+      id: string;
+      wordpressAdminUsername?: string;
+      wordpressApplicationPasswordConfigured: boolean;
+    };
+  };
+}
+
+async function createWordPressConnection(
+  payload: Partial<{
+    wordpressAdminUsername: string;
+    wordpressApplicationPassword: string;
+  }> = {}
+) {
   const server = createServer({
     siteConnectionRepository: createInMemorySiteConnectionRepository()
   });
@@ -40,7 +58,8 @@ async function createWordPressConnection() {
       name: 'Local WordPress',
       siteUrl: 'http://localhost:8088',
       cmsVersion: '6.8.2',
-      pluginVersion: '0.1.0'
+      pluginVersion: '0.1.0',
+      ...payload
     }
   });
 
@@ -90,6 +109,62 @@ describe('site connection routes', () => {
       }
     });
     expect(JSON.stringify(response.json())).not.toContain(body.data.apiToken);
+  });
+
+  it('stores WordPress admin application password configuration without exposing the password', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/site-connections'
+    });
+
+    expect(body.data.site).toMatchObject({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPasswordConfigured: true
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        sites: [
+          {
+            id: body.data.site.id,
+            wordpressAdminUsername: 'site-admin',
+            wordpressApplicationPasswordConfigured: true
+          }
+        ]
+      }
+    });
+    expect(JSON.stringify(response.json())).not.toContain('abcd efgh ijkl mnop');
+  });
+
+  it('updates WordPress admin application password credentials for an existing site', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/site-connections/${body.data.site.id}/wordpress-credentials`,
+      payload: {
+        wordpressAdminUsername: 'editor-admin',
+        wordpressApplicationPassword: 'qrst uvwx yz12 3456'
+      }
+    });
+    const updated = response.json<UpdateWordPressCredentialsResponse>();
+
+    expect(response.statusCode).toBe(200);
+    expect(updated).toMatchObject({
+      success: true,
+      data: {
+        site: {
+          id: body.data.site.id,
+          wordpressAdminUsername: 'editor-admin',
+          wordpressApplicationPasswordConfigured: true
+        }
+      }
+    });
+    expect(JSON.stringify(updated)).not.toContain('qrst uvwx yz12 3456');
   });
 
   it('rejects article sync without a valid site token', async () => {

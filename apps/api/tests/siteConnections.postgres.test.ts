@@ -11,6 +11,8 @@ interface CreateSiteConnectionResponse {
   data: {
     site: {
       id: string;
+      wordpressAdminUsername?: string;
+      wordpressApplicationPasswordConfigured: boolean;
     };
     apiToken: string;
   };
@@ -48,7 +50,9 @@ describePostgres('PostgreSQL site connection repository', () => {
           name: `Postgres WordPress ${crypto.randomUUID()}`,
           siteUrl: 'http://localhost:8088',
           cmsVersion: '6.8.2',
-          pluginVersion: '0.1.0'
+          pluginVersion: '0.1.0',
+          wordpressAdminUsername: 'postgres-admin',
+          wordpressApplicationPassword: 'abcd efgh ijkl mnop'
         }
       });
       const createBody = createResponse.json<CreateSiteConnectionResponse>();
@@ -56,6 +60,11 @@ describePostgres('PostgreSQL site connection repository', () => {
 
       expect(createResponse.statusCode).toBe(201);
       expect(createBody.data.apiToken).toMatch(/^rw_[a-f0-9]{32}$/);
+      expect(createBody.data.site).toMatchObject({
+        wordpressAdminUsername: 'postgres-admin',
+        wordpressApplicationPasswordConfigured: true
+      });
+      expect(JSON.stringify(createBody)).not.toContain('abcd efgh ijkl mnop');
 
       const syncPayload = {
         syncStartedAt: '2026-07-25T15:14:18+00:00',
@@ -130,6 +139,8 @@ describePostgres('PostgreSQL site connection repository', () => {
           SELECT
             sc.api_token_hash,
             sc.token_preview,
+            sc.wordpress_admin_username,
+            sc.wordpress_application_password_encrypted,
             COUNT(DISTINCT sa.id)::int AS article_count,
             COUNT(DISTINCT sm.id)::int AS media_count,
             COUNT(DISTINCT sr.id)::int AS sync_run_count
@@ -145,11 +156,37 @@ describePostgres('PostgreSQL site connection repository', () => {
 
       expect(persisted.rows[0]).toMatchObject({
         token_preview: `${createBody.data.apiToken.slice(0, 8)}...`,
+        wordpress_admin_username: 'postgres-admin',
         article_count: 1,
         media_count: 1,
         sync_run_count: 2
       });
       expect(persisted.rows[0].api_token_hash).not.toBe(createBody.data.apiToken);
+      expect(persisted.rows[0].wordpress_application_password_encrypted).not.toBe(
+        'abcd efgh ijkl mnop'
+      );
+      expect(persisted.rows[0].wordpress_application_password_encrypted).toMatch(/^v1:/);
+
+      const credentialsResponse = await server.inject({
+        method: 'PUT',
+        url: `/api/v1/site-connections/${siteId}/wordpress-credentials`,
+        payload: {
+          wordpressAdminUsername: 'updated-admin',
+          wordpressApplicationPassword: 'qrst uvwx yz12 3456'
+        }
+      });
+
+      expect(credentialsResponse.statusCode).toBe(200);
+      expect(credentialsResponse.json()).toMatchObject({
+        data: {
+          site: {
+            id: siteId,
+            wordpressAdminUsername: 'updated-admin',
+            wordpressApplicationPasswordConfigured: true
+          }
+        }
+      });
+      expect(JSON.stringify(credentialsResponse.json())).not.toContain('qrst uvwx yz12 3456');
 
       const regenerateResponse = await server.inject({
         method: 'POST',
