@@ -91,10 +91,12 @@ const messages = {
   }
 };
 
-const savedLocale = globalThis.localStorage?.getItem('aieo-locale') as AppLocale | null;
-const initialLocale = supportedLocales.some((item) => item.code === savedLocale)
-  ? savedLocale
-  : 'zh-Hant';
+function isSupportedLocale(value: string | null | undefined): value is AppLocale {
+  return supportedLocales.some((item) => item.code === value);
+}
+
+const savedLocale = globalThis.localStorage?.getItem('aieo-locale');
+const initialLocale: AppLocale = isSupportedLocale(savedLocale) ? savedLocale : 'zh-Hant';
 
 export const i18n = createI18n({
   legacy: false,

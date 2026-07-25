@@ -2,7 +2,7 @@ services:
   web:
     build:
       context: .
-    command: npm run dev -w @aieo/web -- --host 0.0.0.0
+    command: sh -c "npm install && npm run dev -w @aieo/web -- --host 0.0.0.0"
     working_dir: /workspace
     ports:
       - '5173:5173'
@@ -17,7 +17,7 @@ services:
   api:
     build:
       context: .
-    command: sh -c "npm run build -w @aieo/cms-adapters && npm run dev -w @aieo/api"
+    command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run dev -w @aieo/api"
     working_dir: /workspace
     ports:
       - '3011:3000'
@@ -34,7 +34,7 @@ services:
   worker:
     build:
       context: .
-    command: sh -c "npm run build -w @aieo/cms-adapters && npm run dev -w @aieo/worker"
+    command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run dev -w @aieo/worker"
     working_dir: /workspace
     environment:
       NODE_ENV: development
