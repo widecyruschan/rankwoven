@@ -5,6 +5,11 @@ import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import SitesView from '../views/SitesView.vue';
 import ArticlesView from '../views/ArticlesView.vue';
+import ArticleSyncView from '../views/ArticleSyncView.vue';
+import SuggestionsView from '../views/SuggestionsView.vue';
+import MediaOptimizationView from '../views/MediaOptimizationView.vue';
+import ApplySuggestionsView from '../views/ApplySuggestionsView.vue';
+import ArticleSuggestionsView from '../views/ArticleSuggestionsView.vue';
 import ReviewView from '../views/ReviewView.vue';
 import LinksView from '../views/LinksView.vue';
 import TasksView from '../views/TasksView.vue';
@@ -73,6 +78,56 @@ const routes: RouteRecordRaw[] = [
     component: ArticlesView,
     meta: {
       titleKey: 'nav.articles',
+      layout: 'app',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/app/article-sync',
+    name: 'AppArticleSync',
+    component: ArticleSyncView,
+    meta: {
+      titleKey: 'nav.articleSync',
+      layout: 'app',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/app/suggestions',
+    name: 'AppSuggestions',
+    component: SuggestionsView,
+    meta: {
+      titleKey: 'nav.suggestions',
+      layout: 'app',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/app/media',
+    name: 'AppMediaOptimization',
+    component: MediaOptimizationView,
+    meta: {
+      titleKey: 'nav.media',
+      layout: 'app',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/app/apply',
+    name: 'AppApplySuggestions',
+    component: ApplySuggestionsView,
+    meta: {
+      titleKey: 'nav.apply',
+      layout: 'app',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/app/article-suggestions',
+    name: 'AppArticleSuggestions',
+    component: ArticleSuggestionsView,
+    meta: {
+      titleKey: 'nav.articleSuggestions',
       layout: 'app',
       requiresAuth: false
     }

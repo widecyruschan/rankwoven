@@ -182,6 +182,11 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `/app`：客戶後台站點概覽
 - `/app/sites`：客戶後台站點管理
 - `/app/articles`：客戶後台文章審計
+- `/app/article-sync`：客戶後台文章同步
+- `/app/suggestions`：客戶後台處理建議
+- `/app/media`：客戶後台媒體處理，包含圖片標題、圖片 Meta、Alt Text 與檔案名稱建議
+- `/app/apply`：客戶後台一鍵套用建議
+- `/app/article-suggestions`：客戶後台單篇文章修改建議
 - `/app/review`：客戶後台內容審核
 - `/app/links`：客戶後台內部連結
 - `/app/tasks`：客戶後台任務隊列
@@ -437,3 +442,21 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Vue 3、TypeScript、CSS、Vue I18n、Google Fonts、Playwright with system Chrome。
 - 新增或修改文件：新增 `DESIGN.md`；修改 `apps/web/index.html`、`apps/web/src/views/MarketingHomeView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/brand-guidelines.md` 和 `README.md`。
 - 後續建議：下一步可把通用 `MetricCard`、`DataTable`、`StatusPill` 和 `PageHeading` 抽成正式組件，並針對手機端建立更完整的抽屜式後台導航。
+
+### 2026-07-25：補齊客戶後台 SEO 優化工作流
+
+- 會話的主要目的：在客戶後台新增文章同步、建議處理、媒體處理、一鍵套用和單篇文章修改建議原型。
+- 完成的主要任務：新增 5 個客戶後台靜態頁面；補充側邊欄導航和路由；為所有新頁面補齊 `zh-Hant` 和 `en` i18n 文案；更新原型文檔和 README 路由說明。
+- 關鍵決策和解決方案：本階段仍只做頁面原型，不接 API、不寫 Store、不做真實 CMS 寫入；圖片標題與圖片 Meta 歸入媒體處理；一鍵套用頁展示批次和安全護欄；單篇文章頁逐項展示內容、媒體和內鏈建議。
+- 使用的技術棧：Vue 3、TypeScript、Vue Router、Vue I18n、lucide-vue-next。
+- 新增或修改文件：新增 `ArticleSyncView.vue`、`SuggestionsView.vue`、`MediaOptimizationView.vue`、`ApplySuggestionsView.vue`、`ArticleSuggestionsView.vue`；修改前端路由、App 導航、i18n、原型文檔和 README。
+- 後續建議：下一步可把這些靜態頁接入後端文章同步任務、AI 建議記錄、媒體建議記錄和 CMS Adapter 發佈隊列。
+
+### 2026-07-25：修正媒體處理資訊架構
+
+- 會話的主要目的：按產品定義修正客戶後台資訊架構，將圖片標題與圖片 Meta 優化建議歸入媒體處理。
+- 完成的主要任務：移除獨立 `/app/title-meta` 客戶後台入口；更新媒體處理頁，使其展示圖片標題、圖片 Meta、Alt Text、檔案名稱和套用操作；同步調整處理建議和一鍵套用的靜態分類。
+- 關鍵決策和解決方案：文章標題與文章 Meta 的逐項審核仍保留在單篇文章修改建議中；圖片標題與圖片 Meta 作為媒體處理子項，不單獨佔用側邊欄入口。
+- 使用的技術棧：Vue 3、TypeScript、Vue Router、Vue I18n、lucide-vue-next。
+- 新增或修改文件：修改 `apps/web/src/router/index.ts`、`apps/web/src/App.vue`、`apps/web/src/i18n.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/views/ApplySuggestionsView.vue`、`docs/saas-dashboard-prototype.md` 和 `README.md`；刪除 `apps/web/src/views/TitleMetaView.vue`。
+- 後續建議：後續接入 API 時，媒體建議模型應拆分 `imageTitle`、`imageMeta`、`altText` 和 `filename` 欄位，方便逐項批准和套用。
