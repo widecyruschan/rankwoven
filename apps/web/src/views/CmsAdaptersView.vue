@@ -1,19 +1,23 @@
 <script setup lang="ts">
-const adapters = [
-  { name: 'WordPress', phase: 'MVP', status: '參考實現' },
-  { name: 'Joomla', phase: 'Phase 2', status: '預留' },
-  { name: 'OpenCart', phase: 'Phase 3', status: '預留' }
-];
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
+const adapters = computed(() => [
+  { name: 'WordPress', phase: 'MVP', status: t('cmsAdapters.reference') },
+  { name: 'Joomla', phase: 'Phase 2', status: t('cmsAdapters.reserved') },
+  { name: 'OpenCart', phase: 'Phase 3', status: t('cmsAdapters.reserved') }
+]);
 </script>
 
 <template>
   <section class="content-panel">
-    <h2>CMS 適配器</h2>
+    <h2>{{ t('cmsAdapters.title') }}</h2>
     <div class="table-like" role="table" aria-label="CMS 適配器列表">
       <div class="table-row table-head" role="row">
-        <span>平台</span>
-        <span>階段</span>
-        <span>狀態</span>
+        <span>{{ t('cmsAdapters.platform') }}</span>
+        <span>{{ t('cmsAdapters.phase') }}</span>
+        <span>{{ t('cmsAdapters.status') }}</span>
       </div>
       <div v-for="adapter in adapters" :key="adapter.name" class="table-row" role="row">
         <span>{{ adapter.name }}</span>

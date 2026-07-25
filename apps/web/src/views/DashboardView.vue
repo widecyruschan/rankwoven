@@ -1,9 +1,13 @@
 <script setup lang="ts">
-const metrics = [
-  { label: '已連接站點', value: '0' },
-  { label: '待審核建議', value: '0' },
-  { label: '執行中任務', value: '0' }
-];
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
+const metrics = computed(() => [
+  { label: t('dashboard.connectedSites'), value: '0' },
+  { label: t('dashboard.pendingSuggestions'), value: '0' },
+  { label: t('dashboard.runningTasks'), value: '0' }
+]);
 </script>
 
 <template>
@@ -16,8 +20,8 @@ const metrics = [
     </div>
 
     <section class="content-panel">
-      <h2>初始化狀態</h2>
-      <p>平台骨架已建立，可開始接入 WordPress 插件、API 服務與 Worker 任務流程。</p>
+      <h2>{{ t('dashboard.title') }}</h2>
+      <p>{{ t('dashboard.body') }}</p>
     </section>
   </section>
 </template>

@@ -703,6 +703,130 @@ OpenCart 擴展要特別限制可修改欄位，避免 SEO 任務誤改商品價
 - 生成標題、大綱、正文和圖片提示詞。
 - 支援推送為 WordPress 草稿。
 
+### 11.8 SaaS 前台與工具頁參考
+
+前台網站可參考 AITDK 的產品資訊架構和工具型排版，但不得照抄其品牌、文案、圖片、配色和頁面細節。參考重點是它將 SEO 工具拆成可獨立進入的生成器頁面，並用清楚的 Hero、輸入框、工具集合、功能說明、FAQ 和 CTA 引導用戶快速試用。
+
+可參考的功能入口：
+
+- SEO Title Generator：標題生成。
+- SEO Description Generator：Meta Description 生成。
+- SEO Keywords Generator：關鍵詞生成。
+- FAQ Generator：FAQ 內容生成。
+- Feature Generator：產品或服務賣點生成。
+- Testimonial Generator：評價內容生成。
+- AI Rewriter：既有內容改寫。
+- AI Landing Page Generator：落地頁內容生成。
+- SEO Extension：瀏覽器插件或網站分析插件入口。
+- Pricing：套餐和用量說明。
+
+建議前台頁面結構：
+
+1. 首屏 Hero
+
+   - 左側或中間顯示產品名稱、定位文案和主 CTA。
+   - CTA 使用「免費開始優化」和「查看插件」兩個動作。
+   - 首屏放一個可互動的 SEO 輸入框，讓用戶輸入網址、文章標題或關鍵詞。
+   - 顯示可輸出的結果類型，例如標題、描述、關鍵詞、FAQ、內部連結建議。
+
+2. 工具集合區
+
+   - 使用 2 到 3 欄網格展示獨立工具。
+   - 每個工具卡片包含工具名稱、適用場景、輸入內容、輸出內容和「Generate」動作。
+   - 工具入口要能獨立分享和被搜尋引擎收錄。
+   - MVP 優先提供標題生成、描述生成、關鍵詞生成、FAQ 生成和文章改寫。
+
+3. 功能詳解區
+
+   - 以編號區塊展示核心能力，例如 `01 標題優化`、`02 Meta 優化`、`03 關鍵詞建議`、`04 FAQ 生成`、`05 內部連結`、`06 CMS 發佈`。
+   - 每個區塊包含 3 個短要點，並配一個工具預覽或結果預覽。
+   - 內容要聚焦實際工作流，不做空泛行銷敘述。
+
+4. SaaS 工作台預覽
+
+   - 展示站點概覽、文章列表、SEO 分數、待審核建議和任務進度。
+   - 強調「先預覽、再批准、可回滾」。
+   - 呈現 WordPress、Joomla、OpenCart 的平台狀態。
+
+5. 使用流程區
+
+   - 第一步：安裝插件或擴展。
+   - 第二步：連接 SaaS API。
+   - 第三步：同步文章和圖片。
+   - 第四步：生成 SEO 建議。
+   - 第五步：審核後套用並追蹤效果。
+
+6. Pricing 區
+
+   - 至少包含 Free、Pro、Agency 三個套餐。
+   - 套餐差異以站點數、文章同步量、AI 生成量、圖片生成量、團隊成員和白標報告區分。
+   - 價格頁必須清楚說明 AI 用量限制和超額規則。
+
+7. FAQ 區
+
+   - 解釋 AI 內容是否安全、是否保證排名、是否會自動改站、如何回滾、支援哪些 CMS、用量如何計算。
+   - FAQ 文案必須直接回答疑問，不使用誇大排名承諾。
+
+8. 底部 CTA
+
+   - 提供「連接第一個網站」和「查看 WordPress 插件」。
+   - 若未登入，引導註冊；若已登入，引導到站點連接流程。
+
+視覺與互動要求：
+
+- 前台可比後台更有品牌感，但不要做純展示型 landing page；首屏必須提供可操作的輸入或明確產品入口。
+- 工具頁採用「輸入表單 + 結果預覽 + 可複製/保存/推送」的固定結構。
+- 常用工具以 Tabs 或分類導覽分組，例如「SEO 生成器」、「內容改寫」、「落地頁」、「CMS 插件」。
+- 每個生成器都要有 Loading、空狀態、錯誤狀態和用量提示。
+- 生成結果必須支援複製、保存為建議、推送到文章草稿。
+- 行動端優先保證表單可用，工具卡片改為單欄排列。
+- 不使用過度裝飾的漸層背景；後台仍保持安靜、密集、適合反覆工作的 SaaS 風格。
+
+### 11.9 多語言與 i18n 要求
+
+前端必須使用 `vue-i18n` 建立多語言架構，避免在 Vue 模板和 TypeScript 邏輯中寫死顯示文字。前台、登入頁、工具頁、Pricing、Extension 介紹頁和登入後 SaaS 工作台都要走同一套 i18n 訊息管理。
+
+第一批語言：
+
+- English：`en`
+- Deutsch：`de`
+- Français：`fr`
+- Italiano：`it`
+- 中文：`zh-CN`
+- 繁體中文：`zh-Hant`
+- 日本語：`ja`
+- 한국어：`ko`
+- Português：`pt`
+- Español：`es`
+- Русский：`ru`
+
+語言切換器需求：
+
+- 位置：桌面端放在右上角；行動端可放入頂部導覽或抽屜選單。
+- 樣式：使用地球圖示、當前語言名稱、下拉箭頭；選單顯示完整語言名稱，當前語言以勾號標記。
+- 狀態：切換後立即更新頁面文字，並保存到 `localStorage`。
+- 預設：首次訪問優先讀取瀏覽器語言；不支援時 fallback 到 `zh-Hant`，再 fallback 到 `en`。
+- URL 策略：MVP 可先不加語言前綴；正式 SEO 前台建議支援 `/en/`、`/de/`、`/zh-hant/` 等語言路徑，並輸出 `hreflang`。
+- SEO：每個工具頁的 title、description、canonical、Open Graph 和 Schema 文字都要支援多語言。
+- 表單：錯誤提示、Loading、空狀態、成功提示和用量提示都必須走 i18n。
+- 內容生成：用戶選擇語言後，AI 生成結果要預設使用當前介面語言，但允許在生成表單中單獨指定文章語言。
+- 翻譯維護：文案 key 採用模塊化命名，例如 `nav.dashboard`、`tools.titleGenerator.inputLabel`、`pricing.pro.description`。
+
+### 11.10 前台路由建議
+
+- `/`：首頁，展示 Hero、工具集合、工作流、Pricing 摘要和 FAQ。
+- `/tools`：AI SEO 工具集合。
+- `/tools/title-generator`：SEO 標題生成器。
+- `/tools/description-generator`：SEO 描述生成器。
+- `/tools/keywords-generator`：關鍵詞生成器。
+- `/tools/faq-generator`：FAQ 生成器。
+- `/tools/content-rewriter`：內容改寫工具。
+- `/tools/landing-page-generator`：落地頁內容生成器。
+- `/extension`：WordPress/Joomla/OpenCart 插件與擴展介紹。
+- `/pricing`：套餐價格。
+- `/login`：登入。
+- `/sites`：登入後站點工作台。
+
 ## 12. MVP 開發步驟
 
 ### 第 0 階段：產品定稿

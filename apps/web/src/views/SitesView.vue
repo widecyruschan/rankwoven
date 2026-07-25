@@ -1,6 +1,12 @@
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
+</script>
+
 <template>
   <section class="content-panel">
-    <h2>站點管理</h2>
-    <p>此頁將用於連接 WordPress、Joomla、OpenCart 等網站，並展示同步狀態。</p>
+    <h2>{{ t('sites.title') }}</h2>
+    <p>{{ t('sites.body') }}</p>
   </section>
 </template>

@@ -1,6 +1,12 @@
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
+</script>
+
 <template>
   <section class="content-panel">
-    <h2>設定</h2>
-    <p>此頁將集中管理 API Base URL、團隊、用量與第三方服務連接。</p>
+    <h2>{{ t('settings.title') }}</h2>
+    <p>{{ t('settings.body') }}</p>
   </section>
 </template>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import LanguageSwitcher from './components/LanguageSwitcher.vue';
 
 const route = useRoute();
+const { t } = useI18n();
 const isNavigationOpen = ref(false);
 
 const currentTitle = computed(() => String(route.meta.title ?? 'AIEO'));
@@ -19,25 +22,28 @@ function toggleNavigation() {
         <span class="brand-mark">A</span>
         <div>
           <strong>AIEO</strong>
-          <small>AI SEO 平台</small>
+          <small>{{ t('app.brandSubtitle') }}</small>
         </div>
       </div>
 
       <nav class="nav-list" aria-label="主導覽">
-        <RouterLink to="/">站點概覽</RouterLink>
-        <RouterLink to="/sites">站點管理</RouterLink>
-        <RouterLink to="/cms-adapters">CMS 適配器</RouterLink>
-        <RouterLink to="/settings">設定</RouterLink>
+        <RouterLink to="/">{{ t('nav.dashboard') }}</RouterLink>
+        <RouterLink to="/sites">{{ t('nav.sites') }}</RouterLink>
+        <RouterLink to="/cms-adapters">{{ t('nav.cmsAdapters') }}</RouterLink>
+        <RouterLink to="/settings">{{ t('nav.settings') }}</RouterLink>
       </nav>
     </aside>
 
     <main class="main-panel">
       <header class="topbar">
-        <button class="menu-button" type="button" @click="toggleNavigation">選單</button>
+        <button class="menu-button" type="button" @click="toggleNavigation">
+          {{ t('app.menu') }}
+        </button>
         <div>
-          <p>第 1 階段</p>
+          <p>{{ t('app.phase') }}</p>
           <h1>{{ currentTitle }}</h1>
         </div>
+        <LanguageSwitcher />
       </header>
 
       <RouterView />
