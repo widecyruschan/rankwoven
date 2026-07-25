@@ -14,8 +14,9 @@
 |---|---|---|---:|---|
 | `@` | A | `72.62.253.72` | 300 | 根域名指向 Hostinger VPS |
 | `www` | CNAME | `rankwoven.com.` | 300 | `www.rankwoven.com` 指向根域名 |
+| `api` | A | `72.62.253.72` | 300 | API 子域名指向 Hostinger VPS |
 
-目前未檢測到 `api`、`app`、`cdn`、`mail`、SPF、DKIM、DMARC 等記錄。
+目前未檢測到 `app`、`cdn`、`mail`、SPF、DKIM、DMARC 等記錄。
 
 Hostinger Cloud/Hosting 曾創建 `rankwoven.com` 網站：
 
@@ -33,8 +34,11 @@ Hostinger VPS 目標：
 - 部署來源：<https://github.com/widecyruschan/rankwoven>
 - 臨時 Web 入口：`http://72.62.253.72:8080`
 - 臨時 API 入口：`http://72.62.253.72:3011`
+- 正式 Web 入口：`https://rankwoven.com`
+- 正式 API 入口：`https://api.rankwoven.com`
+- SSL 狀態：`rankwoven.com`、`www.rankwoven.com`、`api.rankwoven.com` 已使用 Certbot / Let’s Encrypt 啟用 HTTPS，自動續期由 Certbot 管理。
 
-注意：VPS 的 80 端口目前被其他服務佔用，Docker Compose 的 Web 服務先使用 `8080:5173` 避免破壞既有服務。若要讓 `https://rankwoven.com` 直接訪問 RankWoven，需要在 VPS 上釋放 80/443，或配置 Nginx/Caddy 反向代理到 Web 容器與 API 容器。
+注意：VPS 的 80/443 端口由 Nginx 接管，Docker Compose 的 Web 服務使用 `8080:5173`，API 使用 `3011:3000`。Nginx 負責將正式域名反向代理到容器服務。
 
 ## 3. 建議子域名規劃
 
@@ -93,11 +97,10 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## 7. 暫不執行的操作
 
-- 暫不新增 `api.rankwoven.com`，因為尚未確認 API 對外入口 IP 或 CNAME。
 - 暫不配置郵件 DNS，因為尚未選定郵件服務商。
 
 ## 8. 目前待處理事項
 
 - 在 Hostinger hPanel 手動刪除 Cloud/Hosting 上的 `rankwoven.com` addon website，或等待 MCP 刪除工具支援 `confirm` 參數後重試。
-- 檢查 VPS 上佔用 80/443 的服務，決定是停止該服務，還是用它作為反向代理。
-- 將 `rankwoven.com` 反向代理到 Web 服務，將 `api.rankwoven.com` 反向代理到 API 服務，並申請 HTTPS 憑證。
+- 檢查 HTTPS 憑證自動續期狀態。
+- 後續如拆分 `app.rankwoven.com`，需新增對應 DNS 與 Nginx 反向代理。

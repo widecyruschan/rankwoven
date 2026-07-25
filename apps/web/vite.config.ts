@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: ['rankwoven.com', 'www.rankwoven.com']
+    allowedHosts: ['rankwoven.com', 'www.rankwoven.com', 'api.rankwoven.com']
   },
   test: {
     environment: 'jsdom'
