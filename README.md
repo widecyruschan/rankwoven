@@ -45,36 +45,89 @@ AIEO 是一個規劃中的 AI SEO 自動優化平台，目標是通過 SaaS 雲�
 
 ```text
 .
+├── apps/
+│   ├── api/
+│   ├── web/
+│   └── worker/
+├── packages/
+│   └── cms-adapters/
+├── plugins/
+│   ├── joomla/
+│   ├── opencart/
+│   └── wordpress/
 ├── README.md
-└── docs/
-    └── seo-ai-platform-prd.md
+├── docs/
+│   └── seo-ai-platform-prd.md
+├── docker-compose.yml
+├── Dockerfile
+├── package.json
+└── tsconfig.base.json
 ```
 
 ## 啟動方式
 
-當前尚未初始化程式碼專案，暫無本地啟動命令。
-
-後續建議在確認產品範圍後再初始化：
+本地安裝依賴：
 
 ```bash
-npm create vite@latest apps/web -- --template vue-ts
+npm install
+```
+
+本地開發啟動：
+
+```bash
+npm run dev
+```
+
+Docker Desktop 啟動：
+
+```bash
+npm run docker:up
+```
+
+啟動後可訪問：
+
+- Web：<http://localhost:5173>
+- API Health：<http://localhost:3011/health>
+
+如需同時啟動 PostgreSQL 和 Redis，可使用：
+
+```bash
+docker compose --profile data up -d --build
 ```
 
 ## 建置方式
 
-當前尚未初始化構建配置。後續建議分別為 SaaS 前端、API 後端和 WordPress 插件配置獨立構建流程。
+執行完整建置：
+
+```bash
+npm run build
+```
+
+執行 Lint：
+
+```bash
+npm run lint
+```
+
+執行測試：
+
+```bash
+npm run test
+```
 
 後續擴展 Joomla、OpenCart 時，建議將各 CMS 插件作為獨立構建單元，並共用 SaaS API 的站點連接、文章同步、審計、建議、任務和回滾流程。
 
 ## 環境變量說明
 
-當前暫無 `.env.example`。後續至少需要：
+已提供 `.env.example`。目前至少包含：
 
 ```text
+NODE_ENV=development
+APP_BASE_URL=http://localhost:5173
+API_BASE_URL=http://localhost:3011
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=
-APP_BASE_URL=
 OPENAI_API_KEY=
 IMAGE_PROVIDER_API_KEY=
 GOOGLE_OAUTH_CLIENT_ID=
@@ -111,7 +164,12 @@ S3_SECRET_ACCESS_KEY=
 
 ## API 使用說明
 
-當前尚未實現 API。詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
+目前已建立 API 服務骨架：
+
+- `GET /health`：服務健康檢查。
+- `GET /api/v1/cms-adapters`：查看 CMS 適配器狀態。
+
+詳細產品 API 規劃詳見 [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md) 的 API 設計章節。
 
 ## 元件使用說明
 
@@ -178,3 +236,12 @@ S3_SECRET_ACCESS_KEY=
 - 使用的技術棧：Git、Markdown。
 - 新增或修改文件：新增 `.gitignore`；修改 `README.md`。
 - 後續建議：如需遠端備份，可建立 GitHub、GitLab 或私有 Git 遠端倉庫後再設定 `origin` 並推送。
+
+### 2026-07-25：第 1 階段專案初始化與 Docker Desktop 掛載
+
+- 會話的主要目的：執行第 1 階段專案初始化，並將 Web、API、Worker 掛載到 Docker Desktop。
+- 完成的主要任務：初始化 npm workspaces；建立 Vue 3 Web、Fastify API、Worker、`packages/cms-adapters`、WordPress/Joomla/OpenCart 插件目錄；配置 ESLint、Prettier、TypeScript、Vitest、Dockerfile、Docker Compose 和 `.env.example`。
+- 關鍵決策和解決方案：MVP 先提供 WordPress 適配器參考實現；Joomla、OpenCart 先保留目錄與約束；PostgreSQL 和 Redis 放入 Docker Compose `data` profile，避免首次啟動被外部鏡像拉取阻塞；API 宿主機端口使用 `3011` 避免與既有 Docker 服務衝突。
+- 使用的技術棧：Vue 3、Vite、Pinia、Vue Router、Element Plus、Fastify、TypeScript、Vitest、Docker Compose。
+- 新增或修改文件：新增 `package.json`、`package-lock.json`、`tsconfig.base.json`、`eslint.config.js`、`prettier.config.js`、`.dockerignore`、`.env.example`、`Dockerfile`、`docker-compose.yml`、`apps/`、`packages/`、`plugins/`；修改 `.gitignore` 和 `README.md`。
+- 後續建議：第 2 階段開始實作帳號、工作區與 WordPress 站點連接 Token，並在需要資料庫時啟用 `docker compose --profile data up -d --build`。
