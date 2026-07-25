@@ -1205,11 +1205,12 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 ## 17. 下一步行動清單
 
-1. 為 `rankwoven.com` 配置 DNS、網站入口、API 子域名和郵件發信域名。
-2. 做 RankWoven 商標檢索和社交媒體帳號檢索。
-3. 建立 RankWoven Logo、品牌色和基礎 UI 視覺規範。
-4. 畫 SaaS 後台核心頁面原型。
-5. 先定義 `CmsAdapter` 介面，再開始 WordPress 插件連接流程。
-6. 建立第一批 SEO 審計規則。
-7. 用一個測試 WordPress 站點做端到端驗證。
-8. WordPress Beta 穩定後，再排 Joomla 和 OpenCart 擴展。
+1. 確認 `rankwoven.com` 的正式 Web 部署目標和 API 對外入口。
+2. 按 [RankWoven 域名與 DNS 接入方案](domain-setup.md) 配置 `api.rankwoven.com`、`app.rankwoven.com`、`assets.rankwoven.com` 和郵件 DNS。
+3. 做 RankWoven 商標檢索和社交媒體帳號檢索。
+4. 建立 RankWoven Logo、品牌色和基礎 UI 視覺規範。
+5. 畫 SaaS 後台核心頁面原型。
+6. 先定義 `CmsAdapter` 介面，再開始 WordPress 插件連接流程。
+7. 建立第一批 SEO 審計規則。
+8. 用一個測試 WordPress 站點做端到端驗證。
+9. WordPress Beta 穩定後，再排 Joomla 和 OpenCart 擴展。

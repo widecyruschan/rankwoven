@@ -65,6 +65,7 @@ AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域�
 │   └── wordpress/
 ├── README.md
 ├── docs/
+│   ├── domain-setup.md
 │   └── seo-ai-platform-prd.md
 ├── docker-compose.yml
 ├── Dockerfile
@@ -133,6 +134,9 @@ npm run test
 NODE_ENV=development
 APP_BASE_URL=http://localhost:5173
 API_BASE_URL=http://localhost:3011
+PUBLIC_SITE_URL=https://rankwoven.com
+APP_DASHBOARD_URL=https://app.rankwoven.com
+PUBLIC_ASSETS_URL=https://assets.rankwoven.com
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=
@@ -158,6 +162,9 @@ QINIU_PUBLIC_DOMAIN=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+MAIL_FROM_NAME=RankWoven
+MAIL_FROM_ADDRESS=no-reply@rankwoven.com
+SUPPORT_EMAIL=support@rankwoven.com
 ```
 
 敏感資訊必須放在環境變量或密鑰管理系統中，不得提交 `.env`。
@@ -234,6 +241,7 @@ CLOUDINARY_API_SECRET=
 ## 文件
 
 - [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md)
+- [RankWoven 域名與 DNS 接入方案](docs/domain-setup.md)
 
 ## 會話總結記錄
 
@@ -326,3 +334,12 @@ CLOUDINARY_API_SECRET=
 - 使用的技術棧：Markdown、Git。
 - 新增或修改文件：修改 `docs/seo-ai-platform-prd.md` 和 `README.md`。
 - 後續建議：下一步為 `rankwoven.com` 配置 DNS、Web/API 子域名和郵件發信域名。
+
+### 2026-07-25：RankWoven 域名接入準備
+
+- 會話的主要目的：繼續下一步，為 `rankwoven.com` 做 DNS、Web/API 子域名和郵件發信域名接入準備。
+- 完成的主要任務：讀取 Hostinger DNS 現狀；新增域名接入方案文件；補充正式域名相關環境變量；修正 Docker Compose 中 API/Worker 啟動前未構建 `@aieo/ai-providers` 的問題。
+- 關鍵決策和解決方案：目前 DNS 已有根域名 A 記錄 `2.57.91.91` 和 `www` CNAME；在未確認正式部署 IP、API 入口和郵件服務商前，不直接修改 DNS。
+- 使用的技術棧：Hostinger DNS、Docker Compose、Markdown。
+- 新增或修改文件：新增 `docs/domain-setup.md`；修改 `.env.example`、`docker-compose.yml` 和 `README.md`。
+- 後續建議：確認正式 Web/API 部署目標後，再新增或更新 `api.rankwoven.com`、`app.rankwoven.com`、`assets.rankwoven.com` 和郵件 DNS 記錄。
