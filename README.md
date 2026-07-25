@@ -534,3 +534,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`.env.example`、`docker-compose.yml`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；使用 WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過；Docker Desktop 已重建 API/Worker，`localhost:3011` smoke 測試確認應用程式密碼不在 API 回應中洩露，PostgreSQL 保存值為 `v1:` 加密密文。
 - 下一步行動清單：為站點 Token 增加最後使用時間記錄；補充分頁同步與增量同步；建立第一批 SEO 審計規則模型；實作已批准建議的 WordPress REST API 寫回任務。
+
+### 2026-07-26：修復生產 API 路由版本落後
+
+- 會話的主要目的：修復生產環境 `GET /api/v1/site-connections` 返回 `Route GET:/api/v1/site-connections not found` 的問題。
+- 完成的主要任務：確認本地 API 已支持該路由但生產 API 仍為舊構建；備份 VPS 生產配置；使用 `git archive HEAD` 將已提交代碼部署到 `/docker/rankwoven`；重建並啟動 Docker Compose `data` profile，補齊 PostgreSQL 和 Redis 容器。
+- 關鍵決策和解決方案：部署只使用 Git `HEAD` 打包，避免把本地未提交的 `apps/web/src/styles.css` 帶入生產；保留舊版本目錄 `/docker/rankwoven-old-20260725173214` 和配置備份 `/docker/backups/rankwoven-config-20260725173203.tgz` 以便回滾。
+- 使用的技術棧：Docker Compose、Nginx Reverse Proxy、Fastify、PostgreSQL、Redis、SSH。
+- 新增或修改文件：修改 `README.md` 和 `docs/seo-ai-platform-prd.md`；未修改應用代碼。
+- 驗證結果：`https://api.rankwoven.com/health` 返回 `200 OK`；`https://api.rankwoven.com/api/v1/site-connections` 返回 `200 OK`，響應為 `{"success":true,"message":"操作成功","data":{"sites":[]}}`；生產 `rankwoven-api`、`rankwoven-web`、`rankwoven-worker`、`rankwoven-postgres` 和 `rankwoven-redis` 容器均已啟動。
+- 下一步行動清單：補齊可重複部署流程或 GitHub Actions；為生產資料庫建立備份與遷移流程；處理 `npm audit` 提示的高危依賴；繼續開發站點 Token 最後使用時間與 WordPress 分頁同步。
