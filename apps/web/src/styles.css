@@ -82,6 +82,265 @@ a {
   min-width: 0;
 }
 
+.marketing-shell {
+  min-height: 100vh;
+  background: var(--color-canvas);
+}
+
+.marketing-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  padding: 16px 28px;
+}
+
+.marketing-brand,
+.marketing-actions,
+.marketing-nav,
+.icon-link-button {
+  display: flex;
+  align-items: center;
+}
+
+.marketing-brand {
+  flex: 1;
+}
+
+.marketing-nav,
+.marketing-actions {
+  gap: 12px;
+}
+
+.marketing-nav a,
+.icon-link-button {
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+
+.marketing-nav a.router-link-active {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-dark);
+  font-weight: 700;
+}
+
+.icon-link-button {
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-weight: 700;
+}
+
+.marketing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 32px;
+  align-items: center;
+  min-height: calc(100vh - 96px);
+  padding: 64px 28px 32px;
+}
+
+.marketing-copy {
+  display: grid;
+  max-width: 760px;
+  gap: 18px;
+}
+
+.marketing-copy h1,
+.pricing-heading h1,
+.login-panel h1 {
+  margin: 0;
+  font-size: clamp(36px, 5vw, 72px);
+  line-height: 1;
+}
+
+.marketing-copy p,
+.pricing-heading p,
+.login-panel p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.eyebrow {
+  color: var(--color-brand-primary);
+  font-weight: 800;
+}
+
+.product-preview,
+.pricing-card,
+.login-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 24px 60px rgb(20 35 31 / 10%);
+}
+
+.product-preview {
+  display: grid;
+  gap: 22px;
+  padding: 28px;
+}
+
+.preview-header,
+.preview-score-row,
+.preview-table {
+  display: grid;
+  gap: 10px;
+}
+
+.preview-header {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.preview-header strong {
+  color: var(--color-brand-primary-dark);
+  font-size: 28px;
+}
+
+.preview-table {
+  grid-template-columns: 1fr auto;
+  border-top: 1px solid var(--color-border);
+  padding-top: 18px;
+}
+
+.marketing-section {
+  padding: 44px 28px;
+}
+
+.marketing-band {
+  background: color-mix(in srgb, var(--color-brand-primary-soft) 62%, var(--color-surface));
+}
+
+.feature-grid,
+.pricing-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.feature-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feature-grid .content-panel {
+  margin: 0;
+}
+
+.pricing-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pricing-card {
+  display: grid;
+  gap: 20px;
+  align-content: space-between;
+  padding: 22px;
+}
+
+.pricing-card h2,
+.pricing-card p {
+  margin: 0;
+}
+
+.pricing-card strong {
+  display: block;
+  margin: 12px 0;
+  font-size: 30px;
+}
+
+.workflow-list,
+.demo-entry-list,
+.operation-list {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-list li {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.workflow-list strong {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  color: var(--color-surface);
+}
+
+.login-page {
+  display: grid;
+  min-height: calc(100vh - 74px);
+  place-items: center;
+  padding: 32px;
+}
+
+.login-panel {
+  display: grid;
+  width: min(100%, 460px);
+  gap: 24px;
+  padding: 30px;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.login-form input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-ink);
+  font: inherit;
+  padding: 11px 12px;
+}
+
+.operation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+}
+
+.operation-item div {
+  display: grid;
+  gap: 4px;
+}
+
+.operation-item span:not(.status-pill) {
+  color: var(--color-muted);
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -417,6 +676,35 @@ a {
 
 @media (max-width: 760px) {
   .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .marketing-topbar {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px 18px;
+  }
+
+  .marketing-brand,
+  .marketing-nav,
+  .marketing-actions {
+    flex-wrap: wrap;
+  }
+
+  .marketing-hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding: 36px 18px 24px;
+  }
+
+  .marketing-section,
+  .login-page {
+    padding: 24px 18px;
+  }
+
+  .feature-grid,
+  .pricing-grid,
+  .workflow-list {
     grid-template-columns: 1fr;
   }
 

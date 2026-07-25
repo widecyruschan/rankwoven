@@ -174,20 +174,28 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## 路由說明
 
-當前尚未實現前端路由。建議 MVP 路由：
+當前前端原型已拆分為前台展示頁、客戶後台和管理後台三層：
 
-- `/login`：登入
-- `/sites`：站點列表
-- `/sites/:siteId/dashboard`：站點概覽
-- `/sites/:siteId/articles`：文章庫存
-- `/sites/:siteId/audits`：SEO 審計
-- `/sites/:siteId/editor/:articleId`：優化審核
-- `/sites/:siteId/links`：內部連結機會
-- `/settings`：帳號與 API 設置
+- `/`：前台功能簡介首頁
+- `/pricing`：定價頁
+- `/login`：用戶登入頁原型
+- `/app`：客戶後台站點概覽
+- `/app/sites`：客戶後台站點管理
+- `/app/articles`：客戶後台文章審計
+- `/app/review`：客戶後台內容審核
+- `/app/links`：客戶後台內部連結
+- `/app/tasks`：客戶後台任務隊列
+- `/app/cms-adapters`：客戶後台 CMS 適配器
+- `/app/settings`：客戶後台設定
+- `/admin`：管理後台平台概覽
+- `/admin/customers`：管理後台客戶管理
+- `/admin/usage`：管理後台用量與成本
+- `/admin/operations`：管理後台運營中心
+- `/admin/settings`：管理後台設定
 
 ## 狀態管理說明
 
-當前尚未實現 Pinia Store。建議拆分：
+當前已建立 Pinia，但頁面原型仍使用靜態資料，暫不接正式 API。後續建議拆分：
 
 - `useAuthStore`：登入狀態和用戶資料
 - `useSiteStore`：當前站點、站點列表
@@ -411,3 +419,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Vue 3、Vue Router、Vue I18n、Lucide Vue、CSS。
 - 新增或修改文件：新增 `apps/web/src/views/ArticlesView.vue`、`apps/web/src/views/ReviewView.vue`、`apps/web/src/views/LinksView.vue`、`apps/web/src/views/TasksView.vue` 和 `docs/saas-dashboard-prototype.md`；修改 `apps/web/src/App.vue`、`apps/web/src/router/index.ts`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`apps/web/src/views/DashboardView.vue`、`apps/web/src/views/SitesView.vue`、`apps/web/src/views/CmsAdaptersView.vue`、`apps/web/src/views/SettingsView.vue` 和 `README.md`。
 - 後續建議：下一步可根據原型評審結果抽出共用 `PageHeading`、`DataTable`、`StatusPill`、`ProgressBar` 組件，再開始接入 API。
+
+### 2026-07-25：補齊前台與管理後台頁面原型
+
+- 會話的主要目的：將 RankWoven 原型拆分為前台展示頁、客戶後台與管理後台，並補齊管理後台頁面。
+- 完成的主要任務：新增前台功能首頁、定價頁、登入頁；將既有客戶後台路由遷移到 `/app`；新增管理後台平台概覽、客戶管理、用量與成本、運營中心和管理設定頁。
+- 關鍵決策和解決方案：使用 `route.meta.layout` 區分 `marketing`、`app`、`admin` 三種布局；頁面只使用靜態原型資料，不接 API、不做真實登入；新增顯示文案繼續走 `vue-i18n`。
+- 使用的技術棧：Vue 3、TypeScript、Vite、Vue Router、Pinia、Element Plus、lucide-vue-next、vue-i18n。
+- 新增或修改文件：修改 `apps/web/src/router/index.ts`、`apps/web/src/App.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/saas-dashboard-prototype.md`、`README.md`；新增前台與管理後台視圖文件。
+- 後續建議：下一步可用真實認證角色切換 `/app` 與 `/admin`，再逐步把靜態表格替換為 API Response 類型和後端資料。
