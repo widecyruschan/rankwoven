@@ -14,59 +14,39 @@
 - 重點服務英文和中文內容站、企業官網、博客、聯盟營銷站和 SEO Agency。
 - 不承諾 Google 排名，只提供內容品質、站內結構和資料追蹤能力。
 
-## 2. 域名和品牌推薦
+## 2. 域名和品牌
 
-### 2.1 篩選原則
+### 2.1 已定稿品牌
 
-- 好讀、好記，儘量不超過 12 個字母。
-- 避免連字符、數字和容易拼錯的組合。
-- 能表達 SEO、排名、內容增長、AI 自動優化其中至少一個方向。
-- 不把品牌限制在“文章生成器”，因為未來可以擴展到 AI Search、GEO、AEO 和內容增長。
-- 購買前必須檢查註冊商可用性、商標、社交媒體帳號和同名競品。
+| 項目 | 內容 |
+|---|---|
+| 主品牌 | RankWoven |
+| 主域名 | `rankwoven.com` |
+| 域名狀態 | 已購買 |
+| 中文品牌方向 | 排名織引 |
 
-### 2.2 當前優先候選
+RankWoven 的品牌語義貼近“把文章、關鍵詞、圖片、內部連結和主題集群編織成可持續增長的 SEO 網絡”。相比只強調文章生成，它更適合覆蓋 SEO 審計、內容優化、圖片優化、內部連結、AEO、GEO 和 AI Search 可見性等後續產品線。
 
-以下 RDAP 快速檢查基於 2026-07-25 的查詢結果。“未查到 RDAP 記錄”不等於一定可註冊，只代表當前公共 RDAP 查詢沒有返回註冊記錄，最終以註冊商下單頁為準。
+### 2.2 品牌使用規則
 
-| 推薦級別 | 品牌 | 域名方向 | RDAP 快速結果 | 推薦理由 |
+- 對外主品牌統一使用 `RankWoven`。
+- 主站、SaaS 前台和產品登入入口統一使用 `rankwoven.com`。
+- 中文市場可使用“RankWoven 排名織引”作為完整稱呼。
+- 技術倉庫和內部 package 名稱可暫時保留 `AIEO`，避免第一階段做大規模重命名。
+- Logo、前台文案、插件名稱和郵件模板後續應逐步改為 `RankWoven`。
+
+### 2.3 原候選記錄
+
+以下記錄保留作為早期命名決策依據，後續產品以 RankWoven 為準。
+
+| 推薦級別 | 品牌 | 域名方向 | 狀態 | 推薦理由 |
 |---|---|---|---|---|
-| 首選 | RankLoom | `rankloom.ai` | 未查到 RDAP 記錄 | 直接表達排名和內容網絡，適合主打內部連結、內容圖譜和 AI SEO |
-| 首選 | SeoLume | `seolume.ai` | 未查到 RDAP 記錄 | 短、清楚、有“照亮 SEO 機會”的品牌感 |
-| 首選 | RankWoven | `rankwoven.com` | 未查到 RDAP 記錄 | 與站內連結、內容編織和主題集群高度貼合 |
-| 備選 | SearchCraftAI | `searchcraftai.com` | 未查到 RDAP 記錄 | 產品用途清楚，適合 SEO 內容生成，但略長 |
-| 備選 | ContentLume | `contentlume.ai` | 未查到 RDAP 記錄 | 適合從 SEO 擴展到內容增長平台 |
-| 備選 | AISearchPilot | `aisearchpilot.com` | 未查到 RDAP 記錄 | 表達 AI 搜尋導航和自動駕駛感，但字符較多 |
-| 觀察 | RankLume | `ranklume.com` | 已有 RDAP 記錄 | 名字很好，但當前 `.com` 已有記錄，需看是否可購買其他後綴 |
-| 觀察 | RankWeave | `rankweave.com` | 已有 RDAP 記錄 | 概念貼合，但 `.com` 當前已有記錄 |
-| 觀察 | SeoVanta | `seovanta.com` | 已有 RDAP 記錄 | 市場定位清楚，但需要商標和可購買性核查 |
-
-### 2.3 我的前三名
-
-1. **RankLoom.ai**
-
-   最適合這類產品。它不是單純“寫文章”，而是把文章、關鍵詞、圖片和內部連結織成一個增長網絡。品牌記憶度高，也方便做 Logo 和產品敘事。
-
-2. **SeoLume.ai**
-
-   最適合早期獲客。用戶一眼知道與 SEO 有關，“Lume”有照亮、發現機會的感覺，適合做審計和優化產品。
-
-3. **RankWoven.com**
-
-   最貼近內部連結和內容集群功能。缺點是沒有 RankLoom 那麼利落，但 `.com` 如果可註冊，會更適合長期品牌。
-
-### 2.4 中文品牌方向
-
-- RankLoom：排名織網
-- SeoLume：搜優之光
-- RankWoven：排名織引
-- SearchCraftAI：搜文匠 AI
-- ContentLume：內容增亮
-
-建議對外用英文主品牌，中文市場使用“英文品牌 + 中文副標題”，例如：
-
-```text
-RankLoom AI SEO 自動優化平台
-```
+| 已選定 | RankWoven | `rankwoven.com` | 已購買 | 與站內連結、內容編織和主題集群高度貼合 |
+| 原首選候選 | RankLoom | `rankloom.ai` | 未採用 | 直接表達排名和內容網絡，適合主打內部連結、內容圖譜和 AI SEO |
+| 原首選候選 | SeoLume | `seolume.ai` | 未採用 | 短、清楚、有“照亮 SEO 機會”的品牌感 |
+| 原備選 | SearchCraftAI | `searchcraftai.com` | 未採用 | 產品用途清楚，適合 SEO 內容生成，但略長 |
+| 原備選 | ContentLume | `contentlume.ai` | 未採用 | 適合從 SEO 擴展到內容增長平台 |
+| 原備選 | AISearchPilot | `aisearchpilot.com` | 未採用 | 表達 AI 搜尋導航和自動駕駛感，但字符較多 |
 
 ## 3. 產品定位
 
@@ -1225,12 +1205,11 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 ## 17. 下一步行動清單
 
-1. 在註冊商確認 `rankloom.ai`、`seolume.ai`、`rankwoven.com` 是否可購買。
-2. 做商標檢索和社交媒體帳號檢索。
-3. 確認產品名。
+1. 為 `rankwoven.com` 配置 DNS、網站入口、API 子域名和郵件發信域名。
+2. 做 RankWoven 商標檢索和社交媒體帳號檢索。
+3. 建立 RankWoven Logo、品牌色和基礎 UI 視覺規範。
 4. 畫 SaaS 後台核心頁面原型。
-5. 初始化 Monorepo。
-6. 先定義 `CmsAdapter` 介面，再開始 WordPress 插件連接流程。
-7. 建立第一批 SEO 審計規則。
-8. 用一個測試 WordPress 站點做端到端驗證。
-9. WordPress Beta 穩定後，再排 Joomla 和 OpenCart 擴展。
+5. 先定義 `CmsAdapter` 介面，再開始 WordPress 插件連接流程。
+6. 建立第一批 SEO 審計規則。
+7. 用一個測試 WordPress 站點做端到端驗證。
+8. WordPress Beta 穩定後，再排 Joomla 和 OpenCart 擴展。

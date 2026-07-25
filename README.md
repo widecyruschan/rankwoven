@@ -1,6 +1,6 @@
 # AIEO
 
-AIEO 是一個規劃中的 AI SEO 自動優化平台，目標是通過 SaaS 雲端後台和網站插件連接客戶站點，幫助用戶對現有文章、圖片、標題、Meta 資訊和內部連結進行可審核、可回滾的 SEO 優化。
+AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域名為 `rankwoven.com`，目標是通過 SaaS 雲端後台和網站插件連接客戶站點，幫助用戶對現有文章、圖片、標題、Meta 資訊和內部連結進行可審核、可回滾的 SEO 優化。
 
 ## 專案介紹
 
@@ -12,6 +12,13 @@ AIEO 是一個規劃中的 AI SEO 自動優化平台，目標是通過 SaaS 雲�
 - 統一 CMS 適配器層，為後續 Joomla、OpenCart 等常用系統擴展預留介面
 
 核心目標不是批量製造低價值文章，而是幫助網站管理者更安全地提升內容品質、搜尋可見性和站內連結結構。
+
+## 品牌與域名
+
+- 主品牌：RankWoven
+- 主域名：`rankwoven.com`
+- 域名狀態：已購買
+- 中文品牌方向：排名織引
 
 ## 技術棧建議
 
@@ -310,3 +317,12 @@ CLOUDINARY_API_SECRET=
 - 使用的技術棧：問問 API、OpenAI 兼容 API、七牛雲 Kodo、TypeScript、Fastify、Vitest。
 - 新增或修改文件：修改 `packages/ai-providers/src/index.ts`、`packages/ai-providers/tests/usageRecords.test.ts`、`apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/tests/health.test.ts`、`.env.example`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 後續建議：下一步實作 `WenwenTextGenerationProvider`、`WenwenEmbeddingProvider`、`WenwenImageGenerationProvider` 和 `QiniuKodoMediaStorageProvider`。
+
+### 2026-07-25：確認 RankWoven 主域名
+
+- 會話的主要目的：記錄 `rankwoven.com` 已購買，並將品牌域名從候選狀態改為定稿狀態。
+- 完成的主要任務：在 PRD 中將主品牌定為 RankWoven、主域名定為 `rankwoven.com`；更新 README 的專案介紹和品牌域名說明；調整下一步行動清單。
+- 關鍵決策和解決方案：技術倉庫和內部 package 名稱暫時保留 AIEO，對外產品品牌統一使用 RankWoven，避免第一階段做大規模重命名。
+- 使用的技術棧：Markdown、Git。
+- 新增或修改文件：修改 `docs/seo-ai-platform-prd.md` 和 `README.md`。
+- 後續建議：下一步為 `rankwoven.com` 配置 DNS、Web/API 子域名和郵件發信域名。
