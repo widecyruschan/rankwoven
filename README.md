@@ -250,6 +250,8 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 所有批量修改必須支援預覽、審批、日誌和回滾
 - CMS 相關邏輯必須通過適配器層接入，不把 WordPress、Joomla、OpenCart 的特殊邏輯散落在業務服務中
 - 不承諾搜尋排名結果，只承諾流程、品質檢查和可觀測指標
+- 每次完成開發、測試、部署或文件更新後，必須在相關文件末尾追加本次會話總結，並提供「下一步行動清單」。
+- 「下一步行動清單」必須使用可執行、可驗證的短句，例如「建立 PostgreSQL migration」而不是「完善後端」。
 
 ## 後續優化建議
 
@@ -475,3 +477,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：新增 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`；修改 `apps/api/src/server.ts`、`plugins/wordpress/README.md`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
 - 驗證結果：`cyruschancom` 測試站成功連接到 AIEO API；插件同步 59 篇文章和 100 個圖片媒體；後端受保護文章列表 API 可通過站點 Token 讀取 59 篇文章。
 - 後續建議：下一步將站點連接、Token 和同步文章落到 PostgreSQL，並在前端客戶後台接入站點列表與文章同步結果。
+
+### 2026-07-26：固定文檔更新與下一步行動清單規則
+
+- 會話的主要目的：按要求明確每次完成任務後都要更新文檔，並在文檔最後提供下一步行動清單。
+- 完成的主要任務：在 README 開發規範中新增文檔更新規則；更新 PRD 的下一步行動清單，使其對齊目前已完成 WordPress 插件連接與文章同步實測後的狀態。
+- 關鍵決策和解決方案：保留 README 作為會話總結主記錄；PRD 的「下一步行動清單」作為當前產品與開發優先級，不保留已完成的早期事項。
+- 使用的技術棧：Markdown。
+- 新增或修改文件：修改 `README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 下一步行動清單：建立 PostgreSQL migration；將站點連接與同步文章落庫；把客戶後台站點列表接入 API；補齊同步分頁和增量同步；開始 SEO 審計規則模型。

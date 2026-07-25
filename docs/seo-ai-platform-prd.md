@@ -1206,12 +1206,15 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 ## 17. 下一步行動清單
 
-1. 確認 `rankwoven.com` 的正式 Web 部署目標和 API 對外入口。
-2. 按 [RankWoven 域名與 DNS 接入方案](domain-setup.md) 配置 `api.rankwoven.com`、`app.rankwoven.com`、`assets.rankwoven.com` 和郵件 DNS。
-3. 做 RankWoven 商標檢索和社交媒體帳號檢索。
-4. 建立 RankWoven Logo、品牌色和基礎 UI 視覺規範。
-5. 畫 SaaS 後台核心頁面原型。
-6. 先定義 `CmsAdapter` 介面，再開始 WordPress 插件連接流程。
-7. 建立第一批 SEO 審計規則。
-8. 用一個測試 WordPress 站點做端到端驗證。
-9. WordPress Beta 穩定後，再排 Joomla 和 OpenCart 擴展。
+本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
+
+1. 建立 PostgreSQL migration，包含 `site_connections`、`synced_articles`、`synced_media` 和 `sync_runs`。
+2. 將目前 API 的內存 Repository 替換為 PostgreSQL Repository，保留現有測試並補充整合測試。
+3. 為站點 Token 增加重新生成、吊銷和最後使用時間記錄。
+4. 把客戶後台 `/app/sites` 接入 `GET /api/v1/site-connections`。
+5. 把客戶後台 `/app/article-sync` 接入同步狀態和最近同步結果。
+6. 為 WordPress 插件補充分頁同步，避免每次只同步第一批 100 篇文章和 100 個圖片媒體。
+7. 增加增量同步參數，例如 `updatedAfter` 和單篇文章手動刷新。
+8. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
+9. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
+10. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、最近同步和錯誤原因。
