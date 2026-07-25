@@ -428,3 +428,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Vue 3、TypeScript、Vite、Vue Router、Pinia、Element Plus、lucide-vue-next、vue-i18n。
 - 新增或修改文件：修改 `apps/web/src/router/index.ts`、`apps/web/src/App.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/saas-dashboard-prototype.md`、`README.md`；新增前台與管理後台視圖文件。
 - 後續建議：下一步可用真實認證角色切換 `/app` 與 `/admin`，再逐步把靜態表格替換為 API Response 類型和後端資料。
+
+### 2026-07-25：全站 UI 設計審查與視覺優化
+
+- 會話的主要目的：按 `/design-review`、`/design-consultation`、`/design-shotgun` 流程優化 RankWoven 前台、客戶後台與管理後台 UI。
+- 完成的主要任務：審查本地頁面截圖；建立 `DESIGN.md`；將前台首頁從普通卡片網格升級為帶編織網絡視覺錨點的產品展示頁；提升後台表格、KPI、導航、按鈕與移動端布局質感；修復登入頁手機端橫向溢出。
+- 關鍵決策和解決方案：設計方向定為「可審核的 SEO 增長操作台」；前台採用 editorial marketing + woven signal visual；後台採用 compact utilitarian workspace；字體改為 Noto Sans TC、Instrument Sans 與 JetBrains Mono。
+- 使用的技術棧：Vue 3、TypeScript、CSS、Vue I18n、Google Fonts、Playwright with system Chrome。
+- 新增或修改文件：新增 `DESIGN.md`；修改 `apps/web/index.html`、`apps/web/src/views/MarketingHomeView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/brand-guidelines.md` 和 `README.md`。
+- 後續建議：下一步可把通用 `MetricCard`、`DataTable`、`StatusPill` 和 `PageHeading` 抽成正式組件，並針對手機端建立更完整的抽屜式後台導航。

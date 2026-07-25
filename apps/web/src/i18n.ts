@@ -46,6 +46,11 @@ const messages = {
       previewLabel: 'Product preview',
       previewSite: 'rankwoven.com',
       previewAudit: 'Optimization readiness',
+      signal: {
+        pages: 'indexed pages',
+        suggestions: 'review items',
+        links: 'link paths'
+      },
       featuresTitle: 'Core features',
       featuresBody: 'The front office introduces what RankWoven does before users enter the SaaS dashboard.',
       nav: {
@@ -82,6 +87,7 @@ const messages = {
       title: 'Plans for sites, teams, and agencies',
       body: 'Static pricing cards help validate packaging before billing logic is connected.',
       action: 'Choose plan',
+      recommended: 'Recommended',
       starter: {
         name: 'Starter',
         price: '$29/mo',
@@ -366,6 +372,11 @@ const messages = {
       previewLabel: '產品預覽',
       previewSite: 'rankwoven.com',
       previewAudit: '優化準備度',
+      signal: {
+        pages: '已索引頁面',
+        suggestions: '審核項',
+        links: '連結路徑'
+      },
       featuresTitle: '核心功能',
       featuresBody: '前台頁面用於讓用戶在進入 SaaS 後台前，快速理解 RankWoven 可解決的問題。',
       nav: {
@@ -402,6 +413,7 @@ const messages = {
       title: '面向網站、團隊與代理商的套餐',
       body: '靜態定價卡用於先驗證套餐包裝，後續再接入帳單邏輯。',
       action: '選擇套餐',
+      recommended: '推薦',
       starter: {
         name: 'Starter',
         price: '$29/月',

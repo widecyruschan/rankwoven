@@ -20,6 +20,12 @@ const workflowSteps = computed(() => [
   t('marketing.workflow.review'),
   t('marketing.workflow.publish')
 ]);
+
+const signalItems = computed(() => [
+  { label: t('marketing.signal.pages'), value: '1,284' },
+  { label: t('marketing.signal.suggestions'), value: '42' },
+  { label: t('marketing.signal.links'), value: '312' }
+]);
 </script>
 
 <template>
@@ -36,6 +42,15 @@ const workflowSteps = computed(() => [
       </div>
 
       <aside class="product-preview" :aria-label="t('marketing.previewLabel')">
+        <div class="weave-map" aria-hidden="true">
+          <span class="weave-node weave-node-a" />
+          <span class="weave-node weave-node-b" />
+          <span class="weave-node weave-node-c" />
+          <span class="weave-node weave-node-d" />
+          <span class="weave-line weave-line-a" />
+          <span class="weave-line weave-line-b" />
+          <span class="weave-line weave-line-c" />
+        </div>
         <div class="preview-header">
           <span>{{ t('marketing.previewSite') }}</span>
           <strong>SEO 86</strong>
@@ -54,6 +69,12 @@ const workflowSteps = computed(() => [
           <span>{{ t('articles.issueLinks') }}</span>
           <strong>12</strong>
         </div>
+        <div class="signal-strip">
+          <span v-for="item in signalItems" :key="item.label">
+            <strong>{{ item.value }}</strong>
+            {{ item.label }}
+          </span>
+        </div>
       </aside>
     </section>
 
@@ -64,8 +85,9 @@ const workflowSteps = computed(() => [
           <p>{{ t('marketing.featuresBody') }}</p>
         </div>
       </div>
-      <div class="feature-grid">
+      <div class="feature-lanes">
         <article v-for="feature in features" :key="feature.title" class="content-panel">
+          <span class="lane-knot" aria-hidden="true" />
           <h2>{{ feature.title }}</h2>
           <p>{{ feature.body }}</p>
         </article>
