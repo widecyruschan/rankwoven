@@ -30,6 +30,7 @@ Hostinger VPS 目標：
 - VPS ID：`1307693`
 - IPv4：`72.62.253.72`
 - Docker Compose 專案名：`rankwoven`
+- 部署來源：<https://github.com/widecyruschan/rankwoven>
 
 ## 3. 建議子域名規劃
 

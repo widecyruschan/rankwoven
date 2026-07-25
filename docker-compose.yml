@@ -8,9 +8,6 @@ services:
       - '80:5173'
     environment:
       VITE_API_BASE_URL: http://rankwoven.com:3011
-    volumes:
-      - .:/workspace
-      - node_modules:/workspace/node_modules
     depends_on:
       - api
 
@@ -27,9 +24,6 @@ services:
       API_PORT: 3000
       DATABASE_URL: postgresql://aieo:aieo_password@postgres:5432/aieo
       REDIS_URL: redis://redis:6379
-    volumes:
-      - .:/workspace
-      - node_modules:/workspace/node_modules
 
   worker:
     build:
@@ -40,9 +34,6 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://aieo:aieo_password@postgres:5432/aieo
       REDIS_URL: redis://redis:6379
-    volumes:
-      - .:/workspace
-      - node_modules:/workspace/node_modules
 
   postgres:
     profiles:
@@ -77,6 +68,5 @@ services:
       retries: 10
 
 volumes:
-  node_modules:
   postgres_data:
   redis_data:
