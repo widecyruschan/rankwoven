@@ -27,8 +27,7 @@ final class RankWoven_SEO_Plugin
     private const OPTION_IMAGE_BULK_LOG = 'rankwoven_image_bulk_log';
     private const IMAGE_BULK_BATCH_SIZE = 50;
     private const SYNC_PAGE_SIZE = 100;
-    private const SYNC_MAX_ARTICLES = 1000;
-    private const SYNC_MAX_MEDIA = 2000;
+    private const SYNC_MAX_BATCH_PAGES = 10000;
     private const REST_NAMESPACE = 'rankwoven/v1';
 
     public function __construct()
@@ -223,17 +222,20 @@ final class RankWoven_SEO_Plugin
                             <th><?php echo esc_html__('Media Pages Synced', 'rankwoven-seo'); ?></th>
                             <td><?php echo esc_html((string) ($last_sync_result['mediaPagesSynced'] ?? 1)); ?></td>
                         </tr>
-                        <?php if (!empty($last_sync_result['articleSyncTruncated']) || !empty($last_sync_result['mediaSyncTruncated'])) : ?>
+                        <tr>
+                            <th><?php echo esc_html__('Sync Mode', 'rankwoven-seo'); ?></th>
+                            <td><?php echo esc_html((string) ($last_sync_result['syncMode'] ?? 'full')); ?></td>
+                        </tr>
+                        <?php if (!empty($last_sync_result['updatedAfter'])) : ?>
                             <tr>
-                                <th><?php echo esc_html__('Sync Limit', 'rankwoven-seo'); ?></th>
-                                <td>
-                                    <?php echo esc_html(sprintf(
-                                        /* translators: 1: article limit, 2: media limit */
-                                        __('Reached the current API payload limit. Articles are capped at %1$d and image media are capped at %2$d per manual sync.', 'rankwoven-seo'),
-                                        self::SYNC_MAX_ARTICLES,
-                                        self::SYNC_MAX_MEDIA
-                                    )); ?>
-                                </td>
+                                <th><?php echo esc_html__('Updated After', 'rankwoven-seo'); ?></th>
+                                <td><?php echo esc_html((string) $last_sync_result['updatedAfter']); ?></td>
+                            </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($last_sync_result['syncTaskId'])) : ?>
+                            <tr>
+                                <th><?php echo esc_html__('Sync Task ID', 'rankwoven-seo'); ?></th>
+                                <td><code><?php echo esc_html((string) $last_sync_result['syncTaskId']); ?></code></td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
@@ -451,45 +453,40 @@ final class RankWoven_SEO_Plugin
             $this->redirect_with_status('missing_site_credentials');
         }
 
-        $article_sync = $this->get_all_synced_articles();
-        $media_sync = $this->get_all_synced_media();
-        $articles = $article_sync['items'];
-        $media = $media_sync['items'];
-        $response = wp_remote_post($this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/sync'), [
-            'timeout' => 45,
-            'headers' => [
-                'Authorization' => 'Bearer ' . $site_token,
-                'Content-Type' => 'application/json'
-            ],
-            'body' => wp_json_encode([
-                'syncStartedAt' => gmdate('c'),
-                'articles' => $articles,
-                'media' => $media
-            ])
-        ]);
+        $sync_started_at = gmdate('c');
+        $updated_after = $this->get_incremental_updated_after();
+        $task_response = $this->create_sync_task($site_id, $site_token, $sync_started_at, $updated_after);
 
-        if (is_wp_error($response)) {
+        if (is_wp_error($task_response)) {
             $this->redirect_with_status('sync_failed');
         }
 
-        $body = $this->decode_response_body($response);
-        if (!($body['success'] ?? false)) {
-            $error_code = $body['error']['code'] ?? '';
-            if (wp_remote_retrieve_response_code($response) === 401 || $error_code === 'SITE_TOKEN_INVALID') {
-                $this->redirect_with_status('site_token_invalid');
-            }
+        $task_body = $this->decode_response_body($task_response);
+        $this->redirect_if_sync_response_failed($task_response, $task_body);
 
+        $sync_task_id = sanitize_text_field($task_body['data']['task']['id'] ?? '');
+        if ($sync_task_id === '') {
             $this->redirect_with_status('sync_failed');
         }
+
+        $sync_summary = $this->sync_paginated_content_batches(
+            $site_id,
+            $site_token,
+            $sync_task_id,
+            $sync_started_at,
+            $updated_after
+        );
 
         update_option(self::OPTION_LAST_SYNC_RESULT, [
             'syncedAt' => gmdate('c'),
-            'articlesReceived' => (int) ($body['data']['articlesReceived'] ?? count($articles)),
-            'mediaReceived' => (int) ($body['data']['mediaReceived'] ?? count($media)),
-            'articlePagesSynced' => (int) $article_sync['pagesSynced'],
-            'mediaPagesSynced' => (int) $media_sync['pagesSynced'],
-            'articleSyncTruncated' => (bool) $article_sync['truncated'],
-            'mediaSyncTruncated' => (bool) $media_sync['truncated']
+            'syncStartedAt' => $sync_started_at,
+            'updatedAfter' => $updated_after,
+            'syncMode' => $updated_after === '' ? 'full' : 'incremental',
+            'syncTaskId' => $sync_task_id,
+            'articlesReceived' => (int) $sync_summary['articlesReceived'],
+            'mediaReceived' => (int) $sync_summary['mediaReceived'],
+            'articlePagesSynced' => (int) $sync_summary['articlePagesSynced'],
+            'mediaPagesSynced' => (int) $sync_summary['mediaPagesSynced']
         ]);
 
         $this->redirect_with_status('sync_completed');
@@ -646,11 +643,13 @@ final class RankWoven_SEO_Plugin
     {
         $per_page = (int) $request->get_param('perPage');
         $page = (int) $request->get_param('page');
+        $updated_after = sanitize_text_field((string) $request->get_param('updatedAfter'));
 
         return new WP_REST_Response([
-            'articles' => $this->get_synced_articles($per_page, $page),
+            'articles' => $this->get_synced_articles($per_page, $page, $updated_after),
             'page' => $page,
-            'perPage' => $per_page
+            'perPage' => $per_page,
+            'updatedAfter' => $updated_after
         ]);
     }
 
@@ -658,17 +657,19 @@ final class RankWoven_SEO_Plugin
     {
         $per_page = (int) $request->get_param('perPage');
         $page = (int) $request->get_param('page');
+        $updated_after = sanitize_text_field((string) $request->get_param('updatedAfter'));
 
         return new WP_REST_Response([
-            'media' => $this->get_synced_media($per_page, $page),
+            'media' => $this->get_synced_media($per_page, $page, $updated_after),
             'page' => $page,
-            'perPage' => $per_page
+            'perPage' => $per_page,
+            'updatedAfter' => $updated_after
         ]);
     }
 
-    private function get_synced_articles(int $per_page, int $page): array
+    private function get_synced_articles(int $per_page, int $page, string $updated_after = ''): array
     {
-        $posts = get_posts([
+        $query_args = [
             'post_type' => ['post', 'page'],
             'post_status' => ['publish', 'draft', 'pending', 'future'],
             'posts_per_page' => $this->normalize_per_page($per_page),
@@ -676,14 +677,21 @@ final class RankWoven_SEO_Plugin
             'orderby' => 'modified',
             'order' => 'DESC',
             'no_found_rows' => true
-        ]);
+        ];
+
+        $date_query = $this->get_modified_after_date_query($updated_after);
+        if (!empty($date_query)) {
+            $query_args['date_query'] = $date_query;
+        }
+
+        $posts = get_posts($query_args);
 
         return array_map([$this, 'map_post_to_synced_article'], $posts);
     }
 
-    private function get_synced_media(int $per_page, int $page): array
+    private function get_synced_media(int $per_page, int $page, string $updated_after = ''): array
     {
-        $attachments = get_posts([
+        $query_args = [
             'post_type' => 'attachment',
             'post_status' => 'inherit',
             'post_mime_type' => 'image',
@@ -692,69 +700,187 @@ final class RankWoven_SEO_Plugin
             'orderby' => 'modified',
             'order' => 'DESC',
             'no_found_rows' => true
-        ]);
+        ];
+
+        $date_query = $this->get_modified_after_date_query($updated_after);
+        if (!empty($date_query)) {
+            $query_args['date_query'] = $date_query;
+        }
+
+        $attachments = get_posts($query_args);
 
         return array_map([$this, 'map_attachment_to_synced_media'], $attachments);
     }
 
-    private function get_all_synced_articles(): array
-    {
-        return $this->get_paginated_sync_items(
-            fn(int $per_page, int $page): array => $this->get_synced_articles($per_page, $page),
-            self::SYNC_MAX_ARTICLES
-        );
+    private function create_sync_task(
+        string $site_id,
+        string $site_token,
+        string $sync_started_at,
+        string $updated_after
+    ) {
+        $body = [
+            'syncStartedAt' => $sync_started_at
+        ];
+
+        if ($updated_after !== '') {
+            $body['updatedAfter'] = $updated_after;
+        }
+
+        return wp_remote_post($this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/sync-tasks'), [
+            'timeout' => 30,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $site_token,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($body)
+        ]);
     }
 
-    private function get_all_synced_media(): array
+    private function sync_paginated_content_batches(
+        string $site_id,
+        string $site_token,
+        string $sync_task_id,
+        string $sync_started_at,
+        string $updated_after
+    ): array
     {
-        return $this->get_paginated_sync_items(
-            fn(int $per_page, int $page): array => $this->get_synced_media($per_page, $page),
-            self::SYNC_MAX_MEDIA
-        );
-    }
-
-    private function get_paginated_sync_items(callable $fetch_page, int $max_items): array
-    {
-        $items = [];
+        $article_pages_synced = 0;
+        $media_pages_synced = 0;
+        $articles_received = 0;
+        $media_received = 0;
         $page = 1;
-        $pages_synced = 0;
-        $truncated = false;
 
-        while (count($items) < $max_items) {
-            $page_items = $fetch_page(self::SYNC_PAGE_SIZE, $page);
-            $page_item_count = count($page_items);
+        while ($page <= self::SYNC_MAX_BATCH_PAGES) {
+            $articles = $this->get_synced_articles(self::SYNC_PAGE_SIZE, $page, $updated_after);
+            $media = $this->get_synced_media(self::SYNC_PAGE_SIZE, $page, $updated_after);
+            $article_count = count($articles);
+            $media_count = count($media);
+            $is_final_batch = $article_count < self::SYNC_PAGE_SIZE && $media_count < self::SYNC_PAGE_SIZE;
 
-            if ($page_item_count === 0) {
-                break;
+            if ($article_count > 0) {
+                $article_pages_synced++;
             }
 
-            $remaining_items = $max_items - count($items);
-            if ($page_item_count > $remaining_items) {
-                $items = array_merge($items, array_slice($page_items, 0, $remaining_items));
-                $pages_synced++;
-                $truncated = true;
-                break;
+            if ($media_count > 0) {
+                $media_pages_synced++;
             }
 
-            $items = array_merge($items, $page_items);
-            $pages_synced++;
+            $response = $this->send_sync_batch(
+                $site_id,
+                $site_token,
+                $sync_task_id,
+                $page,
+                $sync_started_at,
+                $updated_after,
+                $articles,
+                $media,
+                $is_final_batch
+            );
 
-            if ($page_item_count < self::SYNC_PAGE_SIZE) {
-                break;
+            if (is_wp_error($response)) {
+                $this->redirect_with_status('sync_failed');
             }
 
-            if (count($items) >= $max_items) {
-                $truncated = count($fetch_page(self::SYNC_PAGE_SIZE, $page + 1)) > 0;
+            $body = $this->decode_response_body($response);
+            $this->redirect_if_sync_response_failed($response, $body);
+
+            $articles_received = (int) ($body['data']['task']['articlesReceived'] ?? ($articles_received + $article_count));
+            $media_received = (int) ($body['data']['task']['mediaReceived'] ?? ($media_received + $media_count));
+
+            if ($is_final_batch) {
                 break;
             }
 
             $page++;
         }
 
+        if ($page > self::SYNC_MAX_BATCH_PAGES) {
+            $this->redirect_with_status('sync_failed');
+        }
+
         return [
-            'items' => $items,
-            'pagesSynced' => $pages_synced,
-            'truncated' => $truncated
+            'articlesReceived' => $articles_received,
+            'mediaReceived' => $media_received,
+            'articlePagesSynced' => $article_pages_synced,
+            'mediaPagesSynced' => $media_pages_synced
+        ];
+    }
+
+    private function send_sync_batch(
+        string $site_id,
+        string $site_token,
+        string $sync_task_id,
+        int $batch_index,
+        string $sync_started_at,
+        string $updated_after,
+        array $articles,
+        array $media,
+        bool $is_final_batch
+    ) {
+        $body = [
+            'batchIndex' => $batch_index,
+            'syncStartedAt' => $sync_started_at,
+            'articles' => $articles,
+            'media' => $media,
+            'isFinalBatch' => $is_final_batch
+        ];
+
+        if ($updated_after !== '') {
+            $body['updatedAfter'] = $updated_after;
+        }
+
+        return wp_remote_post($this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/sync-tasks/' . rawurlencode($sync_task_id) . '/batches'), [
+            'timeout' => 45,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $site_token,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($body)
+        ]);
+    }
+
+    private function redirect_if_sync_response_failed($response, array $body): void
+    {
+        if (($body['success'] ?? false)) {
+            return;
+        }
+
+        $error_code = $body['error']['code'] ?? '';
+        if (wp_remote_retrieve_response_code($response) === 401 || $error_code === 'SITE_TOKEN_INVALID') {
+            $this->redirect_with_status('site_token_invalid');
+        }
+
+        $this->redirect_with_status('sync_failed');
+    }
+
+    private function get_incremental_updated_after(): string
+    {
+        $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
+        if (!is_array($last_sync_result)) {
+            return '';
+        }
+
+        $value = sanitize_text_field((string) ($last_sync_result['syncStartedAt'] ?? $last_sync_result['syncedAt'] ?? ''));
+        return strtotime($value) === false ? '' : $value;
+    }
+
+    private function get_modified_after_date_query(string $updated_after): array
+    {
+        if ($updated_after === '') {
+            return [];
+        }
+
+        $timestamp = strtotime($updated_after);
+        if ($timestamp === false) {
+            return [];
+        }
+
+        return [
+            [
+                'column' => 'post_modified_gmt',
+                'after' => gmdate('Y-m-d H:i:s', $timestamp),
+                'inclusive' => false
+            ]
         ];
     }
 
@@ -822,6 +948,11 @@ final class RankWoven_SEO_Plugin
                 'default' => 100,
                 'sanitize_callback' => 'absint',
                 'validate_callback' => static fn($value): bool => (int) $value >= 1 && (int) $value <= 100
+            ],
+            'updatedAfter' => [
+                'default' => '',
+                'sanitize_callback' => 'sanitize_text_field',
+                'validate_callback' => static fn($value): bool => $value === '' || strtotime((string) $value) !== false
             ]
         ];
     }

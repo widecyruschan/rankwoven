@@ -58,15 +58,29 @@ const syncedMediaSchema = z.object({
 
 const syncPayloadSchema = z.object({
   syncStartedAt: z.string().trim().max(80).optional(),
+  updatedAfter: z.string().trim().max(80).optional(),
   articles: z.array(syncedArticleSchema).max(1000).default([]),
   media: z.array(syncedMediaSchema).max(2000).default([])
+});
+
+const createSyncTaskSchema = z.object({
+  syncStartedAt: z.string().trim().max(80).optional(),
+  updatedAfter: z.string().trim().max(80).optional()
+});
+
+const syncBatchPayloadSchema = syncPayloadSchema.extend({
+  batchIndex: z.number().int().min(1).max(1_000_000),
+  isFinalBatch: z.boolean().default(false)
 });
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
+export type CreateSyncTaskInput = z.infer<typeof createSyncTaskSchema>;
+export type SyncBatchPayload = z.infer<typeof syncBatchPayloadSchema>;
 export type SiteConnectionStatus = 'connected' | 'revoked';
+export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface SiteConnection {
   id: string;
@@ -94,6 +108,26 @@ export interface SaveSyncResult {
   mediaReceived: number;
 }
 
+export interface SyncTask {
+  id: string;
+  siteId: string;
+  status: SyncTaskStatus;
+  syncStartedAt?: string;
+  updatedAfter?: string;
+  batchesReceived: number;
+  articlesReceived: number;
+  mediaReceived: number;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface SaveSyncBatchResult {
+  site: SiteConnection;
+  task: SyncTask;
+  articlesReceived: number;
+  mediaReceived: number;
+}
+
 export interface SiteConnectionRepository {
   create(input: CreateConnectionInput): Promise<{
     site: SiteConnection;
@@ -109,6 +143,12 @@ export interface SiteConnectionRepository {
   revokeToken(siteId: string): Promise<SiteConnection | undefined>;
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
   saveSync(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
+  createSyncTask(siteId: string, input: CreateSyncTaskInput): Promise<SyncTask | undefined>;
+  saveSyncBatch(
+    siteId: string,
+    syncTaskId: string,
+    payload: SyncBatchPayload
+  ): Promise<SaveSyncBatchResult | undefined>;
   listArticles(siteId: string): Promise<SyncedArticle[]>;
   close?(): Promise<void>;
 }
@@ -161,10 +201,29 @@ ALTER TABLE site_connections
 CREATE INDEX IF NOT EXISTS idx_site_connections_last_token_used
   ON site_connections(last_token_used_at DESC);
 
+CREATE TABLE IF NOT EXISTS sync_tasks (
+  id uuid PRIMARY KEY,
+  site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
+  status text NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  sync_started_at varchar(80),
+  updated_after varchar(80),
+  batches_received integer NOT NULL DEFAULT 0,
+  articles_received integer NOT NULL DEFAULT 0,
+  media_received integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL,
+  completed_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_tasks_site_created
+  ON sync_tasks(site_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS sync_runs (
   id uuid PRIMARY KEY,
   site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
+  task_id uuid REFERENCES sync_tasks(id) ON DELETE SET NULL,
+  batch_index integer,
   sync_started_at varchar(80),
+  updated_after varchar(80),
   completed_at timestamptz NOT NULL,
   articles_received integer NOT NULL DEFAULT 0,
   media_received integer NOT NULL DEFAULT 0,
@@ -173,6 +232,22 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 
 CREATE INDEX IF NOT EXISTS idx_sync_runs_site_completed
   ON sync_runs(site_id, completed_at DESC);
+
+ALTER TABLE sync_runs
+  ADD COLUMN IF NOT EXISTS task_id uuid REFERENCES sync_tasks(id) ON DELETE SET NULL;
+
+ALTER TABLE sync_runs
+  ADD COLUMN IF NOT EXISTS batch_index integer;
+
+ALTER TABLE sync_runs
+  ADD COLUMN IF NOT EXISTS updated_after varchar(80);
+
+CREATE INDEX IF NOT EXISTS idx_sync_runs_task_batch
+  ON sync_runs(task_id, batch_index);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_runs_unique_task_batch
+  ON sync_runs(task_id, batch_index)
+  WHERE task_id IS NOT NULL AND batch_index IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS synced_articles (
   id bigserial PRIMARY KEY,
@@ -339,6 +414,21 @@ function mapArticleRow(row: QueryResultRow): SyncedArticle {
   };
 }
 
+function mapSyncTaskRow(row: QueryResultRow): SyncTask {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    status: row.status,
+    syncStartedAt: row.sync_started_at ?? undefined,
+    updatedAfter: row.updated_after ?? undefined,
+    batchesReceived: Number(row.batches_received ?? 0),
+    articlesReceived: Number(row.articles_received ?? 0),
+    mediaReceived: Number(row.media_received ?? 0),
+    createdAt: toIsoString(row.created_at) ?? '',
+    completedAt: toIsoString(row.completed_at)
+  };
+}
+
 function createSiteConnection(id: string, input: CreateConnectionInput, apiToken: string): InMemorySiteConnection {
   return {
     id,
@@ -361,6 +451,8 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
   const sites = new Map<string, InMemorySiteConnection>();
   const articlesBySite = new Map<string, Map<string, SyncedArticle>>();
   const mediaBySite = new Map<string, Map<string, SyncedMedia>>();
+  const syncTasks = new Map<string, SyncTask>();
+  const syncTaskBatchIndexes = new Map<string, Set<number>>();
 
   return {
     async create(input) {
@@ -463,6 +555,83 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
 
       return {
         site: toPublicConnection(site),
+        articlesReceived: payload.articles.length,
+        mediaReceived: payload.media.length
+      };
+    },
+    async createSyncTask(siteId, input) {
+      if (!sites.has(siteId)) {
+        return undefined;
+      }
+
+      const now = new Date().toISOString();
+      const task: SyncTask = {
+        id: crypto.randomUUID(),
+        siteId,
+        status: 'queued',
+        syncStartedAt: input.syncStartedAt,
+        updatedAfter: input.updatedAfter,
+        batchesReceived: 0,
+        articlesReceived: 0,
+        mediaReceived: 0,
+        createdAt: now
+      };
+
+      syncTasks.set(task.id, task);
+      syncTaskBatchIndexes.set(task.id, new Set());
+      return task;
+    },
+    async saveSyncBatch(siteId, syncTaskId, payload) {
+      const site = sites.get(siteId);
+      const task = syncTasks.get(syncTaskId);
+
+      if (!site || !task || task.siteId !== siteId) {
+        return undefined;
+      }
+
+      const batchIndexes = syncTaskBatchIndexes.get(syncTaskId) ?? new Set<number>();
+      if (batchIndexes.has(payload.batchIndex)) {
+        return {
+          site: toPublicConnection(site),
+          task,
+          articlesReceived: 0,
+          mediaReceived: 0
+        };
+      }
+
+      const siteArticles = articlesBySite.get(siteId) ?? new Map<string, SyncedArticle>();
+      const siteMedia = mediaBySite.get(siteId) ?? new Map<string, SyncedMedia>();
+
+      for (const article of payload.articles) {
+        siteArticles.set(article.cmsId, article);
+      }
+
+      for (const media of payload.media) {
+        siteMedia.set(media.cmsId, media);
+      }
+
+      articlesBySite.set(siteId, siteArticles);
+      mediaBySite.set(siteId, siteMedia);
+
+      task.status = payload.isFinalBatch ? 'completed' : 'running';
+      batchIndexes.add(payload.batchIndex);
+      syncTaskBatchIndexes.set(syncTaskId, batchIndexes);
+      task.batchesReceived += 1;
+      task.articlesReceived += payload.articles.length;
+      task.mediaReceived += payload.media.length;
+
+      if (payload.isFinalBatch) {
+        task.completedAt = new Date().toISOString();
+        site.lastSyncAt = task.completedAt;
+        site.lastSyncStats = {
+          articlesReceived: task.articlesReceived,
+          mediaReceived: task.mediaReceived
+        };
+      }
+
+      return {
+        site: toPublicConnection(site),
+        task,
         articlesReceived: payload.articles.length,
         mediaReceived: payload.media.length
       };
@@ -694,18 +863,22 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           INSERT INTO sync_runs (
             id,
             site_id,
+            task_id,
+            batch_index,
             sync_started_at,
+            updated_after,
             completed_at,
             articles_received,
             media_received,
             status
           )
-          VALUES ($1, $2, $3, $4, $5, $6, 'completed')
+          VALUES ($1, $2, NULL, NULL, $3, $4, $5, $6, $7, 'completed')
         `,
         [
           crypto.randomUUID(),
           siteId,
           payload.syncStartedAt ?? null,
+          payload.updatedAfter ?? null,
           completedAt,
           payload.articles.length,
           payload.media.length
@@ -727,6 +900,199 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
 
       return {
         site: mapSiteRow(updatedSite.rows[0]),
+        articlesReceived: payload.articles.length,
+        mediaReceived: payload.media.length
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createSyncTask(siteId: string, input: CreateSyncTaskInput) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        INSERT INTO sync_tasks (
+          id,
+          site_id,
+          status,
+          sync_started_at,
+          updated_after,
+          created_at
+        )
+        SELECT $1, id, 'queued', $3, $4, $5
+        FROM site_connections
+        WHERE id = $2
+        RETURNING *
+      `,
+      [
+        crypto.randomUUID(),
+        siteId,
+        input.syncStartedAt ?? null,
+        input.updatedAfter ?? null,
+        new Date()
+      ]
+    );
+
+    return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
+  }
+
+  async saveSyncBatch(siteId: string, syncTaskId: string, payload: SyncBatchPayload) {
+    await this.ensureSchema();
+
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const taskResult = await client.query(
+        `
+          SELECT *
+          FROM sync_tasks
+          WHERE id = $1
+            AND site_id = $2
+          FOR UPDATE
+        `,
+        [syncTaskId, siteId]
+      );
+
+      if (!taskResult.rows[0]) {
+        await client.query('ROLLBACK');
+        return undefined;
+      }
+
+      const task = mapSyncTaskRow(taskResult.rows[0]);
+      const batchCompletedAt = new Date();
+      const existingBatchResult = await client.query(
+        `
+          SELECT id
+          FROM sync_runs
+          WHERE task_id = $1
+            AND batch_index = $2
+          LIMIT 1
+        `,
+        [syncTaskId, payload.batchIndex]
+      );
+
+      if (existingBatchResult.rows[0]) {
+        const siteResult = await client.query(
+          `
+            SELECT *
+            FROM site_connections
+            WHERE id = $1
+            LIMIT 1
+          `,
+          [siteId]
+        );
+
+        await client.query('COMMIT');
+
+        return {
+          site: mapSiteRow(siteResult.rows[0]),
+          task,
+          articlesReceived: 0,
+          mediaReceived: 0
+        };
+      }
+
+      for (const article of payload.articles) {
+        await this.upsertArticle(client, siteId, article, batchCompletedAt);
+      }
+
+      for (const media of payload.media) {
+        await this.upsertMedia(client, siteId, media, batchCompletedAt);
+      }
+
+      await client.query(
+        `
+          INSERT INTO sync_runs (
+            id,
+            site_id,
+            task_id,
+            batch_index,
+            sync_started_at,
+            updated_after,
+            completed_at,
+            articles_received,
+            media_received,
+            status
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed')
+        `,
+        [
+          crypto.randomUUID(),
+          siteId,
+          syncTaskId,
+          payload.batchIndex,
+          task.syncStartedAt ?? payload.syncStartedAt ?? null,
+          task.updatedAfter ?? payload.updatedAfter ?? null,
+          batchCompletedAt,
+          payload.articles.length,
+          payload.media.length
+        ]
+      );
+
+      const updatedTaskResult = await client.query(
+        `
+          UPDATE sync_tasks
+          SET status = $3,
+              batches_received = batches_received + 1,
+              articles_received = articles_received + $4,
+              media_received = media_received + $5,
+              completed_at = CASE WHEN $6 THEN $2 ELSE completed_at END
+          WHERE id = $1
+          RETURNING *
+        `,
+        [
+          syncTaskId,
+          batchCompletedAt,
+          payload.isFinalBatch ? 'completed' : 'running',
+          payload.articles.length,
+          payload.media.length,
+          payload.isFinalBatch
+        ]
+      );
+      const updatedTask = mapSyncTaskRow(updatedTaskResult.rows[0]);
+
+      let updatedSite: SiteConnection;
+      if (payload.isFinalBatch) {
+        const lastSyncStats = {
+          articlesReceived: updatedTask.articlesReceived,
+          mediaReceived: updatedTask.mediaReceived
+        };
+        const siteResult = await client.query(
+          `
+            UPDATE site_connections
+            SET last_sync_at = $2,
+                last_sync_stats = $3
+            WHERE id = $1
+            RETURNING *
+          `,
+          [siteId, batchCompletedAt, JSON.stringify(lastSyncStats)]
+        );
+        updatedSite = mapSiteRow(siteResult.rows[0]);
+      } else {
+        const siteResult = await client.query(
+          `
+            SELECT *
+            FROM site_connections
+            WHERE id = $1
+            LIMIT 1
+          `,
+          [siteId]
+        );
+        updatedSite = mapSiteRow(siteResult.rows[0]);
+      }
+
+      await client.query('COMMIT');
+
+      return {
+        site: updatedSite,
+        task: updatedTask,
         articlesReceived: payload.articles.length,
         mediaReceived: payload.media.length
       };
@@ -1060,6 +1426,85 @@ export function registerSiteConnectionRoutes(
       data: {
         site
       }
+    };
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/sync-tasks', async (request, reply) => {
+    const site = await repository.find(request.params.siteId);
+
+    if (!(await ensureSiteToken(repository, request, reply, site))) {
+      return reply;
+    }
+
+    const parsed = createSyncTaskSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const task = await repository.createSyncTask(request.params.siteId, parsed.data);
+
+    if (!task) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return reply.status(201).send({
+      success: true,
+      message: '同步任務已建立',
+      data: {
+        task
+      }
+    });
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+      syncTaskId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches', async (request, reply) => {
+    const site = await repository.find(request.params.siteId);
+
+    if (!(await ensureSiteToken(repository, request, reply, site))) {
+      return reply;
+    }
+
+    const parsed = syncBatchPayloadSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const result = await repository.saveSyncBatch(
+      request.params.siteId,
+      request.params.syncTaskId,
+      parsed.data
+    );
+
+    if (!result) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到同步任務',
+        error: {
+          code: 'SYNC_TASK_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '同步批次已接收',
+      data: result
     };
   });
 

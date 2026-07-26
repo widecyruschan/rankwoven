@@ -227,10 +227,12 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `PUT /api/v1/site-connections/:siteId/wordpress-credentials`：保存 WordPress 管理員用戶名和應用程式密碼，用於後續以該管理員身份調用 WordPress REST API 寫回已批准修改。
 - `POST /api/v1/site-connections/:siteId/token/regenerate`：重新生成站點 API Token，只在回應中返回一次完整 Token，舊 Token 立即失效。
 - `POST /api/v1/site-connections/:siteId/token/revoke`：吊銷站點 API Token，站點狀態改為 `revoked`，插件同步接口不再接受該站點 Token。
-- `POST /api/v1/site-connections/:siteId/sync`：由插件帶 Bearer Token 推送文章與媒體同步資料。
+- `POST /api/v1/site-connections/:siteId/sync`：兼容舊版插件的單次同步接口，由插件帶 Bearer Token 推送文章與媒體同步資料。
+- `POST /api/v1/site-connections/:siteId/sync-tasks`：建立同步任務，可帶 `updatedAfter` 進行增量同步。
+- `POST /api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches`：接收插件分頁推送的同步批次，最後一批完成後更新站點最近同步統計。
 - `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
 
-站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 和 `/app/article-sync` 已使用 `GET /api/v1/site-connections` 顯示站點列表、同步狀態和最近同步結果。
+站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 和 `/app/article-sync` 已使用 `GET /api/v1/site-connections` 顯示站點列表、同步狀態和最近同步結果。
 
 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
@@ -591,3 +593,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：使用 WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過；已將插件更新到 Docker Desktop `cyruschan-wp` 測試環境，容器內 `php -l` 通過；反射調用插件同步方法確認測試站同步 59 篇文章、240 個圖片媒體，其中媒體分 3 頁；本地臨時站點連接同步 API 返回 `200 OK` 並接收 59 篇文章、240 個媒體；`npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 和 PostgreSQL 整合測試均通過。
 - 下一步行動清單：增加增量同步參數；將手動同步升級為後端同步任務以支持大站多批同步；建立第一批 SEO 審計規則模型；新增 WordPress 插件只讀診斷頁。
+
+### 2026-07-26：增量同步與後端同步任務
+
+- 會話的主要目的：實作 `updatedAfter` 增量同步，並將 WordPress 插件手動同步升級為後端同步任務和多批次推送，支持大站內容分批落庫。
+- 完成的主要任務：API 新增 `sync_tasks` 任務模型和分頁批次接口；PostgreSQL 新增 `sync_tasks` 表並讓 `sync_runs` 關聯任務與批次；WordPress 插件同步時先建立任務，再逐頁推送文章和媒體 batch；插件站點側 REST API 新增 `updatedAfter` 參數；最近同步結果保存同步模式、任務 ID 和增量時間。
+- 關鍵決策和解決方案：MVP 仍由插件主動推送批次，後端負責任務進度和批次落庫；因 SaaS 目前只保存 Site Token Hash，不保存完整 Token，暫不讓 Worker 主動拉取 WordPress REST API；下一次同步使用上一次成功同步的 `syncStartedAt` 作為 `updatedAfter`，降低漏同步風險。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、WordPress PHP Plugin、WordPress Posts API、Docker Desktop。
+- 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run test -w @aieo/api -- siteConnections.test.ts` 通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；使用 WordPress PHP Docker 鏡像執行 `php -l` 通過；Docker Desktop 重建 API/Worker/Web 後，`cyruschan-wp` 測試站增量同步接收 50 個更新媒體，立即二次增量同步接收 0/0；臨時全量同步任務接收 59 篇文章和 240 個媒體，媒體分 3 頁批次推送。
+- 下一步行動清單：補充單篇文章和單個媒體手動刷新接口；建立第一批 SEO 審計規則模型；新增 WordPress 插件只讀診斷頁；將客戶後台同步頁接入同步任務列表和批次進度。

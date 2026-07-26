@@ -588,7 +588,9 @@ cancelled
 | `PUT` | `/api/v1/site-connections/:siteId/wordpress-credentials` | 保存 WordPress 管理員用戶名和加密後 Application Password |
 | `POST` | `/api/v1/site-connections/:siteId/token/regenerate` | 重新生成站點 API Token，舊 Token 立即失效 |
 | `POST` | `/api/v1/site-connections/:siteId/token/revoke` | 吊銷站點 API Token，站點狀態改為 `revoked` |
-| `POST` | `/api/v1/site-connections/:siteId/sync` | 接收插件推送的文章與媒體同步資料 |
+| `POST` | `/api/v1/site-connections/:siteId/sync` | 舊版單次同步兼容接口 |
+| `POST` | `/api/v1/site-connections/:siteId/sync-tasks` | 建立同步任務，可帶 `updatedAfter` |
+| `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 接收插件分頁推送的文章與媒體同步批次 |
 | `GET` | `/api/v1/site-connections/:siteId/articles` | 帶 Bearer Token 獲取文章列表 |
 | `GET` | `/api/v1/articles/:articleId` | 獲取文章詳情 |
 | `POST` | `/api/v1/articles/:articleId/audit` | 發起 SEO 審計 |
@@ -607,12 +609,12 @@ cancelled
 | Method | URL | 用途 |
 |---|---|---|
 | `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
-| `GET` | `/wp-json/rankwoven/v1/posts` | 分頁讀取文章 |
+| `GET` | `/wp-json/rankwoven/v1/posts` | 分頁讀取文章，支援 `updatedAfter` |
 | `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇文章，後續實現 |
 | `POST` | `/wp-json/rankwoven/v1/posts/:id/preview` | 預覽修改，後續實現 |
 | `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 應用修改，後續實現 |
 | `POST` | `/wp-json/rankwoven/v1/posts/:id/rollback` | 回滾修改，後續實現 |
-| `GET` | `/wp-json/rankwoven/v1/media` | 分頁讀取媒體 |
+| `GET` | `/wp-json/rankwoven/v1/media` | 分頁讀取媒體，支援 `updatedAfter` |
 | `POST` | `/wp-json/rankwoven/v1/media` | 上傳圖片，後續實現 |
 
 ### 10.3 Joomla 擴展 API
@@ -1215,12 +1217,11 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 增加增量同步參數，例如 `updatedAfter` 和單篇文章手動刷新。
-2. 將手動同步升級為後端同步任務，支持超過 1,000 篇文章或 2,000 個圖片媒體的大站多批同步。
-3. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
-4. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
-5. 實作已批准建議的 WordPress REST API 寫回任務，使用站點保存的管理員 Application Password。
-6. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、Token 最近使用時間、最近同步、圖片屬性設定、應用程式密碼配置狀態和錯誤原因。
-7. 為 PostgreSQL Repository 補充分頁查詢和按站點篩選條件，避免文章列表資料量增長後一次讀取過多。
-8. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
-9. 將客戶後台同步頁後續接入真正的手動同步任務 API，而不是只刷新同步狀態。
+1. 補充單篇文章和單個媒體手動刷新接口，支持指定 CMS ID 重新同步。
+2. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
+3. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
+4. 實作已批准建議的 WordPress REST API 寫回任務，使用站點保存的管理員 Application Password。
+5. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、Token 最近使用時間、最近同步、圖片屬性設定、應用程式密碼配置狀態和錯誤原因。
+6. 為 PostgreSQL Repository 補充分頁查詢和按站點篩選條件，避免文章列表資料量增長後一次讀取過多。
+7. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
+8. 將客戶後台同步頁接入同步任務列表和批次進度，而不是只顯示最近同步結果。

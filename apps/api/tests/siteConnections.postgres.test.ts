@@ -169,6 +169,105 @@ describePostgres('PostgreSQL site connection repository', () => {
       expect(persisted.rows[0].wordpress_application_password_encrypted).toMatch(/^v1:/);
       expect(persisted.rows[0].last_token_used_at).toBeInstanceOf(Date);
 
+      const createTaskResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/sync-tasks`,
+        headers: {
+          authorization: `Bearer ${createBody.data.apiToken}`
+        },
+        payload: {
+          syncStartedAt: '2026-07-26T03:00:00+00:00',
+          updatedAfter: '2026-07-25T08:00:00+00:00'
+        }
+      });
+      const createTaskBody = createTaskResponse.json<{
+        data: {
+          task: {
+            id: string;
+          };
+        };
+      }>();
+
+      expect(createTaskResponse.statusCode).toBe(201);
+
+      for (const batch of [
+        {
+          batchIndex: 1,
+          articles: [
+            {
+              cmsId: '201',
+              type: 'post',
+              title: 'PostgreSQL Task Article One',
+              slug: 'postgresql-task-article-one',
+              status: 'publish',
+              url: 'http://localhost:8088/postgresql-task-article-one/',
+              updatedAt: '2026-07-26T03:10:00+00:00'
+            }
+          ],
+          media: []
+        },
+        {
+          batchIndex: 2,
+          isFinalBatch: true,
+          articles: [
+            {
+              cmsId: '202',
+              type: 'page',
+              title: 'PostgreSQL Task Article Two',
+              slug: 'postgresql-task-article-two',
+              status: 'publish',
+              url: 'http://localhost:8088/postgresql-task-article-two/',
+              updatedAt: '2026-07-26T03:20:00+00:00'
+            }
+          ],
+          media: [
+            {
+              cmsId: '701',
+              title: 'PostgreSQL Task Image',
+              url: 'http://localhost:8088/wp-content/uploads/postgresql-task-image.jpg',
+              updatedAt: '2026-07-26T03:30:00+00:00'
+            }
+          ]
+        }
+      ]) {
+        const batchResponse = await server.inject({
+          method: 'POST',
+          url: `/api/v1/site-connections/${siteId}/sync-tasks/${createTaskBody.data.task.id}/batches`,
+          headers: {
+            authorization: `Bearer ${createBody.data.apiToken}`
+          },
+          payload: batch
+        });
+
+        expect(batchResponse.statusCode).toBe(200);
+      }
+
+      const taskStatus = await pool.query(
+        `
+          SELECT
+            st.status,
+            st.updated_after,
+            st.batches_received,
+            st.articles_received,
+            st.media_received,
+            COUNT(sr.id)::int AS sync_run_count
+          FROM sync_tasks st
+          LEFT JOIN sync_runs sr ON sr.task_id = st.id
+          WHERE st.id = $1
+          GROUP BY st.id
+        `,
+        [createTaskBody.data.task.id]
+      );
+
+      expect(taskStatus.rows[0]).toMatchObject({
+        status: 'completed',
+        updated_after: '2026-07-25T08:00:00+00:00',
+        batches_received: 2,
+        articles_received: 2,
+        media_received: 1,
+        sync_run_count: 2
+      });
+
       const credentialsResponse = await server.inject({
         method: 'PUT',
         url: `/api/v1/site-connections/${siteId}/wordpress-credentials`,

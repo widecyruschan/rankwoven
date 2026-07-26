@@ -28,8 +28,8 @@ Settings -> RankWoven SEO
 - 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
-- 一鍵分頁同步 Posts、Pages 和圖片媒體，調用 SaaS API 的 `POST /api/v1/site-connections/:siteId/sync`。
-- 顯示最近一次同步時間、文章數、媒體數、同步頁數和是否達到同步上限。
+- 一鍵建立後端同步任務，分頁批量同步 Posts、Pages 和圖片媒體。
+- 顯示最近一次同步時間、文章數、媒體數、同步頁數、同步模式、`updatedAfter` 和同步任務 ID。
 - 當 SaaS 返回 `SITE_TOKEN_INVALID` 時，提示用戶重新生成 Token 並重新保存或重新連接站點。
 
 ## WordPress Application Password
@@ -103,7 +103,9 @@ Settings -> RankWoven SEO -> Bulk Updater
 |---|---|---|
 | `POST` | `/api/v1/site-connections` | 建立站點連接並取得 `siteId` 和 `apiToken` |
 | `PUT` | `/api/v1/site-connections/:siteId/wordpress-credentials` | 更新 WordPress 管理員用戶名和 Application Password |
-| `POST` | `/api/v1/site-connections/:siteId/sync` | 推送文章與媒體同步資料 |
+| `POST` | `/api/v1/site-connections/:siteId/sync-tasks` | 建立同步任務，可帶 `updatedAfter` |
+| `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 分頁推送文章與媒體同步批次 |
+| `POST` | `/api/v1/site-connections/:siteId/sync` | 舊版單次同步兼容接口 |
 
 同步請求使用：
 
@@ -112,7 +114,7 @@ Authorization: Bearer <Site Token>
 Content-Type: application/json
 ```
 
-手動同步會以每頁 100 筆分頁讀取 WordPress Posts、Pages 和圖片媒體，不再只推送第一頁資料。為符合目前 SaaS API 單次 payload 驗證上限，單次手動同步最多推送 1,000 篇文章和 2,000 個圖片媒體；若站點內容量超過此上限，插件會在最近同步結果中顯示已達同步上限。後續增量同步和任務隊列完成後，會再拆分為多批同步。
+手動同步會先在 SaaS 後端建立同步任務，再以每頁 100 筆分頁讀取 WordPress Posts、Pages 和圖片媒體，逐批推送到同步任務。插件會使用上一次成功同步的 `syncStartedAt` 作為下一次同步的 `updatedAfter`，首次同步沒有記錄時自動全量同步。最後一批完成後，後端會累計任務批次、文章數和媒體數，並更新站點最近同步統計。
 
 ## 站點側 REST API
 
@@ -121,8 +123,8 @@ Content-Type: application/json
 | Method | URL | 用途 |
 |---|---|---|
 | `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
-| `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100` | 分頁讀取 Posts 和 Pages |
-| `GET` | `/wp-json/rankwoven/v1/media?page=1&perPage=100` | 分頁讀取圖片媒體 |
+| `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取 Posts 和 Pages，可按修改時間增量過濾 |
+| `GET` | `/wp-json/rankwoven/v1/media?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取圖片媒體，可按修改時間增量過濾 |
 
 站點側 REST API 也需要 Bearer Token，Token 與插件保存的 `Site Token` 一致。
 
@@ -162,5 +164,5 @@ Content-Type: application/json
 - 不保存 WordPress 主登入密碼，只錄入用戶自行建立的 Application Password。
 - 不直接無審核批量發布內容。
 - 不提交任何 `.env` 或真實 API Key。
-- MVP 先使用手動同步，會分頁推送最多 1,000 篇文章和 2,000 個圖片媒體；圖片屬性批量更新每次最多處理 50 張既有圖片。
+- MVP 先使用插件端手動觸發同步任務，由插件分頁推送批次；圖片屬性批量更新每次最多處理 50 張既有圖片。
 - 站點連接、Token Hash、同步資料和加密後 WordPress Application Password 已由 API 保存到 PostgreSQL；未配置資料庫時仍可使用內存 Repository 測試。

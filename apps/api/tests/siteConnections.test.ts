@@ -288,6 +288,165 @@ describe('site connection routes', () => {
     });
   });
 
+  it('creates a sync task and stores incremental batches until the final batch completes', async () => {
+    const { server, body } = await createWordPressConnection();
+    const updatedAfter = '2026-07-25T08:00:00+00:00';
+    const createTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        syncStartedAt: '2026-07-26T03:00:00+00:00',
+        updatedAfter
+      }
+    });
+    const createTaskBody = createTaskResponse.json();
+
+    expect(createTaskResponse.statusCode).toBe(201);
+    expect(createTaskBody).toMatchObject({
+      success: true,
+      data: {
+        task: {
+          siteId: body.data.site.id,
+          status: 'queued',
+          updatedAfter,
+          batchesReceived: 0,
+          articlesReceived: 0,
+          mediaReceived: 0
+        }
+      }
+    });
+
+    const firstBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks/${createTaskBody.data.task.id}/batches`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        batchIndex: 1,
+        updatedAfter,
+        articles: [
+          {
+            cmsId: '201',
+            type: 'post',
+            title: 'Incremental Article One',
+            slug: 'incremental-article-one',
+            status: 'publish',
+            url: 'http://localhost:8088/incremental-article-one/',
+            updatedAt: '2026-07-26T02:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+
+    expect(firstBatchResponse.statusCode).toBe(200);
+    expect(firstBatchResponse.json()).toMatchObject({
+      data: {
+        task: {
+          status: 'running',
+          batchesReceived: 1,
+          articlesReceived: 1,
+          mediaReceived: 0
+        }
+      }
+    });
+
+    const duplicateBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks/${createTaskBody.data.task.id}/batches`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        batchIndex: 1,
+        updatedAfter,
+        articles: [
+          {
+            cmsId: '201',
+            type: 'post',
+            title: 'Incremental Article One',
+            slug: 'incremental-article-one',
+            status: 'publish',
+            url: 'http://localhost:8088/incremental-article-one/',
+            updatedAt: '2026-07-26T02:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+
+    expect(duplicateBatchResponse.statusCode).toBe(200);
+    expect(duplicateBatchResponse.json()).toMatchObject({
+      data: {
+        articlesReceived: 0,
+        mediaReceived: 0,
+        task: {
+          batchesReceived: 1,
+          articlesReceived: 1,
+          mediaReceived: 0
+        }
+      }
+    });
+
+    const finalBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks/${createTaskBody.data.task.id}/batches`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        batchIndex: 2,
+        updatedAfter,
+        isFinalBatch: true,
+        articles: [
+          {
+            cmsId: '202',
+            type: 'page',
+            title: 'Incremental Article Two',
+            slug: 'incremental-article-two',
+            status: 'publish',
+            url: 'http://localhost:8088/incremental-article-two/',
+            updatedAt: '2026-07-26T02:10:00+00:00'
+          }
+        ],
+        media: [
+          {
+            cmsId: '701',
+            title: 'Incremental Image',
+            url: 'http://localhost:8088/wp-content/uploads/incremental-image.jpg',
+            mimeType: 'image/jpeg',
+            fileName: 'incremental-image.jpg',
+            updatedAt: '2026-07-26T02:20:00+00:00'
+          }
+        ]
+      }
+    });
+
+    expect(finalBatchResponse.statusCode).toBe(200);
+    expect(finalBatchResponse.json()).toMatchObject({
+      data: {
+        site: {
+          id: body.data.site.id,
+          lastSyncStats: {
+            articlesReceived: 2,
+            mediaReceived: 1
+          }
+        },
+        task: {
+          status: 'completed',
+          batchesReceived: 2,
+          articlesReceived: 2,
+          mediaReceived: 1,
+          completedAt: expect.any(String)
+        }
+      }
+    });
+  });
+
   it('regenerates a site token and rejects the previous token', async () => {
     const { server, body } = await createWordPressConnection();
     const response = await server.inject({
