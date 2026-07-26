@@ -611,6 +611,12 @@ final class RankWoven_SEO_Plugin
             'permission_callback' => [$this, 'authorize_rest_request']
         ]);
 
+        register_rest_route(self::REST_NAMESPACE, '/posts/(?P<id>\d+)/apply', [
+            'methods' => 'POST',
+            'callback' => [$this, 'apply_single_post_rest_response'],
+            'permission_callback' => [$this, 'authorize_post_write_request']
+        ]);
+
         register_rest_route(self::REST_NAMESPACE, '/media', [
             'methods' => 'GET',
             'callback' => [$this, 'get_media_rest_response'],
@@ -623,9 +629,34 @@ final class RankWoven_SEO_Plugin
             'callback' => [$this, 'get_single_media_rest_response'],
             'permission_callback' => [$this, 'authorize_rest_request']
         ]);
+
+        register_rest_route(self::REST_NAMESPACE, '/media/(?P<id>\d+)/apply', [
+            'methods' => 'POST',
+            'callback' => [$this, 'apply_single_media_rest_response'],
+            'permission_callback' => [$this, 'authorize_media_write_request']
+        ]);
     }
 
     public function authorize_rest_request(WP_REST_Request $request): bool
+    {
+        if ($this->is_site_token_authorized($request)) {
+            return true;
+        }
+
+        return current_user_can('edit_posts') || current_user_can('upload_files');
+    }
+
+    public function authorize_post_write_request(WP_REST_Request $request): bool
+    {
+        return current_user_can('edit_post', (int) $request->get_param('id'));
+    }
+
+    public function authorize_media_write_request(WP_REST_Request $request): bool
+    {
+        return current_user_can('edit_post', (int) $request->get_param('id'));
+    }
+
+    private function is_site_token_authorized(WP_REST_Request $request): bool
     {
         $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
         if ($site_token === '') {
@@ -708,6 +739,121 @@ final class RankWoven_SEO_Plugin
 
         return new WP_REST_Response([
             'media' => $media
+        ]);
+    }
+
+    public function apply_single_post_rest_response(WP_REST_Request $request): WP_REST_Response
+    {
+        $post_id = (int) $request->get_param('id');
+        $post = get_post($post_id);
+
+        if (!($post instanceof WP_Post) || !in_array($post->post_type, ['post', 'page'], true)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => __('Article not found or cannot be updated.', 'rankwoven-seo')
+            ], 404);
+        }
+
+        $payload = $request->get_json_params();
+        $payload = is_array($payload) ? $payload : [];
+        $post_update = ['ID' => $post_id];
+        $changed_fields = [];
+
+        if (isset($payload['title'])) {
+            $post_update['post_title'] = sanitize_text_field((string) $payload['title']);
+            $changed_fields[] = 'title';
+        }
+
+        if (isset($payload['excerpt'])) {
+            $post_update['post_excerpt'] = wp_kses_post((string) $payload['excerpt']);
+            $changed_fields[] = 'excerpt';
+        }
+
+        if (isset($payload['contentHtml'])) {
+            $post_update['post_content'] = wp_kses_post((string) $payload['contentHtml']);
+            $changed_fields[] = 'contentHtml';
+        }
+
+        if (isset($payload['metaDescription'])) {
+            update_post_meta($post_id, '_rankwoven_meta_description', sanitize_textarea_field((string) $payload['metaDescription']));
+            $changed_fields[] = 'metaDescription';
+        }
+
+        if (count($post_update) > 1) {
+            $updated_post_id = wp_update_post(wp_slash($post_update), true);
+            if (is_wp_error($updated_post_id)) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => $updated_post_id->get_error_message()
+                ], 500);
+            }
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'changedFields' => array_values(array_unique($changed_fields)),
+            'appliedAt' => gmdate('c'),
+            'article' => $this->get_synced_article_by_id($post_id)
+        ]);
+    }
+
+    public function apply_single_media_rest_response(WP_REST_Request $request): WP_REST_Response
+    {
+        $attachment_id = (int) $request->get_param('id');
+        $attachment = get_post($attachment_id);
+
+        if (!($attachment instanceof WP_Post) || $attachment->post_type !== 'attachment') {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => __('Media item not found or cannot be updated.', 'rankwoven-seo')
+            ], 404);
+        }
+
+        $payload = $request->get_json_params();
+        $payload = is_array($payload) ? $payload : [];
+        $post_update = ['ID' => $attachment_id];
+        $changed_fields = [];
+
+        if (isset($payload['title'])) {
+            $post_update['post_title'] = sanitize_text_field((string) $payload['title']);
+            $changed_fields[] = 'title';
+        }
+
+        if (isset($payload['caption'])) {
+            $post_update['post_excerpt'] = wp_kses_post((string) $payload['caption']);
+            $changed_fields[] = 'caption';
+        }
+
+        if (isset($payload['description'])) {
+            $post_update['post_content'] = wp_kses_post((string) $payload['description']);
+            $changed_fields[] = 'description';
+        }
+
+        if (isset($payload['altText'])) {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_textarea_field((string) $payload['altText']));
+            $changed_fields[] = 'altText';
+        }
+
+        if (isset($payload['fileName'])) {
+            update_post_meta($attachment_id, '_rankwoven_suggested_file_name', sanitize_file_name((string) $payload['fileName']));
+            $changed_fields[] = 'fileName';
+        }
+
+        if (count($post_update) > 1) {
+            $updated_post_id = wp_update_post(wp_slash($post_update), true);
+            if (is_wp_error($updated_post_id)) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => $updated_post_id->get_error_message()
+                ], 500);
+            }
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'changedFields' => array_values(array_unique($changed_fields)),
+            'appliedAt' => gmdate('c'),
+            'media' => $this->get_synced_media_by_id($attachment_id)
         ]);
     }
 
@@ -1273,12 +1419,18 @@ final class RankWoven_SEO_Plugin
             return false;
         }
 
+        $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
+        if ($site_token === '') {
+            return false;
+        }
+
         $response = wp_remote_request(
             $this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/wordpress-credentials'),
             [
                 'method' => 'PUT',
                 'timeout' => 30,
                 'headers' => [
+                    'Authorization' => 'Bearer ' . $site_token,
                     'Content-Type' => 'application/json'
                 ],
                 'body' => wp_json_encode([

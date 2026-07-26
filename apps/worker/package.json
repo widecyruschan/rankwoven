@@ -12,9 +12,11 @@
   "dependencies": {
     "@aieo/ai-providers": "0.1.0",
     "@aieo/cms-adapters": "0.1.0",
+    "pg": "^8.22.0",
     "zod": "^4.0.14"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "tsx": "^4.20.3"
   }
 }

@@ -595,10 +595,16 @@ cancelled
 | `POST` | `/api/v1/site-connections/:siteId/manual-refresh` | 為單篇文章或單個媒體建立手動刷新任務 |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 接收插件分頁推送的文章與媒體同步批次 |
 | `GET` | `/api/v1/site-connections/:siteId/articles` | 帶 Bearer Token 獲取文章列表 |
+| `POST` | `/api/v1/site-connections/:siteId/audits` | 執行站點 SEO 規則審計並生成建議 |
+| `GET` | `/api/v1/site-connections/:siteId/audits` | 獲取站點 SEO 審計記錄和最近問題 |
+| `GET` | `/api/v1/site-connections/:siteId/suggestions` | 獲取文章與媒體優化建議 |
+| `POST` | `/api/v1/site-connections/:siteId/suggestions` | 手動建立優化建議 |
+| `POST` | `/api/v1/site-connections/:siteId/suggestions/:suggestionId/approve` | 批准優化建議 |
+| `POST` | `/api/v1/site-connections/:siteId/suggestions/:suggestionId/apply` | 為已批准建議建立 WordPress 寫回任務 |
 | `GET` | `/api/v1/articles/:articleId` | 獲取文章詳情 |
-| `POST` | `/api/v1/articles/:articleId/audit` | 發起 SEO 審計 |
-| `POST` | `/api/v1/articles/:articleId/suggestions` | 生成優化建議 |
-| `POST` | `/api/v1/suggestions/:suggestionId/apply` | 應用建議 |
+| `POST` | `/api/v1/articles/:articleId/audit` | 舊規劃路由，後續按站點路由整合 |
+| `POST` | `/api/v1/articles/:articleId/suggestions` | 舊規劃路由，後續按站點路由整合 |
+| `POST` | `/api/v1/suggestions/:suggestionId/apply` | 舊規劃路由，後續按站點路由整合 |
 | `POST` | `/api/v1/articles/:articleId/rollback` | 回滾文章 |
 | `POST` | `/api/v1/articles/generate` | 生成文章草稿 |
 | `GET` | `/api/v1/tasks/:taskId` | 查詢任務狀態 |
@@ -615,10 +621,11 @@ cancelled
 | `GET` | `/wp-json/rankwoven/v1/posts` | 分頁讀取文章，支援 `updatedAfter` |
 | `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇文章 |
 | `POST` | `/wp-json/rankwoven/v1/posts/:id/preview` | 預覽修改，後續實現 |
-| `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 應用修改，後續實現 |
+| `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 應用已批准文章修改，使用 WordPress Application Password 身份 |
 | `POST` | `/wp-json/rankwoven/v1/posts/:id/rollback` | 回滾修改，後續實現 |
 | `GET` | `/wp-json/rankwoven/v1/media` | 分頁讀取媒體，支援 `updatedAfter` |
 | `GET` | `/wp-json/rankwoven/v1/media/:id` | 讀取單個圖片媒體 |
+| `POST` | `/wp-json/rankwoven/v1/media/:id/apply` | 應用已批准媒體標題、Alt Text 或檔名建議 |
 | `POST` | `/wp-json/rankwoven/v1/media` | 上傳圖片，後續實現 |
 
 ### 10.3 Joomla 擴展 API
@@ -1221,11 +1228,11 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 將手動刷新任務接入後端 Worker 隊列，按 `scope` 和 `targetCmsId` 拉取 WordPress 單篇文章或單個媒體並落庫。
-2. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
-3. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
-4. 實作已批准建議的 WordPress REST API 寫回任務，使用站點保存的管理員 Application Password。
+1. 將客戶後台 `/app/suggestions` 和 `/app/article-suggestions` 接入真實 `GET /api/v1/site-connections/:siteId/suggestions`、批准和寫回任務接口。
+2. 將客戶後台任務隊列 `/app/tasks` 接入 `GET /api/v1/sync-tasks`，統一展示同步、審計、建議和寫回任務，包含 `failed.errorMessage`。
+3. 為 SEO 審計補充 Meta Description 真實同步欄位，兼容 Yoast、Rank Math、AIOSEO 和 WordPress 摘要回退。
+4. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
 5. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、Token 最近使用時間、最近同步、圖片屬性設定、應用程式密碼配置狀態和錯誤原因。
-6. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
-7. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
-8. 將客戶後台任務隊列 `/app/tasks` 接入 `GET /api/v1/sync-tasks`，統一展示同步、審計、建議和寫回任務。
+6. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
+7. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
+8. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。

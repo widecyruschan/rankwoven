@@ -1,14 +1,33 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
+import { ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '../stores/auth';
 
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
 
-const demoLinks = computed(() => [
-  { to: '/app', label: t('login.customerEntry') },
-  { to: '/admin', label: t('login.adminEntry') }
-]);
+const email = ref('demo@rankwoven.com');
+const password = ref('rankwoven');
+const isSubmitting = ref(false);
+const loginError = ref('');
+
+async function submitLogin() {
+  loginError.value = '';
+  isSubmitting.value = true;
+
+  try {
+    await authStore.login(email.value, password.value);
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/app';
+    await router.push(redirect);
+  } catch (error) {
+    loginError.value = error instanceof Error ? error.message : t('login.failed');
+  } finally {
+    isSubmitting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -20,23 +39,20 @@ const demoLinks = computed(() => [
         <p>{{ t('login.body') }}</p>
       </div>
 
-      <form class="login-form">
+      <form class="login-form" @submit.prevent="submitLogin">
         <label>
           <span>{{ t('login.email') }}</span>
-          <input type="email" value="demo@rankwoven.com">
+          <input v-model="email" type="email" autocomplete="email" required>
         </label>
         <label>
           <span>{{ t('login.password') }}</span>
-          <input type="password" value="rankwoven">
+          <input v-model="password" type="password" autocomplete="current-password" required>
         </label>
-        <button class="primary-button" type="button">{{ t('login.submit') }}</button>
+        <button class="primary-button" type="submit" :disabled="isSubmitting">
+          {{ isSubmitting ? t('login.submitting') : t('login.submit') }}
+        </button>
+        <p v-if="loginError" class="form-message form-message-error">{{ loginError }}</p>
       </form>
-
-      <div class="demo-entry-list">
-        <RouterLink v-for="link in demoLinks" :key="link.to" class="text-button" :to="link.to">
-          {{ link.label }}
-        </RouterLink>
-      </div>
     </section>
   </main>
 </template>

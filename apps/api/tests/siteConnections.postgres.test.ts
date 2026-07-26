@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
+import { PostgresSeoOptimizationRepository } from '../src/seoOptimization';
 import { createPostgresSiteConnectionRepository } from '../src/siteConnections';
 
 const postgresTestDatabaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -29,12 +30,34 @@ interface RegenerateTokenResponse {
   };
 }
 
+interface LoginResponse {
+  data: {
+    token: string;
+  };
+}
+
+async function loginDemoUser(server: ReturnType<typeof createServer>) {
+  const response = await server.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: {
+      email: 'demo@rankwoven.com',
+      password: 'rankwoven'
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json<LoginResponse>().data.token;
+}
+
 describePostgres('PostgreSQL site connection repository', () => {
   it('persists site connections, token hash, sync runs, articles, and media', async () => {
     const databaseUrl = postgresTestDatabaseUrl as string;
     const repository = createPostgresSiteConnectionRepository(databaseUrl);
+    const seoOptimizationRepository = new PostgresSeoOptimizationRepository(databaseUrl);
     const server = createServer({
-      siteConnectionRepository: repository
+      siteConnectionRepository: repository,
+      seoOptimizationRepository
     });
     const pool = new Pool({
       connectionString: databaseUrl
@@ -57,6 +80,7 @@ describePostgres('PostgreSQL site connection repository', () => {
       });
       const createBody = createResponse.json<CreateSiteConnectionResponse>();
       siteId = createBody.data.site.id;
+      const authToken = await loginDemoUser(server);
 
       expect(createResponse.statusCode).toBe(201);
       expect(createBody.data.apiToken).toMatch(/^rw_[a-f0-9]{32}$/);
@@ -273,6 +297,9 @@ describePostgres('PostgreSQL site connection repository', () => {
       const manualRefreshResponse = await server.inject({
         method: 'POST',
         url: `/api/v1/site-connections/${siteId}/manual-refresh`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
         payload: {
           type: 'media',
           cmsId: '701'
@@ -311,7 +338,10 @@ describePostgres('PostgreSQL site connection repository', () => {
 
       const listedTasksResponse = await server.inject({
         method: 'GET',
-        url: `/api/v1/site-connections/${siteId}/sync-tasks`
+        url: `/api/v1/site-connections/${siteId}/sync-tasks`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
       });
 
       expect(listedTasksResponse.statusCode).toBe(200);
@@ -335,9 +365,40 @@ describePostgres('PostgreSQL site connection repository', () => {
         }
       });
 
+      const auditResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/audits`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(auditResponse.statusCode).toBe(201);
+      expect(auditResponse.json()).toMatchObject({
+        data: {
+          audit: {
+            status: 'completed'
+          }
+        }
+      });
+
+      const persistedSuggestions = await pool.query(
+        `
+          SELECT COUNT(*)::int AS suggestion_count
+          FROM optimization_suggestions
+          WHERE site_id = $1
+        `,
+        [siteId]
+      );
+
+      expect(persistedSuggestions.rows[0].suggestion_count).toBeGreaterThan(0);
+
       const credentialsResponse = await server.inject({
         method: 'PUT',
         url: `/api/v1/site-connections/${siteId}/wordpress-credentials`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
         payload: {
           wordpressAdminUsername: 'updated-admin',
           wordpressApplicationPassword: 'qrst uvwx yz12 3456'
@@ -358,7 +419,10 @@ describePostgres('PostgreSQL site connection repository', () => {
 
       const regenerateResponse = await server.inject({
         method: 'POST',
-        url: `/api/v1/site-connections/${siteId}/token/regenerate`
+        url: `/api/v1/site-connections/${siteId}/token/regenerate`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
       });
       const regenerateBody = regenerateResponse.json<RegenerateTokenResponse>();
 
@@ -409,7 +473,10 @@ describePostgres('PostgreSQL site connection repository', () => {
 
       const revokeResponse = await server.inject({
         method: 'POST',
-        url: `/api/v1/site-connections/${siteId}/token/revoke`
+        url: `/api/v1/site-connections/${siteId}/token/revoke`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
       });
 
       expect(revokeResponse.statusCode).toBe(200);

@@ -1,11 +1,452 @@
+import { createDecipheriv, createHash } from 'node:crypto';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
+import { Pool, type PoolClient, type QueryResultRow } from 'pg';
+
+type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media' | 'suggestion_apply';
+
+interface QueuedTask {
+  id: string;
+  siteId: string;
+  scope: SyncTaskScope;
+  targetCmsId?: string;
+  suggestionId?: string;
+  siteUrl: string;
+  wordpressAdminUsername?: string;
+  wordpressApplicationPasswordEncrypted?: string;
+}
+
+interface WorkerOptions {
+  databaseUrl: string;
+  pollIntervalMs?: number;
+  fetchImpl?: typeof fetch;
+  logger?: Pick<Console, 'log' | 'error'>;
+}
+
+interface WordPressCredentials {
+  username: string;
+  applicationPassword: string;
+}
 
 const adapter = createWordPressAdapter();
 const heartbeatMs = 30_000;
+const defaultPollIntervalMs = 5_000;
 
-function logWorkerHeartbeat() {
+function getCredentialEncryptionKey() {
+  const secret =
+    process.env.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY ??
+    process.env.JWT_SECRET ??
+    'rankwoven-local-development-key';
+
+  return createHash('sha256').update(secret).digest();
+}
+
+function decryptWordPressCredential(value: string) {
+  const [version, iv, authTag, encrypted] = value.split(':');
+  if (version !== 'v1' || !iv || !authTag || !encrypted) {
+    throw new Error('WORDPRESS_CREDENTIAL_FORMAT_INVALID');
+  }
+
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    getCredentialEncryptionKey(),
+    Buffer.from(iv, 'base64url')
+  );
+  decipher.setAuthTag(Buffer.from(authTag, 'base64url'));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(encrypted, 'base64url')),
+    decipher.final()
+  ]).toString('utf8');
+}
+
+function mapQueuedTask(row: QueryResultRow): QueuedTask {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    scope: row.scope,
+    targetCmsId: row.target_cms_id ?? undefined,
+    suggestionId: row.suggestion_id ?? undefined,
+    siteUrl: row.site_url,
+    wordpressAdminUsername: row.wordpress_admin_username ?? undefined,
+    wordpressApplicationPasswordEncrypted: row.wordpress_application_password_encrypted ?? undefined
+  };
+}
+
+function getCredentials(task: QueuedTask): WordPressCredentials {
+  if (!task.wordpressAdminUsername || !task.wordpressApplicationPasswordEncrypted) {
+    throw new Error('WORDPRESS_CREDENTIALS_MISSING');
+  }
+
+  return {
+    username: task.wordpressAdminUsername,
+    applicationPassword: decryptWordPressCredential(task.wordpressApplicationPasswordEncrypted)
+  };
+}
+
+function createBasicAuthHeader(credentials: WordPressCredentials) {
+  return `Basic ${Buffer.from(`${credentials.username}:${credentials.applicationPassword}`).toString('base64')}`;
+}
+
+function buildWordPressUrl(siteUrl: string, path: string) {
+  return `${siteUrl.replace(/\/+$/, '')}/wp-json/rankwoven/v1/${path.replace(/^\/+/, '')}`;
+}
+
+async function claimNextTask(client: PoolClient) {
+  const result = await client.query(
+    `
+      SELECT
+        st.*,
+        sc.site_url,
+        sc.wordpress_admin_username,
+        sc.wordpress_application_password_encrypted
+      FROM sync_tasks st
+      JOIN site_connections sc ON sc.id = st.site_id
+      WHERE st.status = 'queued'
+        AND st.scope IN ('article', 'media', 'suggestion_apply')
+      ORDER BY st.created_at ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `
+  );
+  const row = result.rows[0];
+
+  if (!row) {
+    return undefined;
+  }
+
+  await client.query(
+    `
+      UPDATE sync_tasks
+      SET status = 'running',
+          error_message = NULL
+      WHERE id = $1
+    `,
+    [row.id]
+  );
+
+  return mapQueuedTask(row);
+}
+
+async function completeTask(client: PoolClient, task: QueuedTask, articlesReceived: number, mediaReceived: number) {
+  const completedAt = new Date();
+  await client.query(
+    `
+      INSERT INTO sync_runs (
+        id,
+        site_id,
+        task_id,
+        batch_index,
+        completed_at,
+        articles_received,
+        media_received,
+        status
+      )
+      VALUES ($1, $2, $3, 1, $4, $5, $6, 'completed')
+      ON CONFLICT DO NOTHING
+    `,
+    [crypto.randomUUID(), task.siteId, task.id, completedAt, articlesReceived, mediaReceived]
+  );
+  await client.query(
+    `
+      UPDATE sync_tasks
+      SET status = 'completed',
+          batches_received = 1,
+          articles_received = $2,
+          media_received = $3,
+          completed_at = $4
+      WHERE id = $1
+    `,
+    [task.id, articlesReceived, mediaReceived, completedAt]
+  );
+  await client.query(
+    `
+      UPDATE site_connections
+      SET last_sync_at = $2,
+          last_sync_stats = $3
+      WHERE id = $1
+    `,
+    [
+      task.siteId,
+      completedAt,
+      JSON.stringify({
+        articlesReceived,
+        mediaReceived
+      })
+    ]
+  );
+}
+
+async function failTask(client: PoolClient, task: QueuedTask, error: unknown) {
+  const message = error instanceof Error ? error.message : 'WORKER_TASK_FAILED';
+
+  await client.query(
+    `
+      UPDATE sync_tasks
+      SET status = 'failed',
+          error_message = $2,
+          completed_at = now()
+      WHERE id = $1
+    `,
+    [task.id, message]
+  );
+
+  if (task.suggestionId) {
+    await client.query(
+      `
+        UPDATE optimization_suggestions
+        SET status = 'failed',
+            error_message = $2
+        WHERE id = $1
+      `,
+      [task.suggestionId, message]
+    );
+  }
+}
+
+async function fetchWordPressJson(fetchImpl: typeof fetch, url: string, credentials: WordPressCredentials, init?: RequestInit) {
+  const response = await fetchImpl(url, {
+    ...init,
+    headers: {
+      Authorization: createBasicAuthHeader(credentials),
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`WORDPRESS_REST_${response.status}`);
+  }
+
+  return (await response.json()) as Record<string, unknown>;
+}
+
+async function processManualRefreshTask(
+  client: PoolClient,
+  task: QueuedTask,
+  fetchImpl: typeof fetch
+) {
+  if (!task.targetCmsId) {
+    throw new Error('SYNC_TASK_TARGET_MISSING');
+  }
+
+  const credentials = getCredentials(task);
+  const path = task.scope === 'article' ? `posts/${task.targetCmsId}` : `media/${task.targetCmsId}`;
+  const body = await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials);
+  const now = new Date();
+
+  if (task.scope === 'article') {
+    const article = body.article as Record<string, unknown> | undefined;
+    if (!article) {
+      throw new Error('WORDPRESS_ARTICLE_RESPONSE_INVALID');
+    }
+
+    await upsertArticle(client, task.siteId, article, now);
+    await completeTask(client, task, 1, 0);
+    return;
+  }
+
+  const media = body.media as Record<string, unknown> | undefined;
+  if (!media) {
+    throw new Error('WORDPRESS_MEDIA_RESPONSE_INVALID');
+  }
+
+  await upsertMedia(client, task.siteId, media, now);
+  await completeTask(client, task, 0, 1);
+}
+
+async function processSuggestionApplyTask(
+  client: PoolClient,
+  task: QueuedTask,
+  fetchImpl: typeof fetch
+) {
+  if (!task.suggestionId || !task.targetCmsId) {
+    throw new Error('SUGGESTION_TASK_INVALID');
+  }
+
+  const suggestionResult = await client.query(
+    `
+      SELECT *
+      FROM optimization_suggestions
+      WHERE id = $1
+        AND site_id = $2
+        AND status = 'approved'
+      LIMIT 1
+    `,
+    [task.suggestionId, task.siteId]
+  );
+  const suggestion = suggestionResult.rows[0];
+  if (!suggestion) {
+    throw new Error('SUGGESTION_NOT_APPROVED');
+  }
+
+  const credentials = getCredentials(task);
+  const payload = buildSuggestionPayload(suggestion);
+  const path =
+    suggestion.target_type === 'article'
+      ? `posts/${task.targetCmsId}/apply`
+      : `media/${task.targetCmsId}/apply`;
+  await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+  await client.query(
+    `
+      UPDATE optimization_suggestions
+      SET status = 'applied',
+          applied_at = now(),
+          error_message = NULL
+      WHERE id = $1
+    `,
+    [task.suggestionId]
+  );
+  await completeTask(client, task, suggestion.target_type === 'article' ? 1 : 0, suggestion.target_type === 'media' ? 1 : 0);
+}
+
+function buildSuggestionPayload(suggestion: QueryResultRow) {
+  const fieldName = String(suggestion.field_name);
+  const suggestedValue = String(suggestion.suggested_value);
+
+  if (fieldName === 'contentHtml') {
+    return { contentHtml: suggestedValue };
+  }
+
+  if (fieldName === 'altText') {
+    return { altText: suggestedValue };
+  }
+
+  if (fieldName === 'fileName') {
+    return { fileName: suggestedValue };
+  }
+
+  if (fieldName === 'metaDescription') {
+    return { metaDescription: suggestedValue };
+  }
+
+  return { [fieldName]: suggestedValue };
+}
+
+async function upsertArticle(client: PoolClient, siteId: string, article: Record<string, unknown>, syncedAt: Date) {
+  await client.query(
+    `
+      INSERT INTO synced_articles (
+        site_id, cms_id, type, title, slug, status, url, excerpt, content_html,
+        author, categories, tags, featured_image_id, published_at, cms_updated_at, synced_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ON CONFLICT (site_id, cms_id)
+      DO UPDATE SET
+        type = EXCLUDED.type,
+        title = EXCLUDED.title,
+        slug = EXCLUDED.slug,
+        status = EXCLUDED.status,
+        url = EXCLUDED.url,
+        excerpt = EXCLUDED.excerpt,
+        content_html = EXCLUDED.content_html,
+        author = EXCLUDED.author,
+        categories = EXCLUDED.categories,
+        tags = EXCLUDED.tags,
+        featured_image_id = EXCLUDED.featured_image_id,
+        published_at = EXCLUDED.published_at,
+        cms_updated_at = EXCLUDED.cms_updated_at,
+        synced_at = EXCLUDED.synced_at
+    `,
+    [
+      siteId,
+      String(article.cmsId),
+      article.type === 'page' ? 'page' : 'post',
+      String(article.title ?? ''),
+      String(article.slug ?? ''),
+      String(article.status ?? ''),
+      String(article.url ?? ''),
+      article.excerpt ? String(article.excerpt) : null,
+      article.contentHtml ? String(article.contentHtml) : null,
+      article.author ? String(article.author) : null,
+      JSON.stringify(Array.isArray(article.categories) ? article.categories : []),
+      JSON.stringify(Array.isArray(article.tags) ? article.tags : []),
+      article.featuredImageId ? String(article.featuredImageId) : null,
+      article.publishedAt ? String(article.publishedAt) : null,
+      String(article.updatedAt ?? new Date(0).toISOString()),
+      syncedAt
+    ]
+  );
+}
+
+async function upsertMedia(client: PoolClient, siteId: string, media: Record<string, unknown>, syncedAt: Date) {
+  await client.query(
+    `
+      INSERT INTO synced_media (
+        site_id, cms_id, title, url, mime_type, file_name, alt_text,
+        attached_to_cms_id, cms_updated_at, synced_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (site_id, cms_id)
+      DO UPDATE SET
+        title = EXCLUDED.title,
+        url = EXCLUDED.url,
+        mime_type = EXCLUDED.mime_type,
+        file_name = EXCLUDED.file_name,
+        alt_text = EXCLUDED.alt_text,
+        attached_to_cms_id = EXCLUDED.attached_to_cms_id,
+        cms_updated_at = EXCLUDED.cms_updated_at,
+        synced_at = EXCLUDED.synced_at
+    `,
+    [
+      siteId,
+      String(media.cmsId),
+      String(media.title ?? ''),
+      String(media.url ?? ''),
+      media.mimeType ? String(media.mimeType) : null,
+      media.fileName ? String(media.fileName) : null,
+      media.altText ? String(media.altText) : null,
+      media.attachedToCmsId ? String(media.attachedToCmsId) : null,
+      String(media.updatedAt ?? new Date(0).toISOString()),
+      syncedAt
+    ]
+  );
+}
+
+export async function processNextQueuedTask(pool: Pool, fetchImpl: typeof fetch = fetch) {
+  const client = await pool.connect();
+  let task: QueuedTask | undefined;
+
+  try {
+    await client.query('BEGIN');
+    task = await claimNextTask(client);
+
+    if (!task) {
+      await client.query('COMMIT');
+      return undefined;
+    }
+
+    await client.query('COMMIT');
+
+    await client.query('BEGIN');
+    if (task.scope === 'article' || task.scope === 'media') {
+      await processManualRefreshTask(client, task, fetchImpl);
+    } else {
+      await processSuggestionApplyTask(client, task, fetchImpl);
+    }
+    await client.query('COMMIT');
+
+    return task;
+  } catch (error) {
+    await client.query('ROLLBACK');
+
+    if (task) {
+      await failTask(client, task, error);
+      return task;
+    }
+
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function logWorkerHeartbeat(logger: Pick<Console, 'log'> = console) {
   const capabilities = adapter.getCapabilities();
-  console.log(
+  logger.log(
     JSON.stringify({
       service: 'worker',
       status: 'idle',
@@ -15,5 +456,40 @@ function logWorkerHeartbeat() {
   );
 }
 
-logWorkerHeartbeat();
-setInterval(logWorkerHeartbeat, heartbeatMs);
+export function startWorker(options: WorkerOptions) {
+  const pool = new Pool({ connectionString: options.databaseUrl });
+  const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
+  const logger = options.logger ?? console;
+
+  logWorkerHeartbeat(logger);
+  const heartbeatTimer = setInterval(() => logWorkerHeartbeat(logger), heartbeatMs);
+  const pollTimer = setInterval(() => {
+    processNextQueuedTask(pool, options.fetchImpl ?? fetch).catch((error: unknown) => {
+      logger.error(
+        JSON.stringify({
+          service: 'worker',
+          status: 'error',
+          message: error instanceof Error ? error.message : 'WORKER_POLL_FAILED',
+          timestamp: new Date().toISOString()
+        })
+      );
+    });
+  }, pollIntervalMs);
+
+  return async () => {
+    clearInterval(heartbeatTimer);
+    clearInterval(pollTimer);
+    await pool.end();
+  };
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  if (!process.env.DATABASE_URL) {
+    logWorkerHeartbeat();
+    setInterval(logWorkerHeartbeat, heartbeatMs);
+  } else {
+    startWorker({
+      databaseUrl: process.env.DATABASE_URL
+    });
+  }
+}

@@ -41,6 +41,32 @@ interface UpdateWordPressCredentialsResponse {
   };
 }
 
+interface LoginResponse {
+  success: boolean;
+  data: {
+    token: string;
+    user: {
+      id: string;
+      workspaceId: string;
+      email: string;
+    };
+  };
+}
+
+async function loginDemoUser(server: ReturnType<typeof createServer>) {
+  const response = await server.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: {
+      email: 'demo@rankwoven.com',
+      password: 'rankwoven'
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json<LoginResponse>().data.token;
+}
+
 async function createWordPressConnection(
   payload: Partial<{
     wordpressAdminUsername: string;
@@ -92,9 +118,13 @@ describe('site connection routes', () => {
 
   it('lists connected sites without exposing full tokens', async () => {
     const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
     const response = await server.inject({
       method: 'GET',
-      url: '/api/v1/site-connections'
+      url: '/api/v1/site-connections',
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     expect(response.statusCode).toBe(200);
@@ -112,14 +142,34 @@ describe('site connection routes', () => {
     expect(JSON.stringify(response.json())).not.toContain(body.data.apiToken);
   });
 
+  it('rejects connected site list without a user token', async () => {
+    const { server } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/site-connections'
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: 'AUTH_TOKEN_INVALID'
+      }
+    });
+  });
+
   it('stores WordPress admin application password configuration without exposing the password', async () => {
     const { server, body } = await createWordPressConnection({
       wordpressAdminUsername: 'site-admin',
       wordpressApplicationPassword: 'abcd efgh ijkl mnop'
     });
+    const authToken = await loginDemoUser(server);
     const response = await server.inject({
       method: 'GET',
-      url: '/api/v1/site-connections'
+      url: '/api/v1/site-connections',
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     expect(body.data.site).toMatchObject({
@@ -144,9 +194,13 @@ describe('site connection routes', () => {
 
   it('updates WordPress admin application password credentials for an existing site', async () => {
     const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
     const response = await server.inject({
       method: 'PUT',
       url: `/api/v1/site-connections/${body.data.site.id}/wordpress-credentials`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
       payload: {
         wordpressAdminUsername: 'editor-admin',
         wordpressApplicationPassword: 'qrst uvwx yz12 3456'
@@ -271,9 +325,13 @@ describe('site connection routes', () => {
       }
     });
 
+    const authToken = await loginDemoUser(server);
     const listResponse = await server.inject({
       method: 'GET',
-      url: '/api/v1/site-connections'
+      url: '/api/v1/site-connections',
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     expect(listResponse.json()).toMatchObject({
@@ -450,9 +508,13 @@ describe('site connection routes', () => {
 
   it('creates manual article and media refresh tasks and lists batch progress', async () => {
     const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
     const articleTaskResponse = await server.inject({
       method: 'POST',
       url: `/api/v1/site-connections/${body.data.site.id}/manual-refresh`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
       payload: {
         type: 'article',
         cmsId: '303'
@@ -479,6 +541,9 @@ describe('site connection routes', () => {
     const mediaTaskResponse = await server.inject({
       method: 'POST',
       url: `/api/v1/site-connections/${body.data.site.id}/manual-refresh`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
       payload: {
         type: 'media',
         cmsId: '801'
@@ -497,7 +562,10 @@ describe('site connection routes', () => {
 
     const siteTasksResponse = await server.inject({
       method: 'GET',
-      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks`
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     expect(siteTasksResponse.statusCode).toBe(200);
@@ -523,7 +591,10 @@ describe('site connection routes', () => {
 
     const allTasksResponse = await server.inject({
       method: 'GET',
-      url: '/api/v1/sync-tasks'
+      url: '/api/v1/sync-tasks',
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     expect(allTasksResponse.statusCode).toBe(200);
@@ -539,11 +610,146 @@ describe('site connection routes', () => {
     });
   });
 
+  it('creates SEO audit issues, suggestion records, and approved apply tasks', async () => {
+    const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '404',
+            type: 'post',
+            title: 'Tiny',
+            slug: 'tiny',
+            status: 'publish',
+            url: 'http://localhost:8088/tiny/',
+            contentHtml: '<p>No headings or internal links yet.</p>',
+            updatedAt: '2026-07-26T08:00:00+00:00'
+          }
+        ],
+        media: [
+          {
+            cmsId: '904',
+            title: 'Hero Image',
+            url: 'http://localhost:8088/wp-content/uploads/Hero Image 2026.JPG',
+            mimeType: 'image/jpeg',
+            fileName: 'Hero Image 2026.JPG',
+            altText: '',
+            attachedToCmsId: '404',
+            updatedAt: '2026-07-26T08:00:00+00:00'
+          }
+        ]
+      }
+    });
+
+    expect(syncResponse.statusCode).toBe(200);
+
+    const auditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const auditBody = auditResponse.json<{
+      data: {
+        audit: {
+          id: string;
+          score: number;
+        };
+        issues: Array<{
+          ruleCode: string;
+        }>;
+      };
+    }>();
+
+    expect(auditResponse.statusCode).toBe(201);
+    expect(auditBody.data.audit.score).toBeLessThan(100);
+    expect(auditBody.data.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleCode: 'ARTICLE_TITLE_LENGTH' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_ALT_TEXT_MISSING' })
+      ])
+    );
+
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const suggestionsBody = suggestionsResponse.json<{
+      data: {
+        suggestions: Array<{
+          id: string;
+          status: string;
+          fieldName: string;
+          targetCmsId: string;
+        }>;
+      };
+    }>();
+    const titleSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.fieldName === 'title'
+    );
+
+    expect(suggestionsResponse.statusCode).toBe(200);
+    expect(titleSuggestion).toMatchObject({
+      status: 'pending',
+      targetCmsId: '404'
+    });
+
+    const approveResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${titleSuggestion?.id}/approve`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(approveResponse.statusCode).toBe(200);
+    expect(approveResponse.json()).toMatchObject({
+      data: {
+        suggestion: {
+          status: 'approved'
+        }
+      }
+    });
+
+    const applyResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${titleSuggestion?.id}/apply`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(applyResponse.statusCode).toBe(201);
+    expect(applyResponse.json()).toMatchObject({
+      data: {
+        task: {
+          scope: 'suggestion_apply',
+          targetCmsId: '404',
+          suggestionId: titleSuggestion?.id
+        }
+      }
+    });
+  });
+
   it('rejects invalid manual refresh task input', async () => {
     const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
     const response = await server.inject({
       method: 'POST',
       url: `/api/v1/site-connections/${body.data.site.id}/manual-refresh`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
       payload: {
         type: 'article',
         cmsId: ''
@@ -561,9 +767,13 @@ describe('site connection routes', () => {
 
   it('regenerates a site token and rejects the previous token', async () => {
     const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
     const response = await server.inject({
       method: 'POST',
-      url: `/api/v1/site-connections/${body.data.site.id}/token/regenerate`
+      url: `/api/v1/site-connections/${body.data.site.id}/token/regenerate`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
     const regenerated = response.json<RegenerateTokenResponse>();
 
@@ -616,9 +826,13 @@ describe('site connection routes', () => {
 
   it('revokes a site token and rejects future sync calls', async () => {
     const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
     const response = await server.inject({
       method: 'POST',
-      url: `/api/v1/site-connections/${body.data.site.id}/token/revoke`
+      url: `/api/v1/site-connections/${body.data.site.id}/token/revoke`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     expect(response.statusCode).toBe(200);

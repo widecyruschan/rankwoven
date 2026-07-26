@@ -2,7 +2,18 @@ import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { createNoopAiProviderRegistry } from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
+import {
+  createAuthService,
+  createDefaultAuthRepository,
+  type AuthRepository,
+  registerAuthRoutes
+} from './auth';
 import { apiConfig } from './config';
+import {
+  createDefaultSeoOptimizationRepository,
+  type SeoOptimizationRepository,
+  registerSeoOptimizationRoutes
+} from './seoOptimization';
 import {
   createDefaultSiteConnectionRepository,
   type SiteConnectionRepository,
@@ -11,6 +22,8 @@ import {
 
 interface CreateServerOptions {
   siteConnectionRepository?: SiteConnectionRepository;
+  authRepository?: AuthRepository;
+  seoOptimizationRepository?: SeoOptimizationRepository;
 }
 
 export function createServer(options: CreateServerOptions = {}) {
@@ -30,6 +43,10 @@ export function createServer(options: CreateServerOptions = {}) {
     embeddingModel: apiConfig.WENWEN_EMBEDDING_MODEL,
     imageModel: apiConfig.WENWEN_IMAGE_MODEL
   });
+  const authRepository = options.authRepository ?? createDefaultAuthRepository(apiConfig.DATABASE_URL);
+  const authService = createAuthService(authRepository);
+  const siteConnectionRepository =
+    options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL);
 
   app.register(cors, {
     origin: true
@@ -114,9 +131,15 @@ export function createServer(options: CreateServerOptions = {}) {
     }
   }));
 
-  registerSiteConnectionRoutes(
+  registerAuthRoutes(app, authService, authRepository);
+
+  registerSiteConnectionRoutes(app, siteConnectionRepository, authService);
+
+  registerSeoOptimizationRoutes(
     app,
-    options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL)
+    siteConnectionRepository,
+    options.seoOptimizationRepository ?? createDefaultSeoOptimizationRepository(apiConfig.DATABASE_URL),
+    authService
   );
 
   return app;

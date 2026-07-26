@@ -135,6 +135,8 @@ const messages = {
       email: 'Email',
       password: 'Password',
       submit: 'Log in',
+      submitting: 'Logging in...',
+      failed: 'Login failed. Please check your email and password.',
       customerEntry: 'Open customer dashboard prototype',
       adminEntry: 'Open admin dashboard prototype'
     },
@@ -339,10 +341,12 @@ const messages = {
       scopeIncremental: 'Incremental',
       scopeArticle: 'Article',
       scopeMedia: 'Media',
+      scopeSuggestionApply: 'Apply suggestion',
       fullTask: 'Full content sync',
       incrementalTask: 'Incremental content sync',
       manualArticleTask: 'Manual article refresh',
-      manualMediaTask: 'Manual media refresh'
+      manualMediaTask: 'Manual media refresh',
+      suggestionApplyTask: 'Approved suggestion writeback'
     },
     suggestions: {
       title: 'Suggestion Processing',
@@ -599,6 +603,8 @@ const messages = {
       email: '電郵',
       password: '密碼',
       submit: '登入',
+      submitting: '登入中...',
+      failed: '登入失敗，請檢查電郵和密碼。',
       customerEntry: '打開客戶後台原型',
       adminEntry: '打開管理後台原型'
     },
@@ -803,10 +809,12 @@ const messages = {
       scopeIncremental: '增量同步',
       scopeArticle: '文章',
       scopeMedia: '媒體',
+      scopeSuggestionApply: '套用建議',
       fullTask: '全量內容同步',
       incrementalTask: '增量內容同步',
       manualArticleTask: '單篇文章刷新',
-      manualMediaTask: '單個媒體刷新'
+      manualMediaTask: '單個媒體刷新',
+      suggestionApplyTask: '已批准建議寫回'
     },
     suggestions: {
       title: '處理建議',

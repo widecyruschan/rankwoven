@@ -125,10 +125,12 @@ Content-Type: application/json
 | `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
 | `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取 Posts 和 Pages，可按修改時間增量過濾 |
 | `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇 Post 或 Page |
+| `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 使用 WordPress Application Password 身份寫回已批准文章建議 |
 | `GET` | `/wp-json/rankwoven/v1/media?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取圖片媒體，可按修改時間增量過濾 |
 | `GET` | `/wp-json/rankwoven/v1/media/:id` | 讀取單個圖片媒體 |
+| `POST` | `/wp-json/rankwoven/v1/media/:id/apply` | 使用 WordPress Application Password 身份寫回已批准媒體建議 |
 
-站點側 REST API 也需要 Bearer Token，Token 與插件保存的 `Site Token` 一致。
+站點側讀取 REST API 可使用 Bearer Token，Token 與插件保存的 `Site Token` 一致。寫回 REST API 只接受 WordPress 已認證且有目標內容編輯權限的用戶，SaaS Worker 會使用後台保存的管理員用戶名和 Application Password，以便修改在 WordPress 端留下對應管理員身份記錄。
 
 ## 同步欄位
 

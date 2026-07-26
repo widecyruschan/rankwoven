@@ -151,6 +151,10 @@ function getTaskName(task: SyncTask) {
     return t('articleSync.incrementalTask');
   }
 
+  if (task.scope === 'suggestion_apply') {
+    return t('articleSync.suggestionApplyTask');
+  }
+
   return t('articleSync.fullTask');
 }
 
@@ -170,7 +174,8 @@ function getTaskScopeLabel(scope: SyncTaskScope) {
     full: t('articleSync.scopeFull'),
     incremental: t('articleSync.scopeIncremental'),
     article: t('articleSync.scopeArticle'),
-    media: t('articleSync.scopeMedia')
+    media: t('articleSync.scopeMedia'),
+    suggestion_apply: t('articleSync.scopeSuggestionApply')
   };
 
   return scopeLabels[scope];

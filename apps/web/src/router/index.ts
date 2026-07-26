@@ -20,6 +20,7 @@ import AdminCustomersView from '../views/AdminCustomersView.vue';
 import AdminUsageView from '../views/AdminUsageView.vue';
 import AdminOperationsView from '../views/AdminOperationsView.vue';
 import AdminSettingsView from '../views/AdminSettingsView.vue';
+import { useAuthStore } from '../stores/auth';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -59,7 +60,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.dashboard',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -69,7 +70,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.sites',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -79,7 +80,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.articles',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -89,7 +90,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.articleSync',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -99,7 +100,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.suggestions',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -109,7 +110,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.media',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -119,7 +120,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.apply',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -129,7 +130,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.articleSuggestions',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -139,7 +140,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.review',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -149,7 +150,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.links',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -159,7 +160,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.tasks',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -169,7 +170,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.cmsAdapters',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -179,7 +180,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.settings',
       layout: 'app',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -189,7 +190,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.overview',
       layout: 'admin',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -199,7 +200,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.customers',
       layout: 'admin',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -209,7 +210,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.usage',
       layout: 'admin',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -219,7 +220,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.operations',
       layout: 'admin',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -229,7 +230,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.settings',
       layout: 'admin',
-      requiresAuth: false
+      requiresAuth: true
     }
   }
 ];
@@ -237,4 +238,35 @@ const routes: RouteRecordRaw[] = [
 export const router = createRouter({
   history: createWebHistory(),
   routes
+});
+
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore();
+
+  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+    return {
+      path: '/login',
+      query: {
+        redirect: to.fullPath
+      }
+    };
+  }
+
+  if (to.meta.requiresAuth) {
+    const isSessionValid = await authStore.restoreSession();
+    if (!isSessionValid) {
+      return {
+        path: '/login',
+        query: {
+          redirect: to.fullPath
+        }
+      };
+    }
+  }
+
+  if (to.path === '/login' && authStore.isLoggedIn) {
+    return '/app';
+  }
+
+  return true;
 });

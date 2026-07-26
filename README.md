@@ -234,8 +234,14 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections/:siteId/manual-refresh`：為單篇文章或單個媒體建立手動刷新任務，請求體為 `{ "type": "article" | "media", "cmsId": "123" }`。
 - `POST /api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches`：接收插件分頁推送的同步批次，最後一批完成後更新站點最近同步統計。
 - `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
+- `POST /api/v1/site-connections/:siteId/audits`：以已同步文章與媒體執行第一批 SEO 規則審計，並產生可審核建議。
+- `GET /api/v1/site-connections/:siteId/audits`：查看站點 SEO 審計記錄和最近一次審計問題。
+- `GET /api/v1/site-connections/:siteId/suggestions`：查看文章與媒體優化建議。
+- `POST /api/v1/site-connections/:siteId/suggestions`：手動建立優化建議記錄。
+- `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/approve`：批准待處理建議。
+- `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/apply`：為已批准建議建立 WordPress 寫回任務。
 
-站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。
+站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、媒體同步資料、同步批次記錄、SEO 審計、審計問題和優化建議已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。手動刷新與已批准建議寫回任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行。
 
 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
@@ -616,3 +622,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/i18n.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
 - 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；WordPress PHP Docker 鏡像與 `cyruschan-wp` 容器內 `php -l` 通過；Docker WordPress smoke 確認 `/rankwoven/v1/posts/:id` 和 `/rankwoven/v1/media/:id` 均返回 `200`。
 - 下一步行動清單：將手動刷新任務接入 Worker 隊列；建立第一批 SEO 審計規則模型；設計建議記錄模型；實作已批准建議的 WordPress REST API 寫回任務；新增 WordPress 插件只讀診斷頁；建立資料庫備份和遷移版本管理流程。
+
+### 2026-07-26：Worker 隊列、SEO 審計、建議模型與真實登入
+
+- 會話的主要目的：將手動刷新任務接入 Worker 隊列，建立第一批 SEO 審計和建議模型，並補齊客戶後台真實登入、工作區和站點權限校驗。
+- 完成的主要任務：新增 SaaS 用戶登入和 `GET /api/v1/auth/me`；客戶後台 `/app` 與管理後台 `/admin` 改為需要登入；站點列表、任務列表、Token 管理和手動刷新加入工作區校驗；新增 `seo_audits`、`seo_audit_issues`、`optimization_suggestions` 模型；新增站點審計、建議列表、建議建立、批准和寫回任務 API；Worker 可從 PostgreSQL `sync_tasks` 領取單篇文章、單個媒體和已批准建議寫回任務；WordPress 插件新增文章和媒體寫回 REST API。
+- 關鍵決策和解決方案：MVP 登入先使用 HMAC 簽名 Token 和預設 Demo 工作區，便於本地和部署後驗證；第一批 SEO 規則先採用確定性審計，覆蓋文章標題長度、H1 數量、內部連結數、圖片 Alt Text 和檔名格式；寫回任務使用 WordPress 管理員 Application Password 調用站點側 REST API，讓 WordPress 保留管理員身份記錄。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、pg、Vitest、Vue 3、Pinia、Vue Router、Vue I18n、WordPress REST API、AES-256-GCM。
+- 新增或修改文件：新增 `apps/api/src/auth.ts`、`apps/api/src/seoOptimization.ts` 和 `apps/web/src/api/auth.ts`；修改 `apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/router/index.ts`、`apps/web/src/stores/auth.ts`、`apps/web/src/views/LoginView.vue`、`apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/i18n.ts`、`apps/worker/src/index.ts`、`apps/worker/tests/worker.test.ts`、`apps/worker/package.json`、`package-lock.json`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run build -w @aieo/api` 通過；`npm run test -w @aieo/api -- siteConnections.test.ts` 通過；`npm run build -w @aieo/web` 通過，Vite 僅提示既有大 chunk 警告；`npm run build -w @aieo/worker` 通過；`npm run test -w @aieo/worker` 通過；WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+- 下一步行動清單：將客戶後台 `/app/suggestions` 和 `/app/article-suggestions` 接入真實建議 API；將 `/app/tasks` 接入全局任務隊列；補充 Meta Description 真實同步欄位；為 Worker 增加重試、退避和死信列表；建立資料庫備份和遷移版本管理流程；為已批准建議寫回補充快照與回滾。
