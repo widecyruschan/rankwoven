@@ -260,6 +260,7 @@ describe('site connection routes', () => {
             status: 'publish',
             url: 'http://localhost:8088/wordpress-image-seo-guide/',
             excerpt: 'Image SEO guide excerpt.',
+            metaDescription: 'Learn how to improve WordPress image SEO with practical optimization steps.',
             contentHtml: '<p>Improve image SEO.</p>',
             author: 'Admin',
             categories: ['SEO'],
@@ -319,9 +320,45 @@ describe('site connection routes', () => {
           {
             cmsId: '101',
             title: 'WordPress Image SEO Guide',
+            metaDescription: 'Learn how to improve WordPress image SEO with practical optimization steps.',
             featuredImageId: '501'
           }
-        ]
+        ],
+        pagination: {
+          page: 1,
+          pageSize: 20,
+          total: 1,
+          totalPages: 1
+        }
+      }
+    });
+
+    const mediaResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/media?page=1&pageSize=20`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+
+    expect(mediaResponse.statusCode).toBe(200);
+    expect(mediaResponse.json()).toMatchObject({
+      success: true,
+      data: {
+        media: [
+          {
+            cmsId: '501',
+            title: 'Image SEO Dashboard',
+            fileName: 'image-seo-dashboard.jpg',
+            altText: 'WordPress image SEO dashboard'
+          }
+        ],
+        pagination: {
+          page: 1,
+          pageSize: 20,
+          total: 1,
+          totalPages: 1
+        }
       }
     });
 
@@ -342,6 +379,178 @@ describe('site connection routes', () => {
             lastTokenUsedAt: expect.any(String)
           }
         ]
+      }
+    });
+  });
+
+  it('paginates synced article lists for customer dashboard access', async () => {
+    const { server, body } = await createWordPressConnection();
+    const articles = Array.from({ length: 3 }, (_, index) => ({
+      cmsId: String(700 + index),
+      type: 'post',
+      title: `Paged Article ${index + 1}`,
+      slug: `paged-article-${index + 1}`,
+      status: 'publish',
+      url: `http://localhost:8088/paged-article-${index + 1}/`,
+      updatedAt: `2026-07-2${index}T08:00:00+00:00`
+    }));
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles,
+        media: []
+      }
+    });
+    const authToken = await loginDemoUser(server);
+    const pagedResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/articles?page=2&pageSize=2`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(syncResponse.statusCode).toBe(200);
+    expect(pagedResponse.statusCode).toBe(200);
+    expect(pagedResponse.json()).toMatchObject({
+      success: true,
+      data: {
+        articles: [
+          {
+            cmsId: '700',
+            title: 'Paged Article 1'
+          }
+        ],
+        pagination: {
+          page: 2,
+          pageSize: 2,
+          total: 3,
+          totalPages: 2
+        }
+      }
+    });
+  });
+
+  it('filters synced article and media lists by search, status, and SEO issue', async () => {
+    const { server, body } = await createWordPressConnection();
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '801',
+            type: 'post',
+            title: 'Meta Ready Buying Guide',
+            slug: 'meta-ready-buying-guide',
+            status: 'publish',
+            url: 'http://localhost:8088/meta-ready-buying-guide/',
+            metaDescription: 'A complete buying guide with a strong meta description.',
+            featuredImageId: '901',
+            updatedAt: '2026-07-24T08:00:00+00:00'
+          },
+          {
+            cmsId: '802',
+            type: 'page',
+            title: 'Draft Landing Page',
+            slug: 'draft-landing-page',
+            status: 'draft',
+            url: 'http://localhost:8088/draft-landing-page/',
+            metaDescription: '',
+            updatedAt: '2026-07-25T08:00:00+00:00'
+          }
+        ],
+        media: [
+          {
+            cmsId: '901',
+            title: 'Buying Guide Hero',
+            url: 'http://localhost:8088/wp-content/uploads/buying-guide-hero.jpg',
+            fileName: 'buying-guide-hero.jpg',
+            altText: 'Buying guide hero image',
+            updatedAt: '2026-07-24T08:00:00+00:00'
+          },
+          {
+            cmsId: '902',
+            title: 'Draft Image',
+            url: 'http://localhost:8088/wp-content/uploads/draft-image.jpg',
+            fileName: '',
+            altText: '',
+            updatedAt: '2026-07-25T08:00:00+00:00'
+          }
+        ]
+      }
+    });
+    const authToken = await loginDemoUser(server);
+
+    expect(syncResponse.statusCode).toBe(200);
+
+    const searchedArticlesResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/articles?search=buying&status=publish`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    expect(searchedArticlesResponse.statusCode).toBe(200);
+    expect(searchedArticlesResponse.json()).toMatchObject({
+      data: {
+        articles: [
+          {
+            cmsId: '801'
+          }
+        ],
+        pagination: {
+          total: 1
+        }
+      }
+    });
+
+    const missingMetaResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/articles?issue=missing_meta`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    expect(missingMetaResponse.statusCode).toBe(200);
+    expect(missingMetaResponse.json()).toMatchObject({
+      data: {
+        articles: [
+          {
+            cmsId: '802'
+          }
+        ],
+        pagination: {
+          total: 1
+        }
+      }
+    });
+
+    const missingMediaResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/media?search=draft&issue=missing_alt`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    expect(missingMediaResponse.statusCode).toBe(200);
+    expect(missingMediaResponse.json()).toMatchObject({
+      data: {
+        media: [
+          {
+            cmsId: '902'
+          }
+        ],
+        pagination: {
+          total: 1
+        }
       }
     });
   });
@@ -628,6 +837,8 @@ describe('site connection routes', () => {
             slug: 'tiny',
             status: 'publish',
             url: 'http://localhost:8088/tiny/',
+            excerpt: 'Tiny article fallback summary.',
+            metaDescription: '',
             contentHtml: '<p>No headings or internal links yet.</p>',
             updatedAt: '2026-07-26T08:00:00+00:00'
           }
@@ -673,6 +884,7 @@ describe('site connection routes', () => {
     expect(auditBody.data.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ruleCode: 'ARTICLE_TITLE_LENGTH' }),
+        expect.objectContaining({ ruleCode: 'ARTICLE_META_DESCRIPTION_LENGTH' }),
         expect.objectContaining({ ruleCode: 'MEDIA_ALT_TEXT_MISSING' })
       ])
     );
@@ -690,6 +902,7 @@ describe('site connection routes', () => {
           id: string;
           status: string;
           fieldName: string;
+          suggestionType: string;
           targetCmsId: string;
         }>;
       };
@@ -697,10 +910,18 @@ describe('site connection routes', () => {
     const titleSuggestion = suggestionsBody.data.suggestions.find(
       (suggestion) => suggestion.fieldName === 'title'
     );
+    const metaDescriptionSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.fieldName === 'metaDescription'
+    );
 
     expect(suggestionsResponse.statusCode).toBe(200);
     expect(titleSuggestion).toMatchObject({
       status: 'pending',
+      targetCmsId: '404'
+    });
+    expect(metaDescriptionSuggestion).toMatchObject({
+      status: 'pending',
+      suggestionType: 'meta_description',
       targetCmsId: '404'
     });
 

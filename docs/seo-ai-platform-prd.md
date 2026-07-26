@@ -206,7 +206,8 @@ Google 官方說明中，生成式 AI 可以用於研究主題和增加內容結
 
 - 同步 WordPress Posts 和 Pages。
 - 後續同步 Joomla Articles、Categories 和 OpenCart Information Pages、Categories、Products SEO 欄位。
-- 同步欄位：標題、Slug、正文 HTML、摘要、分類、標籤、特色圖、發佈時間、更新時間、狀態、作者、URL。
+- 同步欄位：標題、Slug、正文 HTML、摘要、Meta Description、分類、標籤、特色圖、發佈時間、更新時間、狀態、作者、URL。
+- WordPress Meta Description 來源優先級：Yoast `_yoast_wpseo_metadesc`、Rank Math `rank_math_description`、AIOSEO `_aioseo_description` / `_aioseop_description`，沒有 SEO 插件欄位時回退 WordPress 摘要。
 - 支援分頁同步和增量同步。
 - 支援手動刷新單篇文章。
 - 不同步回收站和私密文章，除非用戶明確授權。
@@ -594,13 +595,15 @@ cancelled
 | `GET` | `/api/v1/site-connections/:siteId/sync-tasks` | 獲取單個站點的同步任務列表 |
 | `POST` | `/api/v1/site-connections/:siteId/manual-refresh` | 為單篇文章或單個媒體建立手動刷新任務 |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 接收插件分頁推送的文章與媒體同步批次 |
-| `GET` | `/api/v1/site-connections/:siteId/articles` | 帶 Bearer Token 獲取文章列表 |
+| `GET` | `/api/v1/site-connections/:siteId/articles?page=&pageSize=&search=&status=&issue=` | 帶 Bearer Token 或登入用戶權限獲取已同步文章分頁列表；`issue` 支援 `missing_meta`、`missing_featured_image` |
+| `GET` | `/api/v1/site-connections/:siteId/media?page=&pageSize=&search=&issue=` | 帶 Bearer Token 或登入用戶權限獲取已同步媒體分頁列表；`issue` 支援 `missing_alt`、`missing_file_name` |
 | `POST` | `/api/v1/site-connections/:siteId/audits` | 執行站點 SEO 規則審計並生成建議 |
 | `GET` | `/api/v1/site-connections/:siteId/audits` | 獲取站點 SEO 審計記錄和最近問題 |
 | `GET` | `/api/v1/site-connections/:siteId/suggestions` | 獲取文章與媒體優化建議 |
 | `POST` | `/api/v1/site-connections/:siteId/suggestions` | 手動建立優化建議 |
 | `POST` | `/api/v1/site-connections/:siteId/suggestions/:suggestionId/approve` | 批准優化建議 |
 | `POST` | `/api/v1/site-connections/:siteId/suggestions/:suggestionId/apply` | 為已批准建議建立 WordPress 寫回任務 |
+| `GET` | `/api/v1/analytics/overview?siteId=&startDate=&endDate=` | 讀取 GA4 或示範分析數據，支援站點 host 篩選與日期範圍 |
 | `GET` | `/api/v1/articles/:articleId` | 獲取文章詳情 |
 | `POST` | `/api/v1/articles/:articleId/audit` | 舊規劃路由，後續按站點路由整合 |
 | `POST` | `/api/v1/articles/:articleId/suggestions` | 舊規劃路由，後續按站點路由整合 |
@@ -1228,13 +1231,13 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 為 SEO 審計補充 Meta Description 真實同步欄位，兼容 Yoast、Rank Math、AIOSEO 和 WordPress 摘要回退。
-2. 配置正式 GA4 Property ID 和 Google 服務帳號憑據，並為客戶後台分析頁增加站點篩選和日期範圍切換。
-3. 將關鍵詞建議接入 AI Provider、Search Console 或第三方搜尋量/難度來源，替換目前的確定性 MVP 建議。
-4. 逐步將剩餘舊表格頁替換為 Ant Design Vue Table、Form、Tabs 和 Modal，統一客戶後台與管理後台的操作體驗。
-5. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
-6. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
-7. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。
-8. 為客戶後台建議頁補充最近一次 SEO 審計分數、規則版本與問題數摘要，讓用戶知道建議來源。
+1. 在生產 `.env` 或 GitHub Secrets 填入正式 `GOOGLE_ANALYTICS_PROPERTY_ID` 和 Google 服務帳號憑據，確認 GA4 Property 已授權服務帳號讀取。
+2. 將關鍵詞建議接入 AI Provider、Search Console 或第三方搜尋量/難度來源，替換目前的確定性 MVP 建議。
+3. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
+4. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。
+5. 將 `/app/apply` 接入真實已批准建議寫回隊列，支援站點篩選、批次預覽和任務狀態刷新。
+6. 為客戶後台建議頁補充最近一次 SEO 審計分數、規則版本與問題數摘要，讓用戶知道建議來源。
+7. 將任務隊列補充站點篩選、類型篩選和可配置自動刷新，方便大站同步時觀察批次進度。
+8. 將生產 Web 容器改為正式靜態構建部署，避免主站繼續由 Vite dev server 對外服務。
 9. 將 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 逐步收斂為只在測試或開發兜底使用，生產以 migration 腳本為主。
 10. 在部署文件中補充資料庫備份恢復演練步驟，包含 staging 驗證和回滾檢查清單。

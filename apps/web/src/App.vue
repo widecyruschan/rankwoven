@@ -13,6 +13,7 @@ import {
   Link2,
   ListChecks,
   LogIn,
+  LogOut,
   Search,
   RefreshCw,
   PlugZap,
@@ -23,10 +24,12 @@ import {
 } from 'lucide-vue-next';
 import rankwovenLogo from './assets/rankwoven-logo.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
+import { useAuthStore } from './stores/auth';
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const authStore = useAuthStore();
 const isNavigationOpen = ref(false);
 
 const marketingItems = [
@@ -75,7 +78,13 @@ function toggleNavigation() {
 }
 
 function navigateToMenuItem({ key }: { key: string }) {
+  isNavigationOpen.value = false;
   void router.push(key);
+}
+
+function logout() {
+  authStore.logout();
+  void router.push('/login');
 }
 </script>
 
@@ -140,7 +149,24 @@ function navigateToMenuItem({ key }: { key: string }) {
           <p>{{ topbarPhase }}</p>
           <h1>{{ currentTitle }}</h1>
         </div>
-        <LanguageSwitcher />
+        <div class="topbar-actions">
+          <RouterLink class="icon-link-button" to="/">
+            {{ t('app.publicSite') }}
+          </RouterLink>
+          <RouterLink v-if="isAdminLayout" class="icon-link-button" to="/app">
+            {{ t('app.customerDashboard') }}
+          </RouterLink>
+          <RouterLink v-else class="icon-link-button" to="/admin">
+            {{ t('app.adminDashboard') }}
+          </RouterLink>
+          <LanguageSwitcher />
+          <a-button @click="logout">
+            <template #icon>
+              <LogOut :size="16" aria-hidden="true" />
+            </template>
+            {{ t('app.logout') }}
+          </a-button>
+        </div>
       </a-layout-header>
 
       <a-layout-content>

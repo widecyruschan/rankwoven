@@ -459,7 +459,7 @@ a:visited {
 .login-panel {
   display: grid;
   box-sizing: border-box;
-  /* width: min(100%, 460px); */
+  width: min(100%, 660px);
   gap: 24px;
   padding: 30px;
 }
@@ -504,21 +504,30 @@ a:visited {
   color: var(--color-muted);
 }
 
-.topbar {
+.topbar.ant-layout-header {
   display: flex;
   align-items: center;
   gap: 16px;
   height: auto;
-  min-height: 76px;
-  line-height: 1.4;
+  min-height: 88px;
+  line-height: normal;
   border-bottom: 1px solid var(--color-border);
-  background: rgb(255 255 255 / 88%);
+  background:transparent;
   backdrop-filter: blur(18px);
   padding: 18px 28px;
 }
 
 .topbar > div:nth-child(2) {
   flex: 1;
+  min-width: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .topbar h1,
@@ -529,6 +538,7 @@ a:visited {
 .topbar h1 {
   font-size: 22px;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .menu-button {
@@ -634,6 +644,14 @@ a:visited {
   box-shadow: 0 1px 0 rgb(20 35 31 / 3%);
 }
 
+.workflow-chart-card .ant-card-body {
+  padding: 18px 22px 22px;
+}
+
+.workflow-chart-card .analytics-chart {
+  min-height: 260px;
+}
+
 .analytics-chart {
   width: 100%;
   min-height: 240px;
@@ -646,6 +664,47 @@ a:visited {
 
 .keyword-action-col .ant-form-item {
   width: 100%;
+}
+
+.analytics-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.analytics-site-select {
+  min-width: 220px;
+}
+
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.toolbar-select {
+  min-width: 220px;
+}
+
+.toolbar-select-small {
+  min-width: 150px;
+}
+
+.toolbar-input {
+  width: 280px;
+}
+
+.date-input {
+  box-sizing: border-box;
+  min-height: 32px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  padding: 4px 10px;
 }
 
 .ant-layout-sider {
@@ -673,6 +732,38 @@ a:visited {
 
 .ant-table {
   min-width: 680px;
+}
+
+.table-subtext {
+  margin-top: 4px;
+  max-width: 520px;
+  overflow: hidden;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-alert {
+  margin-bottom: 16px;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 10px 14px;
+  margin: 0;
+}
+
+.detail-list dt {
+  color: var(--color-ink-muted);
+  font-weight: 700;
+}
+
+.detail-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .summary-grid {

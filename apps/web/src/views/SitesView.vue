@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { getSiteConnections, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
 
@@ -8,6 +9,8 @@ const { t, locale } = useI18n();
 const apiSites = ref<SiteConnection[]>([]);
 const isLoading = ref(false);
 const loadError = ref('');
+const activeTab = ref('connected');
+const selectedSite = ref<SiteConnection | null>(null);
 
 const platformLabels: Record<CmsPlatform, string> = {
   wordpress: 'WordPress',
@@ -15,23 +18,78 @@ const platformLabels: Record<CmsPlatform, string> = {
   opencart: 'OpenCart'
 };
 
-const sites = computed(() =>
+const siteRows = computed(() =>
   apiSites.value.map((site) => ({
     id: site.id,
+    raw: site,
     name: site.name,
     platform: platformLabels[site.platform],
     health: site.status === 'connected' ? t('sites.healthReady') : t('sites.healthRevoked'),
-    articles: String(site.lastSyncStats?.articlesReceived ?? 0),
+    articles: site.lastSyncStats?.articlesReceived ?? 0,
     lastTokenUsed: formatDateTime(site.lastTokenUsedAt),
     lastSync: formatDateTime(site.lastSyncAt),
-    status: site.status === 'connected' ? t('sites.statusConnected') : t('sites.statusRevoked')
+    status: site.status,
+    statusLabel: site.status === 'connected' ? t('sites.statusConnected') : t('sites.statusRevoked')
   }))
+);
+
+const filteredSiteRows = computed(() =>
+  siteRows.value.filter((site) => (activeTab.value === 'connected' ? site.status === 'connected' : site.status === 'revoked'))
 );
 
 const connectionSteps = computed(() => [
   t('sites.connectStepOne'),
   t('sites.connectStepTwo'),
   t('sites.connectStepThree')
+]);
+
+const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() => [
+  {
+    title: t('sites.name'),
+    dataIndex: 'name',
+    key: 'name'
+  },
+  {
+    title: t('sites.platform'),
+    dataIndex: 'platform',
+    key: 'platform',
+    width: 130
+  },
+  {
+    title: t('sites.health'),
+    dataIndex: 'health',
+    key: 'health',
+    width: 130
+  },
+  {
+    title: t('sites.articles'),
+    dataIndex: 'articles',
+    key: 'articles',
+    width: 100
+  },
+  {
+    title: t('sites.lastTokenUsed'),
+    dataIndex: 'lastTokenUsed',
+    key: 'lastTokenUsed',
+    width: 180
+  },
+  {
+    title: t('sites.lastSync'),
+    dataIndex: 'lastSync',
+    key: 'lastSync',
+    width: 180
+  },
+  {
+    title: t('cmsAdapters.status'),
+    dataIndex: 'statusLabel',
+    key: 'statusLabel',
+    width: 120
+  },
+  {
+    title: t('articles.action'),
+    key: 'action',
+    width: 110
+  }
 ]);
 
 function formatDateTime(value?: string) {
@@ -77,62 +135,46 @@ onMounted(() => {
         <h2>{{ t('sites.title') }}</h2>
         <p>{{ t('sites.body') }}</p>
       </div>
-      <button class="primary-button" type="button" :disabled="isLoading" @click="loadSites">
-        {{ isLoading ? t('sites.loading') : t('sites.refresh') }}
-      </button>
+      <a-button type="primary" :loading="isLoading" @click="loadSites">
+        {{ t('sites.refresh') }}
+      </a-button>
     </div>
+
+    <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
 
     <div class="prototype-grid">
       <section class="content-panel panel-wide">
-        <div class="data-table" role="table">
-          <div class="data-row data-head site-data-row" role="row">
-            <span>{{ t('sites.name') }}</span>
-            <span>{{ t('sites.platform') }}</span>
-            <span>{{ t('sites.health') }}</span>
-            <span>{{ t('sites.articles') }}</span>
-            <span>{{ t('sites.lastTokenUsed') }}</span>
-            <span>{{ t('sites.lastSync') }}</span>
-            <span>{{ t('cmsAdapters.status') }}</span>
-          </div>
-          <div v-if="isLoading" class="data-row site-data-row" role="row">
-            <strong>{{ t('sites.loading') }}</strong>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span class="status-pill">{{ t('sites.statusLoading') }}</span>
-          </div>
-          <div v-else-if="loadError" class="data-row site-data-row" role="row">
-            <strong>{{ t('sites.loadFailed') }}</strong>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span class="status-pill">{{ loadError }}</span>
-          </div>
-          <div v-else-if="sites.length === 0" class="data-row site-data-row" role="row">
-            <strong>{{ t('sites.empty') }}</strong>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span class="status-pill">{{ t('sites.statusEmpty') }}</span>
-          </div>
-          <template v-else>
-            <div v-for="site in sites" :key="site.id" class="data-row site-data-row" role="row">
-              <strong>{{ site.name }}</strong>
-              <span>{{ site.platform }}</span>
-              <span>{{ site.health }}</span>
-              <span>{{ site.articles }}</span>
-              <span>{{ site.lastTokenUsed }}</span>
-              <span>{{ site.lastSync }}</span>
-              <span class="status-pill">{{ site.status }}</span>
-            </div>
+        <a-tabs v-model:active-key="activeTab">
+          <a-tab-pane key="connected" :tab="t('sites.connectedTab')" />
+          <a-tab-pane key="revoked" :tab="t('sites.revokedTab')" />
+        </a-tabs>
+
+        <a-table
+          row-key="id"
+          :columns="columns"
+          :data-source="filteredSiteRows"
+          :loading="isLoading"
+          :pagination="false"
+        >
+          <template #emptyText>{{ t('sites.empty') }}</template>
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'name'">
+              <strong>{{ record.name }}</strong>
+              <div class="table-subtext">{{ record.raw.siteUrl }}</div>
+            </template>
+            <template v-else-if="column.key === 'health'">
+              <a-tag :color="record.status === 'connected' ? 'green' : 'red'">{{ record.health }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'statusLabel'">
+              <a-tag :color="record.status === 'connected' ? 'blue' : 'default'">{{ record.statusLabel }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button type="link" @click="selectedSite = record.raw">
+                {{ t('common.viewDetails') }}
+              </a-button>
+            </template>
           </template>
-        </div>
+        </a-table>
       </section>
 
       <section class="content-panel">
@@ -144,17 +186,25 @@ onMounted(() => {
         </ol>
       </section>
     </div>
+
+    <a-modal
+      :open="Boolean(selectedSite)"
+      :title="selectedSite?.name || t('sites.detailTitle')"
+      :footer="null"
+      @cancel="selectedSite = null"
+    >
+      <dl v-if="selectedSite" class="detail-list">
+        <dt>{{ t('sites.platform') }}</dt>
+        <dd>{{ platformLabels[selectedSite.platform] }}</dd>
+        <dt>{{ t('sites.lastTokenUsed') }}</dt>
+        <dd>{{ formatDateTime(selectedSite.lastTokenUsedAt) }}</dd>
+        <dt>{{ t('sites.lastSync') }}</dt>
+        <dd>{{ formatDateTime(selectedSite.lastSyncAt) }}</dd>
+        <dt>{{ t('sites.articles') }}</dt>
+        <dd>{{ selectedSite.lastSyncStats?.articlesReceived ?? 0 }}</dd>
+        <dt>{{ t('media.title') }}</dt>
+        <dd>{{ selectedSite.lastSyncStats?.mediaReceived ?? 0 }}</dd>
+      </dl>
+    </a-modal>
   </section>
 </template>
-
-<style scoped>
-.site-data-row {
-  grid-template-columns: minmax(180px, 1.4fr) repeat(6, minmax(92px, 1fr));
-}
-
-@media (max-width: 760px) {
-  .site-data-row {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

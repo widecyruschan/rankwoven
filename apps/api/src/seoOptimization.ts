@@ -103,6 +103,7 @@ const createSuggestionSchema = z.object({
 });
 
 const defaultRulesVersion = '2026-07-26.mvp-1';
+const auditBatchSize = 100;
 
 const seoOptimizationMigrationSql = `
 CREATE TABLE IF NOT EXISTS seo_audits (
@@ -233,6 +234,20 @@ function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
       });
     }
 
+    const metaDescription = article.metaDescription?.trim() ?? '';
+    if (metaDescription.length < 70 || metaDescription.length > 160) {
+      issues.push({
+        targetType: 'article',
+        targetCmsId: article.cmsId,
+        ruleCode: 'ARTICLE_META_DESCRIPTION_LENGTH',
+        severity: metaDescription.length === 0 || metaDescription.length > 220 ? 'high' : 'medium',
+        message: '文章 Meta Description 未落在建議範圍',
+        currentValue: metaDescription,
+        suggestedValue: normalizeMetaDescriptionSuggestion(article),
+        fieldName: 'metaDescription'
+      });
+    }
+
     const h1Matches = article.contentHtml?.match(/<h1\b/gi) ?? [];
     if (h1Matches.length !== 1) {
       issues.push({
@@ -302,6 +317,21 @@ function normalizeTitleSuggestion(title: string) {
   return trimmed.length < 25 ? `${trimmed} 完整指南` : trimmed.slice(0, 62).trim();
 }
 
+function normalizeMetaDescriptionSuggestion(article: SyncedArticle) {
+  const sourceText = article.excerpt?.trim() || article.title.trim();
+  const normalized = sourceText.replace(/\s+/g, ' ');
+
+  if (normalized.length > 155) {
+    return `${normalized.slice(0, 152).trim()}...`;
+  }
+
+  if (normalized.length >= 70) {
+    return normalized;
+  }
+
+  return `${normalized}，了解重點做法、常見問題與可立即套用的 SEO 優化建議。`;
+}
+
 function normalizeImageText(value: string) {
   return value
     .replace(/\.[a-z0-9]+$/i, '')
@@ -333,6 +363,10 @@ function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId'
 
   if (issue.ruleCode === 'ARTICLE_INTERNAL_LINKS') {
     return 'internal_link';
+  }
+
+  if (issue.ruleCode === 'ARTICLE_META_DESCRIPTION_LENGTH') {
+    return 'meta_description';
   }
 
   return issue.fieldName === 'title' ? 'title' : 'content';
@@ -732,6 +766,48 @@ function validationError(reply: FastifyReply, error: z.ZodError) {
   });
 }
 
+async function listAllArticlesForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
+  const articles: SyncedArticle[] = [];
+  let page = 1;
+
+  while (true) {
+    const result = await siteRepository.listArticles(siteId, {
+      page,
+      pageSize: auditBatchSize
+    });
+    articles.push(...result.items);
+
+    if (page >= result.pagination.totalPages) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return articles;
+}
+
+async function listAllMediaForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
+  const media: SyncedMedia[] = [];
+  let page = 1;
+
+  while (true) {
+    const result = await siteRepository.listMedia(siteId, {
+      page,
+      pageSize: auditBatchSize
+    });
+    media.push(...result.items);
+
+    if (page >= result.pagination.totalPages) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return media;
+}
+
 export function registerSeoOptimizationRoutes(
   app: FastifyInstance,
   siteRepository: SiteConnectionRepository,
@@ -759,8 +835,8 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
-      const articles = await siteRepository.listArticles(site.id);
-      const media = await siteRepository.listMedia(site.id);
+      const articles = await listAllArticlesForAudit(siteRepository, site.id);
+      const media = await listAllMediaForAudit(siteRepository, site.id);
       const issues = buildSeoIssues(articles, media);
       const score = Math.max(0, 100 - issues.length * 8);
       const result = await seoRepository.saveAudit(

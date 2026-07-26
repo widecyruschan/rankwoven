@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS synced_articles (
   status varchar(40) NOT NULL,
   url text NOT NULL DEFAULT '',
   excerpt text,
+  meta_description varchar(500),
   content_html text,
   author varchar(160),
   categories jsonb NOT NULL DEFAULT '[]'::jsonb,

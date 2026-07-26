@@ -10,11 +10,13 @@ import {
   Input,
   Layout,
   Menu,
+  Modal,
   Progress,
   Row,
   Select,
   Statistic,
   Table,
+  Tabs,
   Tag
 } from 'ant-design-vue';
 import 'ant-design-vue/dist/reset.css';
@@ -37,11 +39,13 @@ app.use(router);
   Input,
   Layout,
   Menu,
+  Modal,
   Progress,
   Row,
   Select,
   Statistic,
   Table,
+  Tabs,
   Tag
 ].forEach((component) => {
   app.use(component);

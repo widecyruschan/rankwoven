@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import type { EChartsOption } from 'echarts';
 import AnalyticsChart from '../components/AnalyticsChart.vue';
@@ -28,7 +29,26 @@ const loadError = ref('');
 const actionMessage = ref('');
 const actionError = ref('');
 
+interface SuggestionRow {
+  id: string;
+  target: string;
+  type: string;
+  priority: string;
+  changes: string;
+  status: string;
+  canApprove: boolean;
+  canApply: boolean;
+  suggestedValue: string;
+  errorMessage?: string;
+}
+
 const selectedSiteOptions = computed(() => sites.value.filter((site) => site.status === 'connected'));
+const selectedSiteSelectOptions = computed(() =>
+  selectedSiteOptions.value.map((site) => ({
+    label: site.name,
+    value: site.id
+  }))
+);
 
 const queues = computed(() => [
   {
@@ -45,54 +65,65 @@ const queues = computed(() => [
   }
 ]);
 
-const suggestionStatusChartOption = computed<EChartsOption>(() => {
-  const statusCounts = ['pending', 'approved', 'applied', 'failed', 'rejected'].map((status) => ({
-    name: getStatusLabel(status as SuggestionStatus),
-    value: suggestions.value.filter((suggestion) => suggestion.status === status).length
-  }));
-
-  return {
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0 },
-    series: [
-      {
-        name: t('suggestions.statusChartTitle'),
-        type: 'pie',
-        radius: ['48%', '70%'],
-        center: ['50%', '44%'],
-        avoidLabelOverlap: true,
-        data: statusCounts
-      }
-    ]
-  };
-});
-
-const suggestionTypeChartOption = computed<EChartsOption>(() => ({
-  tooltip: { trigger: 'axis' },
-  grid: { top: 20, right: 20, bottom: 36, left: 96 },
-  xAxis: { type: 'value' },
+const workflowProgressChartOption = computed<EChartsOption>(() => ({
+  color: ['#1677ff'],
+  tooltip: {
+    trigger: 'axis',
+    axisPointer: { type: 'none' },
+    valueFormatter: (value) => `${value}%`
+  },
+  grid: { top: 10, right: 64, bottom: 8, left: 70 },
+  xAxis: {
+    type: 'value',
+    max: 100,
+    show: false
+  },
   yAxis: {
     type: 'category',
+    inverse: true,
+    axisLine: { show: false },
+    axisTick: { show: false },
+    axisLabel: {
+      color: '#475467',
+      fontSize: 13,
+      fontWeight: 700,
+      margin: 14
+    },
     data: [
-      t('suggestions.typeImageTitleMeta'),
-      t('suggestions.typeContent'),
-      t('suggestions.typeLinks')
-    ].reverse()
+      t('dashboard.pipelineScan'),
+      t('dashboard.pipelineGenerate'),
+      t('dashboard.pipelineReview'),
+      t('dashboard.pipelineApply'),
+      t('dashboard.pipelineDone')
+    ]
   },
   series: [
     {
-      name: t('suggestions.typeChartTitle'),
+      name: t('suggestions.workflowChartTitle'),
       type: 'bar',
-      data: [
-        countByType(['media_alt_text', 'media_file_name']),
-        countByType(['title', 'meta_description', 'content']),
-        countByType(['internal_link'])
-      ].reverse()
+      barWidth: 10,
+      showBackground: true,
+      backgroundStyle: {
+        color: '#f2f4f7',
+        borderRadius: 999
+      },
+      label: {
+        show: true,
+        position: 'right',
+        color: '#1f2937',
+        fontSize: 13,
+        fontWeight: 800,
+        formatter: '{c}%'
+      },
+      itemStyle: {
+        borderRadius: 999
+      },
+      data: [100, 64, 38, 22, 18]
     }
   ]
 }));
 
-const suggestionRows = computed(() =>
+const suggestionRows = computed<SuggestionRow[]>(() =>
   suggestions.value.map((suggestion) => ({
     id: suggestion.id,
     target: `${getTargetLabel(suggestion)} #${suggestion.targetCmsId}`,
@@ -106,6 +137,39 @@ const suggestionRows = computed(() =>
     errorMessage: suggestion.errorMessage
   }))
 );
+
+const suggestionColumns = computed<TableColumnsType<SuggestionRow>>(() => [
+  {
+    title: t('articles.article'),
+    dataIndex: 'target',
+    key: 'target'
+  },
+  {
+    title: t('suggestions.type'),
+    dataIndex: 'type',
+    key: 'type'
+  },
+  {
+    title: t('suggestions.priority'),
+    dataIndex: 'priority',
+    key: 'priority'
+  },
+  {
+    title: t('suggestions.changes'),
+    dataIndex: 'changes',
+    key: 'changes'
+  },
+  {
+    title: t('cmsAdapters.status'),
+    dataIndex: 'status',
+    key: 'status'
+  },
+  {
+    title: t('articles.action'),
+    key: 'action',
+    width: 220
+  }
+]);
 
 function countByType(types: SuggestionType[]) {
   return suggestions.value.filter((suggestion) => types.includes(suggestion.suggestionType)).length;
@@ -276,19 +340,20 @@ onMounted(() => {
         <p>{{ t('suggestions.body') }}</p>
       </div>
       <div class="action-row">
-        <select v-model="selectedSiteId" :disabled="isLoading || selectedSiteOptions.length === 0" @change="handleSiteChange">
-          <option v-for="site in selectedSiteOptions" :key="site.id" :value="site.id">
-            {{ site.name }}
-          </option>
-        </select>
-        <button
-          class="secondary-button"
-          type="button"
-          :disabled="isLoading || isAuditing || !selectedSiteId"
+        <a-select
+          v-model:value="selectedSiteId"
+          class="toolbar-select"
+          :disabled="isLoading || selectedSiteOptions.length === 0"
+          :options="selectedSiteSelectOptions"
+          @change="handleSiteChange"
+        />
+        <a-button
+          :loading="isAuditing"
+          :disabled="isLoading || !selectedSiteId"
           @click="runSeoAudit"
         >
           {{ isAuditing ? t('suggestions.auditRunning') : t('suggestions.runAudit') }}
-        </button>
+        </a-button>
         <RouterLink class="primary-button" to="/app/article-suggestions">{{ t('suggestions.openArticle') }}</RouterLink>
       </div>
     </div>
@@ -300,78 +365,59 @@ onMounted(() => {
       </article>
     </div>
 
-    <a-row class="section-grid" :gutter="[16, 16]">
-      <a-col :xs="24" :xl="10">
-        <a-card :title="t('suggestions.statusChartTitle')">
-          <AnalyticsChart :option="suggestionStatusChartOption" height="280px" />
-        </a-card>
-      </a-col>
-      <a-col :xs="24" :xl="14">
-        <a-card :title="t('suggestions.typeChartTitle')">
-          <AnalyticsChart :option="suggestionTypeChartOption" height="280px" />
-        </a-card>
-      </a-col>
-    </a-row>
+    <a-card class="section-card workflow-chart-card" :title="t('suggestions.workflowChartTitle')">
+      <template #extra>
+        <span>{{ t('dashboard.syncProgress') }}</span>
+      </template>
+      <AnalyticsChart :option="workflowProgressChartOption" height="280px" />
+    </a-card>
 
     <section class="content-panel">
       <div v-if="loadError" class="form-message form-message-error">{{ loadError }}</div>
       <div v-else-if="actionError" class="form-message form-message-error">{{ actionError }}</div>
       <div v-else-if="actionMessage" class="form-message">{{ actionMessage }}</div>
 
-      <div class="data-table" role="table">
-        <div class="data-row data-head" role="row">
-          <span>{{ t('articles.article') }}</span>
-          <span>{{ t('suggestions.type') }}</span>
-          <span>{{ t('suggestions.priority') }}</span>
-          <span>{{ t('suggestions.changes') }}</span>
-          <span>{{ t('cmsAdapters.status') }}</span>
-          <span>{{ t('articles.action') }}</span>
-        </div>
-        <div v-if="isLoading" class="data-row" role="row">
-          <strong>{{ t('suggestions.loading') }}</strong>
-          <span>--</span>
-          <span>--</span>
-          <span>--</span>
-          <span class="status-pill">{{ t('tasks.statusRunning') }}</span>
-          <span>--</span>
-        </div>
-        <div v-else-if="suggestionRows.length === 0" class="data-row" role="row">
-          <strong>{{ t('suggestions.empty') }}</strong>
-          <span>--</span>
-          <span>--</span>
-          <span>--</span>
-          <span class="status-pill">{{ t('suggestions.statusReady') }}</span>
-          <span>--</span>
-        </div>
-        <div v-for="row in suggestionRows" v-else :key="row.id" class="data-row" role="row">
-          <strong>{{ row.target }}</strong>
-          <span>{{ row.type }}</span>
-          <span class="tag-pill">{{ row.priority }}</span>
-          <span>{{ row.changes }}</span>
-          <span class="status-pill">{{ row.status }}</span>
-          <span class="action-row">
-            <button
-              v-if="row.canApprove"
-              class="text-button"
-              type="button"
-              :disabled="actionSuggestionId === row.id"
-              @click="approveSuggestion(row.id)"
-            >
-              {{ t('articleSuggestions.approve') }}
-            </button>
-            <button
-              v-if="row.canApply"
-              class="text-button"
-              type="button"
-              :disabled="actionSuggestionId === row.id"
-              @click="applySuggestion(row.id)"
-            >
-              {{ t('apply.applyOne') }}
-            </button>
-            <RouterLink class="text-button" to="/app/article-suggestions">{{ t('suggestions.review') }}</RouterLink>
-          </span>
-        </div>
-      </div>
+      <a-table
+        row-key="id"
+        :columns="suggestionColumns"
+        :data-source="suggestionRows"
+        :loading="isLoading"
+        :pagination="{ pageSize: 10 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'target'">
+            <strong>{{ record.target }}</strong>
+            <div class="table-subtext">{{ record.suggestedValue }}</div>
+          </template>
+          <template v-else-if="column.key === 'priority'">
+            <a-tag>{{ record.priority }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag>{{ record.status }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <div class="action-row">
+              <a-button
+                v-if="record.canApprove"
+                type="link"
+                :loading="actionSuggestionId === record.id"
+                @click="approveSuggestion(record.id)"
+              >
+                {{ t('articleSuggestions.approve') }}
+              </a-button>
+              <a-button
+                v-if="record.canApply"
+                type="link"
+                :loading="actionSuggestionId === record.id"
+                @click="applySuggestion(record.id)"
+              >
+                {{ t('apply.applyOne') }}
+              </a-button>
+              <RouterLink class="text-button" to="/app/article-suggestions">{{ t('suggestions.review') }}</RouterLink>
+            </div>
+          </template>
+        </template>
+      </a-table>
     </section>
   </section>
 </template>

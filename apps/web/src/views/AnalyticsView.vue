@@ -5,12 +5,25 @@ import type { ColumnsType } from 'ant-design-vue/es/table';
 import type { EChartsOption } from 'echarts';
 import AnalyticsChart from '../components/AnalyticsChart.vue';
 import { getAnalyticsOverview, type AnalyticsOverview } from '../api/appInsights';
+import { getSiteConnections, type SiteConnection } from '../api/siteConnections';
 
 const { t } = useI18n();
 
 const overview = ref<AnalyticsOverview | null>(null);
+const sites = ref<SiteConnection[]>([]);
+const selectedSiteId = ref('');
+const startDate = ref(getDateOffsetValue(6));
+const endDate = ref(getDateOffsetValue(0));
 const isLoading = ref(false);
 const loadError = ref('');
+
+const siteOptions = computed(() => [
+  { label: t('analytics.allSites'), value: '' },
+  ...sites.value.map((site) => ({
+    label: site.name,
+    value: site.id
+  }))
+]);
 
 const metricCards = computed(() => {
   const totals = overview.value?.totals ?? {
@@ -86,7 +99,11 @@ async function loadAnalytics() {
   loadError.value = '';
 
   try {
-    overview.value = await getAnalyticsOverview();
+    overview.value = await getAnalyticsOverview({
+      siteId: selectedSiteId.value || undefined,
+      startDate: startDate.value,
+      endDate: endDate.value
+    });
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : t('analytics.loadFailed');
   } finally {
@@ -94,8 +111,33 @@ async function loadAnalytics() {
   }
 }
 
+async function loadSites() {
+  const result = await getSiteConnections();
+  sites.value = result.sites;
+}
+
+async function loadAnalyticsPage() {
+  isLoading.value = true;
+  loadError.value = '';
+
+  try {
+    await loadSites();
+    await loadAnalytics();
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : t('analytics.loadFailed');
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function getDateOffsetValue(daysAgo: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
 onMounted(() => {
-  void loadAnalytics();
+  void loadAnalyticsPage();
 });
 </script>
 
@@ -106,9 +148,20 @@ onMounted(() => {
         <h2>{{ t('analytics.title') }}</h2>
         <p>{{ t('analytics.body') }}</p>
       </div>
-      <a-button type="primary" :loading="isLoading" @click="loadAnalytics">
-        {{ t('sites.refresh') }}
-      </a-button>
+      <div class="analytics-filter-row">
+        <a-select
+          v-model:value="selectedSiteId"
+          class="analytics-site-select"
+          :options="siteOptions"
+          :disabled="isLoading"
+          @change="loadAnalytics"
+        />
+        <input v-model="startDate" class="date-input" type="date" :aria-label="t('analytics.startDate')">
+        <input v-model="endDate" class="date-input" type="date" :aria-label="t('analytics.endDate')">
+        <a-button type="primary" :loading="isLoading" @click="loadAnalytics">
+          {{ t('sites.refresh') }}
+        </a-button>
+      </div>
     </div>
 
     <a-alert

@@ -2,6 +2,10 @@ export interface AnalyticsOverview {
   configured: boolean;
   source: 'google-analytics' | 'demo';
   propertyId?: string;
+  siteId?: string;
+  siteHost?: string;
+  startDate: string;
+  endDate: string;
   totals: {
     activeUsers: number;
     sessions: number;
@@ -23,6 +27,12 @@ export interface AnalyticsOverview {
     pageViews: number;
     activeUsers: number;
   }>;
+}
+
+export interface AnalyticsOverviewParams {
+  siteId?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface KeywordSuggestion {
@@ -76,8 +86,23 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data;
 }
 
-export async function getAnalyticsOverview() {
-  return requestApi<AnalyticsOverview>('/api/v1/analytics/overview');
+export async function getAnalyticsOverview(params: AnalyticsOverviewParams = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.siteId) {
+    searchParams.set('siteId', params.siteId);
+  }
+
+  if (params.startDate) {
+    searchParams.set('startDate', params.startDate);
+  }
+
+  if (params.endDate) {
+    searchParams.set('endDate', params.endDate);
+  }
+
+  const queryString = searchParams.toString();
+  return requestApi<AnalyticsOverview>(`/api/v1/analytics/overview${queryString ? `?${queryString}` : ''}`);
 }
 
 export async function createKeywordSuggestions(payload: {

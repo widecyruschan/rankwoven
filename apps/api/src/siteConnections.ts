@@ -37,6 +37,7 @@ const syncedArticleSchema = z.object({
   status: z.string().trim().max(40),
   url: z.url().or(z.literal('')),
   excerpt: z.string().max(2000).optional(),
+  metaDescription: z.string().max(500).optional(),
   contentHtml: z.string().max(500_000).optional(),
   author: z.string().trim().max(160).optional(),
   categories: z.array(z.string().trim().max(160)).default([]),
@@ -79,6 +80,22 @@ const syncBatchPayloadSchema = syncPayloadSchema.extend({
   isFinalBatch: z.boolean().default(false)
 });
 
+const paginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20)
+});
+
+const articleListQuerySchema = paginationQuerySchema.extend({
+  search: z.string().trim().min(1).max(160).optional(),
+  status: z.string().trim().min(1).max(40).optional(),
+  issue: z.enum(['missing_meta', 'missing_featured_image']).optional()
+});
+
+const mediaListQuerySchema = paginationQuerySchema.extend({
+  search: z.string().trim().min(1).max(160).optional(),
+  issue: z.enum(['missing_alt', 'missing_file_name']).optional()
+});
+
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
@@ -93,6 +110,34 @@ export type SyncBatchPayload = z.infer<typeof syncBatchPayloadSchema>;
 export type SiteConnectionStatus = 'connected' | 'revoked';
 export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed';
 export type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media' | 'suggestion_apply';
+export type ArticleIssueFilter = z.infer<typeof articleListQuerySchema>['issue'];
+export type MediaIssueFilter = z.infer<typeof mediaListQuerySchema>['issue'];
+
+export interface PaginationOptions {
+  page: number;
+  pageSize: number;
+}
+
+export interface ArticleListOptions extends PaginationOptions {
+  search?: string;
+  status?: string;
+  issue?: ArticleIssueFilter;
+}
+
+export interface MediaListOptions extends PaginationOptions {
+  search?: string;
+  issue?: MediaIssueFilter;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
 export interface SiteConnection {
   id: string;
@@ -172,8 +217,8 @@ export interface SiteConnectionRepository {
     syncTaskId: string,
     payload: SyncBatchPayload
   ): Promise<SaveSyncBatchResult | undefined>;
-  listArticles(siteId: string): Promise<SyncedArticle[]>;
-  listMedia(siteId: string): Promise<SyncedMedia[]>;
+  listArticles(siteId: string, pagination?: ArticleListOptions): Promise<PaginatedResult<SyncedArticle>>;
+  listMedia(siteId: string, pagination?: MediaListOptions): Promise<PaginatedResult<SyncedMedia>>;
   getWordPressCredentials(siteId: string): Promise<WordPressCredentials | undefined>;
   close?(): Promise<void>;
 }
@@ -322,6 +367,7 @@ CREATE TABLE IF NOT EXISTS synced_articles (
   status varchar(40) NOT NULL,
   url text NOT NULL DEFAULT '',
   excerpt text,
+  meta_description varchar(500),
   content_html text,
   author varchar(160),
   categories jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -336,6 +382,9 @@ CREATE TABLE IF NOT EXISTS synced_articles (
 
 CREATE INDEX IF NOT EXISTS idx_synced_articles_site_updated
   ON synced_articles(site_id, cms_updated_at DESC);
+
+ALTER TABLE synced_articles
+  ADD COLUMN IF NOT EXISTS meta_description varchar(500);
 
 CREATE TABLE IF NOT EXISTS synced_media (
   id bigserial PRIMARY KEY,
@@ -488,6 +537,7 @@ function mapArticleRow(row: QueryResultRow): SyncedArticle {
     status: row.status,
     url: row.url,
     excerpt: row.excerpt ?? undefined,
+    metaDescription: row.meta_description ?? undefined,
     contentHtml: row.content_html ?? undefined,
     author: row.author ?? undefined,
     categories: Array.isArray(row.categories) ? row.categories : [],
@@ -529,6 +579,97 @@ function mapSyncTaskRow(row: QueryResultRow): SyncTask {
     createdAt: toIsoString(row.created_at) ?? '',
     completedAt: toIsoString(row.completed_at)
   };
+}
+
+function getPagination(options?: PaginationOptions): PaginationOptions {
+  return {
+    page: options?.page ?? 1,
+    pageSize: Math.min(options?.pageSize ?? 20, 100)
+  };
+}
+
+function paginateItems<T>(items: T[], options?: PaginationOptions): PaginatedResult<T> {
+  const pagination = getPagination(options);
+  const offset = (pagination.page - 1) * pagination.pageSize;
+
+  return {
+    items: items.slice(offset, offset + pagination.pageSize),
+    pagination: {
+      ...pagination,
+      total: items.length,
+      totalPages: Math.ceil(items.length / pagination.pageSize)
+    }
+  };
+}
+
+function isBlank(value: string | undefined) {
+  return !value || value.trim().length === 0;
+}
+
+function matchesSearch(fields: Array<string | undefined>, search?: string) {
+  if (!search) {
+    return true;
+  }
+
+  const normalizedSearch = search.toLowerCase();
+  return fields.some((field) => field?.toLowerCase().includes(normalizedSearch));
+}
+
+function filterArticles(articles: SyncedArticle[], options?: ArticleListOptions) {
+  return articles.filter((article) => {
+    if (options?.status && article.status !== options.status) {
+      return false;
+    }
+
+    if (
+      !matchesSearch(
+        [
+          article.title,
+          article.slug,
+          article.url,
+          article.excerpt,
+          article.metaDescription,
+          article.author
+        ],
+        options?.search
+      )
+    ) {
+      return false;
+    }
+
+    if (options?.issue === 'missing_meta') {
+      return isBlank(article.metaDescription);
+    }
+
+    if (options?.issue === 'missing_featured_image') {
+      return isBlank(article.featuredImageId);
+    }
+
+    return true;
+  });
+}
+
+function filterMedia(mediaItems: SyncedMedia[], options?: MediaListOptions) {
+  return mediaItems.filter((media) => {
+    if (
+      !matchesSearch(
+        [media.title, media.url, media.fileName, media.altText, media.mimeType],
+        options?.search
+      )
+    ) {
+      return false;
+    }
+
+    if (options?.issue === 'missing_alt') {
+      return isBlank(media.altText);
+    }
+
+    if (options?.issue === 'missing_file_name') {
+      return isBlank(media.fileName);
+    }
+
+    return true;
+  });
 }
 
 function createSiteConnection(id: string, input: CreateConnectionInput, apiToken: string): InMemorySiteConnection {
@@ -794,11 +935,26 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         mediaReceived: payload.media.length
       };
     },
-    async listArticles(siteId) {
-      return Array.from(articlesBySite.get(siteId)?.values() ?? []);
+    async listArticles(siteId, options) {
+      const articles = filterArticles(
+        Array.from(articlesBySite.get(siteId)?.values() ?? []),
+        options
+      ).sort((left, right) => {
+        const updatedComparison = right.updatedAt.localeCompare(left.updatedAt);
+        return updatedComparison === 0 ? left.cmsId.localeCompare(right.cmsId) : updatedComparison;
+      });
+
+      return paginateItems(articles, options);
     },
-    async listMedia(siteId) {
-      return Array.from(mediaBySite.get(siteId)?.values() ?? []);
+    async listMedia(siteId, options) {
+      const media = filterMedia(Array.from(mediaBySite.get(siteId)?.values() ?? []), options).sort(
+        (left, right) => {
+          const updatedComparison = right.updatedAt.localeCompare(left.updatedAt);
+          return updatedComparison === 0 ? left.cmsId.localeCompare(right.cmsId) : updatedComparison;
+        }
+      );
+
+      return paginateItems(media, options);
     },
     async getWordPressCredentials(siteId) {
       const site = sites.get(siteId);
@@ -1383,36 +1539,112 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     }
   }
 
-  async listArticles(siteId: string) {
+  async listArticles(siteId: string, options?: ArticleListOptions) {
     await this.ensureSchema();
 
+    const pagination = getPagination(options);
+    const offset = (pagination.page - 1) * pagination.pageSize;
+    const values: Array<string | number> = [siteId];
+    const conditions = ['site_id = $1'];
+
+    if (options?.search) {
+      values.push(`%${options.search}%`);
+      conditions.push(`(
+        title ILIKE $${values.length}
+        OR slug ILIKE $${values.length}
+        OR url ILIKE $${values.length}
+        OR excerpt ILIKE $${values.length}
+        OR meta_description ILIKE $${values.length}
+        OR author ILIKE $${values.length}
+      )`);
+    }
+
+    if (options?.status) {
+      values.push(options.status);
+      conditions.push(`status = $${values.length}`);
+    }
+
+    if (options?.issue === 'missing_meta') {
+      conditions.push("(meta_description IS NULL OR btrim(meta_description) = '')");
+    }
+
+    if (options?.issue === 'missing_featured_image') {
+      conditions.push("(featured_image_id IS NULL OR btrim(featured_image_id) = '')");
+    }
+
+    values.push(pagination.pageSize, offset);
     const result = await this.pool.query(
       `
-        SELECT *
+        SELECT *, COUNT(*) OVER()::int AS total_count
         FROM synced_articles
-        WHERE site_id = $1
+        WHERE ${conditions.join('\n          AND ')}
         ORDER BY cms_updated_at DESC, cms_id ASC
+        LIMIT $${values.length - 1} OFFSET $${values.length}
       `,
-      [siteId]
+      values
     );
 
-    return result.rows.map(mapArticleRow);
+    const total = Number(result.rows[0]?.total_count ?? 0);
+
+    return {
+      items: result.rows.map(mapArticleRow),
+      pagination: {
+        ...pagination,
+        total,
+        totalPages: Math.ceil(total / pagination.pageSize)
+      }
+    };
   }
 
-  async listMedia(siteId: string) {
+  async listMedia(siteId: string, options?: MediaListOptions) {
     await this.ensureSchema();
 
+    const pagination = getPagination(options);
+    const offset = (pagination.page - 1) * pagination.pageSize;
+    const values: Array<string | number> = [siteId];
+    const conditions = ['site_id = $1'];
+
+    if (options?.search) {
+      values.push(`%${options.search}%`);
+      conditions.push(`(
+        title ILIKE $${values.length}
+        OR url ILIKE $${values.length}
+        OR file_name ILIKE $${values.length}
+        OR alt_text ILIKE $${values.length}
+        OR mime_type ILIKE $${values.length}
+      )`);
+    }
+
+    if (options?.issue === 'missing_alt') {
+      conditions.push("(alt_text IS NULL OR btrim(alt_text) = '')");
+    }
+
+    if (options?.issue === 'missing_file_name') {
+      conditions.push("(file_name IS NULL OR btrim(file_name) = '')");
+    }
+
+    values.push(pagination.pageSize, offset);
     const result = await this.pool.query(
       `
-        SELECT *
+        SELECT *, COUNT(*) OVER()::int AS total_count
         FROM synced_media
-        WHERE site_id = $1
+        WHERE ${conditions.join('\n          AND ')}
         ORDER BY cms_updated_at DESC, cms_id ASC
+        LIMIT $${values.length - 1} OFFSET $${values.length}
       `,
-      [siteId]
+      values
     );
 
-    return result.rows.map(mapMediaRow);
+    const total = Number(result.rows[0]?.total_count ?? 0);
+
+    return {
+      items: result.rows.map(mapMediaRow),
+      pagination: {
+        ...pagination,
+        total,
+        totalPages: Math.ceil(total / pagination.pageSize)
+      }
+    };
   }
 
   async getWordPressCredentials(siteId: string) {
@@ -1468,6 +1700,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           status,
           url,
           excerpt,
+          meta_description,
           content_html,
           author,
           categories,
@@ -1477,7 +1710,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           cms_updated_at,
           synced_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (site_id, cms_id)
         DO UPDATE SET
           type = EXCLUDED.type,
@@ -1486,6 +1719,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           status = EXCLUDED.status,
           url = EXCLUDED.url,
           excerpt = EXCLUDED.excerpt,
+          meta_description = EXCLUDED.meta_description,
           content_html = EXCLUDED.content_html,
           author = EXCLUDED.author,
           categories = EXCLUDED.categories,
@@ -1504,6 +1738,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         article.status,
         article.url,
         article.excerpt ?? null,
+        article.metaDescription ?? null,
         article.contentHtml ?? null,
         article.author ?? null,
         JSON.stringify(article.categories),
@@ -1593,6 +1828,48 @@ async function ensureSiteToken(
       message: '站點 Token 無效',
       error: {
         code: 'SITE_TOKEN_INVALID'
+      }
+    });
+    return false;
+  }
+
+  return true;
+}
+
+async function ensureSiteReadAccess(
+  repository: SiteConnectionRepository,
+  authService: AuthService,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  site?: SiteConnection
+) {
+  if (!site) {
+    reply.status(404).send({
+      success: false,
+      message: '找不到站點連接',
+      error: {
+        code: 'SITE_NOT_FOUND'
+      }
+    });
+    return false;
+  }
+
+  const token = getBearerToken(request);
+  if (await repository.verifyToken(site.id, token)) {
+    return true;
+  }
+
+  const user = await requireAuth(authService, request, reply);
+  if (!user) {
+    return false;
+  }
+
+  if (site.workspaceId !== user.workspaceId) {
+    reply.status(404).send({
+      success: false,
+      message: '找不到站點連接',
+      error: {
+        code: 'SITE_NOT_FOUND'
       }
     });
     return false;
@@ -2033,19 +2310,67 @@ export function registerSiteConnectionRoutes(
     Params: {
       siteId: string;
     };
+    Querystring: {
+      page?: string;
+      pageSize?: string;
+      search?: string;
+      status?: string;
+      issue?: ArticleIssueFilter;
+    };
   }>('/api/v1/site-connections/:siteId/articles', async (request, reply) => {
     const site = await repository.find(request.params.siteId);
 
-    if (!(await ensureSiteToken(repository, request, reply, site))) {
+    if (!(await ensureSiteReadAccess(repository, authService, request, reply, site))) {
       return reply;
     }
+
+    const parsedQuery = articleListQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return validationError(reply, parsedQuery.error);
+    }
+    const articleResult = await repository.listArticles(request.params.siteId, parsedQuery.data);
 
     return {
       success: true,
       message: '操作成功',
       data: {
         site,
-        articles: await repository.listArticles(request.params.siteId)
+        articles: articleResult.items,
+        pagination: articleResult.pagination
+      }
+    };
+  });
+
+  app.get<{
+    Params: {
+      siteId: string;
+    };
+    Querystring: {
+      page?: string;
+      pageSize?: string;
+      search?: string;
+      issue?: MediaIssueFilter;
+    };
+  }>('/api/v1/site-connections/:siteId/media', async (request, reply) => {
+    const site = await repository.find(request.params.siteId);
+
+    if (!(await ensureSiteReadAccess(repository, authService, request, reply, site))) {
+      return reply;
+    }
+
+    const parsedQuery = mediaListQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return validationError(reply, parsedQuery.error);
+    }
+    const mediaResult = await repository.listMedia(request.params.siteId, parsedQuery.data);
+
+    return {
+      success: true,
+      message: '操作成功',
+      data: {
+        site,
+        media: mediaResult.items,
+        pagination: mediaResult.pagination
       }
     };
   });

@@ -94,6 +94,58 @@ export interface SeoAuditIssue {
   createdAt: string;
 }
 
+export interface SyncedArticle {
+  cmsId: string;
+  type: 'post' | 'page';
+  title: string;
+  slug: string;
+  status: string;
+  url: string;
+  excerpt?: string;
+  metaDescription?: string;
+  contentHtml?: string;
+  author?: string;
+  categories: string[];
+  tags: string[];
+  featuredImageId?: string;
+  publishedAt?: string;
+  updatedAt: string;
+}
+
+export interface SyncedMedia {
+  cmsId: string;
+  title: string;
+  url: string;
+  mimeType?: string;
+  fileName?: string;
+  altText?: string;
+  attachedToCmsId?: string;
+  updatedAt: string;
+}
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginationParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ArticleListParams extends PaginationParams {
+  search?: string;
+  status?: string;
+  issue?: 'missing_meta' | 'missing_featured_image';
+}
+
+export interface MediaListParams extends PaginationParams {
+  search?: string;
+  issue?: 'missing_alt' | 'missing_file_name';
+}
+
 export interface ManualRefreshTaskPayload {
   type: 'article' | 'media';
   cmsId: string;
@@ -164,6 +216,49 @@ export async function createManualRefreshTask(siteId: string, payload: ManualRef
     method: 'POST',
     body: JSON.stringify(payload)
   });
+}
+
+function createPaginationQuery(params: ArticleListParams | MediaListParams = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.page) {
+    searchParams.set('page', String(params.page));
+  }
+
+  if (params.pageSize) {
+    searchParams.set('pageSize', String(params.pageSize));
+  }
+
+  if (params.search?.trim()) {
+    searchParams.set('search', params.search.trim());
+  }
+
+  if ('status' in params && params.status?.trim()) {
+    searchParams.set('status', params.status.trim());
+  }
+
+  if (params.issue) {
+    searchParams.set('issue', params.issue);
+  }
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
+export async function getSyncedArticles(siteId: string, params?: ArticleListParams) {
+  return requestApi<{
+    site: SiteConnection;
+    articles: SyncedArticle[];
+    pagination: PaginationMeta;
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/articles${createPaginationQuery(params)}`);
+}
+
+export async function getSyncedMedia(siteId: string, params?: MediaListParams) {
+  return requestApi<{
+    site: SiteConnection;
+    media: SyncedMedia[];
+    pagination: PaginationMeta;
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/media${createPaginationQuery(params)}`);
 }
 
 export async function getOptimizationSuggestions(siteId: string) {

@@ -1167,6 +1167,7 @@ final class RankWoven_SEO_Plugin
         $excerpt = $post->post_excerpt !== ''
             ? $post->post_excerpt
             : wp_trim_words(wp_strip_all_tags($post->post_content), 40, '');
+        $meta_description = $this->get_post_meta_description($post, $excerpt);
 
         return [
             'cmsId' => (string) $post->ID,
@@ -1176,6 +1177,7 @@ final class RankWoven_SEO_Plugin
             'status' => get_post_status($post),
             'url' => get_permalink($post) ?: '',
             'excerpt' => $excerpt,
+            'metaDescription' => $meta_description,
             'contentHtml' => $post->post_content,
             'author' => get_the_author_meta('display_name', (int) $post->post_author),
             'categories' => is_wp_error($categories) ? [] : $categories,
@@ -1184,6 +1186,26 @@ final class RankWoven_SEO_Plugin
             'publishedAt' => $this->get_post_date_value($post, false),
             'updatedAt' => $this->get_post_date_value($post, true)
         ];
+    }
+
+    private function get_post_meta_description(WP_Post $post, string $excerpt): string
+    {
+        $meta_keys = [
+            '_yoast_wpseo_metadesc',
+            'rank_math_description',
+            '_aioseo_description',
+            '_aioseop_description',
+            '_rankwoven_meta_description'
+        ];
+
+        foreach ($meta_keys as $meta_key) {
+            $value = trim((string) get_post_meta($post->ID, $meta_key, true));
+            if ($value !== '') {
+                return wp_strip_all_tags($value);
+            }
+        }
+
+        return wp_strip_all_tags($excerpt);
     }
 
     private function map_attachment_to_synced_media(WP_Post $attachment): array

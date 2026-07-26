@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
   getSyncTasks,
@@ -13,18 +14,67 @@ const { t, locale } = useI18n();
 const tasks = ref<SyncTask[]>([]);
 const isLoading = ref(false);
 const loadError = ref('');
+const activeTab = ref('all');
+const selectedTask = ref<SyncTask | null>(null);
 
 const taskRows = computed(() =>
-  tasks.value.map((task) => ({
+  filteredTasks.value.map((task) => ({
     id: task.id,
+    raw: task,
     task: getTaskName(task),
     site: task.siteName ?? task.siteId,
+    statusValue: task.status,
     status: getStatusLabel(task.status),
-    progress: getProgress(task),
+    progress: getProgressPercent(task),
     eta: getTaskTimeLabel(task),
     detail: getTaskDetail(task)
   }))
 );
+
+const filteredTasks = computed(() =>
+  tasks.value.filter((task) => activeTab.value === 'all' || task.status === activeTab.value)
+);
+
+const columns = computed<TableColumnsType<(typeof taskRows.value)[number]>>(() => [
+  {
+    title: t('tasks.task'),
+    dataIndex: 'task',
+    key: 'task'
+  },
+  {
+    title: t('tasks.site'),
+    dataIndex: 'site',
+    key: 'site'
+  },
+  {
+    title: t('tasks.status'),
+    dataIndex: 'status',
+    key: 'status',
+    width: 130
+  },
+  {
+    title: t('tasks.progress'),
+    dataIndex: 'progress',
+    key: 'progress',
+    width: 180
+  },
+  {
+    title: t('tasks.eta'),
+    dataIndex: 'eta',
+    key: 'eta',
+    width: 180
+  },
+  {
+    title: t('tasks.detail'),
+    dataIndex: 'detail',
+    key: 'detail'
+  },
+  {
+    title: t('articles.action'),
+    key: 'action',
+    width: 110
+  }
+]);
 
 function getTaskName(task: SyncTask) {
   const scopeLabels: Record<SyncTaskScope, string> = {
@@ -49,16 +99,39 @@ function getStatusLabel(status: SyncTaskStatus) {
   return statusLabels[status];
 }
 
-function getProgress(task: SyncTask) {
+function getProgressPercent(task: SyncTask) {
   if (task.status === 'completed' || task.status === 'failed') {
-    return '100%';
+    return 100;
   }
 
   if (task.status === 'running') {
-    return `${Math.min(90, 35 + task.batchesReceived * 15)}%`;
+    return Math.min(90, 35 + task.batchesReceived * 15);
   }
 
-  return '15%';
+  return 15;
+}
+
+function getProgressStatus(status: SyncTaskStatus) {
+  if (status === 'failed') {
+    return 'exception';
+  }
+
+  if (status === 'completed') {
+    return 'success';
+  }
+
+  return 'active';
+}
+
+function getStatusColor(status: SyncTaskStatus) {
+  const statusColors: Record<SyncTaskStatus, string> = {
+    queued: 'default',
+    running: 'processing',
+    completed: 'success',
+    failed: 'error'
+  };
+
+  return statusColors[status];
 }
 
 function getTaskTimeLabel(task: SyncTask) {
@@ -128,51 +201,77 @@ onMounted(() => {
         <h2>{{ t('tasks.title') }}</h2>
         <p>{{ t('tasks.body') }}</p>
       </div>
-      <button class="primary-button" type="button" :disabled="isLoading" @click="loadTasks">
-        {{ isLoading ? t('tasks.loading') : t('sites.refresh') }}
-      </button>
+      <a-button type="primary" :loading="isLoading" @click="loadTasks">
+        {{ t('sites.refresh') }}
+      </a-button>
     </div>
 
     <section class="content-panel">
-      <div v-if="loadError" class="form-message form-message-error">{{ loadError }}</div>
-      <div class="data-table" role="table">
-        <div class="data-row data-head" role="row">
-          <span>{{ t('tasks.task') }}</span>
-          <span>{{ t('tasks.site') }}</span>
-          <span>{{ t('tasks.status') }}</span>
-          <span>{{ t('tasks.progress') }}</span>
-          <span>{{ t('tasks.eta') }}</span>
-          <span>{{ t('tasks.detail') }}</span>
-        </div>
-        <div v-if="isLoading" class="data-row" role="row">
-          <strong>{{ t('tasks.loading') }}</strong>
-          <span>--</span>
-          <span class="status-pill">{{ t('tasks.statusRunning') }}</span>
-          <span>--</span>
-          <span>--</span>
-          <span>--</span>
-        </div>
-        <div v-else-if="taskRows.length === 0" class="data-row" role="row">
-          <strong>{{ t('tasks.empty') }}</strong>
-          <span>--</span>
-          <span class="status-pill">{{ t('tasks.statusQueued') }}</span>
-          <span>--</span>
-          <span>--</span>
-          <span>--</span>
-        </div>
-        <div v-for="task in taskRows" v-else :key="task.id" class="data-row" role="row">
-          <strong>{{ task.task }}</strong>
-          <span>{{ task.site }}</span>
-          <span class="status-pill">{{ task.status }}</span>
-          <span>
-            <span class="progress-track">
-              <span class="progress-fill" :style="{ width: task.progress }" />
-            </span>
-          </span>
-          <span>{{ task.eta }}</span>
-          <span>{{ task.detail }}</span>
-        </div>
-      </div>
+      <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
+
+      <a-tabs v-model:active-key="activeTab">
+        <a-tab-pane key="all" :tab="t('tasks.allTab')" />
+        <a-tab-pane key="queued" :tab="t('tasks.statusQueued')" />
+        <a-tab-pane key="running" :tab="t('tasks.statusRunning')" />
+        <a-tab-pane key="failed" :tab="t('tasks.statusFailed')" />
+        <a-tab-pane key="completed" :tab="t('tasks.statusDone')" />
+      </a-tabs>
+
+      <a-table
+        row-key="id"
+        :columns="columns"
+        :data-source="taskRows"
+        :loading="isLoading"
+        :pagination="false"
+      >
+        <template #emptyText>{{ t('tasks.empty') }}</template>
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'task'">
+            <strong>{{ record.task }}</strong>
+            <div class="table-subtext">{{ record.raw.id }}</div>
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="getStatusColor(record.statusValue)">{{ record.status }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'progress'">
+            <a-progress
+              :percent="record.progress"
+              :status="getProgressStatus(record.statusValue)"
+              size="small"
+            />
+          </template>
+          <template v-else-if="column.key === 'detail'">
+            <span>{{ record.detail }}</span>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-button type="link" @click="selectedTask = record.raw">
+              {{ t('common.viewDetails') }}
+            </a-button>
+          </template>
+        </template>
+      </a-table>
     </section>
+
+    <a-modal
+      :open="Boolean(selectedTask)"
+      :title="selectedTask ? getTaskName(selectedTask) : t('tasks.detailTitle')"
+      :footer="null"
+      @cancel="selectedTask = null"
+    >
+      <dl v-if="selectedTask" class="detail-list">
+        <dt>{{ t('tasks.site') }}</dt>
+        <dd>{{ selectedTask.siteName || selectedTask.siteId }}</dd>
+        <dt>{{ t('articleSync.taskScope') }}</dt>
+        <dd>{{ selectedTask.scope }}</dd>
+        <dt>{{ t('articleSync.taskTarget') }}</dt>
+        <dd>{{ selectedTask.targetCmsId || '-' }}</dd>
+        <dt>{{ t('tasks.status') }}</dt>
+        <dd>{{ getStatusLabel(selectedTask.status) }}</dd>
+        <dt>{{ t('tasks.detail') }}</dt>
+        <dd>{{ getTaskDetail(selectedTask) }}</dd>
+        <dt>{{ t('articleSync.createdAt') }}</dt>
+        <dd>{{ formatDateTime(selectedTask.createdAt) }}</dd>
+      </dl>
+    </a-modal>
   </section>
 </template>

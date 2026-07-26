@@ -236,15 +236,17 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /api/v1/site-connections/:siteId/sync-tasks`：查看單個站點的同步任務列表與批次進度。
 - `POST /api/v1/site-connections/:siteId/manual-refresh`：為單篇文章或單個媒體建立手動刷新任務，請求體為 `{ "type": "article" | "media", "cmsId": "123" }`。
 - `POST /api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches`：接收插件分頁推送的同步批次，最後一批完成後更新站點最近同步統計。
-- `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
+- `GET /api/v1/site-connections/:siteId/articles?page=&pageSize=`：帶 Bearer Token 或登入用戶權限查看已同步文章分頁列表。
+- `GET /api/v1/site-connections/:siteId/media?page=&pageSize=`：帶 Bearer Token 或登入用戶權限查看已同步媒體分頁列表。
 - `POST /api/v1/site-connections/:siteId/audits`：以已同步文章與媒體執行第一批 SEO 規則審計，並產生可審核建議。
 - `GET /api/v1/site-connections/:siteId/audits`：查看站點 SEO 審計記錄和最近一次審計問題。
 - `GET /api/v1/site-connections/:siteId/suggestions`：查看文章與媒體優化建議。
 - `POST /api/v1/site-connections/:siteId/suggestions`：手動建立優化建議記錄。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/approve`：批准待處理建議。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/apply`：為已批准建議建立 WordPress 寫回任務。
+- `GET /api/v1/analytics/overview?siteId=&startDate=&endDate=`：讀取 GA4 或示範分析數據，支援站點 host 篩選與日期範圍。
 
-站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、媒體同步資料、同步批次記錄、SEO 審計、審計問題和優化建議已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。手動刷新與已批准建議寫回任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行。
+站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、文章 Meta Description、媒體同步資料、同步批次記錄、SEO 審計、審計問題和優化建議已落到 PostgreSQL。文章與媒體列表已支援 `page` / `pageSize` 分頁查詢，避免資料量增長後一次讀取過多。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。手動刷新與已批准建議寫回任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行。
 
 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
@@ -685,3 +687,63 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：新增 `apps/api/src/analytics.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/components/AnalyticsChart.vue`、`apps/web/src/views/AnalyticsView.vue` 和 `apps/web/src/views/KeywordSuggestionsView.vue`；修改 `apps/api/src/server.ts`、`apps/api/src/config.ts`、`apps/api/tests/health.test.ts`、`apps/web/src/App.vue`、`apps/web/src/components/LanguageSwitcher.vue`、`apps/web/src/i18n.ts`、`apps/web/src/main.ts`、`apps/web/src/router/index.ts`、`apps/web/src/styles.css`、`apps/web/vite.config.ts`、`docker-compose.yml`、`.env.example`、`package.json`、`package-lock.json`、`README.md`、`docs/deployment.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。Vite 仍提示 `vendor-antdv` 和 `vendor-echarts` 單獨依賴 chunk 超過 500KB，屬於第三方 UI/圖表庫體積提醒，已通過路由懶載入和 manual chunks 降低首屏主包大小。
 - 下一步行動清單：配置正式 GA4 Property ID 和服務帳號憑據；把關鍵詞建議接入 AI Provider 與真實搜尋量/難度來源；逐步將剩餘舊表格頁替換為 Ant Design Vue Table/Form；為分析頁增加站點篩選和時間範圍切換；補充 Meta Description 真實同步欄位。
+
+### 2026-07-26：RankWoven SSL 狀態排查與 HTTPS 安全頭
+
+- 會話的主要目的：使用 Hostinger MCP 和 VPS 檢查 `https://www.rankwoven.com/` 仍顯示不安全的原因。
+- 完成的主要任務：確認 Hostinger DNS 中 `@`、`www` 和 `api` 均指向 VPS `72.62.253.72`；檢查 `rankwoven.com`、`www.rankwoven.com` 與 `api.rankwoven.com` 的公開 HTTPS、Nginx 和 Certbot 狀態；為主站和 API 站點的 HTTPS 回應加入 `Strict-Transport-Security` 與 `X-Content-Type-Options` 安全頭。
+- 關鍵決策和解決方案：公開證書已有效，`rankwoven.com` 證書 SAN 覆蓋 `rankwoven.com` 和 `www.rankwoven.com`，因此不重新簽發無必要的新證書；目前主要風險是生產主站仍由 Vite dev server 對外服務，下一步應改為正式靜態構建部署。
+- 使用的技術棧：Hostinger MCP、DNS、Nginx、Certbot、Let’s Encrypt、curl、OpenSSL、Docker Compose。
+- 新增或修改文件：修改 `docs/domain-setup.md` 和 `README.md`；VPS 備份 Nginx 配置至 `/etc/nginx/backups/rankwoven-ssl-headers-20260726144849.tgz`。
+- 驗證結果：`https://rankwoven.com/` 和 `https://www.rankwoven.com/` 均返回 `200`，`ssl_verify_result=0`；`rankwoven.com` 證書有效期為 2026-07-25 至 2026-10-23，SAN 包含 `rankwoven.com` 和 `www.rankwoven.com`；`certbot renew --dry-run --no-random-sleep-on-renew --cert-name rankwoven.com` 通過；`certbot renew --dry-run --no-random-sleep-on-renew --cert-name api.rankwoven.com` 通過；三個 HTTPS 入口均返回 `Strict-Transport-Security: max-age=31536000`。
+- 下一步行動清單：將生產 Web 容器改為 `npm run build -w @aieo/web` 後由 Nginx 或靜態服務器提供 `dist`；清理 VPS 上不再使用且阻塞整機 `certbot renew --dry-run` 的舊 `cloud.imgkit.io` 證書；讓瀏覽器清除 `rankwoven.com` 的站點資料或以無痕視窗重新打開，確認地址欄安全狀態刷新。
+
+### 2026-07-26：新增 macOS、GitHub 與 Hostinger MCP 代理 Skill
+
+- 會話的主要目的：將使用者提供的代理開發規則整理為適合本機 macOS、GitHub 自動部署與 Hostinger MCP / VPS 部署檢查的倉庫級 Skill。
+- 完成的主要任務：新增根目錄 `AGENTS.md`；明確本機開發檢查、Git/GitHub 提交流程、GitHub Actions 生產部署、Hostinger MCP 使用邊界、部署後驗證與文檔更新規則。
+- 關鍵決策和解決方案：倉庫內原本沒有 `AGENTS.md` 或 `SKILL.md`，因此以根目錄 `AGENTS.md` 承載本專案代理規則；部署仍以 GitHub Actions 和 `scripts/deploy-production.sh` 為首選，Hostinger MCP 主要用於只讀檢查、容器狀態確認和使用者明確授權後的 VPS 專案操作。
+- 使用的技術棧：Markdown、GitHub Actions、Hostinger MCP、Hostinger VPS、Docker Compose、macOS zsh、npm。
+- 新增或修改文件：新增 `AGENTS.md`；修改 `README.md`。
+- 驗證結果：已檢查 `README.md`、`docs/deployment.md`、`docs/domain-setup.md`、`.github/workflows/production-deploy.yml`、`scripts/deploy-production.sh` 和 Git 遠端資訊；本次為文檔與代理規則更新，未執行應用 lint/test/build。
+- 下一步行動清單：確認是否需要將 `AGENTS.md` 同步為可自動發現的 `$CODEX_HOME/skills/rankwoven-deploy/SKILL.md`；下一次正式部署前先推送到 GitHub 並監控 GitHub Actions；使用 Hostinger MCP 查詢 `rankwoven` Compose 專案與容器狀態。
+
+### 2026-07-26：Meta Description 同步與 GA4 分析篩選
+
+- 會話的主要目的：為 SEO 審計補充真實 Meta Description 同步欄位，並讓客戶後台分析頁支持正式 GA4 配置、站點篩選和日期範圍切換。
+- 完成的主要任務：WordPress 插件同步文章時新增 `metaDescription`；API 與 PostgreSQL 保存 `synced_articles.meta_description`；SEO 審計新增文章 Meta Description 長度規則與優化建議；分析 API 支援 `siteId`、`startDate`、`endDate` 查詢參數；客戶後台 `/app/analytics` 新增站點選擇、開始日期、結束日期和刷新操作。
+- 關鍵決策和解決方案：Meta Description 來源按 Yoast、Rank Math、AIOSEO、RankWoven 自有欄位排序讀取，缺失時回退 WordPress 摘要；GA4 使用服務帳號 JWT 直接調用 Google Analytics Data API REST，正式憑據可由檔案路徑、JSON 字串或 Base64 字串注入，避免將密鑰提交到 Git；未配置正式 GA4 憑據時保留示範數據以支援本地開發。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、Vue 3、Ant Design Vue、Vue I18n、ECharts、WordPress PHP Plugin、Google Analytics Data API REST。
+- 新增或修改文件：新增 `db/migrations/0002_synced_article_meta_description.sql`；修改 `.env.example`、`docker-compose.yml`、`apps/api/src/analytics.ts`、`apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/views/AnalyticsView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`db/migrations/0001_initial_schema.sql`、`docs/deployment.md`、`docs/seo-ai-platform-prd.md`、`plugins/wordpress/README.md` 和 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`。
+- 驗證結果：`npm run test -w @aieo/api -- health.test.ts siteConnections.test.ts` 通過；`npm run build -w @aieo/api` 通過；`npm run build -w @aieo/web` 通過；`docker run --rm -v "$PWD/plugins/wordpress/rankwoven-seo:/plugin" wordpress:php8.2 php -l /plugin/rankwoven-seo.php` 通過；`npm run test`、`npm run build`、`npm run security:audit`、`npm run lint` 通過；`npm run db:migrate` 已套用 `0002_synced_article_meta_description.sql`；PostgreSQL 整合測試 `RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過。
+- 下一步行動清單：在生產環境安全填入 `GOOGLE_ANALYTICS_PROPERTY_ID` 和 Google 服務帳號憑據；部署前重新執行 migration 和備份；把關鍵詞建議接入 AI Provider 與真實搜尋量/難度來源；為文章與媒體列表補充分頁查詢；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾。
+
+### 2026-07-27：Ant Design Vue 表格統一與文章媒體分頁查詢
+
+- 會話的主要目的：逐步將剩餘舊表格頁替換為 Ant Design Vue Table、Form、Tabs 和 Modal，並為 PostgreSQL Repository 補充文章與媒體列表分頁查詢。
+- 完成的主要任務：`/app/articles` 和 `/app/media` 接入真實文章/媒體列表 API、站點篩選、服務端分頁、Tabs 和詳情 Modal；`/app/article-sync`、`/app/suggestions`、`/app/article-suggestions` 改用 Ant Design Vue Select、Form、Table 和 Progress；`/admin/customers`、`/admin/usage` 改用 Ant Design Vue Table、Tabs 和 Modal；API 新增 `/api/v1/site-connections/:siteId/media?page=&pageSize=`，文章列表端點新增分頁回傳；內存與 PostgreSQL Repository 均支援分頁。
+- 關鍵決策和解決方案：分頁預設 `page=1`、`pageSize=20`，最大 `pageSize=100`；文章/媒體讀取端點同時支持插件 Site Token 和客戶後台 JWT 工作區權限；SEO 審計改為用 Repository 分頁批次讀取內容，避免審計時一次無上限拉取全站資料。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、Vue 3、Ant Design Vue、Vue I18n。
+- 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/main.ts`、`apps/web/src/views/ArticlesView.vue`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/ArticleSuggestionsView.vue`、`apps/web/src/views/AdminCustomersView.vue`、`apps/web/src/views/AdminUsageView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；PostgreSQL 整合測試 `RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過。Vite 仍提示 AntD/ECharts 依賴 chunk 超過 500KB，屬於既有第三方套件體積提醒。
+- 下一步行動清單：將 `/app/sites`、`/app/tasks`、`/app/apply` 和 `/admin/operations` 繼續替換為 Ant Design Vue 組件；為文章與媒體列表增加搜尋、狀態篩選和 SEO 問題篩選；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾；將生產 Web 容器改為正式靜態構建部署。
+
+### 2026-07-27：站點與任務頁 AntD 化、文章媒體搜尋篩選
+
+- 會話的主要目的：繼續將 `/app/sites`、`/app/tasks`、`/app/apply` 和 `/admin/operations` 換成 Ant Design Vue 組件，並為文章/媒體列表補充搜尋與篩選。
+- 完成的主要任務：`/app/sites` 改用 Ant Design Vue Tabs、Table、Tag 和詳情 Modal；`/app/tasks` 改用 Tabs、Table、Progress、Tag 和詳情 Modal，保留失敗任務 `errorMessage`；`/app/apply` 改用批次 Tabs、Table、Tag 和確認 Modal；`/admin/operations` 改用運營事件/每日檢查 Tabs、Table 和 Modal；文章列表新增搜尋、狀態篩選、缺 Meta 和缺特色圖篩選；媒體列表新增搜尋、缺 Alt Text 和缺檔名篩選。
+- 關鍵決策和解決方案：搜尋與 SEO 問題篩選由後端分頁接口承接，不在前端一次性載入全量資料；文章 `issue` 支援 `missing_meta` 和 `missing_featured_image`，媒體 `issue` 支援 `missing_alt` 和 `missing_file_name`；PostgreSQL 查詢使用參數化條件並保留 `COUNT(*) OVER()` 分頁總數。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、Vue 3、Ant Design Vue、Vue I18n。
+- 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SitesView.vue`、`apps/web/src/views/TasksView.vue`、`apps/web/src/views/ApplySuggestionsView.vue`、`apps/web/src/views/AdminOperationsView.vue`、`apps/web/src/views/ArticlesView.vue`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
+- 驗證結果：`npm run test -w @aieo/api -- siteConnections.test.ts` 通過；`npm run build -w @aieo/web` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；PostgreSQL 整合測試 `RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過。Vite 仍提示 AntD/ECharts 依賴 chunk 超過 500KB，屬於既有第三方套件體積提醒。
+- 下一步行動清單：為 Worker 任務加入重試次數、退避時間和死信列表；為已批准建議寫回補充快照與回滾接口；將 `/app/apply` 接入真實已批准建議寫回隊列；為客戶後台建議頁補充最近 SEO 審計分數、規則版本與問題數摘要；將生產 Web 容器改為正式靜態構建部署。
+
+### 2026-07-27：RankWoven Agent Skill 整體流程巡檢與原型優化
+
+- 會話的主要目的：使用倉庫內 `AGENTS.md` 的 RankWoven Agent Skill 檢查整體產品流程和 SaaS 原型，完成可落地的小幅 UI/流程優化，並更新 GitHub 與 Docker Desktop。
+- 完成的主要任務：巡檢前台、登入、客戶後台、管理後台、站點、任務、套用、建議、文章和媒體頁；客戶/管理後台頂部新增前台入口、客戶後台與管理後台切換、語言切換和登出；登入頁改用 Ant Design Vue 表單與錯誤提示；登入 redirect 加入安全校驗；移除登入、定價和首頁 CTA 中的原型期文案，改為正式 SaaS 工作流語境。
+- 關鍵決策和解決方案：只做可直接改善產品流程的低風險修改，不重構既有頁面資料流；保留 Docker Desktop 目前以 Vite dev server 提供本地前端的方式，但通過重建容器讓最新前端與 API 變更掛載到 Docker Desktop。
+- 使用的技術棧：Vue 3、TypeScript、Pinia、Vue Router、Vue I18n、Ant Design Vue、Playwright/Chrome 自動化巡檢、Docker Compose、PostgreSQL、Vitest。
+- 新增或修改文件：修改 `apps/web/src/App.vue`、`apps/web/src/views/LoginView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/seo-ai-platform-prd.md` 和 `README.md`；同時本次提交包含前序已驗證的 API、前端、WordPress 插件、migration 和部署文檔更新。
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；`docker run --rm -v "$PWD/plugins/wordpress/rankwoven-seo:/plugin" wordpress:php8.2 php -l /plugin/rankwoven-seo.php` 通過；Chrome 自動化巡檢確認核心本地頁面沒有橫向溢出或可見前端錯誤。
+- 下一步行動清單：為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾接口；將 `/app/apply` 接入真實已批准建議寫回隊列；為建議頁補充最近 SEO 審計分數、規則版本與問題數摘要；將生產 Web 容器改為正式靜態構建部署。

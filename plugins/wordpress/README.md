@@ -166,6 +166,7 @@ Content-Type: application/json
 - `status`
 - `url`
 - `excerpt`
+- `metaDescription`
 - `contentHtml`
 - `author`
 - `categories`
@@ -173,6 +174,8 @@ Content-Type: application/json
 - `featuredImageId`
 - `publishedAt`
 - `updatedAt`
+
+`metaDescription` 會優先讀取 Yoast `_yoast_wpseo_metadesc`、Rank Math `rank_math_description`、AIOSEO `_aioseo_description` / `_aioseop_description`，沒有 SEO 插件欄位時回退 WordPress 摘要。
 
 媒體同步欄位：
 

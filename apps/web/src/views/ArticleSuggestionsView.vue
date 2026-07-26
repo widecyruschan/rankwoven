@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
   applyOptimizationSuggestion,
@@ -23,7 +24,24 @@ const loadError = ref('');
 const actionMessage = ref('');
 const actionError = ref('');
 
+interface ArticleChangeRow {
+  id: string;
+  area: string;
+  current: string;
+  suggestion: string;
+  impact: string;
+  status: string;
+  canApprove: boolean;
+  canApply: boolean;
+}
+
 const selectedSiteOptions = computed(() => sites.value.filter((site) => site.status === 'connected'));
+const selectedSiteSelectOptions = computed(() =>
+  selectedSiteOptions.value.map((site) => ({
+    label: site.name,
+    value: site.id
+  }))
+);
 const groupedTargets = computed(() => {
   const groups = new Map<string, OptimizationSuggestion[]>();
 
@@ -42,7 +60,13 @@ const currentTargetSuggestions = computed(() => {
   const selectedGroup = groupedTargets.value.find((group) => group.key === selectedTargetKey.value);
   return selectedGroup?.items ?? [];
 });
-const articleChanges = computed(() =>
+const targetOptions = computed(() =>
+  groupedTargets.value.map((target) => ({
+    label: target.label,
+    value: target.key
+  }))
+);
+const articleChanges = computed<ArticleChangeRow[]>(() =>
   currentTargetSuggestions.value.map((suggestion) => ({
     id: suggestion.id,
     area: getAreaLabel(suggestion),
@@ -68,6 +92,41 @@ const scoreLabel = computed(() => {
 
   return `SEO ${currentScore}`;
 });
+
+const changeColumns = computed<TableColumnsType<ArticleChangeRow>>(() => [
+  {
+    title: t('articleSuggestions.area'),
+    dataIndex: 'area',
+    key: 'area'
+  },
+  {
+    title: t('articleSuggestions.current'),
+    dataIndex: 'current',
+    key: 'current'
+  },
+  {
+    title: t('articleSuggestions.suggestion'),
+    dataIndex: 'suggestion',
+    key: 'suggestion'
+  },
+  {
+    title: t('articleSuggestions.impact'),
+    dataIndex: 'impact',
+    key: 'impact',
+    width: 110
+  },
+  {
+    title: t('cmsAdapters.status'),
+    dataIndex: 'status',
+    key: 'status',
+    width: 130
+  },
+  {
+    title: t('articles.action'),
+    key: 'action',
+    width: 160
+  }
+]);
 
 function getAreaLabel(suggestion: OptimizationSuggestion) {
   if (suggestion.fieldName === 'title') {
@@ -219,19 +278,22 @@ onMounted(() => {
         <p>{{ t('articleSuggestions.body') }}</p>
       </div>
       <div class="action-row">
-        <select v-model="selectedSiteId" :disabled="isLoading || selectedSiteOptions.length === 0" @change="handleSiteChange">
-          <option v-for="site in selectedSiteOptions" :key="site.id" :value="site.id">
-            {{ site.name }}
-          </option>
-        </select>
-        <select v-model="selectedTargetKey" :disabled="isLoading || groupedTargets.length === 0">
-          <option v-for="target in groupedTargets" :key="target.key" :value="target.key">
-            {{ target.label }}
-          </option>
-        </select>
-        <button class="primary-button" type="button" :disabled="currentTargetSuggestions.every((suggestion) => suggestion.status !== 'approved')" @click="applyApprovedSuggestions">
+        <a-select
+          v-model:value="selectedSiteId"
+          class="toolbar-select"
+          :disabled="isLoading || selectedSiteOptions.length === 0"
+          :options="selectedSiteSelectOptions"
+          @change="handleSiteChange"
+        />
+        <a-select
+          v-model:value="selectedTargetKey"
+          class="toolbar-select"
+          :disabled="isLoading || groupedTargets.length === 0"
+          :options="targetOptions"
+        />
+        <a-button type="primary" :disabled="currentTargetSuggestions.every((suggestion) => suggestion.status !== 'approved')" @click="applyApprovedSuggestions">
           {{ t('articleSuggestions.applyApproved') }}
-        </button>
+        </a-button>
       </div>
     </div>
 
@@ -241,59 +303,48 @@ onMounted(() => {
         <div v-else-if="actionError" class="form-message form-message-error">{{ actionError }}</div>
         <div v-else-if="actionMessage" class="form-message">{{ actionMessage }}</div>
 
-        <div class="data-table" role="table">
-          <div class="data-row data-head" role="row">
-            <span>{{ t('articleSuggestions.area') }}</span>
-            <span>{{ t('articleSuggestions.current') }}</span>
-            <span>{{ t('articleSuggestions.suggestion') }}</span>
-            <span>{{ t('articleSuggestions.impact') }}</span>
-            <span>{{ t('cmsAdapters.status') }}</span>
-            <span>{{ t('articles.action') }}</span>
-          </div>
-          <div v-if="isLoading" class="data-row" role="row">
-            <strong>{{ t('suggestions.loading') }}</strong>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span class="status-pill">{{ t('tasks.statusRunning') }}</span>
-            <span>--</span>
-          </div>
-          <div v-else-if="articleChanges.length === 0" class="data-row" role="row">
-            <strong>{{ t('suggestions.empty') }}</strong>
-            <span>--</span>
-            <span>--</span>
-            <span>--</span>
-            <span class="status-pill">{{ t('suggestions.statusReady') }}</span>
-            <span>--</span>
-          </div>
-          <div v-for="change in articleChanges" v-else :key="change.id" class="data-row" role="row">
-            <strong>{{ change.area }}</strong>
-            <span>{{ change.current }}</span>
-            <span>{{ change.suggestion }}</span>
-            <span>{{ change.impact }}</span>
-            <span class="status-pill">{{ change.status }}</span>
-            <span class="action-row">
-              <button
-                v-if="change.canApprove"
-                class="text-button"
-                type="button"
-                :disabled="actionSuggestionId === change.id"
-                @click="approveSuggestion(change.id)"
-              >
-                {{ t('articleSuggestions.approve') }}
-              </button>
-              <button
-                v-if="change.canApply"
-                class="text-button"
-                type="button"
-                :disabled="actionSuggestionId === change.id"
-                @click="applySuggestion(change.id)"
-              >
-                {{ t('apply.applyOne') }}
-              </button>
-            </span>
-          </div>
-        </div>
+        <a-table
+          row-key="id"
+          :columns="changeColumns"
+          :data-source="articleChanges"
+          :loading="isLoading"
+          :pagination="{ pageSize: 10 }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'area'">
+              <strong>{{ record.area }}</strong>
+            </template>
+            <template v-else-if="column.key === 'current'">
+              <span class="table-subtext">{{ record.current }}</span>
+            </template>
+            <template v-else-if="column.key === 'suggestion'">
+              <span>{{ record.suggestion }}</span>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <a-tag>{{ record.status }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <div class="action-row">
+                <a-button
+                  v-if="record.canApprove"
+                  type="link"
+                  :loading="actionSuggestionId === record.id"
+                  @click="approveSuggestion(record.id)"
+                >
+                  {{ t('articleSuggestions.approve') }}
+                </a-button>
+                <a-button
+                  v-if="record.canApply"
+                  type="link"
+                  :loading="actionSuggestionId === record.id"
+                  @click="applySuggestion(record.id)"
+                >
+                  {{ t('apply.applyOne') }}
+                </a-button>
+              </div>
+            </template>
+          </template>
+        </a-table>
       </section>
 
       <section class="content-panel">

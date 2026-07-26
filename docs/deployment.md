@@ -41,6 +41,22 @@ Workflow：`.github/workflows/production-deploy.yml`
 
 生產 `.env` 需要設定 `VITE_API_BASE_URL=https://api.rankwoven.com`，避免前端容器使用本地開發預設 API 地址。
 
+GA4 分析頁正式讀取 Google Analytics Data API 時，需要在生產 `.env` 或 GitHub Secrets 配置：
+
+```text
+GOOGLE_ANALYTICS_PROPERTY_ID=123456789
+GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/google-service-account.json
+```
+
+如部署平台不方便掛載 JSON 文件，可改用其中一種內聯格式：
+
+```text
+GOOGLE_APPLICATION_CREDENTIALS_JSON={"client_email":"...","private_key":"..."}
+GOOGLE_APPLICATION_CREDENTIALS_BASE64=base64-encoded-service-account-json
+```
+
+只需配置其中一種服務帳號來源。服務帳號需要加入 GA4 Property 的 Viewer 或 Analyst 權限；JSON 憑據不得提交到 Git。
+
 ### 本機手動部署
 
 手動部署使用同一支腳本：

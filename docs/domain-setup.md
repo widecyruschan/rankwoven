@@ -1,6 +1,6 @@
 # RankWoven 域名與 DNS 接入方案
 
-更新日期：2026-07-25
+更新日期：2026-07-26
 
 ## 1. 目標
 
@@ -36,8 +36,9 @@ Hostinger VPS 目標：
 - 臨時 API 入口：`http://72.62.253.72:3011`
 - 正式 Web 入口：`https://rankwoven.com`
 - 正式 API 入口：`https://api.rankwoven.com`
-- SSL 狀態：`rankwoven.com`、`www.rankwoven.com`、`api.rankwoven.com` 已使用 Certbot / Let’s Encrypt 啟用 HTTPS，自動續期由 Certbot 管理。
+- SSL 狀態：`rankwoven.com`、`www.rankwoven.com`、`api.rankwoven.com` 已使用 Certbot / Let’s Encrypt 啟用 HTTPS，自動續期由 Certbot 管理。2026-07-26 公開檢查確認 `rankwoven.com` 證書 SAN 包含 `rankwoven.com` 與 `www.rankwoven.com`，有效期至 2026-10-23。
 - 續期驗證：`certbot renew --dry-run --no-random-sleep-on-renew --cert-name rankwoven.com` 與 `certbot renew --dry-run --no-random-sleep-on-renew --cert-name api.rankwoven.com` 均通過。
+- HTTPS 安全頭：2026-07-26 已在 `rankwoven.com`、`www.rankwoven.com` 與 `api.rankwoven.com` 的 Nginx HTTPS 回應中加入 `Strict-Transport-Security: max-age=31536000` 和 `X-Content-Type-Options: nosniff`。
 
 注意：VPS 的 80/443 端口由 Nginx 接管，Docker Compose 的 Web 服務使用 `8080:5173`，API 使用 `3011:3000`。Nginx 負責將正式域名反向代理到容器服務。
 
@@ -104,4 +105,5 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 - 在 Hostinger hPanel 手動刪除 Cloud/Hosting 上的 `rankwoven.com` addon website，或等待 MCP 刪除工具支援 `confirm` 參數後重試。
 - 整機級 `certbot renew --dry-run` 目前會被 VPS 上舊的 `cloud.imgkit.io` 證書阻塞，原因是該域名 DNS 已返回 NXDOMAIN；如不再使用該域名，應另行清理該舊證書。
+- 生產主站目前仍由 Docker Web 容器內的 Vite dev server 對外提供頁面，HTML 仍包含 `/@vite/client` 和 `/src/main.ts`；下一步應改為正式靜態構建或 Nginx 靜態文件服務，避免正式站暴露開發服務。
 - 後續如拆分 `app.rankwoven.com`，需新增對應 DNS 與 Nginx 反向代理。

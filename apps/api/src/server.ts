@@ -134,7 +134,7 @@ export function createServer(options: CreateServerOptions = {}) {
   }));
 
   registerAuthRoutes(app, authService, authRepository);
-  registerAnalyticsRoutes(app, authService);
+  registerAnalyticsRoutes(app, authService, siteConnectionRepository);
   registerKeywordSuggestionRoutes(app, authService);
 
   registerSiteConnectionRoutes(app, siteConnectionRepository, authService);

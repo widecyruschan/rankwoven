@@ -101,6 +101,7 @@ describePostgres('PostgreSQL site connection repository', () => {
             status: 'publish',
             url: 'http://localhost:8088/postgresql-sync-article/',
             excerpt: 'Stored in PostgreSQL.',
+            metaDescription: 'PostgreSQL stored meta description for SEO auditing.',
             contentHtml: '<p>Stored in PostgreSQL.</p>',
             author: 'Admin',
             categories: ['SEO'],
@@ -154,7 +155,81 @@ describePostgres('PostgreSQL site connection repository', () => {
               cmsId: '101',
               title: 'PostgreSQL Sync Article'
             }
-          ]
+          ],
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            total: 1,
+            totalPages: 1
+          }
+        }
+      });
+
+      const mediaResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${siteId}/media?page=1&pageSize=1`,
+        headers: {
+          authorization: `Bearer ${createBody.data.apiToken}`
+        }
+      });
+
+      expect(mediaResponse.statusCode).toBe(200);
+      expect(mediaResponse.json()).toMatchObject({
+        success: true,
+        data: {
+          media: [
+            {
+              cmsId: '501',
+              title: 'PostgreSQL Sync Image'
+            }
+          ],
+          pagination: {
+            page: 1,
+            pageSize: 1,
+            total: 1,
+            totalPages: 1
+          }
+        }
+      });
+
+      const searchedArticlesResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${siteId}/articles?search=postgresql&status=publish`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(searchedArticlesResponse.statusCode).toBe(200);
+      expect(searchedArticlesResponse.json()).toMatchObject({
+        data: {
+          articles: [
+            {
+              cmsId: '101',
+              title: 'PostgreSQL Sync Article'
+            }
+          ],
+          pagination: {
+            total: 1
+          }
+        }
+      });
+
+      const missingAltResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${siteId}/media?issue=missing_alt`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(missingAltResponse.statusCode).toBe(200);
+      expect(missingAltResponse.json()).toMatchObject({
+        data: {
+          media: [],
+          pagination: {
+            total: 0
+          }
         }
       });
 
@@ -166,6 +241,7 @@ describePostgres('PostgreSQL site connection repository', () => {
             sc.wordpress_admin_username,
             sc.wordpress_application_password_encrypted,
             sc.last_token_used_at,
+            MAX(sa.meta_description) AS meta_description,
             COUNT(DISTINCT sa.id)::int AS article_count,
             COUNT(DISTINCT sm.id)::int AS media_count,
             COUNT(DISTINCT sr.id)::int AS sync_run_count
@@ -184,6 +260,7 @@ describePostgres('PostgreSQL site connection repository', () => {
         wordpress_admin_username: 'postgres-admin',
         article_count: 1,
         media_count: 1,
+        meta_description: 'PostgreSQL stored meta description for SEO auditing.',
         sync_run_count: 2
       });
       expect(persisted.rows[0].api_token_hash).not.toBe(createBody.data.apiToken);

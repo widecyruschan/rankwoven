@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
+import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
 
 describe('api health route', () => {
   it('returns a successful health response', async () => {
@@ -103,6 +104,42 @@ describe('analytics and keyword routes', () => {
         daily: expect.any(Array),
         channels: expect.any(Array),
         pages: expect.any(Array)
+      }
+    });
+  });
+
+  it('filters analytics overview by connected site and date range', async () => {
+    const siteConnectionRepository = createInMemorySiteConnectionRepository();
+    const server = createServer({ siteConnectionRepository });
+    const createSiteResponse = await server.inject({
+      method: 'POST',
+      url: '/api/v1/site-connections',
+      payload: {
+        platform: 'wordpress',
+        name: 'Analytics Site',
+        siteUrl: 'https://www.rankwoven.com',
+        cmsVersion: '6.8.2',
+        pluginVersion: '0.1.0'
+      }
+    });
+    const siteId = createSiteResponse.json<{ data: { site: { id: string } } }>().data.site.id;
+    const token = await loginDemoUser(server);
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/v1/analytics/overview?siteId=${siteId}&startDate=2026-07-20&endDate=2026-07-26`,
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        siteId,
+        siteHost: 'www.rankwoven.com',
+        startDate: '2026-07-20',
+        endDate: '2026-07-26'
       }
     });
   });

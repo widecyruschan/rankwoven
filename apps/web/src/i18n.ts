@@ -22,7 +22,11 @@ const messages = {
       phase: 'Phase 1',
       brandSubtitle: 'AI SEO Platform',
       menu: 'Menu',
-      mainNavigation: 'Main navigation'
+      mainNavigation: 'Main navigation',
+      publicSite: 'Public site',
+      customerDashboard: 'Customer dashboard',
+      adminDashboard: 'Admin dashboard',
+      logout: 'Log out'
     },
     nav: {
       dashboard: 'Site Overview',
@@ -41,6 +45,11 @@ const messages = {
       cmsAdapters: 'CMS Adapters',
       settings: 'Settings'
     },
+    common: {
+      totalItems: '{total} items',
+      untitled: 'Untitled',
+      viewDetails: 'Details'
+    },
     marketing: {
       homeTitle: 'AI SEO Platform',
       pricingTitle: 'Pricing',
@@ -48,7 +57,7 @@ const messages = {
       headline: 'Optimize existing content, images, and internal links with reviewable AI workflows',
       subheadline:
         'Connect WordPress first, then expand to Joomla, OpenCart, and more. RankWoven helps teams audit pages, generate SEO suggestions, enrich images, and keep every change human-approved.',
-      primaryAction: 'Start prototype',
+      primaryAction: 'Open dashboard',
       secondaryAction: 'View pricing',
       previewLabel: 'Product preview',
       previewSite: 'rankwoven.com',
@@ -90,9 +99,9 @@ const messages = {
       }
     },
     pricing: {
-      eyebrow: 'Simple prototype pricing',
+      eyebrow: 'Simple pricing',
       title: 'Plans for sites, teams, and agencies',
-      body: 'Static pricing cards help validate packaging before billing logic is connected.',
+      body: 'Choose a plan that matches your connected sites, audit volume, and review workflow.',
       action: 'Choose plan',
       recommended: 'Recommended',
       starter: {
@@ -131,20 +140,22 @@ const messages = {
       }
     },
     login: {
-      eyebrow: 'Prototype login',
+      eyebrow: 'Secure workspace login',
       title: 'Log in to RankWoven',
-      body: 'This page only validates the SaaS entry structure. Buttons link directly to static customer and admin prototypes.',
+      body: 'Access your customer dashboard, connected sites, SEO suggestions, and admin operations from one place.',
       email: 'Email',
       password: 'Password',
       submit: 'Log in',
       submitting: 'Logging in...',
       failed: 'Login failed. Please check your email and password.',
-      customerEntry: 'Open customer dashboard prototype',
-      adminEntry: 'Open admin dashboard prototype'
+      emailRequired: 'Enter a valid email address.',
+      passwordRequired: 'Enter your password.',
+      customerEntry: 'Open customer dashboard',
+      adminEntry: 'Open admin dashboard'
     },
     admin: {
       subtitle: 'Platform Admin',
-      phase: 'Admin prototype',
+      phase: 'Admin workspace',
       nav: {
         overview: 'Platform Overview',
         customers: 'Customers',
@@ -181,7 +192,9 @@ const messages = {
         plan: 'Plan',
         sites: 'Sites',
         usage: 'Usage',
-        open: 'Open'
+        open: 'Open',
+        activeTab: 'Active customers',
+        watchTab: 'Needs attention'
       },
       usage: {
         title: 'Usage & Cost',
@@ -193,7 +206,9 @@ const messages = {
         autoRoute: 'Auto',
         inspect: 'Inspect',
         wenwen: 'Wenwen proxy API',
-        qiniu: 'Qiniu Kodo'
+        qiniu: 'Qiniu Kodo',
+        providersTab: 'AI providers',
+        storageTab: 'Storage'
       },
       operations: {
         title: 'Operations Center',
@@ -206,7 +221,14 @@ const messages = {
         checklistTitle: 'Daily checks',
         checkCert: 'SSL certificate renewal dry-run status',
         checkQueue: 'Worker queue retry and dead-letter volume',
-        checkWebhook: 'CMS webhook delivery health'
+        checkWebhook: 'CMS webhook delivery health',
+        incidentsTab: 'Incidents',
+        checksTab: 'Daily checks',
+        event: 'Event',
+        target: 'Target',
+        severity: 'Severity',
+        open: 'Open',
+        passed: 'Passed'
       },
       settings: {
         title: 'Admin Settings',
@@ -261,6 +283,9 @@ const messages = {
       channelTitle: 'Channel sessions',
       topPages: 'Top pages',
       pagePath: 'Page path',
+      allSites: 'All sites',
+      startDate: 'Start date',
+      endDate: 'End date',
       demoMode: 'Demo analytics data',
       demoModeDescription:
         'Configure GOOGLE_ANALYTICS_PROPERTY_ID and Google service account credentials to read live GA4 data.',
@@ -312,7 +337,10 @@ const messages = {
       connectTitle: 'Connection preview',
       connectStepOne: 'Install extension',
       connectStepTwo: 'Paste API token',
-      connectStepThree: 'Start content sync'
+      connectStepThree: 'Start content sync',
+      connectedTab: 'Connected',
+      revokedTab: 'Revoked',
+      detailTitle: 'Site details'
     },
     articles: {
       title: 'Article Audit',
@@ -326,6 +354,15 @@ const messages = {
       opportunity: 'Opportunity',
       owner: 'Owner',
       action: 'Open review',
+      status: 'Status',
+      metaDescription: 'Meta description',
+      updatedAt: 'Updated at',
+      selectSite: 'Select site',
+      searchPlaceholder: 'Search title, slug, URL, meta, or author',
+      statusAll: 'All statuses',
+      cmsId: 'CMS ID',
+      author: 'Author',
+      loadFailed: 'Unable to load articles',
       issueMeta: 'Meta description',
       issueLinks: 'Internal links',
       issueImages: 'Image alt text',
@@ -421,6 +458,7 @@ const messages = {
       imageTitleMetaQueue: 'Image title & Meta',
       contentQueue: 'Content',
       mediaQueue: 'Media',
+      workflowChartTitle: 'Optimization workflow',
       statusChartTitle: 'Suggestion status',
       typeChartTitle: 'Suggestion type distribution'
     },
@@ -433,6 +471,13 @@ const messages = {
       altText: 'Alt Text',
       filename: 'Filename',
       apply: 'Apply',
+      selectSite: 'Select site',
+      searchPlaceholder: 'Search title, URL, filename, Alt Text, or MIME type',
+      missingAlt: 'Missing Alt Text',
+      filenameTab: 'Filename',
+      mimeType: 'MIME type',
+      inspect: 'Inspect',
+      loadFailed: 'Unable to load media',
       statusReady: 'Ready',
       statusReview: 'Needs review'
     },
@@ -452,6 +497,9 @@ const messages = {
       riskLow: 'Low risk',
       riskMedium: 'Medium risk',
       ready: 'Ready',
+      readyTab: 'Ready',
+      waitingTab: 'Waiting',
+      detailTitle: 'Apply batch',
       snapshot: 'Create CMS snapshot before publishing changes',
       reviewOnly: 'Only approved suggestions enter this queue',
       rollback: 'Rollback path remains available after apply'
@@ -520,7 +568,9 @@ const messages = {
       statusDone: 'Done',
       statusFailed: 'Needs retry',
       noErrorMessage: 'No error message recorded',
-      batchSummary: '{batches} batches, {articles} articles, {media} media'
+      batchSummary: '{batches} batches, {articles} articles, {media} media',
+      allTab: 'All tasks',
+      detailTitle: 'Task details'
     },
     cmsAdapters: {
       title: 'CMS Adapters',
@@ -553,7 +603,11 @@ const messages = {
       phase: '第 1 階段',
       brandSubtitle: 'AI SEO 平台',
       menu: '選單',
-      mainNavigation: '主導覽'
+      mainNavigation: '主導覽',
+      publicSite: '前台',
+      customerDashboard: '客戶後台',
+      adminDashboard: '管理後台',
+      logout: '登出'
     },
     nav: {
       dashboard: '站點概覽',
@@ -572,6 +626,11 @@ const messages = {
       cmsAdapters: 'CMS 適配器',
       settings: '設定'
     },
+    common: {
+      totalItems: '共 {total} 項',
+      untitled: '未命名',
+      viewDetails: '查看詳情'
+    },
     marketing: {
       homeTitle: 'AI SEO 平台',
       pricingTitle: '定價',
@@ -579,7 +638,7 @@ const messages = {
       headline: '用可審核的 AI 流程優化現有文章、圖片與內部連結',
       subheadline:
         '先接入 WordPress，再擴展 Joomla、OpenCart 等常用系統。RankWoven 協助團隊審計頁面、生成 SEO 建議、補強圖片資訊，並保留人工批准流程。',
-      primaryAction: '開始查看原型',
+      primaryAction: '進入後台',
       secondaryAction: '查看定價',
       previewLabel: '產品預覽',
       previewSite: 'rankwoven.com',
@@ -621,9 +680,9 @@ const messages = {
       }
     },
     pricing: {
-      eyebrow: '原型定價',
+      eyebrow: '清晰定價',
       title: '面向網站、團隊與代理商的套餐',
-      body: '靜態定價卡用於先驗證套餐包裝，後續再接入帳單邏輯。',
+      body: '按連接站點、審計量與審核流程選擇合適套餐，後續可接入帳單與用量限制。',
       action: '選擇套餐',
       recommended: '推薦',
       starter: {
@@ -662,20 +721,22 @@ const messages = {
       }
     },
     login: {
-      eyebrow: '登入原型',
+      eyebrow: '安全工作區登入',
       title: '登入 RankWoven',
-      body: '此頁只驗證 SaaS 入口結構，按鈕會直接進入靜態客戶後台與管理後台原型。',
+      body: '登入後可管理客戶後台、已連接站點、SEO 建議、寫回任務與平台運營。',
       email: '電郵',
       password: '密碼',
       submit: '登入',
       submitting: '登入中...',
       failed: '登入失敗，請檢查電郵和密碼。',
-      customerEntry: '打開客戶後台原型',
-      adminEntry: '打開管理後台原型'
+      emailRequired: '請輸入有效電郵。',
+      passwordRequired: '請輸入密碼。',
+      customerEntry: '打開客戶後台',
+      adminEntry: '打開管理後台'
     },
     admin: {
       subtitle: '平台管理後台',
-      phase: '管理後台原型',
+      phase: '管理工作區',
       nav: {
         overview: '平台概覽',
         customers: '客戶管理',
@@ -712,7 +773,9 @@ const messages = {
         plan: '套餐',
         sites: '站點',
         usage: '用量',
-        open: '打開'
+        open: '打開',
+        activeTab: '活躍客戶',
+        watchTab: '需關注'
       },
       usage: {
         title: '用量與成本',
@@ -724,7 +787,9 @@ const messages = {
         autoRoute: '自動',
         inspect: '查看',
         wenwen: '問問代理 API',
-        qiniu: '七牛雲 Kodo'
+        qiniu: '七牛雲 Kodo',
+        providersTab: 'AI Provider',
+        storageTab: '存儲'
       },
       operations: {
         title: '運營中心',
@@ -737,7 +802,14 @@ const messages = {
         checklistTitle: '每日檢查',
         checkCert: 'SSL 證書自動續期 dry-run 狀態',
         checkQueue: 'Worker 隊列重試與死信數量',
-        checkWebhook: 'CMS Webhook 投遞健康度'
+        checkWebhook: 'CMS Webhook 投遞健康度',
+        incidentsTab: '事件',
+        checksTab: '每日檢查',
+        event: '事件',
+        target: '目標',
+        severity: '嚴重度',
+        open: '打開',
+        passed: '已通過'
       },
       settings: {
         title: '管理設定',
@@ -792,6 +864,9 @@ const messages = {
       channelTitle: '渠道工作階段',
       topPages: '熱門頁面',
       pagePath: '頁面路徑',
+      allSites: '全部站點',
+      startDate: '開始日期',
+      endDate: '結束日期',
       demoMode: '示範分析數據',
       demoModeDescription: '配置 GOOGLE_ANALYTICS_PROPERTY_ID 和 Google 服務帳號憑據後，即可讀取真實 GA4 數據。',
       loadFailed: '無法載入分析數據'
@@ -842,7 +917,10 @@ const messages = {
       connectTitle: '連接預覽',
       connectStepOne: '安裝擴展',
       connectStepTwo: '貼上 API Token',
-      connectStepThree: '開始內容同步'
+      connectStepThree: '開始內容同步',
+      connectedTab: '已連接',
+      revokedTab: '已吊銷',
+      detailTitle: '站點詳情'
     },
     articles: {
       title: '文章審計',
@@ -856,6 +934,15 @@ const messages = {
       opportunity: '機會',
       owner: '負責人',
       action: '打開審核',
+      status: '狀態',
+      metaDescription: 'Meta 描述',
+      updatedAt: '更新時間',
+      selectSite: '選擇站點',
+      searchPlaceholder: '搜尋標題、Slug、URL、Meta 或作者',
+      statusAll: '全部狀態',
+      cmsId: 'CMS ID',
+      author: '作者',
+      loadFailed: '無法載入文章',
       issueMeta: 'Meta 描述',
       issueLinks: '內部連結',
       issueImages: '圖片 Alt Text',
@@ -951,6 +1038,7 @@ const messages = {
       imageTitleMetaQueue: '圖片標題與 Meta',
       contentQueue: '內容',
       mediaQueue: '媒體',
+      workflowChartTitle: '優化流程',
       statusChartTitle: '建議狀態',
       typeChartTitle: '建議類型分佈'
     },
@@ -963,6 +1051,13 @@ const messages = {
       altText: 'Alt Text',
       filename: '檔案名稱',
       apply: '套用',
+      selectSite: '選擇站點',
+      searchPlaceholder: '搜尋標題、URL、檔名、Alt Text 或 MIME 類型',
+      missingAlt: '缺少 Alt Text',
+      filenameTab: '檔案名稱',
+      mimeType: 'MIME 類型',
+      inspect: '查看',
+      loadFailed: '無法載入媒體',
       statusReady: '已就緒',
       statusReview: '需審核'
     },
@@ -982,6 +1077,9 @@ const messages = {
       riskLow: '低風險',
       riskMedium: '中風險',
       ready: '已就緒',
+      readyTab: '已就緒',
+      waitingTab: '等待中',
+      detailTitle: '套用批次',
       snapshot: '發佈變更前先建立 CMS 快照',
       reviewOnly: '只有已批准建議會進入此隊列',
       rollback: '套用後仍保留回滾路徑'
@@ -1050,7 +1148,9 @@ const messages = {
       statusDone: '已完成',
       statusFailed: '需重試',
       noErrorMessage: '未記錄錯誤原因',
-      batchSummary: '{batches} 個批次，{articles} 篇文章，{media} 個媒體'
+      batchSummary: '{batches} 個批次，{articles} 篇文章，{media} 個媒體',
+      allTab: '全部任務',
+      detailTitle: '任務詳情'
     },
     cmsAdapters: {
       title: 'CMS 適配器',
