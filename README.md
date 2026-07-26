@@ -642,3 +642,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `.github/workflows/production-deploy.yml`、`scripts/deploy-production.sh` 和 `README.md`。
 - 驗證結果：`bash -n scripts/deploy-production.sh` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。
 - 下一步行動清單：重新觸發 GitHub Actions 生產部署；為生產建立專用 smoke 帳號並配置 `DEPLOY_SMOKE_EMAIL`、`DEPLOY_SMOKE_PASSWORD` Secrets；將 `/app/tasks` 和建議頁接入真實 API；為 Worker 增加重試、退避和死信列表。
+
+### 2026-07-26：客戶後台建議與任務隊列真實 API 接入
+
+- 會話的主要目的：將客戶後台 `/app/suggestions`、`/app/article-suggestions` 和 `/app/tasks` 從靜態原型升級為真實 API 資料。
+- 完成的主要任務：前端 API 封裝新增優化建議型別、建議列表、批准建議和建立寫回任務方法；`/app/suggestions` 支援選擇站點、載入真實建議、批准和建立寫回任務；`/app/article-suggestions` 按文章或媒體目標分組展示真實建議，支持逐項批准和套用已批准項；`/app/tasks` 接入 `GET /api/v1/sync-tasks`，展示任務範圍、站點、狀態、進度、完成時間和失敗原因。
+- 關鍵決策和解決方案：本次只接入既有後端 API，不新增後端路由；三個頁面沿用既有表格和面板樣式，避免擴大 UI 樣式改動；失敗任務優先顯示 `errorMessage`，沒有記錄時顯示友善缺省文案。
+- 使用的技術棧：Vue 3、TypeScript、Composition API、Vue Router、Vue I18n、Fastify API、JWT Bearer Token。
+- 新增或修改文件：修改 `apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/ArticleSuggestionsView.vue`、`apps/web/src/views/TasksView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run build -w @aieo/web` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；Vite 僅提示既有大 chunk 警告。
+- 下一步行動清單：在建議頁增加手動執行 SEO 審計入口；補充 Meta Description 真實同步欄位；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾；將任務隊列增加類型篩選、站點篩選和自動刷新。
