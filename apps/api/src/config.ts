@@ -29,7 +29,9 @@ const envSchema = z.object({
   QINIU_SECRET_KEY: z.string().optional(),
   QINIU_BUCKET: z.string().optional(),
   QINIU_REGION: z.string().optional(),
-  QINIU_PUBLIC_DOMAIN: z.string().optional()
+  QINIU_PUBLIC_DOMAIN: z.string().optional(),
+  GOOGLE_ANALYTICS_PROPERTY_ID: z.string().optional(),
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().optional()
 });
 
 export const apiConfig = envSchema.parse(process.env);

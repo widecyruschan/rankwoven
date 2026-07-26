@@ -1,7 +1,23 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import 'element-plus/dist/index.css';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Dropdown,
+  Form,
+  Input,
+  Layout,
+  Menu,
+  Progress,
+  Row,
+  Select,
+  Statistic,
+  Table,
+  Tag
+} from 'ant-design-vue';
+import 'ant-design-vue/dist/reset.css';
 import './styles.css';
 import App from './App.vue';
 import { i18n } from './i18n';
@@ -11,7 +27,25 @@ const app = createApp(App);
 
 app.use(createPinia());
 app.use(router);
-app.use(ElementPlus);
+[
+  Alert,
+  Button,
+  Card,
+  Col,
+  Dropdown,
+  Form,
+  Input,
+  Layout,
+  Menu,
+  Progress,
+  Row,
+  Select,
+  Statistic,
+  Table,
+  Tag
+].forEach((component) => {
+  app.use(component);
+});
 app.use(i18n);
 
 app.mount('#app');

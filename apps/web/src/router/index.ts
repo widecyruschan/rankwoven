@@ -1,32 +1,11 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
-import MarketingHomeView from '../views/MarketingHomeView.vue';
-import PricingView from '../views/PricingView.vue';
-import LoginView from '../views/LoginView.vue';
-import DashboardView from '../views/DashboardView.vue';
-import SitesView from '../views/SitesView.vue';
-import ArticlesView from '../views/ArticlesView.vue';
-import ArticleSyncView from '../views/ArticleSyncView.vue';
-import SuggestionsView from '../views/SuggestionsView.vue';
-import MediaOptimizationView from '../views/MediaOptimizationView.vue';
-import ApplySuggestionsView from '../views/ApplySuggestionsView.vue';
-import ArticleSuggestionsView from '../views/ArticleSuggestionsView.vue';
-import ReviewView from '../views/ReviewView.vue';
-import LinksView from '../views/LinksView.vue';
-import TasksView from '../views/TasksView.vue';
-import CmsAdaptersView from '../views/CmsAdaptersView.vue';
-import SettingsView from '../views/SettingsView.vue';
-import AdminOverviewView from '../views/AdminOverviewView.vue';
-import AdminCustomersView from '../views/AdminCustomersView.vue';
-import AdminUsageView from '../views/AdminUsageView.vue';
-import AdminOperationsView from '../views/AdminOperationsView.vue';
-import AdminSettingsView from '../views/AdminSettingsView.vue';
 import { useAuthStore } from '../stores/auth';
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'MarketingHome',
-    component: MarketingHomeView,
+    component: () => import('../views/MarketingHomeView.vue'),
     meta: {
       titleKey: 'marketing.homeTitle',
       layout: 'marketing',
@@ -36,7 +15,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/pricing',
     name: 'Pricing',
-    component: PricingView,
+    component: () => import('../views/PricingView.vue'),
     meta: {
       titleKey: 'marketing.pricingTitle',
       layout: 'marketing',
@@ -46,7 +25,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
-    component: LoginView,
+    component: () => import('../views/LoginView.vue'),
     meta: {
       titleKey: 'login.title',
       layout: 'marketing',
@@ -56,7 +35,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app',
     name: 'AppDashboard',
-    component: DashboardView,
+    component: () => import('../views/DashboardView.vue'),
     meta: {
       titleKey: 'nav.dashboard',
       layout: 'app',
@@ -66,7 +45,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/sites',
     name: 'AppSites',
-    component: SitesView,
+    component: () => import('../views/SitesView.vue'),
     meta: {
       titleKey: 'nav.sites',
       layout: 'app',
@@ -74,9 +53,29 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/app/analytics',
+    name: 'AppAnalytics',
+    component: () => import('../views/AnalyticsView.vue'),
+    meta: {
+      titleKey: 'nav.analytics',
+      layout: 'app',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/app/keywords',
+    name: 'AppKeywordSuggestions',
+    component: () => import('../views/KeywordSuggestionsView.vue'),
+    meta: {
+      titleKey: 'nav.keywords',
+      layout: 'app',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/app/articles',
     name: 'AppArticles',
-    component: ArticlesView,
+    component: () => import('../views/ArticlesView.vue'),
     meta: {
       titleKey: 'nav.articles',
       layout: 'app',
@@ -86,7 +85,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/article-sync',
     name: 'AppArticleSync',
-    component: ArticleSyncView,
+    component: () => import('../views/ArticleSyncView.vue'),
     meta: {
       titleKey: 'nav.articleSync',
       layout: 'app',
@@ -96,7 +95,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/suggestions',
     name: 'AppSuggestions',
-    component: SuggestionsView,
+    component: () => import('../views/SuggestionsView.vue'),
     meta: {
       titleKey: 'nav.suggestions',
       layout: 'app',
@@ -106,7 +105,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/media',
     name: 'AppMediaOptimization',
-    component: MediaOptimizationView,
+    component: () => import('../views/MediaOptimizationView.vue'),
     meta: {
       titleKey: 'nav.media',
       layout: 'app',
@@ -116,7 +115,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/apply',
     name: 'AppApplySuggestions',
-    component: ApplySuggestionsView,
+    component: () => import('../views/ApplySuggestionsView.vue'),
     meta: {
       titleKey: 'nav.apply',
       layout: 'app',
@@ -126,7 +125,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/article-suggestions',
     name: 'AppArticleSuggestions',
-    component: ArticleSuggestionsView,
+    component: () => import('../views/ArticleSuggestionsView.vue'),
     meta: {
       titleKey: 'nav.articleSuggestions',
       layout: 'app',
@@ -136,7 +135,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/review',
     name: 'AppReview',
-    component: ReviewView,
+    component: () => import('../views/ReviewView.vue'),
     meta: {
       titleKey: 'nav.review',
       layout: 'app',
@@ -146,7 +145,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/links',
     name: 'AppLinks',
-    component: LinksView,
+    component: () => import('../views/LinksView.vue'),
     meta: {
       titleKey: 'nav.links',
       layout: 'app',
@@ -156,7 +155,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/tasks',
     name: 'AppTasks',
-    component: TasksView,
+    component: () => import('../views/TasksView.vue'),
     meta: {
       titleKey: 'nav.tasks',
       layout: 'app',
@@ -166,7 +165,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/cms-adapters',
     name: 'AppCmsAdapters',
-    component: CmsAdaptersView,
+    component: () => import('../views/CmsAdaptersView.vue'),
     meta: {
       titleKey: 'nav.cmsAdapters',
       layout: 'app',
@@ -176,7 +175,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/app/settings',
     name: 'AppSettings',
-    component: SettingsView,
+    component: () => import('../views/SettingsView.vue'),
     meta: {
       titleKey: 'nav.settings',
       layout: 'app',
@@ -186,7 +185,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin',
     name: 'AdminOverview',
-    component: AdminOverviewView,
+    component: () => import('../views/AdminOverviewView.vue'),
     meta: {
       titleKey: 'admin.nav.overview',
       layout: 'admin',
@@ -196,7 +195,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/customers',
     name: 'AdminCustomers',
-    component: AdminCustomersView,
+    component: () => import('../views/AdminCustomersView.vue'),
     meta: {
       titleKey: 'admin.nav.customers',
       layout: 'admin',
@@ -206,7 +205,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/usage',
     name: 'AdminUsage',
-    component: AdminUsageView,
+    component: () => import('../views/AdminUsageView.vue'),
     meta: {
       titleKey: 'admin.nav.usage',
       layout: 'admin',
@@ -216,7 +215,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/operations',
     name: 'AdminOperations',
-    component: AdminOperationsView,
+    component: () => import('../views/AdminOperationsView.vue'),
     meta: {
       titleKey: 'admin.nav.operations',
       layout: 'admin',
@@ -226,7 +225,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/settings',
     name: 'AdminSettings',
-    component: AdminSettingsView,
+    component: () => import('../views/AdminSettingsView.vue'),
     meta: {
       titleKey: 'admin.nav.settings',
       layout: 'admin',

@@ -1229,10 +1229,12 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
 1. 為 SEO 審計補充 Meta Description 真實同步欄位，兼容 Yoast、Rank Math、AIOSEO 和 WordPress 摘要回退。
-2. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
-3. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
-4. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。
-5. 將任務隊列增加類型篩選、站點篩選和自動刷新，方便大站點監控批量任務。
-6. 為客戶後台建議頁補充最近一次 SEO 審計分數、規則版本與問題數摘要，讓用戶知道建議來源。
-7. 將 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 逐步收斂為只在測試或開發兜底使用，生產以 migration 腳本為主。
-8. 在部署文件中補充資料庫備份恢復演練步驟，包含 staging 驗證和回滾檢查清單。
+2. 配置正式 GA4 Property ID 和 Google 服務帳號憑據，並為客戶後台分析頁增加站點篩選和日期範圍切換。
+3. 將關鍵詞建議接入 AI Provider、Search Console 或第三方搜尋量/難度來源，替換目前的確定性 MVP 建議。
+4. 逐步將剩餘舊表格頁替換為 Ant Design Vue Table、Form、Tabs 和 Modal，統一客戶後台與管理後台的操作體驗。
+5. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
+6. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
+7. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。
+8. 為客戶後台建議頁補充最近一次 SEO 審計分數、規則版本與問題數摘要，讓用戶知道建議來源。
+9. 將 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 逐步收斂為只在測試或開發兜底使用，生產以 migration 腳本為主。
+10. 在部署文件中補充資料庫備份恢復演練步驟，包含 staging 驗證和回滾檢查清單。

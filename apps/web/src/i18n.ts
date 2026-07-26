@@ -27,6 +27,8 @@ const messages = {
     nav: {
       dashboard: 'Site Overview',
       sites: 'Site Management',
+      analytics: 'Analytics',
+      keywords: 'Keywords',
       articles: 'Article Audit',
       articleSync: 'Article Sync',
       suggestions: 'Suggestions',
@@ -248,6 +250,44 @@ const messages = {
       priorityImage: 'Add alt text for 18 images',
       priorityLinks: 'Review 12 internal link opportunities'
     },
+    analytics: {
+      title: 'Google Analytics',
+      body: 'Read GA4 traffic and SEO demand signals, then visualize user growth, channels, and top pages with ECharts.',
+      activeUsers: 'Active users',
+      sessions: 'Sessions',
+      pageViews: 'Page views',
+      conversions: 'Conversions',
+      trendTitle: '7-day traffic trend',
+      channelTitle: 'Channel sessions',
+      topPages: 'Top pages',
+      pagePath: 'Page path',
+      demoMode: 'Demo analytics data',
+      demoModeDescription:
+        'Configure GOOGLE_ANALYTICS_PROPERTY_ID and Google service account credentials to read live GA4 data.',
+      loadFailed: 'Unable to load analytics'
+    },
+    keywords: {
+      title: 'Keyword Suggestions',
+      body: 'Generate keyword ideas, intent notes, difficulty, and content angles before creating SEO articles.',
+      seedKeyword: 'Seed keyword',
+      seedPlaceholder: 'Example: AI SEO',
+      intent: 'Intent',
+      keyword: 'Keyword',
+      difficulty: 'Difficulty',
+      opportunity: 'Opportunity',
+      angle: 'Content angle',
+      resultTitle: 'Suggestion list',
+      generate: 'Generate suggestions',
+      seedRequired: 'Enter a seed keyword first',
+      loadFailed: 'Unable to create keyword suggestions',
+      intentInformational: 'Informational',
+      intentCommercial: 'Commercial',
+      intentTransactional: 'Transactional',
+      intentLocal: 'Local',
+      difficultyLow: 'Low',
+      difficultyMedium: 'Medium',
+      difficultyHigh: 'High'
+    },
     sites: {
       title: 'Site Management',
       body: 'Connect WordPress, Joomla, OpenCart, and other websites, then monitor sync status.',
@@ -380,7 +420,9 @@ const messages = {
       applyTaskCreated: 'Writeback task created',
       imageTitleMetaQueue: 'Image title & Meta',
       contentQueue: 'Content',
-      mediaQueue: 'Media'
+      mediaQueue: 'Media',
+      statusChartTitle: 'Suggestion status',
+      typeChartTitle: 'Suggestion type distribution'
     },
     media: {
       title: 'Media Processing',
@@ -516,6 +558,8 @@ const messages = {
     nav: {
       dashboard: '站點概覽',
       sites: '站點管理',
+      analytics: '流量分析',
+      keywords: '關鍵詞建議',
       articles: '文章審計',
       articleSync: '文章同步',
       suggestions: '處理建議',
@@ -737,6 +781,43 @@ const messages = {
       priorityImage: '補齊 18 張圖片 Alt Text',
       priorityLinks: '審核 12 個內部連結機會'
     },
+    analytics: {
+      title: 'Google Analytics',
+      body: '讀取 GA4 流量與 SEO 需求信號，並用 ECharts 顯示用戶增長、渠道來源與熱門頁面。',
+      activeUsers: '活躍用戶',
+      sessions: '工作階段',
+      pageViews: '瀏覽量',
+      conversions: '轉換',
+      trendTitle: '7 日流量趨勢',
+      channelTitle: '渠道工作階段',
+      topPages: '熱門頁面',
+      pagePath: '頁面路徑',
+      demoMode: '示範分析數據',
+      demoModeDescription: '配置 GOOGLE_ANALYTICS_PROPERTY_ID 和 Google 服務帳號憑據後，即可讀取真實 GA4 數據。',
+      loadFailed: '無法載入分析數據'
+    },
+    keywords: {
+      title: '關鍵詞建議',
+      body: '在生成 SEO 文章前，先產生關鍵詞想法、搜尋意圖、難度、機會分與內容角度。',
+      seedKeyword: '種子關鍵詞',
+      seedPlaceholder: '例如：AI SEO',
+      intent: '搜尋意圖',
+      keyword: '關鍵詞',
+      difficulty: '難度',
+      opportunity: '機會分',
+      angle: '內容角度',
+      resultTitle: '建議列表',
+      generate: '生成建議',
+      seedRequired: '請先輸入種子關鍵詞',
+      loadFailed: '無法生成關鍵詞建議',
+      intentInformational: '資訊型',
+      intentCommercial: '商業比較',
+      intentTransactional: '交易型',
+      intentLocal: '本地搜尋',
+      difficultyLow: '低',
+      difficultyMedium: '中',
+      difficultyHigh: '高'
+    },
     sites: {
       title: '站點管理',
       body: '此頁將用於連接 WordPress、Joomla、OpenCart 等網站，並展示同步狀態。',
@@ -869,7 +950,9 @@ const messages = {
       applyTaskCreated: '寫回任務已建立',
       imageTitleMetaQueue: '圖片標題與 Meta',
       contentQueue: '內容',
-      mediaQueue: '媒體'
+      mediaQueue: '媒體',
+      statusChartTitle: '建議狀態',
+      typeChartTitle: '建議類型分佈'
     },
     media: {
       title: '媒體處理',

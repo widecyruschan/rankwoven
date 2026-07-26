@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
   Activity,
@@ -13,6 +13,7 @@ import {
   Link2,
   ListChecks,
   LogIn,
+  Search,
   RefreshCw,
   PlugZap,
   Settings,
@@ -24,6 +25,7 @@ import rankwovenLogo from './assets/rankwoven-logo.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
 
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 const isNavigationOpen = ref(false);
 
@@ -36,6 +38,8 @@ const marketingItems = [
 const appNavigationItems = [
   { to: '/app', labelKey: 'nav.dashboard', icon: LayoutDashboard },
   { to: '/app/sites', labelKey: 'nav.sites', icon: Waypoints },
+  { to: '/app/analytics', labelKey: 'nav.analytics', icon: BarChart3 },
+  { to: '/app/keywords', labelKey: 'nav.keywords', icon: Search },
   { to: '/app/articles', labelKey: 'nav.articles', icon: FileSearch },
   { to: '/app/article-sync', labelKey: 'nav.articleSync', icon: RefreshCw },
   { to: '/app/suggestions', labelKey: 'nav.suggestions', icon: Sparkles },
@@ -64,9 +68,14 @@ const isAdminLayout = computed(() => currentLayout.value === 'admin');
 const navigationItems = computed(() => (isAdminLayout.value ? adminNavigationItems : appNavigationItems));
 const shellSubtitle = computed(() => (isAdminLayout.value ? t('admin.subtitle') : t('app.brandSubtitle')));
 const topbarPhase = computed(() => (isAdminLayout.value ? t('admin.phase') : t('app.phase')));
+const selectedMenuKeys = computed(() => [route.path]);
 
 function toggleNavigation() {
   isNavigationOpen.value = !isNavigationOpen.value;
+}
+
+function navigateToMenuItem({ key }: { key: string }) {
+  void router.push(key);
 }
 </script>
 
@@ -99,40 +108,44 @@ function toggleNavigation() {
     <RouterView />
   </div>
 
-  <div v-else class="app-shell">
-    <aside class="sidebar" :class="{ 'sidebar-open': isNavigationOpen }">
+  <a-layout v-else class="app-shell">
+    <a-layout-sider class="sidebar" :class="{ 'sidebar-open': isNavigationOpen }" width="272">
       <div class="brand">
         <img class="brand-logo" :src="rankwovenLogo" alt="RankWoven">
         <small>{{ shellSubtitle }}</small>
       </div>
 
-      <nav class="nav-list" :aria-label="t('app.mainNavigation')">
-        <RouterLink
-          v-for="item in navigationItems"
-          :key="item.to"
-          :to="item.to"
-          active-class=""
-          exact-active-class="router-link-active"
-        >
-          <component :is="item.icon" :size="17" aria-hidden="true" />
-          <span>{{ t(item.labelKey) }}</span>
-        </RouterLink>
-      </nav>
-    </aside>
+      <a-menu
+        class="nav-list"
+        mode="inline"
+        :selected-keys="selectedMenuKeys"
+        :aria-label="t('app.mainNavigation')"
+        @click="navigateToMenuItem"
+      >
+        <a-menu-item v-for="item in navigationItems" :key="item.to">
+          <template #icon>
+            <component :is="item.icon" :size="17" aria-hidden="true" />
+          </template>
+          {{ t(item.labelKey) }}
+        </a-menu-item>
+      </a-menu>
+    </a-layout-sider>
 
-    <main class="main-panel">
-      <header class="topbar">
-        <button class="menu-button" type="button" @click="toggleNavigation">
+    <a-layout class="main-panel">
+      <a-layout-header class="topbar">
+        <a-button class="menu-button" type="button" @click="toggleNavigation">
           {{ t('app.menu') }}
-        </button>
+        </a-button>
         <div>
           <p>{{ topbarPhase }}</p>
           <h1>{{ currentTitle }}</h1>
         </div>
         <LanguageSwitcher />
-      </header>
+      </a-layout-header>
 
-      <RouterView />
-    </main>
-  </div>
+      <a-layout-content>
+        <RouterView />
+      </a-layout-content>
+    </a-layout>
+  </a-layout>
 </template>

@@ -23,7 +23,7 @@ AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域�
 
 ## 技術棧建議
 
-- 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia、Tailwind CSS、Element Plus
+- 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia、Vue I18n、Ant Design Vue、ECharts
 - 後端：Node.js、TypeScript、NestJS 或 Fastify
 - 資料庫：PostgreSQL
 - 緩存與隊列：Redis、BullMQ
@@ -143,6 +143,7 @@ npm run security:audit
 NODE_ENV=development
 APP_BASE_URL=http://localhost:5173
 API_BASE_URL=http://localhost:3011
+VITE_API_BASE_URL=http://localhost:3011
 PUBLIC_SITE_URL=https://rankwoven.com
 APP_DASHBOARD_URL=https://app.rankwoven.com
 PUBLIC_ASSETS_URL=https://assets.rankwoven.com
@@ -164,6 +165,8 @@ WENWEN_EMBEDDING_MODEL=text-embedding-3-small
 WENWEN_IMAGE_MODEL=gemini-2.5-flash-image
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_ANALYTICS_PROPERTY_ID=
+GOOGLE_APPLICATION_CREDENTIALS=
 QINIU_ACCESS_KEY=
 QINIU_SECRET_KEY=
 QINIU_BUCKET=
@@ -672,3 +675,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：新增 `db/migrations/0001_initial_schema.sql`、`scripts/migrate-database.sh` 和 `scripts/backup-database.sh`；修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`scripts/deploy-production.sh`、`docs/deployment.md`、`package.json`、`.gitignore`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`bash -n scripts/migrate-database.sh scripts/backup-database.sh scripts/deploy-production.sh` 通過；`docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過；`npm run db:migrate` 通過並在本地 PostgreSQL 記錄 `0001_initial_schema.sql`；`DATABASE_BACKUP_DIR=/tmp/rankwoven-db-backups npm run db:backup` 成功建立備份；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。
 - 下一步行動清單：補充 Meta Description 真實同步欄位；為文章與媒體列表補充分頁查詢；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾；補充資料庫備份恢復演練步驟。
+
+### 2026-07-26：Ant Design Vue、Google Analytics、ECharts 與關鍵詞建議
+
+- 會話的主要目的：將 SaaS 前端基座改用 Ant Design Vue，加入 Google Analytics 讀取能力、ECharts 圖表展示和關鍵詞建議入口。
+- 完成的主要任務：前端移除 Element Plus 並按需註冊 Ant Design Vue 元件；新增 `/app/analytics` 流量分析頁，使用 ECharts 顯示 7 日流量趨勢、渠道工作階段和熱門頁面；在 `/app/suggestions` 增加建議狀態環形圖與建議類型柱狀圖；新增 `/app/keywords` 關鍵詞建議頁；後端新增 `GET /api/v1/analytics/overview` 和 `POST /api/v1/keyword-suggestions`。
+- 關鍵決策和解決方案：Google Analytics 先以服務帳號 JWT 調用 GA4 Data API REST 端點，避免引入會觸發 high audit 的 Google Node SDK 依賴；未配置 `GOOGLE_ANALYTICS_PROPERTY_ID` 或服務帳號憑據時返回示範數據，方便原型和本地開發；路由頁面改為動態載入，並用 Vite `manualChunks` 拆分 Vue、AntD 和 ECharts 依賴；Docker Compose 的 `VITE_API_BASE_URL` 預設改回本地 API，生產由 `.env` 覆蓋為 `https://api.rankwoven.com`。
+- 使用的技術棧：Vue 3、TypeScript、Vite、Vue Router、Vue I18n、Ant Design Vue、ECharts、vue-echarts、Fastify、Google Analytics Data API REST、Vitest。
+- 新增或修改文件：新增 `apps/api/src/analytics.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/components/AnalyticsChart.vue`、`apps/web/src/views/AnalyticsView.vue` 和 `apps/web/src/views/KeywordSuggestionsView.vue`；修改 `apps/api/src/server.ts`、`apps/api/src/config.ts`、`apps/api/tests/health.test.ts`、`apps/web/src/App.vue`、`apps/web/src/components/LanguageSwitcher.vue`、`apps/web/src/i18n.ts`、`apps/web/src/main.ts`、`apps/web/src/router/index.ts`、`apps/web/src/styles.css`、`apps/web/vite.config.ts`、`docker-compose.yml`、`.env.example`、`package.json`、`package-lock.json`、`README.md`、`docs/deployment.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。Vite 仍提示 `vendor-antdv` 和 `vendor-echarts` 單獨依賴 chunk 超過 500KB，屬於第三方 UI/圖表庫體積提醒，已通過路由懶載入和 manual chunks 降低首屏主包大小。
+- 下一步行動清單：配置正式 GA4 Property ID 和服務帳號憑據；把關鍵詞建議接入 AI Provider 與真實搜尋量/難度來源；逐步將剩餘舊表格頁替換為 Ant Design Vue Table/Form；為分析頁增加站點篩選和時間範圍切換；補充 Meta Description 真實同步欄位。

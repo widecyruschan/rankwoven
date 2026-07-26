@@ -39,6 +39,8 @@ Workflow：`.github/workflows/production-deploy.yml`
 | `HOSTINGER_VPS_SSH_KEY` | 專用部署私鑰 |
 | `HOSTINGER_DEPLOY_PATH` | 部署目錄，預設 `/docker/rankwoven` |
 
+生產 `.env` 需要設定 `VITE_API_BASE_URL=https://api.rankwoven.com`，避免前端容器使用本地開發預設 API 地址。
+
 ### 本機手動部署
 
 手動部署使用同一支腳本：

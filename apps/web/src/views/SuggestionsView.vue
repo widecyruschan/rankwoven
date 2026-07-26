@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import type { EChartsOption } from 'echarts';
+import AnalyticsChart from '../components/AnalyticsChart.vue';
 import {
   applyOptimizationSuggestion,
   approveOptimizationSuggestion,
@@ -42,6 +44,53 @@ const queues = computed(() => [
     value: String(countByTarget('media'))
   }
 ]);
+
+const suggestionStatusChartOption = computed<EChartsOption>(() => {
+  const statusCounts = ['pending', 'approved', 'applied', 'failed', 'rejected'].map((status) => ({
+    name: getStatusLabel(status as SuggestionStatus),
+    value: suggestions.value.filter((suggestion) => suggestion.status === status).length
+  }));
+
+  return {
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0 },
+    series: [
+      {
+        name: t('suggestions.statusChartTitle'),
+        type: 'pie',
+        radius: ['48%', '70%'],
+        center: ['50%', '44%'],
+        avoidLabelOverlap: true,
+        data: statusCounts
+      }
+    ]
+  };
+});
+
+const suggestionTypeChartOption = computed<EChartsOption>(() => ({
+  tooltip: { trigger: 'axis' },
+  grid: { top: 20, right: 20, bottom: 36, left: 96 },
+  xAxis: { type: 'value' },
+  yAxis: {
+    type: 'category',
+    data: [
+      t('suggestions.typeImageTitleMeta'),
+      t('suggestions.typeContent'),
+      t('suggestions.typeLinks')
+    ].reverse()
+  },
+  series: [
+    {
+      name: t('suggestions.typeChartTitle'),
+      type: 'bar',
+      data: [
+        countByType(['media_alt_text', 'media_file_name']),
+        countByType(['title', 'meta_description', 'content']),
+        countByType(['internal_link'])
+      ].reverse()
+    }
+  ]
+}));
 
 const suggestionRows = computed(() =>
   suggestions.value.map((suggestion) => ({
@@ -250,6 +299,19 @@ onMounted(() => {
         <strong>{{ item.value }}</strong>
       </article>
     </div>
+
+    <a-row class="section-grid" :gutter="[16, 16]">
+      <a-col :xs="24" :xl="10">
+        <a-card :title="t('suggestions.statusChartTitle')">
+          <AnalyticsChart :option="suggestionStatusChartOption" height="280px" />
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :xl="14">
+        <a-card :title="t('suggestions.typeChartTitle')">
+          <AnalyticsChart :option="suggestionTypeChartOption" height="280px" />
+        </a-card>
+      </a-col>
+    </a-row>
 
     <section class="content-panel">
       <div v-if="loadError" class="form-message form-message-error">{{ loadError }}</div>
