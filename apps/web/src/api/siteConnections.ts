@@ -4,6 +4,8 @@ export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed';
 export type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media' | 'suggestion_apply';
 export type SuggestionStatus = 'pending' | 'approved' | 'applied' | 'failed' | 'rejected';
 export type SuggestionTargetType = 'article' | 'media';
+export type SeoAuditStatus = 'completed';
+export type SeoAuditIssueSeverity = 'low' | 'medium' | 'high';
 export type SuggestionType =
   | 'title'
   | 'meta_description'
@@ -66,6 +68,30 @@ export interface OptimizationSuggestion {
   appliedAt?: string;
   errorMessage?: string;
   applyTaskId?: string;
+}
+
+export interface SeoAudit {
+  id: string;
+  siteId: string;
+  status: SeoAuditStatus;
+  score: number;
+  rulesVersion: string;
+  createdAt: string;
+}
+
+export interface SeoAuditIssue {
+  id: string;
+  auditId: string;
+  siteId: string;
+  targetType: SuggestionTargetType;
+  targetCmsId: string;
+  ruleCode: string;
+  severity: SeoAuditIssueSeverity;
+  message: string;
+  currentValue?: string;
+  suggestedValue?: string;
+  fieldName: string;
+  createdAt: string;
 }
 
 export interface ManualRefreshTaskPayload {
@@ -144,6 +170,15 @@ export async function getOptimizationSuggestions(siteId: string) {
   return requestApi<{
     suggestions: OptimizationSuggestion[];
   }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions`);
+}
+
+export async function createSeoAudit(siteId: string) {
+  return requestApi<{
+    audit: SeoAudit;
+    issues: SeoAuditIssue[];
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/audits`, {
+    method: 'POST'
+  });
 }
 
 export async function approveOptimizationSuggestion(siteId: string, suggestionId: string) {

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import {
   applyOptimizationSuggestion,
   approveOptimizationSuggestion,
+  createSeoAudit,
   getOptimizationSuggestions,
   getSiteConnections,
   type OptimizationSuggestion,
@@ -19,6 +20,7 @@ const sites = ref<SiteConnection[]>([]);
 const suggestions = ref<OptimizationSuggestion[]>([]);
 const selectedSiteId = ref('');
 const isLoading = ref(false);
+const isAuditing = ref(false);
 const actionSuggestionId = ref('');
 const loadError = ref('');
 const actionMessage = ref('');
@@ -140,6 +142,8 @@ async function loadSuggestions() {
 async function handleSiteChange() {
   isLoading.value = true;
   loadError.value = '';
+  actionMessage.value = '';
+  actionError.value = '';
 
   try {
     await loadSuggestions();
@@ -147,6 +151,28 @@ async function handleSiteChange() {
     loadError.value = error instanceof Error ? error.message : t('suggestions.loadFailed');
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function runSeoAudit() {
+  if (!selectedSiteId.value) {
+    actionError.value = t('suggestions.noSiteSelected');
+    return;
+  }
+
+  isAuditing.value = true;
+  actionMessage.value = '';
+  actionError.value = '';
+  loadError.value = '';
+
+  try {
+    await createSeoAudit(selectedSiteId.value);
+    await loadSuggestions();
+    actionMessage.value = t('suggestions.auditCompleted');
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : t('suggestions.auditFailed');
+  } finally {
+    isAuditing.value = false;
   }
 }
 
@@ -206,6 +232,14 @@ onMounted(() => {
             {{ site.name }}
           </option>
         </select>
+        <button
+          class="secondary-button"
+          type="button"
+          :disabled="isLoading || isAuditing || !selectedSiteId"
+          @click="runSeoAudit"
+        >
+          {{ isAuditing ? t('suggestions.auditRunning') : t('suggestions.runAudit') }}
+        </button>
         <RouterLink class="primary-button" to="/app/article-suggestions">{{ t('suggestions.openArticle') }}</RouterLink>
       </div>
     </div>

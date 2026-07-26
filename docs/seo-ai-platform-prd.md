@@ -1228,11 +1228,11 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 在客戶後台補充「執行 SEO 審計」入口，讓 `/app/suggestions` 可直接觸發 `POST /api/v1/site-connections/:siteId/audits` 並刷新建議列表。
-2. 為 SEO 審計補充 Meta Description 真實同步欄位，兼容 Yoast、Rank Math、AIOSEO 和 WordPress 摘要回退。
-3. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
-4. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、Token 最近使用時間、最近同步、圖片屬性設定、應用程式密碼配置狀態和錯誤原因。
-5. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
-6. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
-7. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。
-8. 將任務隊列增加類型篩選、站點篩選和自動刷新，方便大站點監控批量任務。
+1. 為 SEO 審計補充 Meta Description 真實同步欄位，兼容 Yoast、Rank Math、AIOSEO 和 WordPress 摘要回退。
+2. 為 PostgreSQL Repository 補充文章和媒體列表分頁查詢，避免資料量增長後一次讀取過多。
+3. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、Token 最近使用時間、最近同步、圖片屬性設定、應用程式密碼配置狀態和錯誤原因。
+4. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
+5. 為 Worker 任務加入重試次數、退避時間和死信列表，避免單個 WordPress 站點暫時不可用時阻塞後續處理。
+6. 為已批准建議寫回補充快照與回滾接口，確保批量修改前後可以追蹤和恢復。
+7. 將任務隊列增加類型篩選、站點篩選和自動刷新，方便大站點監控批量任務。
+8. 為客戶後台建議頁補充最近一次 SEO 審計分數、規則版本與問題數摘要，讓用戶知道建議來源。

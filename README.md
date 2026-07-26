@@ -652,3 +652,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/ArticleSuggestionsView.vue`、`apps/web/src/views/TasksView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run build -w @aieo/web` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；Vite 僅提示既有大 chunk 警告。
 - 下一步行動清單：在建議頁增加手動執行 SEO 審計入口；補充 Meta Description 真實同步欄位；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾；將任務隊列增加類型篩選、站點篩選和自動刷新。
+
+### 2026-07-26：客戶後台建議頁 SEO 審計入口
+
+- 會話的主要目的：在客戶後台 `/app/suggestions` 補充可手動執行 SEO 審計的入口，讓用戶不離開建議頁即可生成並刷新建議。
+- 完成的主要任務：前端 API 封裝新增 `POST /api/v1/site-connections/:siteId/audits` 方法與 SEO 審計型別；`/app/suggestions` 新增「執行 SEO 審計」按鈕、執行中狀態、錯誤提示和成功後自動刷新建議列表；補充繁體中文與英文介面文案。
+- 關鍵決策和解決方案：沿用既有後端同步審計接口，不新增後端路由；按目前已選擇且已連接的站點觸發審計；審計成功後重新拉取建議列表，確保頁面顯示最新審計產生的建議。
+- 使用的技術棧：Vue 3、TypeScript、Composition API、Vue I18n、Fastify API、JWT Bearer Token。
+- 新增或修改文件：修改 `apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run build -w @aieo/web` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；Vite 僅提示既有大 chunk 警告與第三方 `#__PURE__` 註釋提示。
+- 下一步行動清單：補充 Meta Description 真實同步欄位；為文章與媒體列表補充分頁查詢；為 WordPress 插件新增只讀診斷頁；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾。
