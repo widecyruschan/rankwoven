@@ -31,6 +31,54 @@ wait_for_url() {
   exit 1
 }
 
+build_login_payload() {
+  python3 -c 'import json, os; print(json.dumps({"email": os.environ["DEPLOY_SMOKE_EMAIL"], "password": os.environ["DEPLOY_SMOKE_PASSWORD"]}))'
+}
+
+extract_auth_token() {
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["data"]["token"])'
+}
+
+wait_for_authenticated_url() {
+  local url="$1"
+  local label="$2"
+  local max_attempts="${3:-30}"
+  local sleep_seconds="${4:-5}"
+
+  for attempt in $(seq 1 "$max_attempts"); do
+    local login_body
+    local token
+    local status
+
+    login_body="$(curl -fsS \
+      -H 'Content-Type: application/json' \
+      -d "$(build_login_payload)" \
+      "$DEPLOY_SMOKE_LOGIN_URL" || true)"
+    token="$(printf '%s' "$login_body" | extract_auth_token 2>/dev/null || true)"
+
+    if [[ -n "$token" ]]; then
+      status="$(curl -fsS \
+        -H "Authorization: Bearer $token" \
+        -o /dev/null \
+        -w '%{http_code}' \
+        "$url" || true)"
+    else
+      status="login_failed"
+    fi
+
+    if [[ "$status" == "200" ]]; then
+      echo "${label} authenticated check passed: ${url}"
+      return 0
+    fi
+
+    echo "${label} authenticated check waiting (${attempt}/${max_attempts}), status=${status:-curl_failed}"
+    sleep "$sleep_seconds"
+  done
+
+  echo "${label} authenticated check failed: ${url}" >&2
+  exit 1
+}
+
 require_env "DEPLOY_HOST"
 
 DEPLOY_USER="${DEPLOY_USER:-root}"
@@ -40,6 +88,9 @@ DEPLOY_PROFILE="${DEPLOY_PROFILE:-data}"
 DEPLOY_REF="${DEPLOY_REF:-HEAD}"
 DEPLOY_HEALTH_URL="${DEPLOY_HEALTH_URL:-https://api.rankwoven.com/health}"
 DEPLOY_SMOKE_URL="${DEPLOY_SMOKE_URL:-https://api.rankwoven.com/api/v1/site-connections}"
+DEPLOY_SMOKE_LOGIN_URL="${DEPLOY_SMOKE_LOGIN_URL:-https://api.rankwoven.com/api/v1/auth/login}"
+DEPLOY_SMOKE_EMAIL="${DEPLOY_SMOKE_EMAIL:-demo@rankwoven.com}"
+DEPLOY_SMOKE_PASSWORD="${DEPLOY_SMOKE_PASSWORD:-rankwoven}"
 REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 DEPLOY_COMMIT="$(git rev-parse "$DEPLOY_REF")"
 
@@ -86,6 +137,6 @@ docker compose --profile '$DEPLOY_PROFILE' up -d --build
 docker compose --profile '$DEPLOY_PROFILE' ps"
 
 wait_for_url "$DEPLOY_HEALTH_URL" "Health"
-wait_for_url "$DEPLOY_SMOKE_URL" "Smoke"
+wait_for_authenticated_url "$DEPLOY_SMOKE_URL" "Smoke"
 
 echo "Deployment completed: ${DEPLOY_COMMIT}"

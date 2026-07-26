@@ -102,4 +102,7 @@ jobs:
           DEPLOY_REF: HEAD
           DEPLOY_HEALTH_URL: https://api.rankwoven.com/health
           DEPLOY_SMOKE_URL: https://api.rankwoven.com/api/v1/site-connections
+          DEPLOY_SMOKE_LOGIN_URL: https://api.rankwoven.com/api/v1/auth/login
+          DEPLOY_SMOKE_EMAIL: ${{ secrets.DEPLOY_SMOKE_EMAIL || 'demo@rankwoven.com' }}
+          DEPLOY_SMOKE_PASSWORD: ${{ secrets.DEPLOY_SMOKE_PASSWORD || 'rankwoven' }}
         run: bash scripts/deploy-production.sh

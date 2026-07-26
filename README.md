@@ -632,3 +632,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：新增 `apps/api/src/auth.ts`、`apps/api/src/seoOptimization.ts` 和 `apps/web/src/api/auth.ts`；修改 `apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/router/index.ts`、`apps/web/src/stores/auth.ts`、`apps/web/src/views/LoginView.vue`、`apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/i18n.ts`、`apps/worker/src/index.ts`、`apps/worker/tests/worker.test.ts`、`apps/worker/package.json`、`package-lock.json`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run build -w @aieo/api` 通過；`npm run test -w @aieo/api -- siteConnections.test.ts` 通過；`npm run build -w @aieo/web` 通過，Vite 僅提示既有大 chunk 警告；`npm run build -w @aieo/worker` 通過；`npm run test -w @aieo/worker` 通過；WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
 - 下一步行動清單：將客戶後台 `/app/suggestions` 和 `/app/article-suggestions` 接入真實建議 API；將 `/app/tasks` 接入全局任務隊列；補充 Meta Description 真實同步欄位；為 Worker 增加重試、退避和死信列表；建立資料庫備份和遷移版本管理流程；為已批准建議寫回補充快照與回滾。
+
+### 2026-07-26：修復部署 Smoke Check 權限校驗
+
+- 會話的主要目的：修復 GitHub Actions 生產部署 smoke check 因 `/api/v1/site-connections` 需要登入而持續返回 `401` 的問題。
+- 完成的主要任務：更新 `scripts/deploy-production.sh`，保留 `/health` 匿名健康檢查；Smoke Check 先調用 `/api/v1/auth/login` 取得 JWT，再以 Bearer Token 訪問 `/api/v1/site-connections`；更新 GitHub Actions 傳入登入 URL 和可覆寫的 `DEPLOY_SMOKE_EMAIL`、`DEPLOY_SMOKE_PASSWORD`。
+- 關鍵決策和解決方案：不放開受保護的站點列表接口，改為讓部署檢查符合真實權限模型；未配置 GitHub Secrets 時仍使用本地 Demo 帳號，後續可在生產 Secrets 中替換為專用 smoke 帳號。
+- 使用的技術棧：Bash、curl、Python JSON、GitHub Actions、Fastify Auth API。
+- 新增或修改文件：修改 `.github/workflows/production-deploy.yml`、`scripts/deploy-production.sh` 和 `README.md`。
+- 驗證結果：`bash -n scripts/deploy-production.sh` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。
+- 下一步行動清單：重新觸發 GitHub Actions 生產部署；為生產建立專用 smoke 帳號並配置 `DEPLOY_SMOKE_EMAIL`、`DEPLOY_SMOKE_PASSWORD` Secrets；將 `/app/tasks` 和建議頁接入真實 API；為 Worker 增加重試、退避和死信列表。
