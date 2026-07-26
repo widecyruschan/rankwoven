@@ -141,6 +141,7 @@ describePostgres('PostgreSQL site connection repository', () => {
             sc.token_preview,
             sc.wordpress_admin_username,
             sc.wordpress_application_password_encrypted,
+            sc.last_token_used_at,
             COUNT(DISTINCT sa.id)::int AS article_count,
             COUNT(DISTINCT sm.id)::int AS media_count,
             COUNT(DISTINCT sr.id)::int AS sync_run_count
@@ -166,6 +167,7 @@ describePostgres('PostgreSQL site connection repository', () => {
         'abcd efgh ijkl mnop'
       );
       expect(persisted.rows[0].wordpress_application_password_encrypted).toMatch(/^v1:/);
+      expect(persisted.rows[0].last_token_used_at).toBeInstanceOf(Date);
 
       const credentialsResponse = await server.inject({
         method: 'PUT',
@@ -201,6 +203,18 @@ describePostgres('PostgreSQL site connection repository', () => {
         tokenPreview: `${regenerateBody.data.apiToken.slice(0, 8)}...`
       });
       expect(regenerateBody.data.apiToken).not.toBe(createBody.data.apiToken);
+      expect(regenerateBody.data.site).not.toHaveProperty('lastTokenUsedAt');
+
+      const resetTokenUsage = await pool.query(
+        `
+          SELECT last_token_used_at
+          FROM site_connections
+          WHERE id = $1
+        `,
+        [siteId]
+      );
+
+      expect(resetTokenUsage.rows[0].last_token_used_at).toBeNull();
 
       const oldTokenSyncResponse = await server.inject({
         method: 'POST',
@@ -215,6 +229,17 @@ describePostgres('PostgreSQL site connection repository', () => {
       });
 
       expect(oldTokenSyncResponse.statusCode).toBe(401);
+
+      const failedTokenUsage = await pool.query(
+        `
+          SELECT last_token_used_at
+          FROM site_connections
+          WHERE id = $1
+        `,
+        [siteId]
+      );
+
+      expect(failedTokenUsage.rows[0].last_token_used_at).toBeNull();
 
       const revokeResponse = await server.inject({
         method: 'POST',

@@ -87,6 +87,7 @@ describe('site connection routes', () => {
     expect(body.data.site.id).toEqual(expect.any(String));
     expect(body.data.apiToken).toMatch(/^rw_[a-f0-9]{32}$/);
     expect(body.data.site.tokenPreview).toBe(`${body.data.apiToken.slice(0, 8)}...`);
+    expect(body.data.site).not.toHaveProperty('lastTokenUsedAt');
   });
 
   it('lists connected sites without exposing full tokens', async () => {
@@ -230,7 +231,9 @@ describe('site connection routes', () => {
     });
 
     expect(syncResponse.statusCode).toBe(200);
-    expect(syncResponse.json()).toMatchObject({
+    const syncBody = syncResponse.json();
+
+    expect(syncBody).toMatchObject({
       success: true,
       data: {
         articlesReceived: 1,
@@ -244,6 +247,7 @@ describe('site connection routes', () => {
         }
       }
     });
+    expect(syncBody.data.site.lastTokenUsedAt).toEqual(expect.any(String));
 
     const articlesResponse = await server.inject({
       method: 'GET',
@@ -262,6 +266,22 @@ describe('site connection routes', () => {
             cmsId: '101',
             title: 'WordPress Image SEO Guide',
             featuredImageId: '501'
+          }
+        ]
+      }
+    });
+
+    const listResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/site-connections'
+    });
+
+    expect(listResponse.json()).toMatchObject({
+      data: {
+        sites: [
+          {
+            id: body.data.site.id,
+            lastTokenUsedAt: expect.any(String)
           }
         ]
       }
@@ -289,6 +309,7 @@ describe('site connection routes', () => {
     expect(regenerated.data.apiToken).toMatch(/^rw_[a-f0-9]{32}$/);
     expect(regenerated.data.apiToken).not.toBe(body.data.apiToken);
     expect(regenerated.data.site.tokenPreview).toBe(`${regenerated.data.apiToken.slice(0, 8)}...`);
+    expect(regenerated.data.site).not.toHaveProperty('lastTokenUsedAt');
 
     const oldTokenSyncResponse = await server.inject({
       method: 'POST',
@@ -316,7 +337,10 @@ describe('site connection routes', () => {
       }
     });
 
+    const newTokenSyncBody = newTokenSyncResponse.json();
+
     expect(newTokenSyncResponse.statusCode).toBe(200);
+    expect(newTokenSyncBody.data.site.lastTokenUsedAt).toEqual(expect.any(String));
   });
 
   it('revokes a site token and rejects future sync calls', async () => {

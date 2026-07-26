@@ -230,7 +230,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections/:siteId/sync`：由插件帶 Bearer Token 推送文章與媒體同步資料。
 - `GET /api/v1/site-connections/:siteId/articles`：帶 Bearer Token 查看已同步文章列表。
 
-站點連接、Token Hash、Token Preview、Token 狀態、WordPress 管理員應用程式密碼加密密文、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 和 `/app/article-sync` 已使用 `GET /api/v1/site-connections` 顯示站點列表、同步狀態和最近同步結果。
+站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、文章同步資料、媒體同步資料和同步批次記錄已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 和 `/app/article-sync` 已使用 `GET /api/v1/site-connections` 顯示站點列表、同步狀態和最近同步結果。
 
 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
@@ -571,3 +571,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：使用 WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過；已將插件更新到 Docker Desktop `cyruschan-wp` 測試環境，容器內 `php -l` 通過；`http://localhost:8088/` 返回 `200 OK`；插件狀態確認為 active。
 - 下一步行動清單：補充 WordPress 插件只讀診斷頁；為圖片批量更新加入更清晰的進度提示或 AJAX 執行；補充分頁同步與增量同步；為站點 Token 增加最後使用時間記錄。
+
+### 2026-07-26：站點 Token 最後使用時間記錄
+
+- 會話的主要目的：為站點 Token 增加最後使用時間記錄，方便後台判斷 WordPress 插件是否仍在同步或讀取資料。
+- 完成的主要任務：新增 `lastTokenUsedAt` API 欄位；PostgreSQL 新增 `site_connections.last_token_used_at` 欄位與索引；站點 Token 驗證成功時更新最後使用時間；重新生成 Token 時清空最後使用時間；客戶後台 `/app/sites` 新增 Token 最近使用欄位。
+- 關鍵決策和解決方案：`lastSyncAt` 保留為同步完成時間，`lastTokenUsedAt` 專門記錄 Token 是否仍被插件或站點側資料接口使用；吊銷 Token 不更新使用時間；重新生成 Token 後需等插件使用新 Token 才顯示新時間。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL、pg、Vitest、Vue 3、Vue I18n。
+- 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SitesView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`npm run test -w @aieo/api -- siteConnections.test.ts` 通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；`npm run build -w @aieo/web` 通過；`npm run lint` 通過。
+- 下一步行動清單：補充 WordPress 插件只讀診斷頁；補充分頁同步與增量同步；建立第一批 SEO 審計規則模型；為 PostgreSQL 建立定時備份和遷移版本管理。

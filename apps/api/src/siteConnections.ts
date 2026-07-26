@@ -77,6 +77,7 @@ export interface SiteConnection {
   pluginVersion?: string;
   status: SiteConnectionStatus;
   createdAt: string;
+  lastTokenUsedAt?: string;
   lastSyncAt?: string;
   lastSyncStats?: {
     articlesReceived: number;
@@ -131,6 +132,7 @@ CREATE TABLE IF NOT EXISTS site_connections (
   token_preview varchar(16) NOT NULL,
   status text NOT NULL DEFAULT 'connected' CHECK (status IN ('connected', 'revoked')),
   created_at timestamptz NOT NULL,
+  last_token_used_at timestamptz,
   last_sync_at timestamptz,
   last_sync_stats jsonb,
   wordpress_admin_username varchar(160),
@@ -152,6 +154,12 @@ ALTER TABLE site_connections
 
 ALTER TABLE site_connections
   ADD COLUMN IF NOT EXISTS wordpress_application_password_encrypted text;
+
+ALTER TABLE site_connections
+  ADD COLUMN IF NOT EXISTS last_token_used_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS idx_site_connections_last_token_used
+  ON site_connections(last_token_used_at DESC);
 
 CREATE TABLE IF NOT EXISTS sync_runs (
   id uuid PRIMARY KEY,
@@ -284,6 +292,7 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
     pluginVersion: connection.pluginVersion,
     status: connection.status,
     createdAt: connection.createdAt,
+    lastTokenUsedAt: connection.lastTokenUsedAt,
     lastSyncAt: connection.lastSyncAt,
     lastSyncStats: connection.lastSyncStats,
     tokenPreview: connection.tokenPreview,
@@ -302,6 +311,7 @@ function mapSiteRow(row: QueryResultRow): SiteConnection {
     pluginVersion: row.plugin_version ?? undefined,
     status: row.status,
     createdAt: toIsoString(row.created_at) ?? '',
+    lastTokenUsedAt: toIsoString(row.last_token_used_at),
     lastSyncAt: toIsoString(row.last_sync_at),
     lastSyncStats: toLastSyncStats(row.last_sync_stats),
     tokenPreview: row.token_preview,
@@ -397,6 +407,7 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       site.apiToken = apiToken;
       site.tokenPreview = getTokenPreview(apiToken);
       site.status = 'connected';
+      site.lastTokenUsedAt = undefined;
 
       return {
         site: toPublicConnection(site),
@@ -416,7 +427,12 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
     },
     async verifyToken(siteId, apiToken) {
       const site = sites.get(siteId);
-      return site?.status === 'connected' && site.apiToken === apiToken;
+      if (site?.status !== 'connected' || site.apiToken !== apiToken) {
+        return false;
+      }
+
+      site.lastTokenUsedAt = new Date().toISOString();
+      return true;
     },
     async saveSync(siteId, payload) {
       const site = sites.get(siteId);
@@ -585,7 +601,8 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         UPDATE site_connections
         SET api_token_hash = $2,
             token_preview = $3,
-            status = 'connected'
+            status = 'connected',
+            last_token_used_at = NULL
         WHERE id = $1
         RETURNING *
       `,
@@ -623,12 +640,12 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
 
     const result = await this.pool.query(
       `
-        SELECT 1
-        FROM site_connections
+        UPDATE site_connections
+        SET last_token_used_at = now()
         WHERE id = $1
           AND api_token_hash = $2
           AND status = 'connected'
-        LIMIT 1
+        RETURNING id
       `,
       [siteId, hashSiteToken(apiToken)]
     );

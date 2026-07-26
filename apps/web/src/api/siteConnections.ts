@@ -10,6 +10,7 @@ export interface SiteConnection {
   pluginVersion?: string;
   status: SiteConnectionStatus;
   createdAt: string;
+  lastTokenUsedAt?: string;
   lastSyncAt?: string;
   lastSyncStats?: {
     articlesReceived: number;
