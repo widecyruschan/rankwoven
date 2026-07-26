@@ -1221,8 +1221,7 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 4. 建立第一批 SEO 審計規則模型，先覆蓋標題、Meta Description、H1、圖片 Alt Text 和內部連結數。
 5. 設計建議記錄模型，支持文章建議、媒體建議、人工批准、應用和回滾。
 6. 實作已批准建議的 WordPress REST API 寫回任務，使用站點保存的管理員 Application Password。
-7. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、最近同步、應用程式密碼配置狀態和錯誤原因。
+7. 在 WordPress 插件中新增只讀診斷頁，顯示 API 連接、Token 狀態、最近同步、圖片屬性設定、應用程式密碼配置狀態和錯誤原因。
 8. 為 PostgreSQL Repository 補充分頁查詢和按站點篩選條件，避免文章列表資料量增長後一次讀取過多。
 9. 建立資料庫備份和遷移版本管理流程，避免後續生產部署時只依賴啟動時 `CREATE TABLE IF NOT EXISTS`。
-10. 監控首個 GitHub Actions 生產部署結果，確認 push 到 `main` 後能自動完成驗證、部署和健康檢查。
-11. 將客戶後台同步頁後續接入真正的手動同步任務 API，而不是只刷新同步狀態。
+10. 將客戶後台同步頁後續接入真正的手動同步任務 API，而不是只刷新同步狀態。

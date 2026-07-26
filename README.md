@@ -561,3 +561,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：新增 `.github/workflows/production-deploy.yml`、`scripts/deploy-production.sh` 和 `docs/deployment.md`；修改 `package.json`、`package-lock.json`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`bash -n scripts/deploy-production.sh` 通過；`npm ci --registry=https://registry.npmjs.org` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；GitHub Secrets 已配置 `HOSTINGER_VPS_HOST`、`HOSTINGER_VPS_USER`、`HOSTINGER_VPS_SSH_KEY` 和 `HOSTINGER_DEPLOY_PATH`。
 - 下一步行動清單：推送後監控首個 GitHub Actions 生產部署結果；為 PostgreSQL 建立定時備份和遷移版本管理；為站點 Token 增加最後使用時間記錄；補充 WordPress 分頁同步和增量同步。
+
+### 2026-07-26：WordPress 圖片屬性設定與批量更新頁
+
+- 會話的主要目的：按參考截圖在 WordPress 插件後台新增圖片屬性設定和批量更新兩個頁面。
+- 完成的主要任務：在 `Settings -> RankWoven SEO` 新增 `Image Attributes` 和 `Bulk Updater` 頁籤；支援新上傳圖片從檔案名自動產生標題、Alt Text、Caption 和 Description；支援清理檔案名中的連字號、底線、句號、逗號和數字；支援前台內容輸出時補上圖片 `title` 屬性；新增測試更新一張圖片、分批更新既有圖片和重設批量計數功能。
+- 關鍵決策和解決方案：批量更新每次處理 50 張圖片，避免大站點一次請求超時；測試和批量更新都使用目前圖片屬性設定；保留事件記錄，方便管理員確認處理結果；本次只在 WordPress 插件端處理圖片屬性，不新增 SaaS API。
+- 使用的技術棧：WordPress PHP Plugin、WordPress Attachment API、WP_HTML_Tag_Processor、Docker Desktop。
+- 新增或修改文件：修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：使用 WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過；已將插件更新到 Docker Desktop `cyruschan-wp` 測試環境，容器內 `php -l` 通過；`http://localhost:8088/` 返回 `200 OK`；插件狀態確認為 active。
+- 下一步行動清單：補充 WordPress 插件只讀診斷頁；為圖片批量更新加入更清晰的進度提示或 AJAX 執行；補充分頁同步與增量同步；為站點 Token 增加最後使用時間記錄。

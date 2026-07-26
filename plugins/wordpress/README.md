@@ -25,6 +25,8 @@ Settings -> RankWoven SEO
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
 - 保存 WordPress 管理員用戶名和 Application Password，供 SaaS 後續以該管理員身份寫回已批准修改。
+- 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
+- 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
 - 一鍵同步 Posts、Pages 和圖片媒體，調用 SaaS API 的 `POST /api/v1/site-connections/:siteId/sync`。
 - 顯示最近一次同步時間、文章數和媒體數。
@@ -53,6 +55,45 @@ SaaS 後端只保存加密後的 Application Password，不會在站點列表或
 ```text
 http://host.docker.internal:3011
 ```
+
+## 圖片屬性設定
+
+後台頁籤：
+
+```text
+Settings -> RankWoven SEO -> Image Attributes
+```
+
+可設定項：
+
+- 為新上傳圖片自動設定圖片標題。
+- 為新上傳圖片自動設定 Alt Text。
+- 為新上傳圖片自動設定媒體說明文字，也就是 Caption。
+- 為新上傳圖片自動設定內容說明，也就是 Description。
+- 從檔案名中移除連字號、底線、句號、逗號或數字。
+- 在前台內容輸出時，為缺少 `title` 屬性的圖片標籤補上圖片標題。
+
+範例：
+
+```text
+a-lot_like_love.jpg -> A Lot Like Love
+```
+
+## 圖片批量更新工具
+
+後台頁籤：
+
+```text
+Settings -> RankWoven SEO -> Bulk Updater
+```
+
+可用操作：
+
+- `Test Bulk Updater`：先更新一張圖片，方便管理員檢查結果。
+- `Run Bulk Updater`：每次處理下一批既有圖片，預設 50 張，避免大站一次請求超時。
+- `Reset Counter`：重新從第一張圖片開始處理。
+
+批量更新會按照目前 `Image Attributes` 的設定，更新既有圖片的標題、Alt Text、Caption 和 Description。正式執行前應先備份 WordPress 資料庫。
 
 ## SaaS API 對接
 
@@ -119,5 +160,5 @@ Content-Type: application/json
 - 不保存 WordPress 主登入密碼，只錄入用戶自行建立的 Application Password。
 - 不直接無審核批量發布內容。
 - 不提交任何 `.env` 或真實 API Key。
-- MVP 先使用手動同步，每次最多推送 100 篇文章和 100 個圖片媒體。
+- MVP 先使用手動同步，每次最多推送 100 篇文章和 100 個圖片媒體；圖片屬性批量更新每次最多處理 50 張既有圖片。
 - 站點連接、Token Hash、同步資料和加密後 WordPress Application Password 已由 API 保存到 PostgreSQL；未配置資料庫時仍可使用內存 Repository 測試。

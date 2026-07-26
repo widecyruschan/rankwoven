@@ -22,6 +22,10 @@ final class RankWoven_SEO_Plugin
     private const OPTION_WP_ADMIN_USERNAME = 'rankwoven_wp_admin_username';
     private const OPTION_WP_APPLICATION_PASSWORD = 'rankwoven_wp_application_password';
     private const OPTION_LAST_SYNC_RESULT = 'rankwoven_last_sync_result';
+    private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
+    private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
+    private const OPTION_IMAGE_BULK_LOG = 'rankwoven_image_bulk_log';
+    private const IMAGE_BULK_BATCH_SIZE = 50;
     private const REST_NAMESPACE = 'rankwoven/v1';
 
     public function __construct()
@@ -30,6 +34,12 @@ final class RankWoven_SEO_Plugin
         add_action('admin_post_rankwoven_save_settings', [$this, 'handle_save_settings']);
         add_action('admin_post_rankwoven_connect_site', [$this, 'handle_connect_site']);
         add_action('admin_post_rankwoven_sync_content', [$this, 'handle_sync_content']);
+        add_action('admin_post_rankwoven_save_image_attributes', [$this, 'handle_save_image_attributes']);
+        add_action('admin_post_rankwoven_test_image_attributes', [$this, 'handle_test_image_attributes']);
+        add_action('admin_post_rankwoven_bulk_update_image_attributes', [$this, 'handle_bulk_update_image_attributes']);
+        add_action('admin_post_rankwoven_reset_image_bulk_counter', [$this, 'handle_reset_image_bulk_counter']);
+        add_action('add_attachment', [$this, 'handle_new_attachment']);
+        add_filter('the_content', [$this, 'add_image_title_attributes_to_content']);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
     }
 
@@ -56,10 +66,24 @@ final class RankWoven_SEO_Plugin
         $wp_admin_username = get_option(self::OPTION_WP_ADMIN_USERNAME, '');
         $wp_application_password = get_option(self::OPTION_WP_APPLICATION_PASSWORD, '');
         $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
+        $active_tab = $this->get_active_admin_tab();
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('RankWoven SEO', 'rankwoven-seo'); ?></h1>
             <?php $this->render_admin_notice(); ?>
+            <?php $this->render_admin_tabs($active_tab); ?>
+
+            <?php if ($active_tab === 'image_attributes') : ?>
+                <?php $this->render_image_attributes_page(); ?>
+        </div>
+                <?php return; ?>
+            <?php endif; ?>
+
+            <?php if ($active_tab === 'image_bulk') : ?>
+                <?php $this->render_image_bulk_page(); ?>
+        </div>
+                <?php return; ?>
+            <?php endif; ?>
 
             <h2><?php echo esc_html__('API Connection', 'rankwoven-seo'); ?></h2>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -195,6 +219,119 @@ final class RankWoven_SEO_Plugin
         <?php
     }
 
+    private function render_admin_tabs(string $active_tab): void
+    {
+        $tabs = [
+            'connection' => __('Site Connection', 'rankwoven-seo'),
+            'image_attributes' => __('Image Attributes', 'rankwoven-seo'),
+            'image_bulk' => __('Bulk Updater', 'rankwoven-seo')
+        ];
+        ?>
+        <h2 class="nav-tab-wrapper">
+            <?php foreach ($tabs as $tab => $label) : ?>
+                <a
+                    class="nav-tab <?php echo $active_tab === $tab ? 'nav-tab-active' : ''; ?>"
+                    href="<?php echo esc_url(add_query_arg([
+                        'page' => 'rankwoven-seo',
+                        'rankwoven_tab' => $tab
+                    ], admin_url('options-general.php'))); ?>"
+                >
+                    <?php echo esc_html($label); ?>
+                </a>
+            <?php endforeach; ?>
+        </h2>
+        <?php
+    }
+
+    private function render_image_attributes_page(): void
+    {
+        $settings = $this->get_image_attribute_settings();
+        ?>
+        <h2><?php echo esc_html__('Image Attribute Settings', 'rankwoven-seo'); ?></h2>
+        <p>
+            <?php echo esc_html__('Use new image filenames to automatically generate image title, alternative text, caption, and description.', 'rankwoven-seo'); ?>
+        </p>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('rankwoven_save_image_attributes'); ?>
+            <input type="hidden" name="action" value="rankwoven_save_image_attributes" />
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php echo esc_html__('General Settings', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <?php $this->render_checkbox('set_title', $settings, __('Set title for newly uploaded images', 'rankwoven-seo')); ?>
+                        <?php $this->render_checkbox('set_alt_text', $settings, __('Set alternative text for newly uploaded images', 'rankwoven-seo')); ?>
+                        <?php $this->render_checkbox('set_caption', $settings, __('Set caption for newly uploaded images', 'rankwoven-seo')); ?>
+                        <?php $this->render_checkbox('set_description', $settings, __('Set description for newly uploaded images', 'rankwoven-seo')); ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Filename Cleanup', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <?php $this->render_checkbox('remove_hyphen', $settings, __('Remove hyphens from filenames', 'rankwoven-seo'), '-'); ?>
+                        <?php $this->render_checkbox('remove_underscore', $settings, __('Remove underscores from filenames', 'rankwoven-seo'), '_'); ?>
+                        <?php $this->render_checkbox('remove_period', $settings, __('Remove periods from filenames', 'rankwoven-seo'), '.'); ?>
+                        <?php $this->render_checkbox('remove_comma', $settings, __('Remove commas from filenames', 'rankwoven-seo'), ','); ?>
+                        <?php $this->render_checkbox('remove_numbers', $settings, __('Remove all numbers from filenames', 'rankwoven-seo')); ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Basic SEO Settings', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <?php $this->render_checkbox('insert_title_attribute', $settings, __('Insert image title into content HTML output', 'rankwoven-seo')); ?>
+                        <p class="description">
+                            <?php echo esc_html__('When enabled, RankWoven adds a title attribute to rendered image tags when a title is available.', 'rankwoven-seo'); ?>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(__('Save Image Attribute Settings', 'rankwoven-seo')); ?>
+        </form>
+        <?php
+    }
+
+    private function render_image_bulk_page(): void
+    {
+        $last_processed_id = (int) get_option(self::OPTION_IMAGE_BULK_LAST_ID, 0);
+        $remaining_count = $this->get_remaining_image_count($last_processed_id);
+        $processed_count = $this->get_processed_image_count($last_processed_id);
+        $log = get_option(self::OPTION_IMAGE_BULK_LOG, []);
+        ?>
+        <h2><?php echo esc_html__('Bulk Image Attribute Updater', 'rankwoven-seo'); ?></h2>
+        <p>
+            <?php echo esc_html__('Run the bulk updater to update existing image titles, captions, descriptions, and alternative text from filenames.', 'rankwoven-seo'); ?>
+        </p>
+        <div class="notice notice-warning inline">
+            <p><strong><?php echo esc_html__('Important:', 'rankwoven-seo'); ?></strong> <?php echo esc_html__('Back up this WordPress database before running a bulk update.', 'rankwoven-seo'); ?></p>
+            <p><?php echo esc_html__('Use the test button to update one image and review the result first. Each bulk run processes the next batch of images to reduce timeout risk.', 'rankwoven-seo'); ?></p>
+        </div>
+
+        <p>
+            <?php $this->render_admin_post_button('rankwoven_bulk_update_image_attributes', 'rankwoven_bulk_update_image_attributes', __('Run Bulk Updater', 'rankwoven-seo'), 'primary'); ?>
+            <?php $this->render_admin_post_button('rankwoven_test_image_attributes', 'rankwoven_test_image_attributes', __('Test Bulk Updater', 'rankwoven-seo'), 'secondary'); ?>
+            <button type="button" class="button" disabled><?php echo esc_html__('Stop Bulk Updater', 'rankwoven-seo'); ?></button>
+        </p>
+
+        <h2><?php echo esc_html__('Tools', 'rankwoven-seo'); ?></h2>
+        <p><?php echo esc_html__('Reset the counter if you need to start processing images again from the beginning.', 'rankwoven-seo'); ?></p>
+        <?php $this->render_admin_post_button('rankwoven_reset_image_bulk_counter', 'rankwoven_reset_image_bulk_counter', __('Reset Counter', 'rankwoven-seo'), 'secondary'); ?>
+
+        <h2><?php echo esc_html__('Event Log', 'rankwoven-seo'); ?></h2>
+        <table class="widefat striped">
+            <tbody>
+                <tr>
+                    <th><?php echo esc_html__('Remaining images', 'rankwoven-seo'); ?></th>
+                    <td><?php echo esc_html((string) $remaining_count); ?></td>
+                </tr>
+                <tr>
+                    <th><?php echo esc_html__('Processed images', 'rankwoven-seo'); ?></th>
+                    <td><?php echo esc_html((string) $processed_count); ?></td>
+                </tr>
+            </tbody>
+        </table>
+        <textarea class="large-text code" rows="12" readonly><?php echo esc_textarea(implode("\n", is_array($log) ? $log : [])); ?></textarea>
+        <?php
+    }
+
     public function handle_save_settings(): void
     {
         $this->assert_admin_action('rankwoven_save_settings');
@@ -326,6 +463,104 @@ final class RankWoven_SEO_Plugin
         ]);
 
         $this->redirect_with_status('sync_completed');
+    }
+
+    public function handle_save_image_attributes(): void
+    {
+        $this->assert_admin_action('rankwoven_save_image_attributes');
+
+        update_option(self::OPTION_IMAGE_ATTRIBUTE_SETTINGS, $this->sanitize_image_attribute_settings(wp_unslash($_POST)));
+        $this->redirect_with_status('image_attribute_settings_saved', 'image_attributes');
+    }
+
+    public function handle_test_image_attributes(): void
+    {
+        $this->assert_admin_action('rankwoven_test_image_attributes');
+
+        $image_ids = $this->get_next_image_attachment_ids(0, 1);
+        if (empty($image_ids)) {
+            $this->append_image_bulk_log(__('No image attachments found for testing.', 'rankwoven-seo'));
+            $this->redirect_with_status('image_bulk_no_images', 'image_bulk');
+        }
+
+        $result = $this->update_image_attachment_attributes((int) $image_ids[0]);
+        $this->append_image_bulk_log(sprintf(
+            /* translators: 1: attachment ID, 2: generated image text */
+            __('Test updated image #%1$d as "%2$s".', 'rankwoven-seo'),
+            (int) $image_ids[0],
+            $result
+        ));
+
+        $this->redirect_with_status('image_bulk_test_completed', 'image_bulk');
+    }
+
+    public function handle_bulk_update_image_attributes(): void
+    {
+        $this->assert_admin_action('rankwoven_bulk_update_image_attributes');
+
+        $last_processed_id = (int) get_option(self::OPTION_IMAGE_BULK_LAST_ID, 0);
+        $image_ids = $this->get_next_image_attachment_ids($last_processed_id, self::IMAGE_BULK_BATCH_SIZE);
+
+        if (empty($image_ids)) {
+            $this->append_image_bulk_log(__('No remaining image attachments to update.', 'rankwoven-seo'));
+            $this->redirect_with_status('image_bulk_no_images', 'image_bulk');
+        }
+
+        $updated_count = 0;
+        foreach ($image_ids as $image_id) {
+            $this->update_image_attachment_attributes((int) $image_id);
+            update_option(self::OPTION_IMAGE_BULK_LAST_ID, (int) $image_id);
+            $updated_count++;
+        }
+
+        $this->append_image_bulk_log(sprintf(
+            /* translators: 1: updated count, 2: highest processed attachment ID */
+            __('Bulk updated %1$d images. Last processed attachment ID: %2$d.', 'rankwoven-seo'),
+            $updated_count,
+            (int) end($image_ids)
+        ));
+
+        $this->redirect_with_status('image_bulk_completed', 'image_bulk');
+    }
+
+    public function handle_reset_image_bulk_counter(): void
+    {
+        $this->assert_admin_action('rankwoven_reset_image_bulk_counter');
+
+        update_option(self::OPTION_IMAGE_BULK_LAST_ID, 0);
+        $this->append_image_bulk_log(__('Bulk updater counter was reset.', 'rankwoven-seo'));
+        $this->redirect_with_status('image_bulk_counter_reset', 'image_bulk');
+    }
+
+    public function handle_new_attachment(int $attachment_id): void
+    {
+        if (!$this->is_image_attachment($attachment_id)) {
+            return;
+        }
+
+        $this->update_image_attachment_attributes($attachment_id);
+    }
+
+    public function add_image_title_attributes_to_content(string $content): string
+    {
+        $settings = $this->get_image_attribute_settings();
+        if (!$settings['insert_title_attribute'] || !class_exists('WP_HTML_Tag_Processor')) {
+            return $content;
+        }
+
+        $processor = new WP_HTML_Tag_Processor($content);
+        while ($processor->next_tag('img')) {
+            if ((string) $processor->get_attribute('title') !== '') {
+                continue;
+            }
+
+            $title = $this->get_title_for_content_image($processor);
+            if ($title !== '') {
+                $processor->set_attribute('title', $title);
+            }
+        }
+
+        return $processor->get_updated_html();
     }
 
     public function register_rest_routes(): void
@@ -505,6 +740,208 @@ final class RankWoven_SEO_Plugin
         return min(100, max(1, $per_page));
     }
 
+    private function get_active_admin_tab(): string
+    {
+        $tab = sanitize_key(wp_unslash($_GET['rankwoven_tab'] ?? 'connection'));
+        return in_array($tab, ['connection', 'image_attributes', 'image_bulk'], true) ? $tab : 'connection';
+    }
+
+    private function get_image_attribute_settings(): array
+    {
+        $settings = get_option(self::OPTION_IMAGE_ATTRIBUTE_SETTINGS, []);
+        $defaults = [
+            'set_title' => true,
+            'set_alt_text' => true,
+            'set_caption' => true,
+            'set_description' => true,
+            'remove_hyphen' => true,
+            'remove_underscore' => true,
+            'remove_period' => false,
+            'remove_comma' => false,
+            'remove_numbers' => false,
+            'insert_title_attribute' => true
+        ];
+
+        return array_merge($defaults, is_array($settings) ? $settings : []);
+    }
+
+    private function sanitize_image_attribute_settings(array $input): array
+    {
+        $defaults = $this->get_image_attribute_settings();
+        $sanitized = [];
+
+        foreach (array_keys($defaults) as $key) {
+            $sanitized[$key] = !empty($input['rankwoven_image_attributes'][$key]);
+        }
+
+        return $sanitized;
+    }
+
+    private function render_checkbox(string $key, array $settings, string $label, string $symbol = ''): void
+    {
+        ?>
+        <label style="display:block;margin:0 0 10px;">
+            <input
+                type="checkbox"
+                name="rankwoven_image_attributes[<?php echo esc_attr($key); ?>]"
+                value="1"
+                <?php checked(!empty($settings[$key])); ?>
+            />
+            <?php echo esc_html($label); ?>
+            <?php if ($symbol !== '') : ?>
+                <code><?php echo esc_html($symbol); ?></code>
+            <?php endif; ?>
+        </label>
+        <?php
+    }
+
+    private function render_admin_post_button(string $action, string $nonce_action, string $label, string $type): void
+    {
+        ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin:0 8px 0 0;">
+            <?php wp_nonce_field($nonce_action); ?>
+            <input type="hidden" name="action" value="<?php echo esc_attr($action); ?>" />
+            <?php submit_button($label, $type, 'submit', false); ?>
+        </form>
+        <?php
+    }
+
+    private function update_image_attachment_attributes(int $attachment_id): string
+    {
+        if (!$this->is_image_attachment($attachment_id)) {
+            return '';
+        }
+
+        $settings = $this->get_image_attribute_settings();
+        $generated_text = $this->generate_image_text_from_filename($attachment_id);
+        if ($generated_text === '') {
+            return '';
+        }
+
+        $post_update = ['ID' => $attachment_id];
+        if ($settings['set_title']) {
+            $post_update['post_title'] = $generated_text;
+        }
+        if ($settings['set_caption']) {
+            $post_update['post_excerpt'] = $generated_text;
+        }
+        if ($settings['set_description']) {
+            $post_update['post_content'] = $generated_text;
+        }
+
+        if (count($post_update) > 1) {
+            wp_update_post(wp_slash($post_update));
+        }
+
+        if ($settings['set_alt_text']) {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
+        }
+
+        return $generated_text;
+    }
+
+    private function generate_image_text_from_filename(int $attachment_id): string
+    {
+        $attached_file = get_attached_file($attachment_id);
+        if (!is_string($attached_file) || $attached_file === '') {
+            return '';
+        }
+
+        $settings = $this->get_image_attribute_settings();
+        $filename = pathinfo($attached_file, PATHINFO_FILENAME);
+        $text = str_replace(['-', '_', '.', ','], [
+            $settings['remove_hyphen'] ? ' ' : '-',
+            $settings['remove_underscore'] ? ' ' : '_',
+            $settings['remove_period'] ? ' ' : '.',
+            $settings['remove_comma'] ? ' ' : ','
+        ], $filename);
+
+        if ($settings['remove_numbers']) {
+            $text = preg_replace('/\d+/', '', $text) ?? $text;
+        }
+
+        $text = preg_replace('/\s+/', ' ', trim($text)) ?? trim($text);
+        return ucwords($text);
+    }
+
+    private function is_image_attachment(int $attachment_id): bool
+    {
+        return wp_attachment_is_image($attachment_id);
+    }
+
+    private function get_next_image_attachment_ids(int $last_processed_id, int $limit): array
+    {
+        global $wpdb;
+
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_type = 'attachment'
+               AND post_status = 'inherit'
+               AND post_mime_type LIKE %s
+               AND ID > %d
+             ORDER BY ID ASC
+             LIMIT %d",
+            'image/%',
+            $last_processed_id,
+            max(1, $limit)
+        ));
+
+        return array_map('intval', $ids);
+    }
+
+    private function get_remaining_image_count(int $last_processed_id): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type = 'attachment'
+               AND post_status = 'inherit'
+               AND post_mime_type LIKE %s
+               AND ID > %d",
+            'image/%',
+            $last_processed_id
+        ));
+    }
+
+    private function get_processed_image_count(int $last_processed_id): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type = 'attachment'
+               AND post_status = 'inherit'
+               AND post_mime_type LIKE %s
+               AND ID <= %d",
+            'image/%',
+            $last_processed_id
+        ));
+    }
+
+    private function append_image_bulk_log(string $message): void
+    {
+        $log = get_option(self::OPTION_IMAGE_BULK_LOG, []);
+        $log = is_array($log) ? array_map('sanitize_text_field', $log) : [];
+        $log[] = '[' . current_time('mysql') . '] ' . $message;
+        $log = array_slice($log, -30);
+
+        update_option(self::OPTION_IMAGE_BULK_LOG, $log);
+    }
+
+    private function get_title_for_content_image(object $processor): string
+    {
+        $class = (string) $processor->get_attribute('class');
+        if (preg_match('/wp-image-(\d+)/', $class, $matches)) {
+            $title = get_the_title((int) $matches[1]);
+            if (is_string($title) && $title !== '') {
+                return $title;
+            }
+        }
+
+        return sanitize_text_field((string) $processor->get_attribute('alt'));
+    }
+
     private function get_api_base_url(): string
     {
         return untrailingslashit(esc_url_raw(get_option(self::OPTION_API_BASE_URL, '')));
@@ -570,10 +1007,11 @@ final class RankWoven_SEO_Plugin
         check_admin_referer($nonce_action);
     }
 
-    private function redirect_with_status(string $status): void
+    private function redirect_with_status(string $status, string $tab = 'connection'): void
     {
         wp_safe_redirect(add_query_arg([
             'page' => 'rankwoven-seo',
+            'rankwoven_tab' => $tab,
             'rankwoven_status' => $status
         ], admin_url('options-general.php')));
         exit;
@@ -591,6 +1029,11 @@ final class RankWoven_SEO_Plugin
             'wordpress_credentials_updated' => ['updated', __('WordPress application password saved locally and updated in RankWoven.', 'rankwoven-seo')],
             'site_connected' => ['updated', __('Site connected successfully.', 'rankwoven-seo')],
             'sync_completed' => ['updated', __('Content sync completed.', 'rankwoven-seo')],
+            'image_attribute_settings_saved' => ['updated', __('Image attribute settings saved.', 'rankwoven-seo')],
+            'image_bulk_test_completed' => ['updated', __('Test bulk update completed for one image.', 'rankwoven-seo')],
+            'image_bulk_completed' => ['updated', __('Bulk image attribute update completed for the next batch.', 'rankwoven-seo')],
+            'image_bulk_counter_reset' => ['updated', __('Bulk updater counter reset.', 'rankwoven-seo')],
+            'image_bulk_no_images' => ['updated', __('No remaining image attachments were found.', 'rankwoven-seo')],
             'missing_api_base_url' => ['error', __('Please set the API Base URL first.', 'rankwoven-seo')],
             'missing_site_credentials' => ['error', __('Please connect this site before syncing content.', 'rankwoven-seo')],
             'missing_wordpress_application_password' => ['error', __('Please save a WordPress administrator username and application password before connecting this site.', 'rankwoven-seo')],
