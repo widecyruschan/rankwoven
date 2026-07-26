@@ -28,8 +28,8 @@ Settings -> RankWoven SEO
 - 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
-- 一鍵同步 Posts、Pages 和圖片媒體，調用 SaaS API 的 `POST /api/v1/site-connections/:siteId/sync`。
-- 顯示最近一次同步時間、文章數和媒體數。
+- 一鍵分頁同步 Posts、Pages 和圖片媒體，調用 SaaS API 的 `POST /api/v1/site-connections/:siteId/sync`。
+- 顯示最近一次同步時間、文章數、媒體數、同步頁數和是否達到同步上限。
 - 當 SaaS 返回 `SITE_TOKEN_INVALID` 時，提示用戶重新生成 Token 並重新保存或重新連接站點。
 
 ## WordPress Application Password
@@ -112,6 +112,8 @@ Authorization: Bearer <Site Token>
 Content-Type: application/json
 ```
 
+手動同步會以每頁 100 筆分頁讀取 WordPress Posts、Pages 和圖片媒體，不再只推送第一頁資料。為符合目前 SaaS API 單次 payload 驗證上限，單次手動同步最多推送 1,000 篇文章和 2,000 個圖片媒體；若站點內容量超過此上限，插件會在最近同步結果中顯示已達同步上限。後續增量同步和任務隊列完成後，會再拆分為多批同步。
+
 ## 站點側 REST API
 
 插件同時預留站點側 REST API，供後續 SaaS Worker 拉取分頁資料或診斷連接狀態。
@@ -160,5 +162,5 @@ Content-Type: application/json
 - 不保存 WordPress 主登入密碼，只錄入用戶自行建立的 Application Password。
 - 不直接無審核批量發布內容。
 - 不提交任何 `.env` 或真實 API Key。
-- MVP 先使用手動同步，每次最多推送 100 篇文章和 100 個圖片媒體；圖片屬性批量更新每次最多處理 50 張既有圖片。
+- MVP 先使用手動同步，會分頁推送最多 1,000 篇文章和 2,000 個圖片媒體；圖片屬性批量更新每次最多處理 50 張既有圖片。
 - 站點連接、Token Hash、同步資料和加密後 WordPress Application Password 已由 API 保存到 PostgreSQL；未配置資料庫時仍可使用內存 Repository 測試。

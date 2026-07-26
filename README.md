@@ -581,3 +581,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SitesView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run test -w @aieo/api -- siteConnections.test.ts` 通過；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；`npm run build -w @aieo/web` 通過；`npm run lint` 通過。
 - 下一步行動清單：補充 WordPress 插件只讀診斷頁；補充分頁同步與增量同步；建立第一批 SEO 審計規則模型；為 PostgreSQL 建立定時備份和遷移版本管理。
+
+### 2026-07-26：WordPress 插件分頁同步
+
+- 會話的主要目的：為 WordPress 插件補充分頁同步，避免手動同步每次只取第一批 100 篇文章和 100 個圖片媒體。
+- 完成的主要任務：將後台手動同步改為分頁讀取 Posts、Pages 和圖片媒體；新增同步頁數和同步上限狀態記錄；最近同步結果展示文章頁數、媒體頁數和是否達到單次 payload 上限。
+- 關鍵決策和解決方案：暫不擴大 SaaS API 單次 payload schema，插件先按目前後端上限最多推送 1,000 篇文章和 2,000 個圖片媒體；若大站超過上限，插件顯示已達同步上限，後續再由後端同步任務和增量同步拆批處理。
+- 使用的技術棧：WordPress PHP Plugin、WordPress Posts API、WordPress Attachment API、Fastify Sync API、Docker Desktop、Vitest。
+- 新增或修改文件：修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：使用 WordPress PHP Docker 鏡像執行 `php -l plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過；已將插件更新到 Docker Desktop `cyruschan-wp` 測試環境，容器內 `php -l` 通過；反射調用插件同步方法確認測試站同步 59 篇文章、240 個圖片媒體，其中媒體分 3 頁；本地臨時站點連接同步 API 返回 `200 OK` 並接收 59 篇文章、240 個媒體；`npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 和 PostgreSQL 整合測試均通過。
+- 下一步行動清單：增加增量同步參數；將手動同步升級為後端同步任務以支持大站多批同步；建立第一批 SEO 審計規則模型；新增 WordPress 插件只讀診斷頁。

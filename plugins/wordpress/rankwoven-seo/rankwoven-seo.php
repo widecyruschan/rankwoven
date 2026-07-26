@@ -26,6 +26,9 @@ final class RankWoven_SEO_Plugin
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
     private const OPTION_IMAGE_BULK_LOG = 'rankwoven_image_bulk_log';
     private const IMAGE_BULK_BATCH_SIZE = 50;
+    private const SYNC_PAGE_SIZE = 100;
+    private const SYNC_MAX_ARTICLES = 1000;
+    private const SYNC_MAX_MEDIA = 2000;
     private const REST_NAMESPACE = 'rankwoven/v1';
 
     public function __construct()
@@ -212,6 +215,27 @@ final class RankWoven_SEO_Plugin
                             <th><?php echo esc_html__('Media', 'rankwoven-seo'); ?></th>
                             <td><?php echo esc_html((string) ($last_sync_result['mediaReceived'] ?? 0)); ?></td>
                         </tr>
+                        <tr>
+                            <th><?php echo esc_html__('Article Pages Synced', 'rankwoven-seo'); ?></th>
+                            <td><?php echo esc_html((string) ($last_sync_result['articlePagesSynced'] ?? 1)); ?></td>
+                        </tr>
+                        <tr>
+                            <th><?php echo esc_html__('Media Pages Synced', 'rankwoven-seo'); ?></th>
+                            <td><?php echo esc_html((string) ($last_sync_result['mediaPagesSynced'] ?? 1)); ?></td>
+                        </tr>
+                        <?php if (!empty($last_sync_result['articleSyncTruncated']) || !empty($last_sync_result['mediaSyncTruncated'])) : ?>
+                            <tr>
+                                <th><?php echo esc_html__('Sync Limit', 'rankwoven-seo'); ?></th>
+                                <td>
+                                    <?php echo esc_html(sprintf(
+                                        /* translators: 1: article limit, 2: media limit */
+                                        __('Reached the current API payload limit. Articles are capped at %1$d and image media are capped at %2$d per manual sync.', 'rankwoven-seo'),
+                                        self::SYNC_MAX_ARTICLES,
+                                        self::SYNC_MAX_MEDIA
+                                    )); ?>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             <?php endif; ?>
@@ -427,8 +451,10 @@ final class RankWoven_SEO_Plugin
             $this->redirect_with_status('missing_site_credentials');
         }
 
-        $articles = $this->get_synced_articles(100, 1);
-        $media = $this->get_synced_media(100, 1);
+        $article_sync = $this->get_all_synced_articles();
+        $media_sync = $this->get_all_synced_media();
+        $articles = $article_sync['items'];
+        $media = $media_sync['items'];
         $response = wp_remote_post($this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/sync'), [
             'timeout' => 45,
             'headers' => [
@@ -459,7 +485,11 @@ final class RankWoven_SEO_Plugin
         update_option(self::OPTION_LAST_SYNC_RESULT, [
             'syncedAt' => gmdate('c'),
             'articlesReceived' => (int) ($body['data']['articlesReceived'] ?? count($articles)),
-            'mediaReceived' => (int) ($body['data']['mediaReceived'] ?? count($media))
+            'mediaReceived' => (int) ($body['data']['mediaReceived'] ?? count($media)),
+            'articlePagesSynced' => (int) $article_sync['pagesSynced'],
+            'mediaPagesSynced' => (int) $media_sync['pagesSynced'],
+            'articleSyncTruncated' => (bool) $article_sync['truncated'],
+            'mediaSyncTruncated' => (bool) $media_sync['truncated']
         ]);
 
         $this->redirect_with_status('sync_completed');
@@ -665,6 +695,67 @@ final class RankWoven_SEO_Plugin
         ]);
 
         return array_map([$this, 'map_attachment_to_synced_media'], $attachments);
+    }
+
+    private function get_all_synced_articles(): array
+    {
+        return $this->get_paginated_sync_items(
+            fn(int $per_page, int $page): array => $this->get_synced_articles($per_page, $page),
+            self::SYNC_MAX_ARTICLES
+        );
+    }
+
+    private function get_all_synced_media(): array
+    {
+        return $this->get_paginated_sync_items(
+            fn(int $per_page, int $page): array => $this->get_synced_media($per_page, $page),
+            self::SYNC_MAX_MEDIA
+        );
+    }
+
+    private function get_paginated_sync_items(callable $fetch_page, int $max_items): array
+    {
+        $items = [];
+        $page = 1;
+        $pages_synced = 0;
+        $truncated = false;
+
+        while (count($items) < $max_items) {
+            $page_items = $fetch_page(self::SYNC_PAGE_SIZE, $page);
+            $page_item_count = count($page_items);
+
+            if ($page_item_count === 0) {
+                break;
+            }
+
+            $remaining_items = $max_items - count($items);
+            if ($page_item_count > $remaining_items) {
+                $items = array_merge($items, array_slice($page_items, 0, $remaining_items));
+                $pages_synced++;
+                $truncated = true;
+                break;
+            }
+
+            $items = array_merge($items, $page_items);
+            $pages_synced++;
+
+            if ($page_item_count < self::SYNC_PAGE_SIZE) {
+                break;
+            }
+
+            if (count($items) >= $max_items) {
+                $truncated = count($fetch_page(self::SYNC_PAGE_SIZE, $page + 1)) > 0;
+                break;
+            }
+
+            $page++;
+        }
+
+        return [
+            'items' => $items,
+            'pagesSynced' => $pages_synced,
+            'truncated' => $truncated
+        ];
     }
 
     private function map_post_to_synced_article(WP_Post $post): array
