@@ -246,6 +246,7 @@ describePostgres('PostgreSQL site connection repository', () => {
         `
           SELECT
             st.status,
+            st.scope,
             st.updated_after,
             st.batches_received,
             st.articles_received,
@@ -261,11 +262,77 @@ describePostgres('PostgreSQL site connection repository', () => {
 
       expect(taskStatus.rows[0]).toMatchObject({
         status: 'completed',
+        scope: 'incremental',
         updated_after: '2026-07-25T08:00:00+00:00',
         batches_received: 2,
         articles_received: 2,
         media_received: 1,
         sync_run_count: 2
+      });
+
+      const manualRefreshResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${siteId}/manual-refresh`,
+        payload: {
+          type: 'media',
+          cmsId: '701'
+        }
+      });
+      const manualRefreshBody = manualRefreshResponse.json<{
+        data: {
+          task: {
+            id: string;
+            scope: string;
+            targetCmsId: string;
+          };
+        };
+      }>();
+
+      expect(manualRefreshResponse.statusCode).toBe(201);
+      expect(manualRefreshBody.data.task).toMatchObject({
+        scope: 'media',
+        targetCmsId: '701'
+      });
+
+      const persistedManualTask = await pool.query(
+        `
+          SELECT scope, target_cms_id, batches_received
+          FROM sync_tasks
+          WHERE id = $1
+        `,
+        [manualRefreshBody.data.task.id]
+      );
+
+      expect(persistedManualTask.rows[0]).toMatchObject({
+        scope: 'media',
+        target_cms_id: '701',
+        batches_received: 0
+      });
+
+      const listedTasksResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${siteId}/sync-tasks`
+      });
+
+      expect(listedTasksResponse.statusCode).toBe(200);
+      expect(listedTasksResponse.json()).toMatchObject({
+        data: {
+          tasks: expect.arrayContaining([
+            expect.objectContaining({
+              siteId,
+              siteName: expect.stringContaining('Postgres WordPress'),
+              scope: 'media',
+              targetCmsId: '701'
+            }),
+            expect.objectContaining({
+              siteId,
+              scope: 'incremental',
+              batchesReceived: 2,
+              articlesReceived: 2,
+              mediaReceived: 1
+            })
+          ])
+        }
       });
 
       const credentialsResponse = await server.inject({

@@ -68,6 +68,11 @@ const createSyncTaskSchema = z.object({
   updatedAfter: z.string().trim().max(80).optional()
 });
 
+const manualRefreshTaskSchema = z.object({
+  type: z.enum(['article', 'media']),
+  cmsId: z.string().trim().min(1).max(80)
+});
+
 const syncBatchPayloadSchema = syncPayloadSchema.extend({
   batchIndex: z.number().int().min(1).max(1_000_000),
   isFinalBatch: z.boolean().default(false)
@@ -77,10 +82,15 @@ export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
-export type CreateSyncTaskInput = z.infer<typeof createSyncTaskSchema>;
+export type ManualRefreshTaskInput = z.infer<typeof manualRefreshTaskSchema>;
+export type CreateSyncTaskInput = z.infer<typeof createSyncTaskSchema> & {
+  scope?: SyncTaskScope;
+  targetCmsId?: string;
+};
 export type SyncBatchPayload = z.infer<typeof syncBatchPayloadSchema>;
 export type SiteConnectionStatus = 'connected' | 'revoked';
 export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media';
 
 export interface SiteConnection {
   id: string;
@@ -111,7 +121,10 @@ export interface SaveSyncResult {
 export interface SyncTask {
   id: string;
   siteId: string;
+  siteName?: string;
   status: SyncTaskStatus;
+  scope: SyncTaskScope;
+  targetCmsId?: string;
   syncStartedAt?: string;
   updatedAfter?: string;
   batchesReceived: number;
@@ -144,6 +157,7 @@ export interface SiteConnectionRepository {
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
   saveSync(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
   createSyncTask(siteId: string, input: CreateSyncTaskInput): Promise<SyncTask | undefined>;
+  listSyncTasks(siteId?: string): Promise<SyncTask[]>;
   saveSyncBatch(
     siteId: string,
     syncTaskId: string,
@@ -205,6 +219,8 @@ CREATE TABLE IF NOT EXISTS sync_tasks (
   id uuid PRIMARY KEY,
   site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
   status text NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  scope text NOT NULL DEFAULT 'full' CHECK (scope IN ('full', 'incremental', 'article', 'media')),
+  target_cms_id varchar(80),
   sync_started_at varchar(80),
   updated_after varchar(80),
   batches_received integer NOT NULL DEFAULT 0,
@@ -216,6 +232,19 @@ CREATE TABLE IF NOT EXISTS sync_tasks (
 
 CREATE INDEX IF NOT EXISTS idx_sync_tasks_site_created
   ON sync_tasks(site_id, created_at DESC);
+
+ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS scope text NOT NULL DEFAULT 'full';
+
+ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS target_cms_id varchar(80);
+
+ALTER TABLE sync_tasks
+  DROP CONSTRAINT IF EXISTS sync_tasks_scope_check;
+
+ALTER TABLE sync_tasks
+  ADD CONSTRAINT sync_tasks_scope_check
+  CHECK (scope IN ('full', 'incremental', 'article', 'media'));
 
 CREATE TABLE IF NOT EXISTS sync_runs (
   id uuid PRIMARY KEY,
@@ -418,7 +447,10 @@ function mapSyncTaskRow(row: QueryResultRow): SyncTask {
   return {
     id: row.id,
     siteId: row.site_id,
+    siteName: row.site_name ?? undefined,
     status: row.status,
+    scope: row.scope ?? 'full',
+    targetCmsId: row.target_cms_id ?? undefined,
     syncStartedAt: row.sync_started_at ?? undefined,
     updatedAfter: row.updated_after ?? undefined,
     batchesReceived: Number(row.batches_received ?? 0),
@@ -569,6 +601,8 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         id: crypto.randomUUID(),
         siteId,
         status: 'queued',
+        scope: input.scope ?? (input.updatedAfter ? 'incremental' : 'full'),
+        targetCmsId: input.targetCmsId,
         syncStartedAt: input.syncStartedAt,
         updatedAfter: input.updatedAfter,
         batchesReceived: 0,
@@ -580,6 +614,15 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       syncTasks.set(task.id, task);
       syncTaskBatchIndexes.set(task.id, new Set());
       return task;
+    },
+    async listSyncTasks(siteId) {
+      return Array.from(syncTasks.values())
+        .filter((task) => !siteId || task.siteId === siteId)
+        .map((task) => ({
+          ...task,
+          siteName: sites.get(task.siteId)?.name
+        }))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     },
     async saveSyncBatch(siteId, syncTaskId, payload) {
       const site = sites.get(siteId);
@@ -913,6 +956,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
 
   async createSyncTask(siteId: string, input: CreateSyncTaskInput) {
     await this.ensureSchema();
+    const scope = input.scope ?? (input.updatedAfter ? 'incremental' : 'full');
 
     const result = await this.pool.query(
       `
@@ -920,11 +964,13 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           id,
           site_id,
           status,
+          scope,
+          target_cms_id,
           sync_started_at,
           updated_after,
           created_at
         )
-        SELECT $1, id, 'queued', $3, $4, $5
+        SELECT $1, id, 'queued', $3, $4, $5, $6, $7
         FROM site_connections
         WHERE id = $2
         RETURNING *
@@ -932,6 +978,8 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
       [
         crypto.randomUUID(),
         siteId,
+        scope,
+        input.targetCmsId ?? null,
         input.syncStartedAt ?? null,
         input.updatedAfter ?? null,
         new Date()
@@ -939,6 +987,26 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     );
 
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
+  }
+
+  async listSyncTasks(siteId?: string) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        SELECT
+          st.*,
+          sc.name AS site_name
+        FROM sync_tasks st
+        JOIN site_connections sc ON sc.id = st.site_id
+        WHERE ($1::uuid IS NULL OR st.site_id = $1::uuid)
+        ORDER BY st.created_at DESC
+        LIMIT 100
+      `,
+      [siteId ?? null]
+    );
+
+    return result.rows.map(mapSyncTaskRow);
   }
 
   async saveSyncBatch(siteId: string, syncTaskId: string, payload: SyncBatchPayload) {
@@ -1321,6 +1389,14 @@ export function registerSiteConnectionRoutes(
     }
   }));
 
+  app.get('/api/v1/sync-tasks', async () => ({
+    success: true,
+    message: '操作成功',
+    data: {
+      tasks: await repository.listSyncTasks()
+    }
+  }));
+
   app.get<{
     Params: {
       siteId: string;
@@ -1427,6 +1503,67 @@ export function registerSiteConnectionRoutes(
         site
       }
     };
+  });
+
+  app.get<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/sync-tasks', async (request, reply) => {
+    const site = await repository.find(request.params.siteId);
+
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '操作成功',
+      data: {
+        tasks: await repository.listSyncTasks(request.params.siteId)
+      }
+    };
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/manual-refresh', async (request, reply) => {
+    const parsed = manualRefreshTaskSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const task = await repository.createSyncTask(request.params.siteId, {
+      scope: parsed.data.type,
+      targetCmsId: parsed.data.cmsId
+    });
+
+    if (!task) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return reply.status(201).send({
+      success: true,
+      message: '手動刷新任務已建立',
+      data: {
+        task
+      }
+    });
   });
 
   app.post<{

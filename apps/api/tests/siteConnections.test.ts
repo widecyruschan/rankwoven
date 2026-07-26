@@ -311,6 +311,7 @@ describe('site connection routes', () => {
         task: {
           siteId: body.data.site.id,
           status: 'queued',
+          scope: 'incremental',
           updatedAfter,
           batchesReceived: 0,
           articlesReceived: 0,
@@ -443,6 +444,117 @@ describe('site connection routes', () => {
           mediaReceived: 1,
           completedAt: expect.any(String)
         }
+      }
+    });
+  });
+
+  it('creates manual article and media refresh tasks and lists batch progress', async () => {
+    const { server, body } = await createWordPressConnection();
+    const articleTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/manual-refresh`,
+      payload: {
+        type: 'article',
+        cmsId: '303'
+      }
+    });
+    const articleTaskBody = articleTaskResponse.json();
+
+    expect(articleTaskResponse.statusCode).toBe(201);
+    expect(articleTaskBody).toMatchObject({
+      success: true,
+      data: {
+        task: {
+          siteId: body.data.site.id,
+          status: 'queued',
+          scope: 'article',
+          targetCmsId: '303',
+          batchesReceived: 0,
+          articlesReceived: 0,
+          mediaReceived: 0
+        }
+      }
+    });
+
+    const mediaTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/manual-refresh`,
+      payload: {
+        type: 'media',
+        cmsId: '801'
+      }
+    });
+
+    expect(mediaTaskResponse.statusCode).toBe(201);
+    expect(mediaTaskResponse.json()).toMatchObject({
+      data: {
+        task: {
+          scope: 'media',
+          targetCmsId: '801'
+        }
+      }
+    });
+
+    const siteTasksResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks`
+    });
+
+    expect(siteTasksResponse.statusCode).toBe(200);
+    expect(siteTasksResponse.json()).toMatchObject({
+      success: true,
+      data: {
+        tasks: expect.arrayContaining([
+          expect.objectContaining({
+            siteId: body.data.site.id,
+            siteName: 'Local WordPress',
+            scope: 'article',
+            targetCmsId: '303'
+          }),
+          expect.objectContaining({
+            siteId: body.data.site.id,
+            siteName: 'Local WordPress',
+            scope: 'media',
+            targetCmsId: '801'
+          })
+        ])
+      }
+    });
+
+    const allTasksResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/sync-tasks'
+    });
+
+    expect(allTasksResponse.statusCode).toBe(200);
+    expect(allTasksResponse.json()).toMatchObject({
+      data: {
+        tasks: expect.arrayContaining([
+          expect.objectContaining({
+            scope: 'article',
+            targetCmsId: '303'
+          })
+        ])
+      }
+    });
+  });
+
+  it('rejects invalid manual refresh task input', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/manual-refresh`,
+      payload: {
+        type: 'article',
+        cmsId: ''
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR'
       }
     });
   });

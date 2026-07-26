@@ -605,11 +605,23 @@ final class RankWoven_SEO_Plugin
             'args' => $this->get_pagination_args()
         ]);
 
+        register_rest_route(self::REST_NAMESPACE, '/posts/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [$this, 'get_single_post_rest_response'],
+            'permission_callback' => [$this, 'authorize_rest_request']
+        ]);
+
         register_rest_route(self::REST_NAMESPACE, '/media', [
             'methods' => 'GET',
             'callback' => [$this, 'get_media_rest_response'],
             'permission_callback' => [$this, 'authorize_rest_request'],
             'args' => $this->get_pagination_args()
+        ]);
+
+        register_rest_route(self::REST_NAMESPACE, '/media/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [$this, 'get_single_media_rest_response'],
+            'permission_callback' => [$this, 'authorize_rest_request']
         ]);
     }
 
@@ -653,6 +665,22 @@ final class RankWoven_SEO_Plugin
         ]);
     }
 
+    public function get_single_post_rest_response(WP_REST_Request $request): WP_REST_Response
+    {
+        $article = $this->get_synced_article_by_id((int) $request->get_param('id'));
+
+        if ($article === null) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => __('Article not found or cannot be synced.', 'rankwoven-seo')
+            ], 404);
+        }
+
+        return new WP_REST_Response([
+            'article' => $article
+        ]);
+    }
+
     public function get_media_rest_response(WP_REST_Request $request): WP_REST_Response
     {
         $per_page = (int) $request->get_param('perPage');
@@ -664,6 +692,22 @@ final class RankWoven_SEO_Plugin
             'page' => $page,
             'perPage' => $per_page,
             'updatedAfter' => $updated_after
+        ]);
+    }
+
+    public function get_single_media_rest_response(WP_REST_Request $request): WP_REST_Response
+    {
+        $media = $this->get_synced_media_by_id((int) $request->get_param('id'));
+
+        if ($media === null) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => __('Media item not found or cannot be synced.', 'rankwoven-seo')
+            ], 404);
+        }
+
+        return new WP_REST_Response([
+            'media' => $media
         ]);
     }
 
@@ -689,6 +733,25 @@ final class RankWoven_SEO_Plugin
         return array_map([$this, 'map_post_to_synced_article'], $posts);
     }
 
+    private function get_synced_article_by_id(int $post_id): ?array
+    {
+        $post = get_post($post_id);
+
+        if (!($post instanceof WP_Post)) {
+            return null;
+        }
+
+        if (!in_array($post->post_type, ['post', 'page'], true)) {
+            return null;
+        }
+
+        if (!in_array((string) get_post_status($post), ['publish', 'draft', 'pending', 'future'], true)) {
+            return null;
+        }
+
+        return $this->map_post_to_synced_article($post);
+    }
+
     private function get_synced_media(int $per_page, int $page, string $updated_after = ''): array
     {
         $query_args = [
@@ -710,6 +773,25 @@ final class RankWoven_SEO_Plugin
         $attachments = get_posts($query_args);
 
         return array_map([$this, 'map_attachment_to_synced_media'], $attachments);
+    }
+
+    private function get_synced_media_by_id(int $attachment_id): ?array
+    {
+        $attachment = get_post($attachment_id);
+
+        if (!($attachment instanceof WP_Post) || $attachment->post_type !== 'attachment') {
+            return null;
+        }
+
+        if ((string) get_post_status($attachment) !== 'inherit') {
+            return null;
+        }
+
+        if (!$this->is_image_attachment($attachment_id)) {
+            return null;
+        }
+
+        return $this->map_attachment_to_synced_media($attachment);
     }
 
     private function create_sync_task(

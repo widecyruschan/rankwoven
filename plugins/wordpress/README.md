@@ -124,7 +124,9 @@ Content-Type: application/json
 |---|---|---|
 | `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
 | `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取 Posts 和 Pages，可按修改時間增量過濾 |
+| `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇 Post 或 Page |
 | `GET` | `/wp-json/rankwoven/v1/media?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取圖片媒體，可按修改時間增量過濾 |
+| `GET` | `/wp-json/rankwoven/v1/media/:id` | 讀取單個圖片媒體 |
 
 站點側 REST API 也需要 Bearer Token，Token 與插件保存的 `Site Token` 一致。
 
