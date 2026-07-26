@@ -22,6 +22,8 @@ final class RankWoven_SEO_Plugin
     private const OPTION_WP_ADMIN_USERNAME = 'rankwoven_wp_admin_username';
     private const OPTION_WP_APPLICATION_PASSWORD = 'rankwoven_wp_application_password';
     private const OPTION_LAST_SYNC_RESULT = 'rankwoven_last_sync_result';
+    private const OPTION_LAST_TOKEN_USED_AT = 'rankwoven_last_token_used_at';
+    private const OPTION_LAST_ERROR = 'rankwoven_last_error';
     private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
     private const OPTION_IMAGE_BULK_LOG = 'rankwoven_image_bulk_log';
@@ -83,6 +85,12 @@ final class RankWoven_SEO_Plugin
 
             <?php if ($active_tab === 'image_bulk') : ?>
                 <?php $this->render_image_bulk_page(); ?>
+        </div>
+                <?php return; ?>
+            <?php endif; ?>
+
+            <?php if ($active_tab === 'diagnostics') : ?>
+                <?php $this->render_diagnostics_page(); ?>
         </div>
                 <?php return; ?>
             <?php endif; ?>
@@ -250,7 +258,8 @@ final class RankWoven_SEO_Plugin
         $tabs = [
             'connection' => __('Site Connection', 'rankwoven-seo'),
             'image_attributes' => __('Image Attributes', 'rankwoven-seo'),
-            'image_bulk' => __('Bulk Updater', 'rankwoven-seo')
+            'image_bulk' => __('Bulk Updater', 'rankwoven-seo'),
+            'diagnostics' => __('Diagnostics', 'rankwoven-seo')
         ];
         ?>
         <h2 class="nav-tab-wrapper">
@@ -266,6 +275,37 @@ final class RankWoven_SEO_Plugin
                 </a>
             <?php endforeach; ?>
         </h2>
+        <?php
+    }
+
+    private function render_diagnostics_page(): void
+    {
+        $api_base_url = $this->get_api_base_url();
+        $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
+        $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
+        $wp_credentials = $this->get_wordpress_admin_credentials();
+        $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
+        $last_sync_result = is_array($last_sync_result) ? $last_sync_result : [];
+        $last_error = get_option(self::OPTION_LAST_ERROR, []);
+        $last_error = is_array($last_error) ? $last_error : [];
+        $image_settings = $this->get_image_attribute_settings();
+        ?>
+        <h2><?php echo esc_html__('Read-only Diagnostics', 'rankwoven-seo'); ?></h2>
+        <p><?php echo esc_html__('Use this page to inspect the local RankWoven plugin connection state without changing settings.', 'rankwoven-seo'); ?></p>
+
+        <table class="widefat striped">
+            <tbody>
+                <?php $this->render_diagnostic_row(__('API Base URL', 'rankwoven-seo'), $api_base_url !== '' ? $api_base_url : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('API connection', 'rankwoven-seo'), $this->get_api_connection_status_label($api_base_url)); ?>
+                <?php $this->render_diagnostic_row(__('Site ID', 'rankwoven-seo'), $site_id !== '' ? $site_id : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('Token status', 'rankwoven-seo'), $site_token !== '' ? __('Configured locally', 'rankwoven-seo') : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('Token last local use', 'rankwoven-seo'), $this->get_last_token_used_label()); ?>
+                <?php $this->render_diagnostic_row(__('Last sync', 'rankwoven-seo'), $this->get_last_sync_label($last_sync_result)); ?>
+                <?php $this->render_diagnostic_row(__('Image attribute settings', 'rankwoven-seo'), $this->get_image_attribute_settings_label($image_settings)); ?>
+                <?php $this->render_diagnostic_row(__('Application Password', 'rankwoven-seo'), $this->get_application_password_status_label($wp_credentials)); ?>
+                <?php $this->render_diagnostic_row(__('Last error', 'rankwoven-seo'), $this->get_last_error_label($last_error)); ?>
+            </tbody>
+        </table>
         <?php
     }
 
@@ -391,9 +431,12 @@ final class RankWoven_SEO_Plugin
                 $this->redirect_with_status('wordpress_credentials_update_failed');
             }
 
+            update_option(self::OPTION_LAST_TOKEN_USED_AT, gmdate('c'));
+            delete_option(self::OPTION_LAST_ERROR);
             $this->redirect_with_status('wordpress_credentials_updated');
         }
 
+        delete_option(self::OPTION_LAST_ERROR);
         $this->redirect_with_status('settings_saved');
     }
 
@@ -438,6 +481,8 @@ final class RankWoven_SEO_Plugin
 
         update_option(self::OPTION_SITE_ID, sanitize_text_field($body['data']['site']['id']));
         update_option(self::OPTION_SITE_TOKEN, sanitize_text_field($body['data']['apiToken']));
+        update_option(self::OPTION_LAST_TOKEN_USED_AT, gmdate('c'));
+        delete_option(self::OPTION_LAST_ERROR);
 
         $this->redirect_with_status('site_connected');
     }
@@ -488,6 +533,8 @@ final class RankWoven_SEO_Plugin
             'articlePagesSynced' => (int) $sync_summary['articlePagesSynced'],
             'mediaPagesSynced' => (int) $sync_summary['mediaPagesSynced']
         ]);
+        update_option(self::OPTION_LAST_TOKEN_USED_AT, gmdate('c'));
+        delete_option(self::OPTION_LAST_ERROR);
 
         $this->redirect_with_status('sync_completed');
     }
@@ -1193,7 +1240,7 @@ final class RankWoven_SEO_Plugin
     private function get_active_admin_tab(): string
     {
         $tab = sanitize_key(wp_unslash($_GET['rankwoven_tab'] ?? 'connection'));
-        return in_array($tab, ['connection', 'image_attributes', 'image_bulk'], true) ? $tab : 'connection';
+        return in_array($tab, ['connection', 'image_attributes', 'image_bulk', 'diagnostics'], true) ? $tab : 'connection';
     }
 
     private function get_image_attribute_settings(): array
@@ -1243,6 +1290,128 @@ final class RankWoven_SEO_Plugin
             <?php endif; ?>
         </label>
         <?php
+    }
+
+    private function render_diagnostic_row(string $label, string $value): void
+    {
+        ?>
+        <tr>
+            <th scope="row"><?php echo esc_html($label); ?></th>
+            <td><?php echo esc_html($value); ?></td>
+        </tr>
+        <?php
+    }
+
+    private function get_api_connection_status_label(string $api_base_url): string
+    {
+        if ($api_base_url === '') {
+            return __('Not configured', 'rankwoven-seo');
+        }
+
+        $response = wp_remote_get($this->build_api_url('/health'), [
+            'timeout' => 8
+        ]);
+
+        if (is_wp_error($response)) {
+            return sprintf(
+                /* translators: %s: WordPress HTTP API error message */
+                __('Unreachable: %s', 'rankwoven-seo'),
+                $response->get_error_message()
+            );
+        }
+
+        $status_code = wp_remote_retrieve_response_code($response);
+        return $status_code === 200
+            ? __('Reachable', 'rankwoven-seo')
+            : sprintf(
+                /* translators: %d: HTTP status code */
+                __('Unexpected HTTP status: %d', 'rankwoven-seo'),
+                (int) $status_code
+            );
+    }
+
+    private function get_last_token_used_label(): string
+    {
+        $last_token_used_at = sanitize_text_field(get_option(self::OPTION_LAST_TOKEN_USED_AT, ''));
+        if ($last_token_used_at !== '') {
+            return $last_token_used_at;
+        }
+
+        $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
+        if (is_array($last_sync_result) && !empty($last_sync_result['syncedAt'])) {
+            return sanitize_text_field((string) $last_sync_result['syncedAt']);
+        }
+
+        return __('No successful local token use recorded', 'rankwoven-seo');
+    }
+
+    private function get_last_sync_label(array $last_sync_result): string
+    {
+        if (empty($last_sync_result)) {
+            return __('No sync has completed yet', 'rankwoven-seo');
+        }
+
+        return sprintf(
+            /* translators: 1: sync time, 2: article count, 3: media count, 4: sync mode */
+            __('%1$s, %2$d articles, %3$d media, %4$s sync', 'rankwoven-seo'),
+            sanitize_text_field((string) ($last_sync_result['syncedAt'] ?? '')),
+            (int) ($last_sync_result['articlesReceived'] ?? 0),
+            (int) ($last_sync_result['mediaReceived'] ?? 0),
+            sanitize_text_field((string) ($last_sync_result['syncMode'] ?? 'full'))
+        );
+    }
+
+    private function get_image_attribute_settings_label(array $settings): string
+    {
+        $enabled_labels = [];
+        $label_map = [
+            'set_title' => __('Title', 'rankwoven-seo'),
+            'set_alt_text' => __('Alt Text', 'rankwoven-seo'),
+            'set_caption' => __('Caption', 'rankwoven-seo'),
+            'set_description' => __('Description', 'rankwoven-seo'),
+            'insert_title_attribute' => __('HTML title attribute', 'rankwoven-seo')
+        ];
+
+        foreach ($label_map as $key => $label) {
+            if (!empty($settings[$key])) {
+                $enabled_labels[] = $label;
+            }
+        }
+
+        return empty($enabled_labels)
+            ? __('All image attribute updates disabled', 'rankwoven-seo')
+            : implode(', ', $enabled_labels);
+    }
+
+    private function get_application_password_status_label(array $wp_credentials): string
+    {
+        if ($wp_credentials['username'] === '' && $wp_credentials['applicationPassword'] === '') {
+            return __('Not configured', 'rankwoven-seo');
+        }
+
+        if ($wp_credentials['username'] === '' || $wp_credentials['applicationPassword'] === '') {
+            return __('Incomplete local configuration', 'rankwoven-seo');
+        }
+
+        return sprintf(
+            /* translators: %s: WordPress administrator username */
+            __('Configured for administrator "%s"', 'rankwoven-seo'),
+            $wp_credentials['username']
+        );
+    }
+
+    private function get_last_error_label(array $last_error): string
+    {
+        if (empty($last_error['message'])) {
+            return __('No recent error recorded', 'rankwoven-seo');
+        }
+
+        return sprintf(
+            /* translators: 1: error time, 2: error message */
+            __('%1$s: %2$s', 'rankwoven-seo'),
+            sanitize_text_field((string) ($last_error['occurredAt'] ?? '')),
+            sanitize_text_field((string) $last_error['message'])
+        );
     }
 
     private function render_admin_post_button(string $action, string $nonce_action, string $label, string $type): void
@@ -1465,12 +1634,37 @@ final class RankWoven_SEO_Plugin
 
     private function redirect_with_status(string $status, string $tab = 'connection'): void
     {
+        $this->record_last_error_for_status($status);
+
         wp_safe_redirect(add_query_arg([
             'page' => 'rankwoven-seo',
             'rankwoven_tab' => $tab,
             'rankwoven_status' => $status
         ], admin_url('options-general.php')));
         exit;
+    }
+
+    private function record_last_error_for_status(string $status): void
+    {
+        $messages = [
+            'missing_api_base_url' => __('Please set the API Base URL first.', 'rankwoven-seo'),
+            'missing_site_credentials' => __('Please connect this site before syncing content.', 'rankwoven-seo'),
+            'missing_wordpress_application_password' => __('Please save a WordPress administrator username and application password before connecting this site.', 'rankwoven-seo'),
+            'wordpress_credentials_update_failed' => __('WordPress application password was saved locally, but RankWoven could not update the SaaS credential record. Please check the API service.', 'rankwoven-seo'),
+            'site_token_invalid' => __('The Site Token is invalid or has been revoked. Regenerate the token in RankWoven, paste the new token here, then sync again.', 'rankwoven-seo'),
+            'connection_failed' => __('Site connection failed. Please check the API service.', 'rankwoven-seo'),
+            'sync_failed' => __('Content sync failed. Please check the Site Token and API service.', 'rankwoven-seo')
+        ];
+
+        if (!isset($messages[$status])) {
+            return;
+        }
+
+        update_option(self::OPTION_LAST_ERROR, [
+            'occurredAt' => gmdate('c'),
+            'status' => $status,
+            'message' => $messages[$status]
+        ]);
     }
 
     private function render_admin_notice(): void

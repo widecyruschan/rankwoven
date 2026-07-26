@@ -15,7 +15,9 @@
     "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org",
     "format": "prettier --write .",
     "docker:up": "docker compose up -d --build",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "db:migrate": "bash scripts/migrate-database.sh",
+    "db:backup": "bash scripts/backup-database.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -241,7 +241,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/approve`：批准待處理建議。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/apply`：為已批准建議建立 WordPress 寫回任務。
 
-站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、媒體同步資料、同步批次記錄、SEO 審計、審計問題和優化建議已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。手動刷新與已批准建議寫回任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行。
+站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、媒體同步資料、同步批次記錄、SEO 審計、審計問題和優化建議已落到 PostgreSQL。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。手動刷新與已批准建議寫回任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行。
 
 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
@@ -662,3 +662,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/i18n.ts`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run build -w @aieo/web` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；Vite 僅提示既有大 chunk 警告與第三方 `#__PURE__` 註釋提示。
 - 下一步行動清單：補充 Meta Description 真實同步欄位；為文章與媒體列表補充分頁查詢；為 WordPress 插件新增只讀診斷頁；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾。
+
+### 2026-07-26：WordPress 診斷頁與資料庫備份遷移流程
+
+- 會話的主要目的：為 WordPress 插件新增只讀診斷頁，並建立 PostgreSQL 備份與 migration 版本管理流程，避免生產部署只依賴 Repository 啟動時建表。
+- 完成的主要任務：插件新增 `Diagnostics` 頁籤，顯示 API 連接、Site ID、Site Token 本地配置狀態、Token 最近本地成功使用時間、最近同步、圖片屬性設定、Application Password 配置狀態和最近錯誤原因；新增 `db/migrations/0001_initial_schema.sql`、`scripts/migrate-database.sh` 和 `scripts/backup-database.sh`；部署腳本在重建服務前先啟動 PostgreSQL、等待 ready、備份資料庫並套用 migration。
+- 關鍵決策和解決方案：診斷頁保持只讀，不顯示完整 Token 或 Application Password 明文；Token 最近使用時間以插件本地成功連接、同步或憑據更新時間作為站點側可見信號；migration 先採用 SQL 文件和 `schema_migrations` 記錄表，不引入 ORM。
+- 使用的技術棧：WordPress PHP、WordPress HTTP API、Bash、Docker Compose、PostgreSQL、pg_dump、psql。
+- 新增或修改文件：新增 `db/migrations/0001_initial_schema.sql`、`scripts/migrate-database.sh` 和 `scripts/backup-database.sh`；修改 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`scripts/deploy-production.sh`、`docs/deployment.md`、`package.json`、`.gitignore`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`bash -n scripts/migrate-database.sh scripts/backup-database.sh scripts/deploy-production.sh` 通過；`docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過；`npm run db:migrate` 通過並在本地 PostgreSQL 記錄 `0001_initial_schema.sql`；`DATABASE_BACKUP_DIR=/tmp/rankwoven-db-backups npm run db:backup` 成功建立備份；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。
+- 下一步行動清單：補充 Meta Description 真實同步欄位；為文章與媒體列表補充分頁查詢；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾；補充資料庫備份恢復演練步驟。

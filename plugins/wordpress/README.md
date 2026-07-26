@@ -27,6 +27,7 @@ Settings -> RankWoven SEO
 - 保存 WordPress 管理員用戶名和 Application Password，供 SaaS 後續以該管理員身份寫回已批准修改。
 - 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
+- 查看只讀診斷頁，檢查 API 連接、Token、本地同步、圖片屬性和 Application Password 配置狀態。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
 - 一鍵建立後端同步任務，分頁批量同步 Posts、Pages 和圖片媒體。
 - 顯示最近一次同步時間、文章數、媒體數、同步頁數、同步模式、`updatedAfter` 和同步任務 ID。
@@ -94,6 +95,28 @@ Settings -> RankWoven SEO -> Bulk Updater
 - `Reset Counter`：重新從第一張圖片開始處理。
 
 批量更新會按照目前 `Image Attributes` 的設定，更新既有圖片的標題、Alt Text、Caption 和 Description。正式執行前應先備份 WordPress 資料庫。
+
+## 只讀診斷頁
+
+後台頁籤：
+
+```text
+Settings -> RankWoven SEO -> Diagnostics
+```
+
+診斷頁只讀展示：
+
+- API Base URL。
+- API `/health` 是否可連通。
+- Site ID 是否已配置。
+- Site Token 是否已在本地配置。
+- Token 最近一次本地成功使用時間。
+- 最近一次同步時間、文章數、媒體數和同步模式。
+- 圖片屬性設定中已啟用的欄位。
+- WordPress 管理員 Application Password 是否已配置。
+- 最近一次插件操作錯誤原因。
+
+診斷頁不顯示完整 Site Token，也不顯示 Application Password 明文。
 
 ## SaaS API 對接
 

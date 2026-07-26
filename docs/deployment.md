@@ -24,8 +24,11 @@ Workflow：`.github/workflows/production-deploy.yml`
 5. 執行 `npm run build`。
 6. 執行 `npm run security:audit`，使用官方 npm registry 檢查 high 以上漏洞。
 7. 通過後 SSH 到 VPS，備份現有配置，部署 `git archive HEAD` 打包出的乾淨代碼。
-8. 執行 `docker compose --profile data up -d --build`。
-9. 驗證 `https://api.rankwoven.com/health` 和 `https://api.rankwoven.com/api/v1/site-connections`。
+8. 先啟動 PostgreSQL，等待 `pg_isready` 通過。
+9. 執行 `scripts/backup-database.sh` 建立部署前資料庫備份。
+10. 執行 `scripts/migrate-database.sh` 套用尚未執行的 SQL migration。
+11. 執行 `docker compose --profile data up -d --build` 重建並啟動服務。
+12. 驗證 `https://api.rankwoven.com/health` 和 `https://api.rankwoven.com/api/v1/site-connections`。
 
 需要的 GitHub Secrets：
 
@@ -56,12 +59,38 @@ bash scripts/deploy-production.sh
 | `DEPLOY_HEALTH_URL` | `https://api.rankwoven.com/health` | 健康檢查 URL |
 | `DEPLOY_SMOKE_URL` | `https://api.rankwoven.com/api/v1/site-connections` | 冒煙測試 URL |
 | `DEPLOY_BACKUP_DIR` | `/docker/backups` | 生產配置備份目錄 |
+| `DEPLOY_DATABASE_BACKUP_DIR` | `/docker/backups/database` | 生產資料庫備份目錄 |
+
+## 資料庫備份與遷移
+
+資料庫 schema 變更使用版本化 SQL 文件管理：
+
+```text
+db/migrations/*.sql
+```
+
+本地或生產可執行：
+
+```bash
+npm run db:backup
+npm run db:migrate
+```
+
+若環境中提供 `DATABASE_URL`，腳本會使用本機 `pg_dump` 和 `psql`；若未提供，腳本會通過 `docker compose exec postgres` 使用 Compose 內的 PostgreSQL 容器。每個 migration 成功後會寫入 `schema_migrations`，避免重複套用。
+
+生產部署腳本會在服務重建前自動：
+
+1. 啟動 PostgreSQL。
+2. 等待資料庫 ready。
+3. 建立部署前資料庫備份。
+4. 套用未執行的 migration。
 
 ## 回滾方式
 
 每次部署會在 VPS 建立：
 
 - 配置備份：`/docker/backups/rankwoven-config-YYYYMMDDHHMMSS.tgz`
+- 資料庫備份：`/docker/backups/database/rankwoven-YYYYMMDDHHMMSS.dump`
 - 上一版代碼目錄：`/docker/rankwoven-old-YYYYMMDDHHMMSS`
 - 當前部署版本記錄：`/docker/rankwoven/.deploy-version`
 
@@ -73,6 +102,12 @@ mv rankwoven rankwoven-bad-$(date +%Y%m%d%H%M%S)
 mv rankwoven-old-YYYYMMDDHHMMSS rankwoven
 cd /docker/rankwoven
 docker compose --profile data up -d --build
+```
+
+若需要回復資料庫，先確認目標備份，再使用 PostgreSQL `pg_restore`。正式執行前應先在新資料庫或 staging 環境驗證：
+
+```bash
+docker compose exec -T postgres pg_restore -U aieo -d aieo --clean --if-exists < /docker/backups/database/rankwoven-YYYYMMDDHHMMSS.dump
 ```
 
 回滾後必須重新驗證：

@@ -84,6 +84,7 @@ require_env "DEPLOY_HOST"
 DEPLOY_USER="${DEPLOY_USER:-root}"
 DEPLOY_PATH="${DEPLOY_PATH:-/docker/rankwoven}"
 DEPLOY_BACKUP_DIR="${DEPLOY_BACKUP_DIR:-/docker/backups}"
+DEPLOY_DATABASE_BACKUP_DIR="${DEPLOY_DATABASE_BACKUP_DIR:-$DEPLOY_BACKUP_DIR/database}"
 DEPLOY_PROFILE="${DEPLOY_PROFILE:-data}"
 DEPLOY_REF="${DEPLOY_REF:-HEAD}"
 DEPLOY_HEALTH_URL="${DEPLOY_HEALTH_URL:-https://api.rankwoven.com/health}"
@@ -133,6 +134,20 @@ echo \"Activated release: $DEPLOY_PATH\""
 
 ssh "$REMOTE" "set -euo pipefail
 cd '$DEPLOY_PATH'
+docker compose --profile '$DEPLOY_PROFILE' up -d postgres
+for attempt in \$(seq 1 30); do
+  if docker compose exec -T postgres pg_isready -U \"\${POSTGRES_USER:-aieo}\" -d \"\${POSTGRES_DB:-aieo}\" >/dev/null 2>&1; then
+    echo \"PostgreSQL is ready\"
+    break
+  fi
+  if [[ \"\$attempt\" == \"30\" ]]; then
+    echo \"PostgreSQL did not become ready\" >&2
+    exit 1
+  fi
+  sleep 2
+done
+DATABASE_BACKUP_DIR='$DEPLOY_DATABASE_BACKUP_DIR' bash scripts/backup-database.sh
+bash scripts/migrate-database.sh
 docker compose --profile '$DEPLOY_PROFILE' up -d --build
 docker compose --profile '$DEPLOY_PROFILE' ps"
 
