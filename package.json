@@ -12,19 +12,20 @@
     "dev": "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run dev --workspaces --if-present",
     "lint": "eslint . --ext .ts,.vue --max-warnings 0",
     "test": "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run test --workspaces --if-present",
+    "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org",
     "format": "prettier --write .",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down"
   },
   "devDependencies": {
-    "@eslint/js": "^9.32.0",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.13.14",
-    "eslint": "^9.32.0",
-    "eslint-plugin-vue": "^10.3.0",
+    "eslint": "^10.8.0",
+    "eslint-plugin-vue": "^10.10.0",
     "prettier": "^3.6.2",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.38.0",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^3.2.4",
-    "vue-eslint-parser": "^10.2.0"
+    "vue-eslint-parser": "^10.4.1"
   }
 }

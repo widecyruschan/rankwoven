@@ -127,6 +127,12 @@ npm run lint
 npm run test
 ```
 
+執行 high 以上依賴安全掃描：
+
+```bash
+npm run security:audit
+```
+
 後續擴展 Joomla、OpenCart 時，建議將各 CMS 插件作為獨立構建單元，並共用 SaaS API 的站點連接、文章同步、審計、建議、任務和回滾流程。
 
 ## 環境變量說明
@@ -275,6 +281,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - [RankWoven 域名與 DNS 接入方案](docs/domain-setup.md)
 - [RankWoven 品牌與基礎 UI 視覺規範](docs/brand-guidelines.md)
 - [RankWoven SaaS 後台核心頁面原型](docs/saas-dashboard-prototype.md)
+- [RankWoven 生產部署流程](docs/deployment.md)
 
 ## 會話總結記錄
 
@@ -544,3 +551,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `README.md` 和 `docs/seo-ai-platform-prd.md`；未修改應用代碼。
 - 驗證結果：`https://api.rankwoven.com/health` 返回 `200 OK`；`https://api.rankwoven.com/api/v1/site-connections` 返回 `200 OK`，響應為 `{"success":true,"message":"操作成功","data":{"sites":[]}}`；生產 `rankwoven-api`、`rankwoven-web`、`rankwoven-worker`、`rankwoven-postgres` 和 `rankwoven-redis` 容器均已啟動。
 - 下一步行動清單：補齊可重複部署流程或 GitHub Actions；為生產資料庫建立備份與遷移流程；處理 `npm audit` 提示的高危依賴；繼續開發站點 Token 最後使用時間與 WordPress 分頁同步。
+
+### 2026-07-26：新增 GitHub Actions 生產部署與安全掃描
+
+- 會話的主要目的：補齊可重複部署流程，避免生產環境停留在舊構建，同時處理 Docker build 中出現的 `npm audit` high 依賴問題。
+- 完成的主要任務：新增 `scripts/deploy-production.sh` 生產部署腳本；新增 `.github/workflows/production-deploy.yml`，在 `main` push 或手動觸發時執行驗證與部署；新增 `docs/deployment.md`；配置 GitHub Secrets 和 VPS 專用部署 SSH key；新增 `npm run security:audit`。
+- 關鍵決策和解決方案：部署腳本只使用 `git archive` 打包指定 Git ref，不包含本機未提交文件；每次部署都備份配置、保留舊版本目錄並寫入 `.deploy-version`；安全掃描固定使用官方 npm registry，避免 npm mirror 不支援 audit endpoint；ESLint 相關 devDependencies 升級到支援 ESLint 10 的版本以消除 high 漏洞。
+- 使用的技術棧：GitHub Actions、SSH、Docker Compose、Node.js 22、npm audit、ESLint 10。
+- 新增或修改文件：新增 `.github/workflows/production-deploy.yml`、`scripts/deploy-production.sh` 和 `docs/deployment.md`；修改 `package.json`、`package-lock.json`、`README.md` 和 `docs/seo-ai-platform-prd.md`。
+- 驗證結果：`bash -n scripts/deploy-production.sh` 通過；`npm ci --registry=https://registry.npmjs.org` 通過；`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；GitHub Secrets 已配置 `HOSTINGER_VPS_HOST`、`HOSTINGER_VPS_USER`、`HOSTINGER_VPS_SSH_KEY` 和 `HOSTINGER_DEPLOY_PATH`。
+- 下一步行動清單：推送後監控首個 GitHub Actions 生產部署結果；為 PostgreSQL 建立定時備份和遷移版本管理；為站點 Token 增加最後使用時間記錄；補充 WordPress 分頁同步和增量同步。

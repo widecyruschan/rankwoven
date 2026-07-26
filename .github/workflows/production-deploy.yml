@@ -1,0 +1,96 @@
+name: Production Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deploy_ref:
+        description: Git ref to deploy
+        required: false
+        default: HEAD
+
+concurrency:
+  group: rankwoven-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.deploy_ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Security audit
+        run: npm run security:audit
+
+  deploy:
+    name: Deploy to Hostinger VPS
+    runs-on: ubuntu-latest
+    needs: verify
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.deploy_ref || github.ref }}
+
+      - name: Configure SSH
+        env:
+          HOSTINGER_VPS_HOST: ${{ secrets.HOSTINGER_VPS_HOST }}
+          HOSTINGER_VPS_USER: ${{ secrets.HOSTINGER_VPS_USER }}
+          HOSTINGER_VPS_SSH_KEY: ${{ secrets.HOSTINGER_VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$HOSTINGER_VPS_HOST"
+          test -n "$HOSTINGER_VPS_USER"
+          test -n "$HOSTINGER_VPS_SSH_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$HOSTINGER_VPS_SSH_KEY" > ~/.ssh/rankwoven_production
+          chmod 600 ~/.ssh/rankwoven_production
+          ssh-keyscan -H "$HOSTINGER_VPS_HOST" >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host $HOSTINGER_VPS_HOST
+            HostName $HOSTINGER_VPS_HOST
+            User $HOSTINGER_VPS_USER
+            IdentityFile ~/.ssh/rankwoven_production
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.HOSTINGER_VPS_HOST }}
+          DEPLOY_USER: ${{ secrets.HOSTINGER_VPS_USER }}
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH || '/docker/rankwoven' }}
+          DEPLOY_PROFILE: data
+          DEPLOY_REF: HEAD
+          DEPLOY_HEALTH_URL: https://api.rankwoven.com/health
+          DEPLOY_SMOKE_URL: https://api.rankwoven.com/api/v1/site-connections
+        run: bash scripts/deploy-production.sh
