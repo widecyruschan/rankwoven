@@ -261,6 +261,10 @@ function getTaskName(task: SyncTask) {
     return t('articleSync.suggestionApplyTask');
   }
 
+  if (task.scope === 'suggestion_rollback') {
+    return t('articleSync.suggestionRollbackTask');
+  }
+
   return t('articleSync.fullTask');
 }
 
@@ -269,7 +273,8 @@ function getTaskStatusLabel(status: SyncTaskStatus) {
     queued: t('articleSync.statusQueued'),
     running: t('articleSync.statusRunning'),
     completed: t('articleSync.statusDone'),
-    failed: t('articleSync.statusFailed')
+    failed: t('articleSync.statusFailed'),
+    dead_letter: t('articleSync.statusDeadLetter')
   };
 
   return statusLabels[status];
@@ -281,7 +286,8 @@ function getTaskScopeLabel(scope: SyncTaskScope) {
     incremental: t('articleSync.scopeIncremental'),
     article: t('articleSync.scopeArticle'),
     media: t('articleSync.scopeMedia'),
-    suggestion_apply: t('articleSync.scopeSuggestionApply')
+    suggestion_apply: t('articleSync.scopeSuggestionApply'),
+    suggestion_rollback: t('articleSync.scopeSuggestionRollback')
   };
 
   return scopeLabels[scope];
@@ -292,7 +298,7 @@ function getTaskProgress(task: SyncTask) {
     return '100%';
   }
 
-  if (task.status === 'failed') {
+  if (task.status === 'failed' || task.status === 'dead_letter') {
     return '100%';
   }
 

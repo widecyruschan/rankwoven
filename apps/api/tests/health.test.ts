@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
+import { createKeywordSuggestionService } from '../src/keywordSuggestions';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
 
 describe('api health route', () => {
@@ -168,7 +169,72 @@ describe('analytics and keyword routes', () => {
     expect(body.data.suggestions[0]).toMatchObject({
       keyword: 'AI SEO 推薦',
       intent: 'commercial',
-      opportunityScore: expect.any(Number)
+      opportunityScore: expect.any(Number),
+      monthlySearchVolume: expect.any(Number),
+      source: 'fallback'
+    });
+    expect(body.data.source).toBe('fallback');
+  });
+
+  it('uses AI provider keyword suggestions when provider returns valid JSON', async () => {
+    const service = createKeywordSuggestionService({
+      provider: 'wenwen',
+      model: 'keyword-test-model',
+      generateTitle: async () => {
+        throw new Error('not used');
+      },
+      generateMetaDescription: async () => {
+        throw new Error('not used');
+      },
+      generateArticleDraft: async () => {
+        throw new Error('not used');
+      },
+      rewriteContent: async () => {
+        throw new Error('not used');
+      },
+      scoreContentQuality: async () => {
+        throw new Error('not used');
+      },
+      generateOutline: async () => ({
+        text: JSON.stringify({
+          suggestions: [
+            {
+              keyword: 'AI SEO workflow',
+              difficulty: 'medium',
+              opportunityScore: 83,
+              monthlySearchVolume: 1900,
+              cpcUsd: 3.2,
+              competition: 0.44,
+              searchIntentSummary: 'Teams compare repeatable SEO workflows.',
+              contentAngle: 'Build a workflow checklist with review gates.'
+            }
+          ]
+        }),
+        model: 'keyword-test-model',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 30
+        }
+      })
+    });
+
+    const result = await service.createSuggestions({
+      seedKeyword: 'AI SEO',
+      locale: 'en',
+      intent: 'commercial',
+      userId: '00000000-0000-4000-8000-000000000001'
+    });
+
+    expect(result).toMatchObject({
+      source: 'ai-provider',
+      suggestions: [
+        {
+          keyword: 'AI SEO workflow',
+          intent: 'commercial',
+          source: 'ai-provider',
+          monthlySearchVolume: 1900
+        }
+      ]
     });
   });
 });

@@ -949,17 +949,95 @@ describe('site connection routes', () => {
         authorization: `Bearer ${authToken}`
       }
     });
+    const applyBody = applyResponse.json<{
+      data: {
+        snapshot: {
+          id: string;
+          taskId: string;
+          targetCmsId: string;
+          fieldName: string;
+          status: string;
+        };
+        task: {
+          id: string;
+          scope: string;
+          targetCmsId: string;
+          suggestionId?: string;
+          applySnapshotId?: string;
+        };
+      };
+    }>();
 
     expect(applyResponse.statusCode).toBe(201);
-    expect(applyResponse.json()).toMatchObject({
+    expect(applyBody).toMatchObject({
       data: {
+        snapshot: {
+          targetCmsId: '404',
+          fieldName: 'title',
+          status: 'created',
+          taskId: applyBody.data.task.id
+        },
         task: {
           scope: 'suggestion_apply',
           targetCmsId: '404',
-          suggestionId: titleSuggestion?.id
+          suggestionId: titleSuggestion?.id,
+          applySnapshotId: applyBody.data.snapshot.id
         }
       }
     });
+
+    const applyQueueResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/apply-queue`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const applyQueueBody = applyQueueResponse.json<{
+      data: {
+        suggestions: Array<{ id: string; status: string }>;
+        tasks: Array<{ scope: string; suggestionId?: string; applySnapshotId?: string }>;
+        snapshots: Array<{ id: string; taskId?: string; status: string }>;
+      };
+    }>();
+
+    expect(applyQueueResponse.statusCode).toBe(200);
+    expect(applyQueueBody.data.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: titleSuggestion?.id,
+          status: 'approved'
+        })
+      ])
+    );
+    expect(applyQueueBody.data.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scope: 'suggestion_apply',
+          suggestionId: titleSuggestion?.id,
+          applySnapshotId: applyBody.data.snapshot.id
+        })
+      ])
+    );
+    expect(applyQueueBody.data.snapshots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: applyBody.data.snapshot.id,
+          taskId: applyBody.data.task.id,
+          status: 'created'
+        })
+      ])
+    );
+
+    const rollbackTooEarlyResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/apply-snapshots/${applyQueueBody.data.snapshots[0].id}/rollback`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(rollbackTooEarlyResponse.statusCode).toBe(409);
   });
 
   it('rejects invalid manual refresh task input', async () => {

@@ -2,7 +2,13 @@ import { createDecipheriv, createHash } from 'node:crypto';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 
-type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media' | 'suggestion_apply';
+type SyncTaskScope =
+  | 'full'
+  | 'incremental'
+  | 'article'
+  | 'media'
+  | 'suggestion_apply'
+  | 'suggestion_rollback';
 
 interface QueuedTask {
   id: string;
@@ -10,9 +16,12 @@ interface QueuedTask {
   scope: SyncTaskScope;
   targetCmsId?: string;
   suggestionId?: string;
+  applySnapshotId?: string;
   siteUrl: string;
   wordpressAdminUsername?: string;
   wordpressApplicationPasswordEncrypted?: string;
+  retryCount: number;
+  maxRetries: number;
 }
 
 interface WorkerOptions {
@@ -66,9 +75,12 @@ function mapQueuedTask(row: QueryResultRow): QueuedTask {
     scope: row.scope,
     targetCmsId: row.target_cms_id ?? undefined,
     suggestionId: row.suggestion_id ?? undefined,
+    applySnapshotId: row.apply_snapshot_id ?? undefined,
     siteUrl: row.site_url,
     wordpressAdminUsername: row.wordpress_admin_username ?? undefined,
-    wordpressApplicationPasswordEncrypted: row.wordpress_application_password_encrypted ?? undefined
+    wordpressApplicationPasswordEncrypted: row.wordpress_application_password_encrypted ?? undefined,
+    retryCount: Number(row.retry_count ?? 0),
+    maxRetries: Number(row.max_retries ?? 3)
   };
 }
 
@@ -102,7 +114,8 @@ async function claimNextTask(client: PoolClient) {
       FROM sync_tasks st
       JOIN site_connections sc ON sc.id = st.site_id
       WHERE st.status = 'queued'
-        AND st.scope IN ('article', 'media', 'suggestion_apply')
+        AND st.scope IN ('article', 'media', 'suggestion_apply', 'suggestion_rollback')
+        AND (st.next_run_at IS NULL OR st.next_run_at <= now())
       ORDER BY st.created_at ASC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
@@ -176,21 +189,36 @@ async function completeTask(client: PoolClient, task: QueuedTask, articlesReceiv
   );
 }
 
+function getRetryDelayMs(retryCount: number) {
+  return Math.min(60_000, 2 ** Math.max(0, retryCount) * 5_000);
+}
+
 async function failTask(client: PoolClient, task: QueuedTask, error: unknown) {
   const message = error instanceof Error ? error.message : 'WORKER_TASK_FAILED';
+  const nextRetryCount = task.retryCount + 1;
+  const shouldDeadLetter = nextRetryCount > task.maxRetries;
 
   await client.query(
     `
       UPDATE sync_tasks
-      SET status = 'failed',
-          error_message = $2,
-          completed_at = now()
+      SET status = $2,
+          retry_count = $3,
+          error_message = $4,
+          next_run_at = $5,
+          completed_at = CASE WHEN $2 IN ('failed', 'dead_letter') THEN now() ELSE NULL END,
+          dead_lettered_at = CASE WHEN $2 = 'dead_letter' THEN now() ELSE dead_lettered_at END
       WHERE id = $1
     `,
-    [task.id, message]
+    [
+      task.id,
+      shouldDeadLetter ? 'dead_letter' : 'queued',
+      nextRetryCount,
+      message,
+      shouldDeadLetter ? null : new Date(Date.now() + getRetryDelayMs(task.retryCount))
+    ]
   );
 
-  if (task.suggestionId) {
+  if (task.suggestionId && shouldDeadLetter) {
     await client.query(
       `
         UPDATE optimization_suggestions
@@ -199,6 +227,18 @@ async function failTask(client: PoolClient, task: QueuedTask, error: unknown) {
         WHERE id = $1
       `,
       [task.suggestionId, message]
+    );
+  }
+
+  if (task.applySnapshotId && shouldDeadLetter) {
+    await client.query(
+      `
+        UPDATE apply_snapshots
+        SET status = 'failed',
+            error_message = $2
+        WHERE id = $1
+      `,
+      [task.applySnapshotId, message]
     );
   }
 }
@@ -300,7 +340,68 @@ async function processSuggestionApplyTask(
     `,
     [task.suggestionId]
   );
+  await client.query(
+    `
+      UPDATE apply_snapshots
+      SET status = 'applied',
+          applied_at = now(),
+          error_message = NULL
+      WHERE suggestion_id = $1
+        AND task_id = $2
+    `,
+    [task.suggestionId, task.id]
+  );
   await completeTask(client, task, suggestion.target_type === 'article' ? 1 : 0, suggestion.target_type === 'media' ? 1 : 0);
+}
+
+async function processSuggestionRollbackTask(
+  client: PoolClient,
+  task: QueuedTask,
+  fetchImpl: typeof fetch
+) {
+  if (!task.applySnapshotId || !task.targetCmsId) {
+    throw new Error('ROLLBACK_TASK_INVALID');
+  }
+
+  const snapshotResult = await client.query(
+    `
+      SELECT *
+      FROM apply_snapshots
+      WHERE id = $1
+        AND site_id = $2
+        AND status = 'applied'
+      LIMIT 1
+    `,
+    [task.applySnapshotId, task.siteId]
+  );
+  const snapshot = snapshotResult.rows[0];
+  if (!snapshot) {
+    throw new Error('APPLY_SNAPSHOT_NOT_APPLIED');
+  }
+
+  const credentials = getCredentials(task);
+  const payload = buildRollbackPayload(snapshot);
+  const path =
+    snapshot.target_type === 'article'
+      ? `posts/${task.targetCmsId}/apply`
+      : `media/${task.targetCmsId}/apply`;
+
+  await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+  await client.query(
+    `
+      UPDATE apply_snapshots
+      SET status = 'rolled_back',
+          rolled_back_at = now(),
+          error_message = NULL
+      WHERE id = $1
+    `,
+    [task.applySnapshotId]
+  );
+  await completeTask(client, task, snapshot.target_type === 'article' ? 1 : 0, snapshot.target_type === 'media' ? 1 : 0);
 }
 
 function buildSuggestionPayload(suggestion: QueryResultRow) {
@@ -324,6 +425,31 @@ function buildSuggestionPayload(suggestion: QueryResultRow) {
   }
 
   return { [fieldName]: suggestedValue };
+}
+
+function buildRollbackPayload(snapshot: QueryResultRow) {
+  const fieldName = String(snapshot.field_name);
+  const beforeValue = snapshot.before_value === null || snapshot.before_value === undefined
+    ? ''
+    : String(snapshot.before_value);
+
+  if (fieldName === 'contentHtml') {
+    return { contentHtml: beforeValue };
+  }
+
+  if (fieldName === 'altText') {
+    return { altText: beforeValue };
+  }
+
+  if (fieldName === 'fileName') {
+    return { fileName: beforeValue };
+  }
+
+  if (fieldName === 'metaDescription') {
+    return { metaDescription: beforeValue };
+  }
+
+  return { [fieldName]: beforeValue };
 }
 
 async function upsertArticle(client: PoolClient, siteId: string, article: Record<string, unknown>, syncedAt: Date) {
@@ -424,6 +550,8 @@ export async function processNextQueuedTask(pool: Pool, fetchImpl: typeof fetch 
     await client.query('BEGIN');
     if (task.scope === 'article' || task.scope === 'media') {
       await processManualRefreshTask(client, task, fetchImpl);
+    } else if (task.scope === 'suggestion_rollback') {
+      await processSuggestionRollbackTask(client, task, fetchImpl);
     } else {
       await processSuggestionApplyTask(client, task, fetchImpl);
     }

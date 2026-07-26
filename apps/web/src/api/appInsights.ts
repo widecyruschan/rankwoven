@@ -40,6 +40,10 @@ export interface KeywordSuggestion {
   intent: 'informational' | 'commercial' | 'transactional' | 'local';
   difficulty: 'low' | 'medium' | 'high';
   opportunityScore: number;
+  monthlySearchVolume?: number;
+  cpcUsd?: number;
+  competition?: number;
+  source: 'ai-provider' | 'third-party-volume' | 'fallback';
   searchIntentSummary: string;
   contentAngle: string;
 }
@@ -113,6 +117,7 @@ export async function createKeywordSuggestions(payload: {
   return requestApi<{
     seedKeyword: string;
     locale: string;
+    source: KeywordSuggestion['source'];
     suggestions: KeywordSuggestion[];
   }>('/api/v1/keyword-suggestions', {
     method: 'POST',

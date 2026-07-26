@@ -240,13 +240,16 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /api/v1/site-connections/:siteId/media?page=&pageSize=`：帶 Bearer Token 或登入用戶權限查看已同步媒體分頁列表。
 - `POST /api/v1/site-connections/:siteId/audits`：以已同步文章與媒體執行第一批 SEO 規則審計，並產生可審核建議。
 - `GET /api/v1/site-connections/:siteId/audits`：查看站點 SEO 審計記錄和最近一次審計問題。
-- `GET /api/v1/site-connections/:siteId/suggestions`：查看文章與媒體優化建議。
+- `GET /api/v1/site-connections/:siteId/suggestions`：查看文章與媒體優化建議，並返回最近一次 SEO 審計分數、規則版本和問題數摘要。
 - `POST /api/v1/site-connections/:siteId/suggestions`：手動建立優化建議記錄。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/approve`：批准待處理建議。
-- `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/apply`：為已批准建議建立 WordPress 寫回任務。
+- `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/apply`：為已批准建議建立 WordPress 寫回任務，並建立套用前後快照。
+- `GET /api/v1/site-connections/:siteId/apply-queue`：查看站點已批准建議、寫回/回滾任務和套用快照。
+- `POST /api/v1/site-connections/:siteId/apply-snapshots/:snapshotId/rollback`：為已套用快照建立回滾任務。
 - `GET /api/v1/analytics/overview?siteId=&startDate=&endDate=`：讀取 GA4 或示範分析數據，支援站點 host 篩選與日期範圍。
+- `POST /api/v1/keyword-suggestions`：產生關鍵詞建議，優先使用第三方搜尋量/難度 API，其次 AI Provider，最後才回退本地 fallback。
 
-站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、文章同步資料、文章 Meta Description、媒體同步資料、同步批次記錄、SEO 審計、審計問題和優化建議已落到 PostgreSQL。文章與媒體列表已支援 `page` / `pageSize` 分頁查詢，避免資料量增長後一次讀取過多。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度。手動刷新與已批准建議寫回任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行。
+站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、重試次數、退避時間、死信狀態、文章同步資料、文章 Meta Description、媒體同步資料、同步批次記錄、SEO 審計、審計問題、優化建議和寫回快照已落到 PostgreSQL。文章與媒體列表已支援 `page` / `pageSize` 分頁查詢，避免資料量增長後一次讀取過多。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度；`/app/apply` 已接入真實已批准建議寫回隊列、批次預覽、任務狀態和回滾入口。手動刷新、已批准建議寫回與快照回滾任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行，失敗時按退避時間重新排隊，超過最大重試次數後進入 `dead_letter`。
 
 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於加密保存 WordPress Application Password。開發環境可使用 `.env.example` 的占位值，正式環境必須改為獨立強隨機密鑰；API 列表和詳情接口只返回是否已配置與管理員用戶名，不返回應用程式密碼明文。
 
@@ -254,7 +257,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## AI Provider 使用說明
 
-目前已新增 `@aieo/ai-providers` 共享包，先提供最小 Provider Adapter 介面、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；圖片存儲使用七牛雲 Kodo。真實請求 Adapter 尚未接入，後續應在此介面下逐步增加具體 Adapter。
+目前已新增 `@aieo/ai-providers` 共享包，先提供最小 Provider Adapter 介面、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；圖片存儲使用七牛雲 Kodo。關鍵詞建議已改為 Provider 化流程：配置 `KEYWORD_VOLUME_API_URL` 和 `KEYWORD_VOLUME_API_KEY` 時優先讀取第三方搜尋量/競爭度資料，未配置時使用 AI Text Provider 產生建議，Provider 不可用時才使用本地 fallback 並標記 `source: fallback`。真實 Search Console 關鍵詞來源尚未接入，後續應在同一服務介面下擴展。
 
 ## 元件使用說明
 
@@ -747,3 +750,13 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 新增或修改文件：修改 `apps/web/src/App.vue`、`apps/web/src/views/LoginView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/seo-ai-platform-prd.md` 和 `README.md`；同時本次提交包含前序已驗證的 API、前端、WordPress 插件、migration 和部署文檔更新。
 - 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；`docker run --rm -v "$PWD/plugins/wordpress/rankwoven-seo:/plugin" wordpress:php8.2 php -l /plugin/rankwoven-seo.php` 通過；Chrome 自動化巡檢確認核心本地頁面沒有橫向溢出或可見前端錯誤。
 - 下一步行動清單：為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾接口；將 `/app/apply` 接入真實已批准建議寫回隊列；為建議頁補充最近 SEO 審計分數、規則版本與問題數摘要；將生產 Web 容器改為正式靜態構建部署。
+
+### 2026-07-27：關鍵詞 Provider、Worker 死信、寫回快照與 Apply 隊列
+
+- 會話的主要目的：將關鍵詞建議、Worker 任務可靠性、已批准建議寫回追蹤和客戶後台套用流程從確定性 MVP 升級為可接入真實 Provider、可追蹤、可回滾的流程。
+- 完成的主要任務：關鍵詞建議新增第三方搜尋量/難度 API、AI Provider 和 fallback 三層來源；`sync_tasks` 新增重試次數、最大重試、退避時間、死信時間和快照關聯；Worker 支援失敗退避重排、超過重試後進入 `dead_letter`、寫回成功標記快照和回滾任務；新增 `apply_snapshots` 模型、寫回快照、回滾 API 和 `/api/v1/site-connections/:siteId/apply-queue`；客戶後台 `/app/apply` 接入真實站點篩選、已批准建議、寫回/回滾任務、批次預覽和任務狀態刷新；建議頁顯示最近 SEO 審計分數、規則版本和問題數摘要。
+- 關鍵決策和解決方案：關鍵詞資料源優先使用 `KEYWORD_VOLUME_API_URL` / `KEYWORD_VOLUME_API_KEY`，未配置時使用 AI Text Provider，最後才使用標記為 `fallback` 的本地建議；Worker 不因單個 WordPress 站點暫時不可用而長期阻塞任務，失敗任務會帶 `retryCount`、`nextRunAt` 和 `deadLetteredAt`；寫回快照目前使用已同步資料中的 `currentValue`，後續再升級為 Worker 寫回前即時讀取 WordPress 欄位值。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、pg、Vitest、Vue 3、Ant Design Vue、Vue I18n、Worker、WordPress REST API、AI Provider Adapter。
+- 新增或修改文件：新增 `db/migrations/0003_apply_snapshots_and_task_retries.sql`；修改 `.env.example`、`apps/api/src/config.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/KeywordSuggestionsView.vue`、`apps/web/src/views/ApplySuggestionsView.vue`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/views/TasksView.vue`、`apps/worker/src/index.ts`、`apps/worker/tests/worker.test.ts`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；`npm run db:migrate` 確認 `0003_apply_snapshots_and_task_retries.sql` 已套用且可跳過重跑；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；Docker Desktop 已用 `docker compose --profile data up -d --build` 重建 API/Web/Worker，`http://localhost:3011/health`、登入 smoke、`/api/v1/keyword-suggestions` 和 `http://localhost:8080/app/apply` 均可用。Vite 仍提示 AntD/ECharts 第三方依賴 chunk 超過 500KB，屬於既有非阻塞提醒。
+- 下一步行動清單：在生產環境配置正式 GA4 和關鍵詞搜尋量/難度資料源；將 AI Provider 切到正式問問 API 憑據並驗證 JSON 可解析；為 Worker 死信任務補充管理後台重跑和忽略入口；將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值；將生產 Web 容器改為正式靜態構建部署。

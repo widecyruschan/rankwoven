@@ -22,6 +22,8 @@ describe('worker adapter wiring', () => {
                 site_id: '00000000-0000-4000-8000-000000000201',
                 scope: 'article',
                 target_cms_id: '101',
+                retry_count: 0,
+                max_retries: 3,
                 site_url: 'http://wordpress.test',
                 wordpress_admin_username: 'admin',
                 wordpress_application_password_encrypted: encryptCredential('abcd efgh ijkl mnop')
@@ -71,6 +73,60 @@ describe('worker adapter wiring', () => {
     expect(queries.some((query) => query.includes('INSERT INTO synced_articles'))).toBe(true);
     expect(queries.some((query) => query.includes("SET status = 'completed'"))).toBe(true);
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('requeues failed tasks with retry metadata before dead-lettering', async () => {
+    const queries: Array<{ sql: string; params?: unknown[] }> = [];
+    const client = {
+      async query(sql: string, params?: unknown[]) {
+        queries.push({ sql, params });
+
+        if (sql.includes('FROM sync_tasks st')) {
+          return {
+            rows: [
+              {
+                id: '00000000-0000-4000-8000-000000000302',
+                site_id: '00000000-0000-4000-8000-000000000202',
+                scope: 'article',
+                target_cms_id: '102',
+                retry_count: 0,
+                max_retries: 3,
+                site_url: 'http://wordpress.test',
+                wordpress_admin_username: 'admin',
+                wordpress_application_password_encrypted: encryptCredential('abcd efgh ijkl mnop')
+              }
+            ]
+          };
+        }
+
+        return { rows: [] };
+      },
+      release: vi.fn()
+    };
+    const pool = {
+      connect: vi.fn(async () => client)
+    };
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({})
+    })) as unknown as typeof fetch;
+
+    const task = await processNextQueuedTask(pool as never, fetchImpl);
+
+    expect(task).toMatchObject({
+      id: '00000000-0000-4000-8000-000000000302',
+      scope: 'article'
+    });
+    expect(
+      queries.some(
+        (query) =>
+          query.sql.includes('retry_count = $3') &&
+          query.params?.[1] === 'queued' &&
+          query.params?.[2] === 1 &&
+          query.params?.[3] === 'WORDPRESS_REST_503'
+      )
+    ).toBe(true);
   });
 });
 

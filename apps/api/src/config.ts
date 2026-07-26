@@ -33,7 +33,9 @@ const envSchema = z.object({
   GOOGLE_ANALYTICS_PROPERTY_ID: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS_JSON: z.string().optional(),
-  GOOGLE_APPLICATION_CREDENTIALS_BASE64: z.string().optional()
+  GOOGLE_APPLICATION_CREDENTIALS_BASE64: z.string().optional(),
+  KEYWORD_VOLUME_API_URL: z.url().optional(),
+  KEYWORD_VOLUME_API_KEY: z.string().optional()
 });
 
 export const apiConfig = envSchema.parse(process.env);

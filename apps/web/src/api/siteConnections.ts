@@ -1,7 +1,13 @@
 export type SiteConnectionStatus = 'connected' | 'revoked';
 export type CmsPlatform = 'wordpress' | 'joomla' | 'opencart';
-export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed';
-export type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media' | 'suggestion_apply';
+export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'dead_letter';
+export type SyncTaskScope =
+  | 'full'
+  | 'incremental'
+  | 'article'
+  | 'media'
+  | 'suggestion_apply'
+  | 'suggestion_rollback';
 export type SuggestionStatus = 'pending' | 'approved' | 'applied' | 'failed' | 'rejected';
 export type SuggestionTargetType = 'article' | 'media';
 export type SeoAuditStatus = 'completed';
@@ -42,11 +48,16 @@ export interface SyncTask {
   scope: SyncTaskScope;
   targetCmsId?: string;
   suggestionId?: string;
+  applySnapshotId?: string;
   syncStartedAt?: string;
   updatedAfter?: string;
   batchesReceived: number;
   articlesReceived: number;
   mediaReceived: number;
+  retryCount: number;
+  maxRetries: number;
+  nextRunAt?: string;
+  deadLetteredAt?: string;
   errorMessage?: string;
   createdAt: string;
   completedAt?: string;
@@ -70,6 +81,23 @@ export interface OptimizationSuggestion {
   applyTaskId?: string;
 }
 
+export interface ApplySnapshot {
+  id: string;
+  siteId: string;
+  suggestionId?: string;
+  taskId?: string;
+  targetType: SuggestionTargetType;
+  targetCmsId: string;
+  fieldName: string;
+  beforeValue?: string;
+  afterValue: string;
+  status: 'created' | 'applied' | 'rolled_back' | 'failed';
+  createdAt: string;
+  appliedAt?: string;
+  rolledBackAt?: string;
+  errorMessage?: string;
+}
+
 export interface SeoAudit {
   id: string;
   siteId: string;
@@ -77,6 +105,16 @@ export interface SeoAudit {
   score: number;
   rulesVersion: string;
   createdAt: string;
+}
+
+export interface LatestAuditSummary {
+  audit: SeoAudit;
+  issueCounts: {
+    total: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
 
 export interface SeoAuditIssue {
@@ -264,7 +302,17 @@ export async function getSyncedMedia(siteId: string, params?: MediaListParams) {
 export async function getOptimizationSuggestions(siteId: string) {
   return requestApi<{
     suggestions: OptimizationSuggestion[];
+    latestAudit?: LatestAuditSummary;
   }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions`);
+}
+
+export async function getApplyQueue(siteId: string) {
+  return requestApi<{
+    site: SiteConnection;
+    suggestions: OptimizationSuggestion[];
+    tasks: SyncTask[];
+    snapshots: ApplySnapshot[];
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/apply-queue`);
 }
 
 export async function createSeoAudit(siteId: string) {
@@ -290,9 +338,22 @@ export async function approveOptimizationSuggestion(siteId: string, suggestionId
 export async function applyOptimizationSuggestion(siteId: string, suggestionId: string) {
   return requestApi<{
     suggestion: OptimizationSuggestion;
+    snapshot: ApplySnapshot;
     task: SyncTask;
   }>(
     `/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions/${encodeURIComponent(suggestionId)}/apply`,
+    {
+      method: 'POST'
+    }
+  );
+}
+
+export async function rollbackApplySnapshot(siteId: string, snapshotId: string) {
+  return requestApi<{
+    snapshot?: ApplySnapshot;
+    task: SyncTask;
+  }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/apply-snapshots/${encodeURIComponent(snapshotId)}/rollback`,
     {
       method: 'POST'
     }

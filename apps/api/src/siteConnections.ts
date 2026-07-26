@@ -105,11 +105,18 @@ export type CreateSyncTaskInput = z.infer<typeof createSyncTaskSchema> & {
   scope?: SyncTaskScope;
   targetCmsId?: string;
   suggestionId?: string;
+  applySnapshotId?: string;
 };
 export type SyncBatchPayload = z.infer<typeof syncBatchPayloadSchema>;
 export type SiteConnectionStatus = 'connected' | 'revoked';
-export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed';
-export type SyncTaskScope = 'full' | 'incremental' | 'article' | 'media' | 'suggestion_apply';
+export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'dead_letter';
+export type SyncTaskScope =
+  | 'full'
+  | 'incremental'
+  | 'article'
+  | 'media'
+  | 'suggestion_apply'
+  | 'suggestion_rollback';
 export type ArticleIssueFilter = z.infer<typeof articleListQuerySchema>['issue'];
 export type MediaIssueFilter = z.infer<typeof mediaListQuerySchema>['issue'];
 
@@ -174,12 +181,17 @@ export interface SyncTask {
   scope: SyncTaskScope;
   targetCmsId?: string;
   suggestionId?: string;
+  applySnapshotId?: string;
   errorMessage?: string;
   syncStartedAt?: string;
   updatedAfter?: string;
   batchesReceived: number;
   articlesReceived: number;
   mediaReceived: number;
+  retryCount: number;
+  maxRetries: number;
+  nextRunAt?: string;
+  deadLetteredAt?: string;
   createdAt: string;
   completedAt?: string;
 }
@@ -289,15 +301,22 @@ CREATE INDEX IF NOT EXISTS idx_site_connections_last_token_used
 CREATE TABLE IF NOT EXISTS sync_tasks (
   id uuid PRIMARY KEY,
   site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
-  status text NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
-  scope text NOT NULL DEFAULT 'full' CHECK (scope IN ('full', 'incremental', 'article', 'media', 'suggestion_apply')),
+  status text NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'dead_letter')),
+  scope text NOT NULL DEFAULT 'full' CHECK (
+    scope IN ('full', 'incremental', 'article', 'media', 'suggestion_apply', 'suggestion_rollback')
+  ),
   target_cms_id varchar(80),
   suggestion_id uuid,
+  apply_snapshot_id uuid,
   sync_started_at varchar(80),
   updated_after varchar(80),
   batches_received integer NOT NULL DEFAULT 0,
   articles_received integer NOT NULL DEFAULT 0,
   media_received integer NOT NULL DEFAULT 0,
+  retry_count integer NOT NULL DEFAULT 0,
+  max_retries integer NOT NULL DEFAULT 3,
+  next_run_at timestamptz,
+  dead_lettered_at timestamptz,
   error_message text,
   created_at timestamptz NOT NULL,
   completed_at timestamptz
@@ -316,14 +335,39 @@ ALTER TABLE sync_tasks
   ADD COLUMN IF NOT EXISTS suggestion_id uuid;
 
 ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS apply_snapshot_id uuid;
+
+ALTER TABLE sync_tasks
   ADD COLUMN IF NOT EXISTS error_message text;
+
+ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS retry_count integer NOT NULL DEFAULT 0;
+
+ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS max_retries integer NOT NULL DEFAULT 3;
+
+ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS next_run_at timestamptz;
+
+ALTER TABLE sync_tasks
+  ADD COLUMN IF NOT EXISTS dead_lettered_at timestamptz;
 
 ALTER TABLE sync_tasks
   DROP CONSTRAINT IF EXISTS sync_tasks_scope_check;
 
 ALTER TABLE sync_tasks
   ADD CONSTRAINT sync_tasks_scope_check
-  CHECK (scope IN ('full', 'incremental', 'article', 'media', 'suggestion_apply'));
+  CHECK (scope IN ('full', 'incremental', 'article', 'media', 'suggestion_apply', 'suggestion_rollback'));
+
+ALTER TABLE sync_tasks
+  DROP CONSTRAINT IF EXISTS sync_tasks_status_check;
+
+ALTER TABLE sync_tasks
+  ADD CONSTRAINT sync_tasks_status_check
+  CHECK (status IN ('queued', 'running', 'completed', 'failed', 'dead_letter'));
+
+CREATE INDEX IF NOT EXISTS idx_sync_tasks_queue_next_run
+  ON sync_tasks(status, next_run_at, created_at);
 
 CREATE TABLE IF NOT EXISTS sync_runs (
   id uuid PRIMARY KEY,
@@ -570,11 +614,16 @@ function mapSyncTaskRow(row: QueryResultRow): SyncTask {
     scope: row.scope ?? 'full',
     targetCmsId: row.target_cms_id ?? undefined,
     suggestionId: row.suggestion_id ?? undefined,
+    applySnapshotId: row.apply_snapshot_id ?? undefined,
     syncStartedAt: row.sync_started_at ?? undefined,
     updatedAfter: row.updated_after ?? undefined,
     batchesReceived: Number(row.batches_received ?? 0),
     articlesReceived: Number(row.articles_received ?? 0),
     mediaReceived: Number(row.media_received ?? 0),
+    retryCount: Number(row.retry_count ?? 0),
+    maxRetries: Number(row.max_retries ?? 3),
+    nextRunAt: toIsoString(row.next_run_at),
+    deadLetteredAt: toIsoString(row.dead_lettered_at),
     errorMessage: row.error_message ?? undefined,
     createdAt: toIsoString(row.created_at) ?? '',
     completedAt: toIsoString(row.completed_at)
@@ -822,11 +871,15 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         scope: input.scope ?? (input.updatedAfter ? 'incremental' : 'full'),
         targetCmsId: input.targetCmsId,
         suggestionId: input.suggestionId,
+        applySnapshotId: input.applySnapshotId,
         syncStartedAt: input.syncStartedAt,
         updatedAfter: input.updatedAfter,
         batchesReceived: 0,
         articlesReceived: 0,
         mediaReceived: 0,
+        retryCount: 0,
+        maxRetries: 3,
+        nextRunAt: now,
         createdAt: now
       };
 
@@ -1277,11 +1330,13 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           scope,
           target_cms_id,
           suggestion_id,
+          apply_snapshot_id,
           sync_started_at,
           updated_after,
+          next_run_at,
           created_at
         )
-        SELECT $1, id, 'queued', $3, $4, $5, $6, $7, $8
+        SELECT $1, id, 'queued', $3, $4, $5, $6, $7, $8, $9, $10
         FROM site_connections
         WHERE id = $2
         RETURNING *
@@ -1292,8 +1347,10 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         scope,
         input.targetCmsId ?? null,
         input.suggestionId ?? null,
+        input.applySnapshotId ?? null,
         input.syncStartedAt ?? null,
         input.updatedAfter ?? null,
+        new Date(),
         new Date()
       ]
     );

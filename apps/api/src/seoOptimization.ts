@@ -55,6 +55,25 @@ export interface OptimizationSuggestion {
   applyTaskId?: string;
 }
 
+export type ApplySnapshotStatus = 'created' | 'applied' | 'rolled_back' | 'failed';
+
+export interface ApplySnapshot {
+  id: string;
+  siteId: string;
+  suggestionId?: string;
+  taskId?: string;
+  targetType: TargetType;
+  targetCmsId: string;
+  fieldName: string;
+  beforeValue?: string;
+  afterValue: string;
+  status: ApplySnapshotStatus;
+  createdAt: string;
+  appliedAt?: string;
+  rolledBackAt?: string;
+  errorMessage?: string;
+}
+
 export interface CreateSuggestionInput {
   targetType: TargetType;
   targetCmsId: string;
@@ -81,9 +100,36 @@ export interface SeoOptimizationRepository {
     suggestionId: string,
     applyTaskId: string
   ): Promise<OptimizationSuggestion | undefined>;
+  createApplySnapshot(
+    siteId: string,
+    suggestion: OptimizationSuggestion,
+    taskId?: string
+  ): Promise<ApplySnapshot>;
+  attachSnapshotTask(snapshotId: string, taskId: string): Promise<ApplySnapshot | undefined>;
+  listApplySnapshots(siteId: string): Promise<ApplySnapshot[]>;
+  findApplySnapshot(siteId: string, snapshotId: string): Promise<ApplySnapshot | undefined>;
+  markApplySnapshotApplied(snapshotId: string): Promise<ApplySnapshot | undefined>;
+  markApplySnapshotRolledBack(snapshotId: string): Promise<ApplySnapshot | undefined>;
+  markApplySnapshotFailed(snapshotId: string, errorMessage: string): Promise<ApplySnapshot | undefined>;
   markSuggestionApplied(suggestionId: string): Promise<OptimizationSuggestion | undefined>;
   markSuggestionFailed(suggestionId: string, errorMessage: string): Promise<OptimizationSuggestion | undefined>;
   close?(): Promise<void>;
+}
+
+function summarizeAudit(audit: SeoAudit | undefined, issues: SeoAuditIssue[]) {
+  if (!audit) {
+    return undefined;
+  }
+
+  return {
+    audit,
+    issueCounts: {
+      total: issues.length,
+      high: issues.filter((issue) => issue.severity === 'high').length,
+      medium: issues.filter((issue) => issue.severity === 'medium').length,
+      low: issues.filter((issue) => issue.severity === 'low').length
+    }
+  };
 }
 
 const createSuggestionSchema = z.object({
@@ -158,6 +204,29 @@ CREATE TABLE IF NOT EXISTS optimization_suggestions (
 
 CREATE INDEX IF NOT EXISTS idx_optimization_suggestions_site_status
   ON optimization_suggestions(site_id, status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS apply_snapshots (
+  id uuid PRIMARY KEY,
+  site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
+  suggestion_id uuid REFERENCES optimization_suggestions(id) ON DELETE SET NULL,
+  task_id uuid,
+  target_type text NOT NULL CHECK (target_type IN ('article', 'media')),
+  target_cms_id varchar(80) NOT NULL,
+  field_name varchar(80) NOT NULL,
+  before_value text,
+  after_value text NOT NULL,
+  status text NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'applied', 'rolled_back', 'failed')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  applied_at timestamptz,
+  rolled_back_at timestamptz,
+  error_message text
+);
+
+CREATE INDEX IF NOT EXISTS idx_apply_snapshots_site_created
+  ON apply_snapshots(site_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_apply_snapshots_suggestion
+  ON apply_snapshots(suggestion_id);
 `;
 
 function toIsoString(value: unknown) {
@@ -213,6 +282,25 @@ function mapSuggestionRow(row: QueryResultRow): OptimizationSuggestion {
     appliedAt: toIsoString(row.applied_at),
     errorMessage: row.error_message ?? undefined,
     applyTaskId: row.apply_task_id ?? undefined
+  };
+}
+
+function mapApplySnapshotRow(row: QueryResultRow): ApplySnapshot {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    suggestionId: row.suggestion_id ?? undefined,
+    taskId: row.task_id ?? undefined,
+    targetType: row.target_type,
+    targetCmsId: row.target_cms_id,
+    fieldName: row.field_name,
+    beforeValue: row.before_value ?? undefined,
+    afterValue: row.after_value,
+    status: row.status,
+    createdAt: toIsoString(row.created_at) ?? '',
+    appliedAt: toIsoString(row.applied_at),
+    rolledBackAt: toIsoString(row.rolled_back_at),
+    errorMessage: row.error_message ?? undefined
   };
 }
 
@@ -376,6 +464,7 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
   const audits = new Map<string, SeoAudit>();
   const issues = new Map<string, SeoAuditIssue>();
   const suggestions = new Map<string, OptimizationSuggestion>();
+  const applySnapshots = new Map<string, ApplySnapshot>();
 
   return {
     async saveAudit(siteId, auditInput, issueInputs) {
@@ -444,6 +533,73 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
 
       suggestion.applyTaskId = applyTaskId;
       return suggestion;
+    },
+    async createApplySnapshot(siteId, suggestion, taskId) {
+      const snapshot: ApplySnapshot = {
+        id: crypto.randomUUID(),
+        siteId,
+        suggestionId: suggestion.id,
+        taskId,
+        targetType: suggestion.targetType,
+        targetCmsId: suggestion.targetCmsId,
+        fieldName: suggestion.fieldName,
+        beforeValue: suggestion.currentValue,
+        afterValue: suggestion.suggestedValue,
+        status: 'created',
+        createdAt: new Date().toISOString()
+      };
+      applySnapshots.set(snapshot.id, snapshot);
+      return snapshot;
+    },
+    async attachSnapshotTask(snapshotId, taskId) {
+      const snapshot = applySnapshots.get(snapshotId);
+      if (!snapshot) {
+        return undefined;
+      }
+
+      snapshot.taskId = taskId;
+      return snapshot;
+    },
+    async listApplySnapshots(siteId) {
+      return Array.from(applySnapshots.values())
+        .filter((snapshot) => snapshot.siteId === siteId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    },
+    async findApplySnapshot(siteId, snapshotId) {
+      const snapshot = applySnapshots.get(snapshotId);
+      return snapshot?.siteId === siteId ? snapshot : undefined;
+    },
+    async markApplySnapshotApplied(snapshotId) {
+      const snapshot = applySnapshots.get(snapshotId);
+      if (!snapshot) {
+        return undefined;
+      }
+
+      snapshot.status = 'applied';
+      snapshot.appliedAt = new Date().toISOString();
+      snapshot.errorMessage = undefined;
+      return snapshot;
+    },
+    async markApplySnapshotRolledBack(snapshotId) {
+      const snapshot = applySnapshots.get(snapshotId);
+      if (!snapshot) {
+        return undefined;
+      }
+
+      snapshot.status = 'rolled_back';
+      snapshot.rolledBackAt = new Date().toISOString();
+      snapshot.errorMessage = undefined;
+      return snapshot;
+    },
+    async markApplySnapshotFailed(snapshotId, errorMessage) {
+      const snapshot = applySnapshots.get(snapshotId);
+      if (!snapshot) {
+        return undefined;
+      }
+
+      snapshot.status = 'failed';
+      snapshot.errorMessage = errorMessage;
+      return snapshot;
     },
     async markSuggestionApplied(suggestionId) {
       const suggestion = suggestions.get(suggestionId);
@@ -642,6 +798,138 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
       [suggestionId, siteId, applyTaskId]
     );
     return result.rows[0] ? mapSuggestionRow(result.rows[0]) : undefined;
+  }
+
+  async createApplySnapshot(siteId: string, suggestion: OptimizationSuggestion, taskId?: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        INSERT INTO apply_snapshots (
+          id,
+          site_id,
+          suggestion_id,
+          task_id,
+          target_type,
+          target_cms_id,
+          field_name,
+          before_value,
+          after_value,
+          status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'created')
+        RETURNING *
+      `,
+      [
+        crypto.randomUUID(),
+        siteId,
+        suggestion.id,
+        taskId ?? null,
+        suggestion.targetType,
+        suggestion.targetCmsId,
+        suggestion.fieldName,
+        suggestion.currentValue ?? null,
+        suggestion.suggestedValue
+      ]
+    );
+
+    return mapApplySnapshotRow(result.rows[0]);
+  }
+
+  async attachSnapshotTask(snapshotId: string, taskId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        UPDATE apply_snapshots
+        SET task_id = $2
+        WHERE id = $1
+        RETURNING *
+      `,
+      [snapshotId, taskId]
+    );
+
+    return result.rows[0] ? mapApplySnapshotRow(result.rows[0]) : undefined;
+  }
+
+  async listApplySnapshots(siteId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        SELECT *
+        FROM apply_snapshots
+        WHERE site_id = $1
+        ORDER BY created_at DESC
+        LIMIT 200
+      `,
+      [siteId]
+    );
+
+    return result.rows.map(mapApplySnapshotRow);
+  }
+
+  async findApplySnapshot(siteId: string, snapshotId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        SELECT *
+        FROM apply_snapshots
+        WHERE id = $1
+          AND site_id = $2
+        LIMIT 1
+      `,
+      [snapshotId, siteId]
+    );
+
+    return result.rows[0] ? mapApplySnapshotRow(result.rows[0]) : undefined;
+  }
+
+  async markApplySnapshotApplied(snapshotId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        UPDATE apply_snapshots
+        SET status = 'applied',
+            applied_at = now(),
+            error_message = NULL
+        WHERE id = $1
+        RETURNING *
+      `,
+      [snapshotId]
+    );
+
+    return result.rows[0] ? mapApplySnapshotRow(result.rows[0]) : undefined;
+  }
+
+  async markApplySnapshotRolledBack(snapshotId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        UPDATE apply_snapshots
+        SET status = 'rolled_back',
+            rolled_back_at = now(),
+            error_message = NULL
+        WHERE id = $1
+        RETURNING *
+      `,
+      [snapshotId]
+    );
+
+    return result.rows[0] ? mapApplySnapshotRow(result.rows[0]) : undefined;
+  }
+
+  async markApplySnapshotFailed(snapshotId: string, errorMessage: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        UPDATE apply_snapshots
+        SET status = 'failed',
+            error_message = $2
+        WHERE id = $1
+        RETURNING *
+      `,
+      [snapshotId, errorMessage]
+    );
+
+    return result.rows[0] ? mapApplySnapshotRow(result.rows[0]) : undefined;
   }
 
   async markSuggestionApplied(suggestionId: string) {
@@ -905,11 +1193,56 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
+      const audits = await seoRepository.listAudits(site.id);
+      const latestAudit = audits[0];
+      const latestIssues = latestAudit ? await seoRepository.listIssues(latestAudit.id) : [];
+
       return {
         success: true,
         message: '操作成功',
         data: {
-          suggestions: await seoRepository.listSuggestions(site.id)
+          suggestions: await seoRepository.listSuggestions(site.id),
+          latestAudit: summarizeAudit(latestAudit, latestIssues)
+        }
+      };
+    }
+  );
+
+  app.get<{ Params: { siteId: string } }>(
+    '/api/v1/site-connections/:siteId/apply-queue',
+    async (request, reply) => {
+      const user = await requireAuth(authService, request, reply);
+      if (!user) {
+        return reply;
+      }
+
+      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      if (!site) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const [suggestions, tasks, snapshots] = await Promise.all([
+        seoRepository.listSuggestions(site.id),
+        siteRepository.listSyncTasks(site.id, user.workspaceId),
+        seoRepository.listApplySnapshots(site.id)
+      ]);
+
+      return {
+        success: true,
+        message: '操作成功',
+        data: {
+          site,
+          suggestions: suggestions.filter((suggestion) =>
+            ['approved', 'applied', 'failed'].includes(suggestion.status)
+          ),
+          tasks: tasks.filter((task) =>
+            task.scope === 'suggestion_apply' || task.scope === 'suggestion_rollback'
+          ),
+          snapshots
         }
       };
     }
@@ -1015,10 +1348,77 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
+      const snapshot = await seoRepository.createApplySnapshot(site.id, suggestion);
       const task = await siteRepository.createSyncTask(site.id, {
         scope: 'suggestion_apply',
         targetCmsId: suggestion.targetCmsId,
-        suggestionId: suggestion.id
+        suggestionId: suggestion.id,
+        applySnapshotId: snapshot.id
+      });
+
+      if (!task) {
+        await seoRepository.markApplySnapshotFailed(snapshot.id, 'SITE_NOT_FOUND');
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const updatedSnapshot = await seoRepository.attachSnapshotTask(snapshot.id, task.id);
+      const updatedSuggestion = await seoRepository.markSuggestionApplyQueued(site.id, suggestion.id, task.id);
+
+      return reply.status(201).send({
+        success: true,
+        message: '寫回任務已建立',
+        data: {
+          suggestion: updatedSuggestion,
+          snapshot: updatedSnapshot ?? snapshot,
+          task
+        }
+      });
+    }
+  );
+
+  app.post<{ Params: { siteId: string; snapshotId: string } }>(
+    '/api/v1/site-connections/:siteId/apply-snapshots/:snapshotId/rollback',
+    async (request, reply) => {
+      const user = await requireAuth(authService, request, reply);
+      if (!user) {
+        return reply;
+      }
+
+      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      if (!site) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const snapshot = await seoRepository.findApplySnapshot(site.id, request.params.snapshotId);
+      if (!snapshot) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到寫回快照',
+          error: { code: 'APPLY_SNAPSHOT_NOT_FOUND' }
+        });
+      }
+
+      if (snapshot.status !== 'applied') {
+        return reply.status(409).send({
+          success: false,
+          message: '只有已套用快照可以建立回滾任務',
+          error: { code: 'APPLY_SNAPSHOT_NOT_APPLIED' }
+        });
+      }
+
+      const task = await siteRepository.createSyncTask(site.id, {
+        scope: 'suggestion_rollback',
+        targetCmsId: snapshot.targetCmsId,
+        suggestionId: snapshot.suggestionId,
+        applySnapshotId: snapshot.id
       });
 
       if (!task) {
@@ -1029,13 +1429,13 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
-      const updatedSuggestion = await seoRepository.markSuggestionApplyQueued(site.id, suggestion.id, task.id);
+      const updatedSnapshot = await seoRepository.attachSnapshotTask(snapshot.id, task.id);
 
       return reply.status(201).send({
         success: true,
-        message: '寫回任務已建立',
+        message: '回滾任務已建立',
         data: {
-          suggestion: updatedSuggestion,
+          snapshot: updatedSnapshot,
           task
         }
       });

@@ -12,6 +12,7 @@ import {
   getOptimizationSuggestions,
   getSiteConnections,
   type OptimizationSuggestion,
+  type LatestAuditSummary,
   type SiteConnection,
   type SuggestionStatus,
   type SuggestionType
@@ -21,6 +22,7 @@ const { t } = useI18n();
 
 const sites = ref<SiteConnection[]>([]);
 const suggestions = ref<OptimizationSuggestion[]>([]);
+const latestAudit = ref<LatestAuditSummary | undefined>();
 const selectedSiteId = ref('');
 const isLoading = ref(false);
 const isAuditing = ref(false);
@@ -51,6 +53,14 @@ const selectedSiteSelectOptions = computed(() =>
 );
 
 const queues = computed(() => [
+  {
+    label: t('suggestions.auditScore'),
+    value: latestAudit.value ? String(latestAudit.value.audit.score) : '--'
+  },
+  {
+    label: t('suggestions.auditIssues'),
+    value: latestAudit.value ? String(latestAudit.value.issueCounts.total) : '--'
+  },
   {
     label: t('suggestions.imageTitleMetaQueue'),
     value: String(countByType(['media_alt_text', 'media_file_name']))
@@ -245,11 +255,13 @@ async function loadSitesAndSuggestions() {
 async function loadSuggestions() {
   if (!selectedSiteId.value) {
     suggestions.value = [];
+    latestAudit.value = undefined;
     return;
   }
 
   const result = await getOptimizationSuggestions(selectedSiteId.value);
   suggestions.value = result.suggestions;
+  latestAudit.value = result.latestAudit;
 }
 
 async function handleSiteChange() {

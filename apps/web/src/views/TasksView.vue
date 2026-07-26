@@ -82,7 +82,8 @@ function getTaskName(task: SyncTask) {
     incremental: t('articleSync.incrementalTask'),
     article: t('articleSync.manualArticleTask'),
     media: t('articleSync.manualMediaTask'),
-    suggestion_apply: t('articleSync.suggestionApplyTask')
+    suggestion_apply: t('articleSync.suggestionApplyTask'),
+    suggestion_rollback: t('articleSync.suggestionRollbackTask')
   };
 
   return task.targetCmsId ? `${scopeLabels[task.scope]} #${task.targetCmsId}` : scopeLabels[task.scope];
@@ -93,14 +94,15 @@ function getStatusLabel(status: SyncTaskStatus) {
     queued: t('tasks.statusQueued'),
     running: t('tasks.statusRunning'),
     completed: t('tasks.statusDone'),
-    failed: t('tasks.statusFailed')
+    failed: t('tasks.statusFailed'),
+    dead_letter: t('tasks.statusDeadLetter')
   };
 
   return statusLabels[status];
 }
 
 function getProgressPercent(task: SyncTask) {
-  if (task.status === 'completed' || task.status === 'failed') {
+  if (task.status === 'completed' || task.status === 'failed' || task.status === 'dead_letter') {
     return 100;
   }
 
@@ -112,7 +114,7 @@ function getProgressPercent(task: SyncTask) {
 }
 
 function getProgressStatus(status: SyncTaskStatus) {
-  if (status === 'failed') {
+  if (status === 'failed' || status === 'dead_letter') {
     return 'exception';
   }
 
@@ -128,7 +130,8 @@ function getStatusColor(status: SyncTaskStatus) {
     queued: 'default',
     running: 'processing',
     completed: 'success',
-    failed: 'error'
+    failed: 'error',
+    dead_letter: 'error'
   };
 
   return statusColors[status];

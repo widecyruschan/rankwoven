@@ -10,7 +10,7 @@ import {
 } from './auth';
 import { registerAnalyticsRoutes } from './analytics';
 import { apiConfig } from './config';
-import { registerKeywordSuggestionRoutes } from './keywordSuggestions';
+import { createKeywordSuggestionService, registerKeywordSuggestionRoutes } from './keywordSuggestions';
 import {
   createDefaultSeoOptimizationRepository,
   type SeoOptimizationRepository,
@@ -135,7 +135,7 @@ export function createServer(options: CreateServerOptions = {}) {
 
   registerAuthRoutes(app, authService, authRepository);
   registerAnalyticsRoutes(app, authService, siteConnectionRepository);
-  registerKeywordSuggestionRoutes(app, authService);
+  registerKeywordSuggestionRoutes(app, authService, createKeywordSuggestionService(aiProviders.text));
 
   registerSiteConnectionRoutes(app, siteConnectionRepository, authService);
 

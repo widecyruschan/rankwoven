@@ -11,6 +11,7 @@ const intent = ref<KeywordSuggestion['intent']>('informational');
 const isLoading = ref(false);
 const loadError = ref('');
 const suggestions = ref<KeywordSuggestion[]>([]);
+const resultSource = ref<KeywordSuggestion['source'] | ''>('');
 
 const intentOptions = computed(() => [
   { label: t('keywords.intentInformational'), value: 'informational' },
@@ -23,6 +24,9 @@ const columns = computed<ColumnsType<KeywordSuggestion>>(() => [
   { title: t('keywords.keyword'), dataIndex: 'keyword', key: 'keyword' },
   { title: t('keywords.intent'), dataIndex: 'intent', key: 'intent' },
   { title: t('keywords.difficulty'), dataIndex: 'difficulty', key: 'difficulty' },
+  { title: t('keywords.volume'), dataIndex: 'monthlySearchVolume', key: 'monthlySearchVolume', width: 120 },
+  { title: t('keywords.cpc'), dataIndex: 'cpcUsd', key: 'cpcUsd', width: 110 },
+  { title: t('keywords.source'), dataIndex: 'source', key: 'source', width: 150 },
   { title: t('keywords.opportunity'), dataIndex: 'opportunityScore', key: 'opportunityScore' },
   { title: t('keywords.angle'), dataIndex: 'contentAngle', key: 'contentAngle' }
 ]);
@@ -56,6 +60,22 @@ function getIntentLabel(nextIntent: KeywordSuggestion['intent']) {
   return t(intentLabelKeys[nextIntent]);
 }
 
+function getSourceLabel(source: KeywordSuggestion['source'] | '') {
+  if (source === 'third-party-volume') {
+    return t('keywords.sourceThirdParty');
+  }
+
+  if (source === 'ai-provider') {
+    return t('keywords.sourceAi');
+  }
+
+  if (source === 'fallback') {
+    return t('keywords.sourceFallback');
+  }
+
+  return '';
+}
+
 async function generateSuggestions() {
   if (!seedKeyword.value.trim()) {
     loadError.value = t('keywords.seedRequired');
@@ -72,6 +92,7 @@ async function generateSuggestions() {
       intent: intent.value
     });
     suggestions.value = result.suggestions;
+    resultSource.value = result.source;
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : t('keywords.loadFailed');
   } finally {
@@ -113,6 +134,9 @@ async function generateSuggestions() {
     </a-card>
 
     <a-card class="section-card" :title="t('keywords.resultTitle')">
+      <template #extra>
+        <a-tag v-if="resultSource">{{ getSourceLabel(resultSource) }}</a-tag>
+      </template>
       <a-table :columns="columns" :data-source="suggestions" :loading="isLoading" row-key="keyword">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'opportunityScore'">
@@ -125,6 +149,15 @@ async function generateSuggestions() {
           </template>
           <template v-else-if="column.key === 'intent'">
             {{ getIntentLabel((record as KeywordSuggestion).intent) }}
+          </template>
+          <template v-else-if="column.key === 'monthlySearchVolume'">
+            {{ (record as KeywordSuggestion).monthlySearchVolume ?? '--' }}
+          </template>
+          <template v-else-if="column.key === 'cpcUsd'">
+            {{ (record as KeywordSuggestion).cpcUsd === undefined ? '--' : `$${(record as KeywordSuggestion).cpcUsd}` }}
+          </template>
+          <template v-else-if="column.key === 'source'">
+            <a-tag>{{ getSourceLabel((record as KeywordSuggestion).source) }}</a-tag>
           </template>
         </template>
       </a-table>
