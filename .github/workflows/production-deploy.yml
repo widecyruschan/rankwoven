@@ -73,7 +73,16 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$HOSTINGER_VPS_SSH_KEY" > ~/.ssh/rankwoven_production
           chmod 600 ~/.ssh/rankwoven_production
-          ssh-keyscan -H "$HOSTINGER_VPS_HOST" >> ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5; do
+            if timeout 15 ssh-keyscan -T 10 -H "$HOSTINGER_VPS_HOST" >> ~/.ssh/known_hosts; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "ssh-keyscan failed after 5 attempts" >&2
+              exit 1
+            fi
+            sleep 5
+          done
           cat > ~/.ssh/config <<EOF
           Host $HOSTINGER_VPS_HOST
             HostName $HOSTINGER_VPS_HOST
