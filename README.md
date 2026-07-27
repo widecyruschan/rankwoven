@@ -1104,3 +1104,19 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `apps/web/src/api/appInsights.ts`、`apps/api/src/lighthouse.ts`、本 `README.md`。
 - 驗證結果：`npm run lint` 通過（0e/0w）；`npm run build` 通過（API + Web）；推送後生產 API health 200、5 個容器 running。
 - 下一步行動清單：在 SaaS 後台用 `https://cyruschan.com/` 重新測試 Lighthouse 審計，確認超時後能顯示明確錯誤提示。
+
+### 2026-07-27（十七）：站點刪除功能 + WordPress 插件自動生成 Site ID/Token
+
+- 會話的主要目的：
+  1. 在 SaaS 後台實現站點刪除功能，刪除前彈出警告確認對話框。
+  2. 修改 WordPress 插件，使 Site ID 和 Site Token 由系統自動生成，用戶無需手動輸入。
+- 完成的主要任務：
+  1. 後端：在 `apps/api/src/siteConnections.ts` 新增 `DELETE /api/v1/site-connections/:siteId` 端點，帶 `requireAuth` + `findForWorkspace` 權限驗證；所有關聯表已設 `ON DELETE CASCADE`（sync_tasks、sync_runs、synced_articles、synced_media、seo_audits、seo_audit_issues、optimization_suggestions）。
+  2. 前端：在 `apps/web/src/api/siteConnections.ts` 新增 `deleteSiteConnection(siteId)` API helper；在 `apps/web/src/views/SitesView.vue` 加入帶 `a-popconfirm` 警告的刪除按鈕；在 `apps/web/src/i18n.ts` 添加 en/zh-Hant 刪除相關文案。
+  3. WordPress 插件：將 Site ID 字段從手動 `<input>` 改為只讀 `<code>` 展示（已連接時顯示 Site ID，未連接時顯示提示）；完全移除 Site Token 手動輸入框；移除 `handle_save_settings()` 中手動保存 Site ID/Token 的邏輯。
+  4. Site ID/Token 現在完全由插件 `handle_connect_site()` 通過調用 `POST /api/v1/site-connections` 自動生成和保存，用戶只需點擊「Connect This Site」按鈕即可。
+- 關鍵決策和解決方案：刪除功能利用 PostgreSQL `ON DELETE CASCADE` 處理關聯數據清理，後端只做權限驗證和主記錄刪除；插件現有 `handle_connect_site()` 已支援自動生成流程，只需移除 UI 層手動輸入即可，無需改動後端 API。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL、Vue 3 Composition API、Ant Design Vue `a-popconfirm`、Vue I18n、WordPress Plugin API。
+- 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/SitesView.vue`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、本 `README.md`。
+- 驗證結果：`npm run lint` 通過；`npm run build` 通過；已推送 `main`（`b548c8d`），GitHub Actions 將自動部署。
+- 下一步行動清單：部署後在 SaaS 後台驗證站點刪除功能；在 WordPress 插件後台測試「Connect This Site」自動生成流程是否正常。
