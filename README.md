@@ -1019,3 +1019,88 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：僅診斷，未修改業務程式碼（本次會話前已修改的 `apps/api/package.json` 與 `apps/api/src/lighthouse.ts` 屬於上一任務）。
 - 驗證結果：`api.rankwoven.com/health` ✓、`api.rankwoven.com/api/v1/cms-adapters` ✓、VPS 容器 healthy ✓、`app.rankwoven.com` DNS 無法解析 ✗。
 - 下一步行動清單：將 WordPress 插件的「API 基礎 URL」從 `https://app.rankwoven.com` 改為 `https://api.rankwoven.com` 並保存；若仍報錯，登入 SaaS 後台檢查站點 `b95887cb-08a7-424d-af9b-ff9cef52275a` 是否存在，不存在則重新創建並更新 Site ID 與 Site Token；再次保存 GA4 屬性 ID 並觀察同步狀態。
+
+### 2026-07-27（十二）：重新設計 RankWoven Logo（概念 A：編織信號）
+
+- 會話的主要目的：根據 `README.md` 項目說明，重新設計 RankWoven 品牌 Logo。
+- 完成的主要任務：
+  1. 使用多模態內容生成技能生成 AI 參考圖（概念 A：兩條交織線條構成抽象 W + 中心向上增長箭頭）。
+  2. 基於參考圖手工繪製矢量 SVG Logo，確保無 AI 水印、可無損縮放、色彩精確對齊品牌規範。
+  3. 新增純圖標版、Favicon（SVG/PNG）、Apple Touch Icon、PWA 圖標和橫式 PNG 版本。
+  4. 更新 `apps/web/index.html` 引用新的 favicon 與 apple-touch-icon。
+  5. 更新 `docs/brand-guidelines.md` 描述新 Logo 概念、檔案清單與使用規則。
+- 關鍵決策和解決方案：
+  - 選定概念 A「編織信號」：深青綠 `#0B6F63` 方形背景，白色與琥珀金 `#F6D365` 兩條交織線構成 W 形，中心金色向上箭頭表示排名增長。
+  - 不使用帶水印的 AI 生成圖作為最終交付，而以 SVG 為 source of truth，再轉換為 PNG 格式變體。
+  - 字標繼續使用 `Instrument Sans`（Google Fonts 已載入），與現有網頁字體體系一致。
+- 使用的技術棧：SVG、Google Fonts、CodeBuddy 多模態圖片生成、sharp（臨時目錄轉換 PNG）、HTML `<link rel="icon">`。
+- 新增或修改文件：
+  - 新增 `apps/web/src/assets/rankwoven-icon.svg`
+  - 新增 `apps/web/public/favicon.svg`
+  - 新增 `apps/web/public/favicon.png`
+  - 新增 `apps/web/public/apple-touch-icon.png`
+  - 新增 `apps/web/public/icon-192.png`
+  - 新增 `rankwoven-favicon.png`（專案根目錄）
+  - 新增 `rankwoven-logo-horizontal.png`（專案根目錄）
+  - 修改 `apps/web/src/assets/rankwoven-logo.svg`
+  - 修改 `apps/web/index.html`
+  - 修改 `docs/brand-guidelines.md`
+  - 修改本 `README.md`
+- 驗證結果：SVG 在本地預覽符合設計意圖；PNG 轉換後無水印；`npm run lint`、`npm run build`、`npm run test`、`npm run security:audit` 通過。
+- 下一步行動清單：在本地瀏覽器確認 favicon 與網頁 Logo 載入正常；若滿意可提交並推送；後續可在登入頁、郵件簽名、社交媒體等場景製作更多尺寸變體。
+
+### 2026-07-27（十三）：RankWoven Logo 備選概念 B（網路樞紐）
+
+- 會話的主要目的：根據用戶要求，使用概念 B「網路樞紐」製作另一款 Logo 試作。
+- 完成的主要任務：
+  1. 手工繪製矢量 SVG：以六邊形節點為中心，三條白色流線帶金色端點匯聚於中心，隱喻 SEO 內容、關鍵詞與連結的中央樞紐；中心上方金色向上箭頭表示排名增長。
+  2. 生成橫式 PNG 與正方形 favicon PNG 備選版本（檔名帶 `-v2`）。
+- 關鍵決策和解決方案：
+  - 採用更深沉的主色 `#084C45`，與概念 A 的 `#0B6F63` 形成對比，增強 B2B 科技與專業感。
+  - 保留 `Instrument Sans` 字標，確保品牌一致性。
+  - 概念 B 檔案以 `-v2` 後綴保存，不覆蓋概念 A 的正式 Logo 檔案。
+- 使用的技術棧：SVG、sharp（臨時目錄轉換 PNG）。
+- 新增或修改文件：
+  - 新增 `apps/web/src/assets/rankwoven-logo-v2.svg`
+  - 新增 `apps/web/src/assets/rankwoven-icon-v2.svg`
+  - 新增 `rankwoven-logo-horizontal-v2.png`
+  - 新增 `rankwoven-favicon-v2.png`
+  - 修改本 `README.md`
+- 驗證結果：SVG 與 PNG 預覽符合設計意圖；未改動既有引用檔案，無需重新 build/lint/test。
+- 下一步行動清單：比較概念 A 與概念 B，決定最終採用的主 Logo；若選定概念 B，則將 `-v2` 檔案取代為主 Logo 檔名，並更新 `apps/web/index.html`、`docs/brand-guidelines.md` 與所有引用位置。
+
+### 2026-07-27（十四）：RankWoven Logo 備選概念 C（時尚盾牌 W + 參考圖風格）
+
+- 會話的主要目的：根據用戶上傳的參考圖風格，結合 `README.md` 項目說明，再設計一款現代感強、時尚的 Logo。
+- 完成的主要任務：
+  1. 使用多模態圖片生成技能生成 AI 參考圖：3D 立體 W、深青綠到深青色漸變、金色向上箭頭、高級時尚感。
+  2. 基於參考圖手工繪製矢量 SVG 版本：盾牌輪廓 + 內部交織 W + 金色增長箭頭，使用線性漸變模擬立體光感。
+  3. 生成橫式 PNG 與 favicon PNG 備選版本（檔名帶 `-v3`）。
+- 關鍵決策和解決方案：
+  - 參考圖風格的 3D 立體效果難以在 SVG 中完美還原，因此用「漸變盾牌 + 扁平交織線 + 粗金箭頭」作為時尚現代 SaaS 的折衷方案。
+  - 不使用帶 AI 水印的生成圖作為最終檔案，矢量 SVG 仍為 source of truth。
+  - 概念 C 檔案以 `-v3` 後綴保存，不覆蓋概念 A 與概念 B。
+- 使用的技術棧：CodeBuddy 多模態圖片生成、SVG 漸變、sharp（臨時目錄轉換 PNG）。
+- 新增或修改文件：
+  - 新增 `apps/web/src/assets/rankwoven-logo-v3.svg`
+  - 新增 `apps/web/src/assets/rankwoven-icon-v3.svg`
+  - 新增 `rankwoven-logo-horizontal-v3.png`
+  - 新增 `rankwoven-favicon-v3.png`
+  - 新增 `rankwoven-logo-reference-v3.png`（帶水印的 AI 參考圖，僅供比對，不建議作為正式使用）
+  - 修改本 `README.md`
+- 驗證結果：SVG 與 PNG 預覽符合設計意圖；未改動既有引用檔案，無需重新 build/lint/test。
+- 下一步行動清單：比較概念 A、B、C，選定最終主 Logo；若選定概念 C，將 `-v3` 檔案取代為主 Logo 檔名，並更新引用位置與品牌規範文件。
+
+### 2026-07-27（十六）：Lighthouse 審計超時保護修復
+
+- 會話的主要目的：修復 `https://cyruschan.com/` 在 SaaS 後台點擊審計後一直卡在「審計中...」沒有反應的問題。
+- 完成的主要任務：
+  1. 診斷根因：前端 `requestApi()` 中的 `fetch` 沒有任何超時機制；Lighthouse 審計耗時 20+ 秒，若 VPS Nginx `proxy_read_timeout` 切斷連接或網路異常，`fetch` Promise 可能永遠不 resolve/reject，導致 UI 永遠卡在 loading。
+  2. 前端修復：在 `apps/web/src/api/appInsights.ts` 新增 `requestWithTimeout` 輔助函數，使用 `AbortController` + 90 秒超時包裝 `getLighthouseAudit`，超時後自動中斷請求並拋出錯誤。
+  3. 後端修復：在 `apps/api/src/lighthouse.ts` 為審計加入 `Promise.race` 95 秒超時包裝，確保後端不會無限等待，超時後返回 `Lighthouse 審計超時` 錯誤而非掛起。
+  4. 提交並推送 `main`（`97bd133`），觸發 GitHub Actions 生產部署；部署後 `https://api.rankwoven.com/health` 返回 200；Hostinger MCP 確認產所有容器正常。
+- 關鍵決策和解決方案：前後端皆增加超時保護，後端超時（95s）略長於前端（90s），確保前端能收到有意義的錯誤回應而非網路層中斷。
+- 使用的技術棧：Vue 3、TypeScript、AbortController、Fastify、Promise.race、GitHub Actions、Hostinger VPS MCP。
+- 新增或修改文件：修改 `apps/web/src/api/appInsights.ts`、`apps/api/src/lighthouse.ts`、本 `README.md`。
+- 驗證結果：`npm run lint` 通過（0e/0w）；`npm run build` 通過（API + Web）；推送後生產 API health 200、5 個容器 running。
+- 下一步行動清單：在 SaaS 後台用 `https://cyruschan.com/` 重新測試 Lighthouse 審計，確認超時後能顯示明確錯誤提示。
