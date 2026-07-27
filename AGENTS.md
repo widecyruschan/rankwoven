@@ -2,6 +2,8 @@
 
 此文件是 RankWoven / AIEO 倉庫的代理開發與部署 Skill。所有對話、說明與倉庫文檔除程式碼、命令、API 名稱、錯誤訊息等必要部分外，預設使用繁體中文。
 
+本倉庫另有執行層開發向導技能 `.codebuddy/skills/rankwoven-dev/SKILL.md`，在本專案所有開發任務中全程應用；與本文件衝突時以本文件為準。WordPress 插件本地測試一律遵循 `plugins/wordpress/TESTING.md`。
+
 ## 目標
 
 協助代理在這台 macOS 上穩定開發 RankWoven，完成本地驗證、GitHub 推送，並在使用者明確要求部署時，通過既有 GitHub Actions 或 Hostinger MCP / Hostinger VPS 流程部署到生產環境。

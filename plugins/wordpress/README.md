@@ -2,6 +2,8 @@
 
 此目錄包含 MVP 第一版 WordPress 插件骨架：`rankwoven-seo`。
 
+本地測試流程與手動測試清單見 [`TESTING.md`](./TESTING.md)。
+
 ## 安裝方式
 
 將 `plugins/wordpress/rankwoven-seo` 複製或掛載到 WordPress 的插件目錄：

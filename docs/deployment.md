@@ -103,6 +103,97 @@ npm run db:migrate
 3. 建立部署前資料庫備份。
 4. 套用未執行的 migration。
 
+## 資料庫備份恢復演練
+
+為確保生產環境資料可恢復，建議定期執行備份恢復演練。以下為標準演練步驟：
+
+### 演練前檢查
+
+```bash
+# 確認最新備份文件存在
+ssh root@72.62.253.72 ls -la /docker/backups/database/
+
+# 確認備份文件大小非零
+ssh root@72.62.253.72 "du -sh /docker/backups/database/"
+```
+
+### 本地恢復驗證演練
+
+```bash
+# 1. 複製生產備份到本地
+scp root@72.62.253.72:/docker/backups/database/rankwoven-最新日期.dump /tmp/
+
+# 2. 啟動本地 PostgreSQL（或 Docker PostgreSQL）
+docker compose --profile data up -d postgres && sleep 5
+
+# 3. 創建臨時恢復數據庫
+docker compose exec -T postgres psql -U aieo -c "DROP DATABASE IF EXISTS aieo_restore_test;"
+docker compose exec -T postgres psql -U aieo -c "CREATE DATABASE aieo_restore_test;"
+
+# 4. 恢復備份到臨時數據庫
+cat /tmp/rankwoven-*.dump | docker compose exec -T postgres pg_restore -U aieo -d aieo_restore_test --clean --if-exists
+
+# 5. 驗證數據完整性
+docker compose exec -T postgres psql -U aieo -d aieo_restore_test -c "SELECT count(*) FROM site_connections;"
+docker compose exec -T postgres psql -U aieo -d aieo_restore_test -c "SELECT count(*) FROM optimization_suggestions;"
+docker compose exec -T postgres psql -U aieo -d aieo_restore_test -c "SELECT count(*) FROM sync_tasks;"
+
+# 6. 執行 migration 驗證 schema 一致性
+# DATABASE_URL 指向臨時數據庫後執行
+DATABASE_URL="postgresql://aieo:aieo@localhost:5432/aieo_restore_test" npm run db:migrate
+
+# 7. 清理臨時數據庫
+docker compose exec -T postgres psql -U aieo -c "DROP DATABASE IF EXISTS aieo_restore_test;"
+rm /tmp/rankwoven-*.dump
+```
+
+### VPS 上直接恢復演練
+
+```bash
+ssh root@72.62.253.72 <<'EOF'
+  cd /docker/rankwoven
+
+  # 1. 確認最新備份
+  LATEST_BACKUP=$(ls -t /docker/backups/database/rankwoven-*.dump 2>/dev/null | head -1)
+  echo "Latest backup: $LATEST_BACKUP"
+
+  # 2. 創建恢復測試數據庫
+  docker compose exec -T postgres psql -U aieo -c "DROP DATABASE IF EXISTS aieo_drill_test;"
+  docker compose exec -T postgres psql -U aieo -c "CREATE DATABASE aieo_drill_test;"
+
+  # 3. 恢復
+  cat "$LATEST_BACKUP" | docker compose exec -T postgres pg_restore -U aieo -d aieo_drill_test --clean --if-exists
+
+  # 4. 校驗
+  docker compose exec -T postgres psql -U aieo -d aieo_drill_test -c "
+  SELECT
+    (SELECT count(*) FROM site_connections) AS sites,
+    (SELECT count(*) FROM sync_tasks) AS tasks,
+    (SELECT count(*) FROM optimization_suggestions) AS suggestions;
+  "
+
+  # 5. 清理
+  docker compose exec -T postgres psql -U aieo -c "DROP DATABASE IF EXISTS aieo_drill_test;"
+EOF
+```
+
+### 演練頻率建議
+
+| 環境 | 頻率 | 方式 |
+|------|------|------|
+| 生產部署後 | 每次部署後 | 部署腳本自動備份 + 基本校驗 |
+| 手動演練 | 每兩週 | 本地或 VPS 恢復演練 |
+| 重大 schema 變更前 | 變更前後各一次 | VPS 上完整恢復演練 |
+
+### 演練記錄
+
+每次演練後應在 VPS `/docker/backups/database/drill-log.txt` 記錄：
+
+```text
+日期 時間 | 備份文件 | 恢復數據庫 | 校驗結果 | 備註
+YYYY-MM-DD HH:MM | rankwoven-YYYYMMDDHHMMSS.dump | aieo_drill_test | PASS/FAIL | 校驗通過，sites=N,tasks=N,suggestions=N
+```
+
 ## 回滾方式
 
 每次部署會在 VPS 建立：

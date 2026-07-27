@@ -785,3 +785,44 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改測試站外部掛載文件 `/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`；修改本 README 追加排查記錄。AIEO 源碼文件未新增功能變更。
 - 驗證結果：`docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過；容器內 `grep` 已確認包含 `GA4 Property ID`、`rankwoven_ga4_property_id` 和 `Diagnostics`；`docker restart cyruschan-wp` 後容器正常運行。
 - 下一步行動清單：刷新 WordPress 後台 `Settings -> RankWoven SEO`；如仍未顯示，清除瀏覽器快取或重新登入 WordPress；後續優先把 AIEO 插件目錄直接 bind mount 到測試站，避免手動同步遺漏；在插件 UI 中可考慮顯示版本號或 build time，方便確認當前載入版本。
+
+### 2026-07-27：PRD 下一步行動清單批量完成
+
+- 會話的主要目的：按 PRD 第17節「下一步行動清單」逐一處理未完成的關鍵項目，將專案從 M5 收尾推進到 M7 前。
+- 完成的主要任務：
+  1. 修復 `siteConnections.ts` WIP 去重代碼中未定義變數問題，使用 `lastSyncStats` 替代全文/媒體 Map
+  2. 新增死信任務管理後台入口：`retrySyncTask()` / `ignoreDeadLetterTask()` Repository 方法、`POST /api/v1/sync-tasks/:taskId/retry` 和 `POST /api/v1/sync-tasks/:taskId/ignore` API 路由
+  3. 任務隊列補充站點篩選、類型篩選和可配置自動刷新：`listSyncTasks()` 改為接受 `SyncTaskListOptions`（siteId/scope/status）、TasksView 新增 Select 篩選和 15 秒自動刷新
+  4. Worker 寫回快照升級為寫回前即時讀取 WordPress 真實欄位值：`processSuggestionApplyTask` 在寫回前透過 WordPress REST API 讀取當前欄位值並更新快照 `before_value`
+  5. Repository `ensureSchema()` 收斂為只在非生產環境執行 `CREATE TABLE IF NOT EXISTS`，生產由 migration 腳本管理
+  6. 資料庫備份恢復演練步驟：在 `docs/deployment.md` 新增詳細的 VPS 和本地恢復演練流程
+  7. `/app/apply` 差異對比視圖和批量勾選操作：新增 `batchApplyOptimizationSuggestions` API、ApplySuggestionsView 加入 Diff Modal、全選/批量套用按鈕和 Table 行選擇
+  8. 全量品質檢查：`npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過
+- 關鍵決策和解決方案：`listSyncTasks()` 改為對象參數 `SyncTaskListOptions`，Web 定時器使用 `window.setInterval/window.clearInterval`；ESLint 為 Vue/web 檔案加入瀏覽器 globals；`ensureSchema` 在 `NODE_ENV=production` 時直接跳過不再執行 DDL
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、pg、Vitest、Vue 3、Ant Design Vue、Vue I18n、Worker、WordPress REST API
+- 新增或修改文件：
+  - 修改 `apps/api/src/siteConnections.ts`（去重修復、接口簽名調整、死信管理、ensureSchema 收斂）
+  - 修改 `apps/api/src/seoOptimization.ts`（批量應用路由、ensureSchema 收斂）
+  - 修改 `apps/api/src/auth.ts`（ensureSchema 收斂）
+  - 修改 `apps/worker/src/index.ts`（寫回前讀取 WordPress 真實值）
+  - 修改 `apps/web/src/api/siteConnections.ts`（新增 retry/ignore/批量應用 API client）
+  - 修改 `apps/web/src/views/TasksView.vue`（死信管理、篩選、自動刷新）
+  - 修改 `apps/web/src/views/ApplySuggestionsView.vue`（差異對比、批量勾選）
+  - 修改 `apps/web/src/i18n.ts`（en + zh-Hant 死信管理、Diff、批量等新 Key）
+  - 修改 `eslint.config.js`（瀏覽器 globals for Vue/web）
+  - 修改 `docs/deployment.md`（資料庫恢復演練步驟）
+- 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`
+- 下一步行動清單：在生產 Secrets 配置 `WENWEN_API_KEY`、`KEYWORD_VOLUME_API_URL` 和 Google 服務帳號憑據；將生產 Web 容器改為正式靜態構建部署；啟動 Phase 6 內部連結推薦開發
+### 2026-07-27：WordPress 插件本地測試文件與 RankWoven 開發向導技能
+
+- 會話的主要目的：為 `rankwoven-seo` WordPress 插件建立本地測試文件；將桌面通用 FastAPI 開發向導 SKILL.md 改寫為適用本系統的 RankWoven 開發向導，並掛接到本專案全程應用。
+- 完成的主要任務：
+  1. 新增 `plugins/wordpress/TESTING.md`：涵蓋 cyruschan.com Docker WordPress 測試環境總覽、前置條件、插件同步流程（cp + `php -l` + 重啟容器 + diff 驗證）、7 大類手動測試清單（啟用設定、站點連接、同步任務、圖片屬性與批量更新、診斷頁、站點側 REST API、建議寫回）、回歸重點對照表和常見問題排錯。
+  2. 改寫 `/Users/cyruschan/Desktop/SKILL.md`：由 Windows FastAPI + MySQL + Vue 向導改為 RankWoven 系統開發向導，技術棧對齊 Fastify + TypeScript + Zod + PostgreSQL 16 + Redis + Vue 3 + Ant Design Vue + npm workspaces + Docker Compose + WordPress 插件，命令改為 macOS zsh，工作流程改為需求澄清 -> 方案設計 -> 實作 -> lint/test/build/security:audit -> 本地驗證 -> README 會話總結 -> Git 與部署，並附本系統排錯手冊與禁止事項。
+  3. 將技能複製到 `.codebuddy/skills/rankwoven-dev/SKILL.md`，並在 `AGENTS.md` 開頭掛接說明，使其在本專案全程應用（衝突時以 AGENTS.md 為準）。
+  4. `plugins/wordpress/README.md` 加入 TESTING.md 連結。
+- 關鍵決策和解決方案：測試文件放在 AIEO 倉庫作為 source of truth，而非 cyruschan.com 掛載目錄；文件中不寫入測試站帳號密碼，僅指向 `cyruschan.com/DOCKER-README.md`；技能定位為 AGENTS.md 的執行層補充，明確衝突時優先級。
+- 使用的技術棧：Markdown、Docker Compose、WordPress PHP 插件、CodeBuddy Skill 格式。
+- 新增或修改文件：新增 `plugins/wordpress/TESTING.md`、`.codebuddy/skills/rankwoven-dev/SKILL.md`；修改 `/Users/cyruschan/Desktop/SKILL.md`（倉庫外）、`AGENTS.md`、`plugins/wordpress/README.md`、本 README。
+- 驗證結果：確認倉庫插件與測試站插件 `diff` 為 SAME；文件中的環境資訊已對照 `cyruschan.com/docker-compose.yml`、`DOCKER-README.md` 和 AIEO `docker-compose.yml` 核實（端口 8088/3011/8080/3308）。純文檔改動，未跑 lint/test/build。
+- 下一步行動清單：按 TESTING.md 走一輪完整插件手動測試並記錄結果；考慮將 AIEO 插件目錄直接 bind mount 到測試站避免手動同步；在生產 Secrets 配置 `WENWEN_API_KEY`、`KEYWORD_VOLUME_API_URL` 和 Google 服務帳號憑據；啟動 Phase 6 內部連結推薦開發。
