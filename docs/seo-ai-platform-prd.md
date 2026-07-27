@@ -1233,14 +1233,19 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 在生產 `.env` 或 GitHub Secrets 填入 Google 服務帳號憑據，並在客戶 WordPress 插件錄入各站點 GA4 Property ID；確認該服務帳號已被授權讀取對應 GA4 Property。
-2. 為關鍵詞建議配置正式搜尋量/難度資料源，例如 Google Search Console、DataForSEO、Ahrefs、Semrush 或其他第三方 API，並以真實請求驗證 `source`、月搜尋量、CPC 和競爭度準確顯示。
-3. 在生產 Secrets 填入正式 `WENWEN_API_KEY`，確認 OpenAI、Google Gemini 和 DeepSeek 代理模型均可產生可解析 JSON；測試時不得輸出完整 API Key。
-4. 執行全量 `lint`、`test`、`build`、`security:audit`、PostgreSQL migration、WordPress 插件 PHP 語法檢查和 Docker Desktop 重建。
-5. 為 Worker 死信任務補充管理後台重跑、忽略、批量導出和告警入口，避免需要直接查資料庫處理。
-6. 將寫回快照升級為 Worker 寫回前從 WordPress 即時讀取真實欄位值，降低同步資料過舊時回滾不準確的風險。
-7. 將任務隊列補充站點篩選、類型篩選和可配置自動刷新，方便大站同步時觀察批次進度。
-8. 將生產 Web 容器改為正式靜態構建部署，避免主站繼續由 Vite dev server 對外服務。
-9. 將 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 逐步收斂為只在測試或開發兜底使用，生產以 migration 腳本為主。
-10. 在部署文件中補充資料庫備份恢復演練步驟，包含 staging 驗證和回滾檢查清單。
-10. 為 `/app/apply` 增加差異對比視圖和批量勾選操作，讓用戶在建立寫回任務前能逐項確認修改內容。
+### 已完成（最近一次收尾：2026-07-27）
+- 配置 Hostinger MCP（hosting / domains / dns / billing / reach / vps 六個 server，Token 置於使用者級 `~/.codebuddy/mcp.json`，不進倉庫）。
+- 提交並推送 site connections 同步、SEO 優化、Tasks / ApplySuggestions UI、auth、i18n（feat）與 WordPress `TESTING.md`、rankwoven-dev 技能、部署文件（docs）至 `main`，觸發 GitHub Actions 生產部署。
+- 通過 `lint` / `test` / `build`（含 API `tsc` 型別檢查）/ `security:audit`，`https://api.rankwoven.com/health` 基線正常。
+
+### 待辦（按優先順序）
+1. 同步最新 `main` 到 Docker Desktop `aieo` 專案並重建容器；依 `TESTING.md` 對 WordPress 插件執行手動測試與本地 smoke check（本機 `aieo` 已 `running(5)`）。
+2. 在生產 `.env` 或 GitHub Secrets 填入 Google 服務帳號憑據，並於客戶 WordPress 插件錄入各站點 GA4 Property ID；確認服務帳號已授權讀取對應 GA4 Property。
+3. 為關鍵詞建議配置正式搜尋量/難度資料源（GSC、DataForSEO、Ahrefs、Semrush 等），以真實請求驗證 `source`、月搜尋量、CPC、競爭度。
+4. 在生產 Secrets 填入正式 `WENWEN_API_KEY`，確認 OpenAI / Gemini / DeepSeek 代理模型可產生可解析 JSON（不得輸出完整 Key）。
+5. 若有 schema 變更，補齊 PostgreSQL migration 並收斂 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 至僅測試/開發兜底；對插件跑 `php -l`。
+6. 為 Worker 死信任務補管理後台重跑 / 忽略 / 批量導出 / 告警入口。
+7. 將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值。
+8. 任務隊列補站點 / 類型篩選與可配置自動刷新。
+9. 生產 Web 容器改為正式靜態構建部署，避免 Vite dev server 對外。
+10. 部署文件補資料庫備份恢復演練與回滾清單；為 `/app/apply` 增加差異對比視圖與批量勾選。

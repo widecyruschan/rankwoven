@@ -826,3 +826,18 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：新增 `plugins/wordpress/TESTING.md`、`.codebuddy/skills/rankwoven-dev/SKILL.md`；修改 `/Users/cyruschan/Desktop/SKILL.md`（倉庫外）、`AGENTS.md`、`plugins/wordpress/README.md`、本 README。
 - 驗證結果：確認倉庫插件與測試站插件 `diff` 為 SAME；文件中的環境資訊已對照 `cyruschan.com/docker-compose.yml`、`DOCKER-README.md` 和 AIEO `docker-compose.yml` 核實（端口 8088/3011/8080/3308）。純文檔改動，未跑 lint/test/build。
 - 下一步行動清單：按 TESTING.md 走一輪完整插件手動測試並記錄結果；考慮將 AIEO 插件目錄直接 bind mount 到測試站避免手動同步；在生產 Secrets 配置 `WENWEN_API_KEY`、`KEYWORD_VOLUME_API_URL` 和 Google 服務帳號憑據；啟動 Phase 6 內部連結推薦開發。
+
+### 2026-07-27（二）：Hostinger MCP 配置、site-connections 部署與 PRD/測試收尾
+
+- 會話的主要目的：配置 Hostinger MCP 供部署前後檢查；將既有 dirty 修改提交推送以觸發 VPS 生產部署；落實「每次完成更新 PRD 下一步行動清單 + 同步 Docker Desktop + 測試」的收尾流程。
+- 完成的主要任務：
+  1. 配置 Hostinger MCP（hosting / domains / dns / billing / reach / vps 六個 server）於使用者級 `~/.codebuddy/mcp.json`，API Token 置於倉庫外，不進 Git。
+  2. 提交並推送 site connections 同步、SEO 優化、Tasks/ApplySuggestions UI、auth、i18n（feat）與 WordPress TESTING.md、rankwoven-dev 技能、部署文件（docs）至 `main`，觸發 GitHub Actions 生產部署（commits `a42a3c0`、`5b167fd`）。
+  3. 更新 `docs/seo-ai-platform-prd.md` 第 17 節「下一步行動清單」：新增「已完成」區塊、將 Docker Desktop 同步與手動測試列為待辦第一項、修正重複編號的 `10`。
+  4. 同步 Docker Desktop：重建 `aieo` 專案 web/api/worker 容器以載入最新代碼（postgres/redis data profile 不變）。
+  5. 測試：本地 `lint`/`test`/`build`/`security:audit` 全過；本機 API（3011）與 Web（8080）health/smoke OK；WordPress 插件 `php -l` 無語法錯誤。
+- 關鍵決策和解決方案：MCP Token 放使用者級配置避免洩漏；部署前完整跑 AGENTS.md 要求的四項驗證；PRD 列表改為「已完成 / 待辦」兩段式並優先列出 Docker 同步測試。
+- 使用的技術棧：Docker Compose、Hostinger MCP（npx hostinger-api-mcp）、Vitest、ESLint、PostgreSQL 16、Redis。
+- 新增或修改文件：`.codebuddy/mcp.json`（倉庫外，使用者級）、`docs/seo-ai-platform-prd.md`、本 README；提交 `apps/*`、`plugins/wordpress/TESTING.md`、`.codebuddy/skills/rankwoven-dev/SKILL.md` 等（見 `a42a3c0`/`5b167fd`）。
+- 驗證結果：四項驗證通過；`https://api.rankwoven.com/health` 基線正常；本機容器重建後 API/Web 200、插件 php -l 通過。
+- 下一步行動清單：依 TESTING.md 於瀏覽器對 WordPress 插件走一輪完整手動測試；在生產 Secrets 配置 Google 憑據與 `WENWEN_API_KEY`；待 GitHub Actions 完成後以 `hostinger-vps` / `hostinger-dns` 工具复查 VPS 專案與 DNS；後續 Phase 6 內部連結推薦開發（見 PRD 第 17 節）。
