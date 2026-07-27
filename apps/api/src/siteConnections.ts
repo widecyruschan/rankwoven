@@ -225,7 +225,7 @@ export interface SyncTaskListOptions {
 export interface SiteConnectionRepository {
   create(input: CreateConnectionInput): Promise<{
     site: SiteConnection;
-    apiToken: string;
+    apiToken: string | null;
   }>;
   list(workspaceId?: string): Promise<SiteConnection[]>;
   find(siteId: string): Promise<SiteConnection | undefined>;
@@ -237,6 +237,10 @@ export interface SiteConnectionRepository {
   updateAnalyticsSettings(
     siteId: string,
     settings: SiteAnalyticsSettingsInput
+  ): Promise<SiteConnection | undefined>;
+  updateSiteInfo(
+    siteId: string,
+    input: CreateConnectionInput
   ): Promise<SiteConnection | undefined>;
   regenerateToken(siteId: string): Promise<{ site: SiteConnection; apiToken: string } | undefined>;
   revokeToken(siteId: string): Promise<SiteConnection | undefined>;
@@ -818,6 +822,35 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
 
   return {
     async create(input) {
+      const normalizedUrl = normalizeSiteUrl(input.siteUrl);
+      const existing = Array.from(sites.values()).find(
+        (site) =>
+          site.workspaceId === defaultWorkspaceId &&
+          site.platform === input.platform &&
+          normalizeSiteUrl(site.siteUrl) === normalizedUrl
+      );
+
+      if (existing) {
+        existing.name = input.name;
+        existing.siteUrl = input.siteUrl;
+        existing.cmsVersion = input.cmsVersion ?? existing.cmsVersion;
+        existing.pluginVersion = input.pluginVersion ?? existing.pluginVersion;
+        existing.googleAnalyticsPropertyId =
+          input.googleAnalyticsPropertyId ?? existing.googleAnalyticsPropertyId;
+        existing.wordpressAdminUsername =
+          input.wordpressAdminUsername ?? existing.wordpressAdminUsername;
+        existing.wordpressApplicationPasswordConfigured = Boolean(
+          input.wordpressApplicationPassword ?? existing.wordpressApplicationPasswordConfigured
+        );
+        existing.wordpressApplicationPassword =
+          input.wordpressApplicationPassword ?? existing.wordpressApplicationPassword;
+
+        return {
+          site: toPublicConnection(existing),
+          apiToken: existing.apiToken
+        };
+      }
+
       const apiToken = generateSiteToken();
       const site = createSiteConnection(crypto.randomUUID(), input, apiToken);
 
@@ -865,6 +898,30 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       }
 
       site.googleAnalyticsPropertyId = settings.googleAnalyticsPropertyId?.trim() || undefined;
+      return toPublicConnection(site);
+    },
+    async updateSiteInfo(siteId, input) {
+      const site = sites.get(siteId);
+
+      if (!site) {
+        return undefined;
+      }
+
+      site.name = input.name;
+      site.siteUrl = input.siteUrl;
+      site.cmsVersion = input.cmsVersion ?? site.cmsVersion;
+      site.pluginVersion = input.pluginVersion ?? site.pluginVersion;
+      site.googleAnalyticsPropertyId =
+        input.googleAnalyticsPropertyId ?? site.googleAnalyticsPropertyId;
+      site.wordpressAdminUsername =
+        input.wordpressAdminUsername ?? site.wordpressAdminUsername;
+      site.wordpressApplicationPasswordConfigured = Boolean(
+        input.wordpressApplicationPassword ?? site.wordpressApplicationPasswordConfigured
+      );
+      site.wordpressApplicationPassword =
+        input.wordpressApplicationPassword ?? site.wordpressApplicationPassword;
+      site.status = 'connected';
+
       return toPublicConnection(site);
     },
     async regenerateToken(siteId) {
@@ -1171,6 +1228,45 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
   async create(input: CreateConnectionInput) {
     await this.ensureSchema();
 
+    const normalizedUrl = normalizeSiteUrl(input.siteUrl);
+    const existing = await this.findByUrl(normalizedUrl, input.platform);
+
+    if (existing) {
+      const result = await this.pool.query(
+        `
+          UPDATE site_connections
+          SET
+            name = $1,
+            site_url = $2,
+            cms_version = COALESCE($3, cms_version),
+            plugin_version = COALESCE($4, plugin_version),
+            google_analytics_property_id = COALESCE($5, google_analytics_property_id),
+            wordpress_admin_username = COALESCE($6, wordpress_admin_username),
+            wordpress_application_password_encrypted = COALESCE($7, wordpress_application_password_encrypted),
+            status = 'connected'
+          WHERE id = $8
+          RETURNING *
+        `,
+        [
+          input.name,
+          normalizedUrl,
+          input.cmsVersion ?? null,
+          input.pluginVersion ?? null,
+          input.googleAnalyticsPropertyId ?? null,
+          input.wordpressAdminUsername ?? null,
+          input.wordpressApplicationPassword
+            ? encryptWordPressCredential(input.wordpressApplicationPassword)
+            : null,
+          existing.id
+        ]
+      );
+
+      return {
+        site: mapSiteRow(result.rows[0]),
+        apiToken: null
+      };
+    }
+
     const apiToken = generateSiteToken();
     const id = crypto.randomUUID();
     const now = new Date();
@@ -1200,7 +1296,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         defaultWorkspaceId,
         input.platform,
         input.name,
-        input.siteUrl,
+        normalizedUrl,
         input.cmsVersion ?? null,
         input.pluginVersion ?? null,
         hashSiteToken(apiToken),
@@ -1218,6 +1314,24 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
       site: mapSiteRow(result.rows[0]),
       apiToken
     };
+  }
+
+  async findByUrl(siteUrl: string, platform: string): Promise<SiteConnection | undefined> {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        SELECT *
+        FROM site_connections
+        WHERE workspace_id = $1::uuid
+          AND platform = $2
+          AND site_url = $3
+        LIMIT 1
+      `,
+      [defaultWorkspaceId, platform, siteUrl]
+    );
+
+    return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
   }
 
   async list(workspaceId?: string) {
@@ -1301,6 +1415,43 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         RETURNING *
       `,
       [siteId, settings.googleAnalyticsPropertyId?.trim() || null]
+    );
+
+    return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
+  }
+
+  async updateSiteInfo(siteId: string, input: CreateConnectionInput) {
+    await this.ensureSchema();
+
+    const normalizedUrl = normalizeSiteUrl(input.siteUrl);
+
+    const result = await this.pool.query(
+      `
+        UPDATE site_connections
+        SET
+          name = $1,
+          site_url = $2,
+          cms_version = COALESCE($3, cms_version),
+          plugin_version = COALESCE($4, plugin_version),
+          google_analytics_property_id = COALESCE($5, google_analytics_property_id),
+          wordpress_admin_username = COALESCE($6, wordpress_admin_username),
+          wordpress_application_password_encrypted = COALESCE($7, wordpress_application_password_encrypted),
+          status = 'connected'
+        WHERE id = $8
+        RETURNING *
+      `,
+      [
+        input.name,
+        normalizedUrl,
+        input.cmsVersion ?? null,
+        input.pluginVersion ?? null,
+        input.googleAnalyticsPropertyId ?? null,
+        input.wordpressAdminUsername ?? null,
+        input.wordpressApplicationPassword
+          ? encryptWordPressCredential(input.wordpressApplicationPassword)
+          : null,
+        siteId
+      ]
     );
 
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
@@ -2162,8 +2313,11 @@ export function registerSiteConnectionRoutes(
 
     return reply.status(201).send({
       success: true,
-      message: '站點連接已建立',
-      data: result
+      message: result.apiToken ? '站點連接已建立' : '站點資訊已更新',
+      data: {
+        site: result.site,
+        ...(result.apiToken ? { apiToken: result.apiToken } : {})
+      }
     });
   });
 
@@ -2239,6 +2393,72 @@ export function registerSiteConnectionRoutes(
       message: '操作成功',
       data: {
         site
+      }
+    };
+  });
+
+  app.put<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId', async (request, reply) => {
+    const parsed = createConnectionSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const existingSite = await repository.find(request.params.siteId);
+    const tokenAuthorized = await repository.verifyToken(
+      request.params.siteId,
+      getBearerToken(request)
+    );
+
+    if (!existingSite) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    if (!tokenAuthorized) {
+      const user = await requireAuth(authService, request, reply);
+
+      if (!user) {
+        return reply;
+      }
+
+      if (existingSite.workspaceId !== user.workspaceId) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: {
+            code: 'SITE_NOT_FOUND'
+          }
+        });
+      }
+    }
+
+    const updated = await repository.updateSiteInfo(request.params.siteId, parsed.data);
+
+    if (!updated) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '站點資訊已更新',
+      data: {
+        site: updated
       }
     };
   });

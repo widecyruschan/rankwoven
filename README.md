@@ -841,3 +841,17 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：`.codebuddy/mcp.json`（倉庫外，使用者級）、`docs/seo-ai-platform-prd.md`、本 README；提交 `apps/*`、`plugins/wordpress/TESTING.md`、`.codebuddy/skills/rankwoven-dev/SKILL.md` 等（見 `a42a3c0`/`5b167fd`）。
 - 驗證結果：四項驗證通過；`https://api.rankwoven.com/health` 基線正常；本機容器重建後 API/Web 200、插件 php -l 通過。
 - 下一步行動清單：依 TESTING.md 於瀏覽器對 WordPress 插件走一輪完整手動測試；在生產 Secrets 配置 Google 憑據與 `WENWEN_API_KEY`；待 GitHub Actions 完成後以 `hostinger-vps` / `hostinger-dns` 工具复查 VPS 專案與 DNS；後續 Phase 6 內部連結推薦開發（見 PRD 第 17 節）。
+
+### 2026-07-27（三）：修復 WordPress 站點設定頁重複新增站點
+
+- 會話的主要目的：解決「在 WordPress 插件站點設定頁修改資訊時，SaaS 客戶後台每次都重新新增站點」的問題，讓同一站點只更新資訊而非重複建立。
+- 完成的主要任務：
+  1. API `siteConnections.ts`：`create()` 改為 upsert（依正規化 `site_url` + `workspace_id` + `platform` 去重，命中則更新資訊並沿用既有 token，不重發）；新增 `findByUrl()` 與 `updateSiteInfo()`；新增 `PUT /api/v1/site-connections/:siteId` 路由（插件以 site token 驗證）；`create` 回傳型別允許 `apiToken: string | null`。
+  2. WordPress 插件 `handle_connect_site()`：已連接站點改用 `PUT` 更新並帶既有 token；僅在 API 回傳新 token 時覆寫本機 token，否則保留。
+  3. 新增 migration `db/migrations/0005_site_url_unique.sql`：先去重重複站點，再建立 `(workspace_id, platform, site_url)` 唯一索引作為資料層防線（可重複執行）。
+  4. Docker Desktop `aieo` 重建 `api` 容器；本地 smoke 驗證同 URL 連續 POST 兩次回傳同一 `site id`、第二次不回傳 `apiToken`（UPSERT_OK）；測試後清理假站點。
+- 關鍵決策和解決方案：以「正規化 URL + workspace 去重 + 沿用 token」為核心，避免重複站點同時不讓插件既有 token 失效；資料層唯一索引防並發重複。
+- 使用的技術棧：Node.js / TypeScript / Fastify、PostgreSQL 16、Docker Compose、WordPress PHP 插件。
+- 新增或修改文件：`apps/api/src/siteConnections.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`db/migrations/0005_site_url_unique.sql`、`docs/seo-ai-platform-prd.md`、本 README。
+- 驗證結果：`lint` / `test` / `build`（含 API `tsc`）/ `security:audit` 全過；插件 `php -l` 無語法錯誤；本地 upsert smoke 通過。
+- 下一步行動清單：生產部署後觀察 SaaS 後台是否仍有重複站點；於生產執行 `0005` migration（會先去重再建索引）；後續依 PRD 第 17 節推進 Google 憑據與關鍵詞資料源配置。

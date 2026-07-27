@@ -1237,10 +1237,11 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 - 配置 Hostinger MCP（hosting / domains / dns / billing / reach / vps 六個 server，Token 置於使用者級 `~/.codebuddy/mcp.json`，不進倉庫）。
 - 提交並推送 site connections 同步、SEO 優化、Tasks / ApplySuggestions UI、auth、i18n（feat）與 WordPress `TESTING.md`、rankwoven-dev 技能、部署文件（docs）至 `main`，觸發 GitHub Actions 生產部署。
 - 通過 `lint` / `test` / `build`（含 API `tsc` 型別檢查）/ `security:audit`，`https://api.rankwoven.com/health` 基線正常。
+- 修復 WordPress 插件在站點設定頁「修改資訊」時 SaaS 後台重複新增站點的問題：API `site-connections` `create()` 改為 upsert（依正規化 `site_url` + `workspace_id` 去重，更新資訊並沿用既有 token 不重發）；新增 `PUT /api/v1/site-connections/:siteId` 路由與 `findByUrl` / `updateSiteInfo`；插件在已連接站點改用 `PUT` 更新（帶既有 token）並只在 API 回傳新 token 時覆寫本機 token；新增 migration `0005_site_url_unique.sql` 建立 `(workspace_id, platform, site_url)` 唯一索引作為資料層防線。本地 smoke 驗證：同 URL 連續 POST 兩次回傳同一 `site id` 且第二次不回傳 `apiToken`（UPSERT_OK）。
+- Docker Desktop `aieo` 專案已重建 `api` 容器載入新程式碼並通過本地 smoke check。
 
 ### 待辦（按優先順序）
-1. 同步最新 `main` 到 Docker Desktop `aieo` 專案並重建容器；依 `TESTING.md` 對 WordPress 插件執行手動測試與本地 smoke check（本機 `aieo` 已 `running(5)`）。
-2. 在生產 `.env` 或 GitHub Secrets 填入 Google 服務帳號憑據，並於客戶 WordPress 插件錄入各站點 GA4 Property ID；確認服務帳號已授權讀取對應 GA4 Property。
+1. 在生產 `.env` 或 GitHub Secrets 填入 Google 服務帳號憑據，並於客戶 WordPress 插件錄入各站點 GA4 Property ID；確認服務帳號已授權讀取對應 GA4 Property。
 3. 為關鍵詞建議配置正式搜尋量/難度資料源（GSC、DataForSEO、Ahrefs、Semrush 等），以真實請求驗證 `source`、月搜尋量、CPC、競爭度。
 4. 在生產 Secrets 填入正式 `WENWEN_API_KEY`，確認 OpenAI / Gemini / DeepSeek 代理模型可產生可解析 JSON（不得輸出完整 Key）。
 5. 若有 schema 變更，補齊 PostgreSQL migration 並收斂 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 至僅測試/開發兜底；對插件跑 `php -l`。

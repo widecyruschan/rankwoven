@@ -483,34 +483,59 @@ final class RankWoven_SEO_Plugin
             $this->redirect_with_status('missing_wordpress_application_password');
         }
 
-        $response = wp_remote_post($this->build_api_url('/api/v1/site-connections'), [
-            'timeout' => 30,
-            'headers' => [
-                'Content-Type' => 'application/json'
-            ],
-            'body' => wp_json_encode([
-                'platform' => 'wordpress',
-                'name' => get_bloginfo('name'),
-                'siteUrl' => home_url('/'),
-                'cmsVersion' => get_bloginfo('version'),
-                'pluginVersion' => self::VERSION,
-                'googleAnalyticsPropertyId' => sanitize_text_field(get_option(self::OPTION_GA4_PROPERTY_ID, '')),
-                'wordpressAdminUsername' => $wp_credentials['username'],
-                'wordpressApplicationPassword' => $wp_credentials['applicationPassword']
-            ])
-        ]);
+        $payload = [
+            'platform' => 'wordpress',
+            'name' => get_bloginfo('name'),
+            'siteUrl' => home_url('/'),
+            'cmsVersion' => get_bloginfo('version'),
+            'pluginVersion' => self::VERSION,
+            'googleAnalyticsPropertyId' => sanitize_text_field(get_option(self::OPTION_GA4_PROPERTY_ID, '')),
+            'wordpressAdminUsername' => $wp_credentials['username'],
+            'wordpressApplicationPassword' => $wp_credentials['applicationPassword']
+        ];
+
+        $existing_site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
+        $existing_site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
+        if ($existing_site_id !== '' && $existing_site_token !== '') {
+            // 同一站點已連接過：更新資訊並沿用既有 token，避免 SaaS 後台重複新增站點。
+            $response = wp_remote_request(
+                $this->build_api_url('/api/v1/site-connections/' . $existing_site_id),
+                [
+                    'method' => 'PUT',
+                    'timeout' => 30,
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'Authorization' => 'Bearer ' . $existing_site_token
+                    ],
+                    'body' => wp_json_encode($payload)
+                ]
+            );
+        } else {
+            // 首次連接：建立新站點並取得 token。
+            $response = wp_remote_post($this->build_api_url('/api/v1/site-connections'), [
+                'timeout' => 30,
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => wp_json_encode($payload)
+            ]);
+        }
 
         if (is_wp_error($response)) {
             $this->redirect_with_status('connection_failed');
         }
 
         $body = $this->decode_response_body($response);
-        if (!($body['success'] ?? false) || empty($body['data']['site']['id']) || empty($body['data']['apiToken'])) {
+        if (!($body['success'] ?? false) || empty($body['data']['site']['id'])) {
             $this->redirect_with_status('connection_failed');
         }
 
-        update_option(self::OPTION_SITE_ID, sanitize_text_field($body['data']['site']['id']));
-        update_option(self::OPTION_SITE_TOKEN, sanitize_text_field($body['data']['apiToken']));
+        $new_site_id = sanitize_text_field($body['data']['site']['id']);
+        $new_api_token = isset($body['data']['apiToken']) ? sanitize_text_field($body['data']['apiToken']) : '';
+
+        update_option(self::OPTION_SITE_ID, $new_site_id);
+        if ($new_api_token !== '') {
+            // 僅在 API 重新發出新 token 時覆寫；否則保留本地既有 token 不變。
+            update_option(self::OPTION_SITE_TOKEN, $new_api_token);
+        }
         update_option(self::OPTION_LAST_TOKEN_USED_AT, gmdate('c'));
         delete_option(self::OPTION_LAST_ERROR);
 
