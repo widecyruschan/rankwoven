@@ -320,9 +320,65 @@ async function processSuggestionApplyTask(
   }
 
   const credentials = getCredentials(task);
+  const targetType = String(suggestion.target_type);
+  const fieldName = String(suggestion.field_name);
+
+  // Read the real current WordPress field value before writeback
+  const currentEndpoint = targetType === 'article' ? `posts/${task.targetCmsId}` : `media/${task.targetCmsId}`;
+  const currentData = await fetchWordPressJson(
+    fetchImpl,
+    buildWordPressUrl(task.siteUrl, currentEndpoint),
+    credentials
+  );
+
+  const currentItem = (targetType === 'article' ? currentData.article : currentData.media) as Record<string, unknown> | undefined;
+  let realCurrentValue = '';
+
+  if (currentItem) {
+    if (fieldName === 'contentHtml') {
+      realCurrentValue = String(currentItem.contentHtml ?? currentItem.content_html ?? '');
+    } else if (fieldName === 'altText') {
+      realCurrentValue = String(currentItem.altText ?? currentItem.alt_text ?? '');
+    } else if (fieldName === 'fileName') {
+      realCurrentValue = String(currentItem.fileName ?? currentItem.file_name ?? '');
+    } else if (fieldName === 'metaDescription') {
+      realCurrentValue = String(currentItem.metaDescription ?? currentItem.meta_description ?? '');
+    } else {
+      realCurrentValue = String(currentItem[fieldName] ?? '');
+    }
+  }
+
+  // Update snapshot before_value to the real WordPress value for accurate rollback
+  if (realCurrentValue !== '') {
+    const existingSnapshot = suggestion.applySnapshotId
+      ? await client.query(
+          `
+            SELECT before_value
+            FROM apply_snapshots
+            WHERE id = $1
+          `,
+          [suggestion.applySnapshotId]
+        )
+      : null;
+
+    const snapshotBeforeValue = String(existingSnapshot?.rows[0]?.before_value ?? '');
+
+    if (snapshotBeforeValue !== realCurrentValue) {
+      await client.query(
+        `
+          UPDATE apply_snapshots
+          SET before_value = $2,
+              snapshot_matched_at = now()
+          WHERE suggestion_id = $1
+        `,
+        [task.suggestionId, realCurrentValue]
+      );
+    }
+  }
+
   const payload = buildSuggestionPayload(suggestion);
   const path =
-    suggestion.target_type === 'article'
+    targetType === 'article'
       ? `posts/${task.targetCmsId}/apply`
       : `media/${task.targetCmsId}/apply`;
   await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials, {
@@ -351,7 +407,7 @@ async function processSuggestionApplyTask(
     `,
     [task.suggestionId, task.id]
   );
-  await completeTask(client, task, suggestion.target_type === 'article' ? 1 : 0, suggestion.target_type === 'media' ? 1 : 0);
+  await completeTask(client, task, targetType === 'article' ? 1 : 0, targetType === 'media' ? 1 : 0);
 }
 
 async function processSuggestionRollbackTask(

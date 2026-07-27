@@ -216,6 +216,12 @@ export interface SaveSyncBatchResult {
   mediaReceived: number;
 }
 
+export interface SyncTaskListOptions {
+  siteId?: string;
+  scope?: SyncTaskScope;
+  status?: SyncTaskStatus;
+}
+
 export interface SiteConnectionRepository {
   create(input: CreateConnectionInput): Promise<{
     site: SiteConnection;
@@ -237,10 +243,12 @@ export interface SiteConnectionRepository {
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
   saveSync(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
   createSyncTask(siteId: string, input: CreateSyncTaskInput): Promise<SyncTask | undefined>;
-  listSyncTasks(siteId?: string, workspaceId?: string): Promise<SyncTask[]>;
+  listSyncTasks(options?: SyncTaskListOptions): Promise<SyncTask[]>;
   getSyncTask(syncTaskId: string): Promise<SyncTask | undefined>;
   markSyncTaskRunning(syncTaskId: string): Promise<SyncTask | undefined>;
   markSyncTaskFailed(syncTaskId: string, errorMessage: string): Promise<SyncTask | undefined>;
+  retrySyncTask(syncTaskId: string): Promise<SyncTask | undefined>;
+  ignoreDeadLetterTask(syncTaskId: string): Promise<SyncTask | undefined>;
   saveSyncBatch(
     siteId: string,
     syncTaskId: string,
@@ -575,6 +583,42 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
   };
 }
 
+function normalizeSiteUrl(value: string) {
+  const url = new URL(value);
+  url.hash = '';
+  url.search = '';
+  const path = url.pathname.replace(/\/+$/, '');
+  return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}${path}`;
+}
+
+function dedupeSiteConnections<T extends { workspaceId?: string; platform: string; siteUrl: string; id: string; lastSyncAt?: string; lastSyncStats?: { articlesReceived: number; mediaReceived: number }; createdAt: string }>(sites: T[]): T[] {
+  const siteByKey = new Map<string, T>();
+
+  for (const site of sites) {
+    const key = `${site.workspaceId ?? ''}:${site.platform}:${normalizeSiteUrl(site.siteUrl)}`;
+    const existingSite = siteByKey.get(key);
+    if (!existingSite) {
+      siteByKey.set(key, site);
+      continue;
+    }
+
+    const existingScore =
+      (existingSite.lastSyncStats?.articlesReceived ?? 0) +
+      (existingSite.lastSyncStats?.mediaReceived ?? 0);
+    const nextScore =
+      (site.lastSyncStats?.articlesReceived ?? 0) +
+      (site.lastSyncStats?.mediaReceived ?? 0);
+    const existingTime = Date.parse(existingSite.lastSyncAt ?? existingSite.createdAt);
+    const nextTime = Date.parse(site.lastSyncAt ?? site.createdAt);
+
+    if (nextScore > existingScore || (nextScore === existingScore && nextTime > existingTime)) {
+      siteByKey.set(key, site);
+    }
+  }
+
+  return Array.from(siteByKey.values());
+}
+
 function mapSiteRow(row: QueryResultRow): SiteConnection {
   return {
     id: row.id,
@@ -787,9 +831,10 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       };
     },
     async list(workspaceId) {
-      return Array.from(sites.values())
-        .filter((site) => !workspaceId || site.workspaceId === workspaceId)
-        .map(toPublicConnection);
+      const filtered = Array.from(sites.values())
+        .filter((site) => !workspaceId || site.workspaceId === workspaceId);
+      const deduped = dedupeSiteConnections(filtered);
+      return deduped.map(toPublicConnection);
     },
     async find(siteId) {
       const site = sites.get(siteId);
@@ -922,10 +967,14 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       syncTaskBatchIndexes.set(task.id, new Set());
       return task;
     },
-    async listSyncTasks(siteId, workspaceId) {
+    async listSyncTasks(options) {
+      const siteId = options?.siteId;
+      const scope = options?.scope;
+      const status = options?.status;
       return Array.from(syncTasks.values())
         .filter((task) => !siteId || task.siteId === siteId)
-        .filter((task) => !workspaceId || sites.get(task.siteId)?.workspaceId === workspaceId)
+        .filter((task) => !scope || task.scope === scope)
+        .filter((task) => !status || task.status === status)
         .map((task) => ({
           ...task,
           siteName: sites.get(task.siteId)?.name
@@ -963,6 +1012,43 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       task.status = 'failed';
       task.completedAt = new Date().toISOString();
       task.errorMessage = errorMessage;
+      return {
+        ...task,
+        siteName: sites.get(task.siteId)?.name
+      };
+    },
+    async retrySyncTask(syncTaskId) {
+      const task = syncTasks.get(syncTaskId);
+      if (!task) {
+        return undefined;
+      }
+
+      if (task.status !== 'dead_letter' && task.status !== 'failed') {
+        return undefined;
+      }
+
+      task.status = 'queued';
+      task.errorMessage = undefined;
+      task.retryCount = 0;
+      task.deadLetteredAt = undefined;
+      task.nextRunAt = new Date().toISOString();
+      return {
+        ...task,
+        siteName: sites.get(task.siteId)?.name
+      };
+    },
+    async ignoreDeadLetterTask(syncTaskId) {
+      const task = syncTasks.get(syncTaskId);
+      if (!task) {
+        return undefined;
+      }
+
+      if (task.status !== 'dead_letter') {
+        return undefined;
+      }
+
+      task.status = 'failed';
+      task.completedAt = new Date().toISOString();
       return {
         ...task,
         siteName: sites.get(task.siteId)?.name
@@ -1411,8 +1497,34 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
   }
 
-  async listSyncTasks(siteId?: string, workspaceId?: string) {
+  async listSyncTasks(options?: SyncTaskListOptions) {
     await this.ensureSchema();
+
+    const siteId = options?.siteId;
+    const scope = options?.scope;
+    const status = options?.status;
+
+    const conditions: string[] = [];
+    const params: (string | null)[] = [];
+
+    if (siteId) {
+      conditions.push(`st.site_id = $${params.length + 1}::uuid`);
+      params.push(siteId);
+    }
+
+    if (scope) {
+      conditions.push(`st.scope = $${params.length + 1}`);
+      params.push(scope);
+    }
+
+    if (status) {
+      conditions.push(`st.status = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
 
     const result = await this.pool.query(
       `
@@ -1421,12 +1533,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           sc.name AS site_name
         FROM sync_tasks st
         JOIN site_connections sc ON sc.id = st.site_id
-        WHERE ($1::uuid IS NULL OR st.site_id = $1::uuid)
-          AND ($2::uuid IS NULL OR sc.workspace_id = $2::uuid)
+        ${whereClause}
         ORDER BY st.created_at DESC
         LIMIT 100
       `,
-      [siteId ?? null, workspaceId ?? null]
+      params
     );
 
     return result.rows.map(mapSyncTaskRow);
@@ -1481,6 +1592,45 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         RETURNING *
       `,
       [syncTaskId, errorMessage]
+    );
+
+    return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
+  }
+
+  async retrySyncTask(syncTaskId: string) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        UPDATE sync_tasks
+        SET status = 'queued',
+            error_message = NULL,
+            retry_count = 0,
+            dead_lettered_at = NULL,
+            next_run_at = now()
+        WHERE id = $1
+          AND status IN ('dead_letter', 'failed')
+        RETURNING *
+      `,
+      [syncTaskId]
+    );
+
+    return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
+  }
+
+  async ignoreDeadLetterTask(syncTaskId: string) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        UPDATE sync_tasks
+        SET status = 'failed',
+            completed_at = now()
+        WHERE id = $1
+          AND status = 'dead_letter'
+        RETURNING *
+      `,
+      [syncTaskId]
     );
 
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
@@ -1789,6 +1939,10 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
   }
 
   private async ensureSchema() {
+    if (process.env.NODE_ENV === 'production') {
+      // In production, schema is managed by db/migrations. Do not run auto-migration.
+      return;
+    }
     this.migrationPromise ??= this.pool.query(siteConnectionMigrationSql).then(() => undefined);
     await this.migrationPromise;
   }
@@ -2029,18 +2183,30 @@ export function registerSiteConnectionRoutes(
     };
   });
 
-  app.get('/api/v1/sync-tasks', async (request, reply) => {
+  app.get<{
+    Querystring: {
+      siteId?: string;
+      scope?: string;
+      status?: string;
+    };
+  }>('/api/v1/sync-tasks', async (request, reply) => {
     const user = await requireAuth(authService, request, reply);
 
     if (!user) {
       return reply;
     }
 
+    const { siteId, scope, status } = request.query;
+
     return {
       success: true,
       message: '操作成功',
       data: {
-        tasks: await repository.listSyncTasks(undefined, user.workspaceId)
+        tasks: await repository.listSyncTasks({
+          siteId: siteId || undefined,
+          scope: scope as SyncTaskScope | undefined,
+          status: status as SyncTaskStatus | undefined
+        })
       }
     };
   });
@@ -2320,7 +2486,7 @@ export function registerSiteConnectionRoutes(
       success: true,
       message: '操作成功',
       data: {
-        tasks: await repository.listSyncTasks(request.params.siteId, user.workspaceId)
+        tasks: await repository.listSyncTasks({ siteId: request.params.siteId })
       }
     };
   });
@@ -2453,6 +2619,66 @@ export function registerSiteConnectionRoutes(
       success: true,
       message: '同步批次已接收',
       data: result
+    };
+  });
+
+  app.post<{
+    Params: {
+      taskId: string;
+    };
+  }>('/api/v1/sync-tasks/:taskId/retry', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+
+    if (!user) {
+      return reply;
+    }
+
+    const task = await repository.retrySyncTask(request.params.taskId);
+
+    if (!task) {
+      return reply.status(400).send({
+        success: false,
+        message: '任務不存在或狀態不允許重試',
+        error: {
+          code: 'TASK_NOT_RETRYABLE'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '任務已重新加入隊列',
+      data: { task }
+    };
+  });
+
+  app.post<{
+    Params: {
+      taskId: string;
+    };
+  }>('/api/v1/sync-tasks/:taskId/ignore', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+
+    if (!user) {
+      return reply;
+    }
+
+    const task = await repository.ignoreDeadLetterTask(request.params.taskId);
+
+    if (!task) {
+      return reply.status(400).send({
+        success: false,
+        message: '任務不存在或狀態不為死信',
+        error: {
+          code: 'TASK_NOT_DEAD_LETTER'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '死信任務已忽略',
+      data: { task }
     };
   });
 

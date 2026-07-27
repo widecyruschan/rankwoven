@@ -968,6 +968,9 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
   }
 
   private async ensureSchema() {
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
     this.migrationPromise ??= this.pool.query(seoOptimizationMigrationSql).then(() => undefined);
     await this.migrationPromise;
   }
@@ -1227,7 +1230,7 @@ export function registerSeoOptimizationRoutes(
 
       const [suggestions, tasks, snapshots] = await Promise.all([
         seoRepository.listSuggestions(site.id),
-        siteRepository.listSyncTasks(site.id, user.workspaceId),
+        siteRepository.listSyncTasks({ siteId: site.id }),
         seoRepository.listApplySnapshots(site.id)
       ]);
 
@@ -1375,6 +1378,93 @@ export function registerSeoOptimizationRoutes(
           suggestion: updatedSuggestion,
           snapshot: updatedSnapshot ?? snapshot,
           task
+        }
+      });
+    }
+  );
+
+  app.post<{ Params: { siteId: string }; Body: { suggestionIds: string[] } }>(
+    '/api/v1/site-connections/:siteId/suggestions/batch-apply',
+    async (request, reply) => {
+      const user = await requireAuth(authService, request, reply);
+      if (!user) {
+        return reply;
+      }
+
+      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      if (!site) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const { suggestionIds } = request.body;
+
+      if (!Array.isArray(suggestionIds) || suggestionIds.length === 0) {
+        return reply.status(400).send({
+          success: false,
+          message: '請提供至少一個建議 ID',
+          error: { code: 'INVALID_INPUT' }
+        });
+      }
+
+      const results: Array<{
+        suggestionId: string;
+        success: boolean;
+        taskId?: string;
+        error?: string;
+      }> = [];
+
+      for (const suggestionId of suggestionIds) {
+        try {
+          const suggestion = await seoRepository.findSuggestion(site.id, suggestionId);
+          if (!suggestion) {
+            results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_FOUND' });
+            continue;
+          }
+
+          if (suggestion.status !== 'approved') {
+            results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_APPROVED' });
+            continue;
+          }
+
+          const snapshot = await seoRepository.createApplySnapshot(site.id, suggestion);
+          const task = await siteRepository.createSyncTask(site.id, {
+            scope: 'suggestion_apply',
+            targetCmsId: suggestion.targetCmsId,
+            suggestionId: suggestion.id,
+            applySnapshotId: snapshot.id
+          });
+
+          if (!task) {
+            await seoRepository.markApplySnapshotFailed(snapshot.id, 'SITE_NOT_FOUND');
+            results.push({ suggestionId, success: false, error: 'TASK_CREATION_FAILED' });
+            continue;
+          }
+
+          await seoRepository.attachSnapshotTask(snapshot.id, task.id);
+          await seoRepository.markSuggestionApplyQueued(site.id, suggestion.id, task.id);
+
+          results.push({ suggestionId, success: true, taskId: task.id });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'UNKNOWN_ERROR';
+          results.push({ suggestionId, success: false, error: message });
+        }
+      }
+
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      return reply.status(201).send({
+        success: true,
+        message: `批量寫回完成：${succeeded} 個成功，${failed} 個失敗`,
+        data: {
+          results,
+          total: suggestionIds.length,
+          succeeded,
+          failed
         }
       });
     }

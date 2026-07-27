@@ -238,14 +238,49 @@ export async function getSiteConnections() {
   }>('/api/v1/site-connections');
 }
 
-export async function getSyncTasks(siteId?: string) {
-  const path = siteId
-    ? `/api/v1/site-connections/${encodeURIComponent(siteId)}/sync-tasks`
-    : '/api/v1/sync-tasks';
+export interface SyncTaskListFilters {
+  siteId?: string;
+  scope?: SyncTaskScope;
+  status?: SyncTaskStatus;
+}
+
+export async function getSyncTasks(filters?: SyncTaskListFilters) {
+  const searchParams = new URLSearchParams();
+
+  if (filters?.siteId) {
+    searchParams.set('siteId', filters.siteId);
+  }
+
+  if (filters?.scope) {
+    searchParams.set('scope', filters.scope);
+  }
+
+  if (filters?.status) {
+    searchParams.set('status', filters.status);
+  }
+
+  const query = searchParams.toString();
+  const path = `/api/v1/sync-tasks${query ? `?${query}` : ''}`;
 
   return requestApi<{
     tasks: SyncTask[];
   }>(path);
+}
+
+export async function retrySyncTask(taskId: string) {
+  return requestApi<{
+    task: SyncTask;
+  }>(`/api/v1/sync-tasks/${encodeURIComponent(taskId)}/retry`, {
+    method: 'POST'
+  });
+}
+
+export async function ignoreDeadLetterTask(taskId: string) {
+  return requestApi<{
+    task: SyncTask;
+  }>(`/api/v1/sync-tasks/${encodeURIComponent(taskId)}/ignore`, {
+    method: 'POST'
+  });
 }
 
 export async function createManualRefreshTask(siteId: string, payload: ManualRefreshTaskPayload) {
@@ -345,6 +380,28 @@ export async function applyOptimizationSuggestion(siteId: string, suggestionId: 
     `/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions/${encodeURIComponent(suggestionId)}/apply`,
     {
       method: 'POST'
+    }
+  );
+}
+
+export interface BatchApplyResult {
+  results: Array<{
+    suggestionId: string;
+    success: boolean;
+    taskId?: string;
+    error?: string;
+  }>;
+  total: number;
+  succeeded: number;
+  failed: number;
+}
+
+export async function batchApplyOptimizationSuggestions(siteId: string, suggestionIds: string[]) {
+  return requestApi<BatchApplyResult>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions/batch-apply`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ suggestionIds })
     }
   );
 }

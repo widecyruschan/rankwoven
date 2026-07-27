@@ -250,6 +250,9 @@ export class PostgresAuthRepository implements AuthRepository {
   }
 
   private async ensureSchema() {
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
     this.migrationPromise ??= this.pool
       .query(authMigrationSql)
       .then(() =>

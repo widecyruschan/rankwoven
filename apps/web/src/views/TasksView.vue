@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
   getSyncTasks,
+  retrySyncTask,
+  ignoreDeadLetterTask,
   type SyncTask,
   type SyncTaskScope,
   type SyncTaskStatus
@@ -16,6 +18,33 @@ const isLoading = ref(false);
 const loadError = ref('');
 const activeTab = ref('all');
 const selectedTask = ref<SyncTask | null>(null);
+const filterScope = ref<string>('');
+const filterStatus = ref<string>('');
+const autoRefreshEnabled = ref(true);
+const retryingTaskIds = ref<Set<string>>(new Set());
+const ignoringTaskIds = ref<Set<string>>(new Set());
+let autoRefreshTimer: number | null = null;
+
+const AUTO_REFRESH_INTERVAL_MS = 15000;
+
+const scopeOptions = [
+  { label: t('tasks.scopeAll'), value: '' },
+  { label: t('articleSync.fullTask'), value: 'full' },
+  { label: t('articleSync.incrementalTask'), value: 'incremental' },
+  { label: t('articleSync.manualArticleTask'), value: 'article' },
+  { label: t('articleSync.manualMediaTask'), value: 'media' },
+  { label: t('articleSync.suggestionApplyTask'), value: 'suggestion_apply' },
+  { label: t('articleSync.suggestionRollbackTask'), value: 'suggestion_rollback' }
+];
+
+const statusOptions = [
+  { label: t('tasks.allTab'), value: '' },
+  { label: t('tasks.statusQueued'), value: 'queued' },
+  { label: t('tasks.statusRunning'), value: 'running' },
+  { label: t('tasks.statusFailed'), value: 'failed' },
+  { label: t('tasks.statusDeadLetter'), value: 'dead_letter' },
+  { label: t('tasks.statusDone'), value: 'completed' }
+];
 
 const taskRows = computed(() =>
   filteredTasks.value.map((task) => ({
@@ -27,7 +56,9 @@ const taskRows = computed(() =>
     status: getStatusLabel(task.status),
     progress: getProgressPercent(task),
     eta: getTaskTimeLabel(task),
-    detail: getTaskDetail(task)
+    detail: getTaskDetail(task),
+    isDeadLetter: task.status === 'dead_letter',
+    isRetryable: task.status === 'dead_letter' || task.status === 'failed'
   }))
 );
 
@@ -72,7 +103,7 @@ const columns = computed<TableColumnsType<(typeof taskRows.value)[number]>>(() =
   {
     title: t('articles.action'),
     key: 'action',
-    width: 110
+    width: 150
   }
 ]);
 
@@ -150,7 +181,7 @@ function getTaskTimeLabel(task: SyncTask) {
 }
 
 function getTaskDetail(task: SyncTask) {
-  if (task.status === 'failed') {
+  if (task.status === 'failed' || task.status === 'dead_letter') {
     return task.errorMessage || t('tasks.noErrorMessage');
   }
 
@@ -183,7 +214,10 @@ async function loadTasks() {
   loadError.value = '';
 
   try {
-    const result = await getSyncTasks();
+    const result = await getSyncTasks({
+      scope: (filterScope.value || undefined) as SyncTaskScope | undefined,
+      status: (filterStatus.value || undefined) as SyncTaskStatus | undefined
+    });
     tasks.value = result.tasks;
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : t('tasks.loadFailed');
@@ -192,8 +226,65 @@ async function loadTasks() {
   }
 }
 
+async function handleRetry(taskId: string) {
+  retryingTaskIds.value = new Set([...retryingTaskIds.value, taskId]);
+  try {
+    await retrySyncTask(taskId);
+    await loadTasks();
+  } catch {
+    window.alert(t('tasks.retryFailed'));
+  } finally {
+    const next = new Set(retryingTaskIds.value);
+    next.delete(taskId);
+    retryingTaskIds.value = next;
+  }
+}
+
+async function handleIgnore(taskId: string) {
+  ignoringTaskIds.value = new Set([...ignoringTaskIds.value, taskId]);
+  try {
+    await ignoreDeadLetterTask(taskId);
+    await loadTasks();
+  } catch {
+    window.alert(t('tasks.ignoreFailed'));
+  } finally {
+    const next = new Set(ignoringTaskIds.value);
+    next.delete(taskId);
+    ignoringTaskIds.value = next;
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  if (!autoRefreshEnabled.value) return;
+  autoRefreshTimer = window.setInterval(() => {
+    loadTasks();
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    window.clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+function toggleAutoRefresh() {
+  autoRefreshEnabled.value = !autoRefreshEnabled.value;
+  if (autoRefreshEnabled.value) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
+}
+
 onMounted(() => {
   void loadTasks();
+  startAutoRefresh();
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
 });
 </script>
 
@@ -204,19 +295,56 @@ onMounted(() => {
         <h2>{{ t('tasks.title') }}</h2>
         <p>{{ t('tasks.body') }}</p>
       </div>
-      <a-button type="primary" :loading="isLoading" @click="loadTasks">
-        {{ t('sites.refresh') }}
-      </a-button>
+      <div class="page-heading-actions">
+        <a-button :type="autoRefreshEnabled ? 'primary' : 'default'" @click="toggleAutoRefresh">
+          {{ t('tasks.autoRefresh') }} {{ autoRefreshEnabled ? 'ON' : 'OFF' }}
+        </a-button>
+        <a-button type="primary" :loading="isLoading" @click="loadTasks">
+          {{ t('sites.refresh') }}
+        </a-button>
+      </div>
     </div>
 
     <section class="content-panel">
       <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
+
+      <div class="filter-row">
+        <a-select
+          v-model:value="filterScope"
+          style="width: 180px"
+          :placeholder="t('tasks.scopeAll')"
+          allow-clear
+        >
+          <a-select-option
+            v-for="opt in scopeOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filterStatus"
+          style="width: 150px; margin-left: 12px"
+          :placeholder="t('tasks.allTab')"
+          allow-clear
+        >
+          <a-select-option
+            v-for="opt in statusOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </a-select-option>
+        </a-select>
+      </div>
 
       <a-tabs v-model:active-key="activeTab">
         <a-tab-pane key="all" :tab="t('tasks.allTab')" />
         <a-tab-pane key="queued" :tab="t('tasks.statusQueued')" />
         <a-tab-pane key="running" :tab="t('tasks.statusRunning')" />
         <a-tab-pane key="failed" :tab="t('tasks.statusFailed')" />
+        <a-tab-pane key="dead_letter" :tab="t('tasks.statusDeadLetter')" />
         <a-tab-pane key="completed" :tab="t('tasks.statusDone')" />
       </a-tabs>
 
@@ -247,7 +375,26 @@ onMounted(() => {
             <span>{{ record.detail }}</span>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" @click="selectedTask = record.raw">
+            <a-space v-if="record.isRetryable">
+              <a-button
+                v-if="record.raw.status === 'dead_letter'"
+                type="link"
+                danger
+                :loading="ignoringTaskIds.has(record.id)"
+                @click="handleIgnore(record.id)"
+              >
+                {{ t('tasks.ignore') }}
+              </a-button>
+              <a-button
+                type="primary"
+                size="small"
+                :loading="retryingTaskIds.has(record.id)"
+                @click="handleRetry(record.id)"
+              >
+                {{ t('tasks.retry') }}
+              </a-button>
+            </a-space>
+            <a-button v-else type="link" @click="selectedTask = record.raw">
               {{ t('common.viewDetails') }}
             </a-button>
           </template>

@@ -48,7 +48,8 @@ const messages = {
     common: {
       totalItems: '{total} items',
       untitled: 'Untitled',
-      viewDetails: 'Details'
+      viewDetails: 'Details',
+      selectAll: 'Select All'
     },
     marketing: {
       homeTitle: 'AI SEO Platform',
@@ -531,7 +532,13 @@ const messages = {
       actionFailed: 'Unable to create apply task',
       snapshot: 'Create CMS snapshot before publishing changes',
       reviewOnly: 'Only approved suggestions enter this queue',
-      rollback: 'Rollback path remains available after apply'
+      rollback: 'Rollback path remains available after apply',
+      viewDiff: 'View Diff',
+      applySelected: 'Apply Selected',
+      noData: '(empty)',
+      batchSucceeded: 'Succeeded',
+      batchFailed: 'Failed',
+      items: 'items'
     },
     articleSuggestions: {
       title: 'Per-article Change Suggestions',
@@ -600,7 +607,17 @@ const messages = {
       noErrorMessage: 'No error message recorded',
       batchSummary: '{batches} batches, {articles} articles, {media} media',
       allTab: 'All tasks',
-      detailTitle: 'Task details'
+      detailTitle: 'Task details',
+      scopeAll: 'All scopes',
+      retry: 'Retry',
+      ignore: 'Ignore',
+      retrySuccess: 'Task re-queued',
+      ignoreSuccess: 'Dead letter ignored',
+      retryFailed: 'Retry failed',
+      ignoreFailed: 'Ignore failed',
+      autoRefresh: 'Auto refresh',
+      siteAll: 'All sites',
+      actionFailed: 'Action failed'
     },
     cmsAdapters: {
       title: 'CMS Adapters',
@@ -659,7 +676,8 @@ const messages = {
     common: {
       totalItems: '共 {total} 項',
       untitled: '未命名',
-      viewDetails: '查看詳情'
+      viewDetails: '查看詳情',
+      selectAll: '全選'
     },
     marketing: {
       homeTitle: 'AI SEO 平台',
@@ -1141,7 +1159,13 @@ const messages = {
       actionFailed: '無法建立套用任務',
       snapshot: '發佈變更前先建立 CMS 快照',
       reviewOnly: '只有已批准建議會進入此隊列',
-      rollback: '套用後仍保留回滾路徑'
+      rollback: '套用後仍保留回滾路徑',
+      viewDiff: '查看差異',
+      applySelected: '批量套用',
+      noData: '（無資料）',
+      batchSucceeded: '成功',
+      batchFailed: '失敗',
+      items: '項'
     },
     articleSuggestions: {
       title: '單篇文章修改建議',
@@ -1210,7 +1234,17 @@ const messages = {
       noErrorMessage: '未記錄錯誤原因',
       batchSummary: '{batches} 個批次，{articles} 篇文章，{media} 個媒體',
       allTab: '全部任務',
-      detailTitle: '任務詳情'
+      detailTitle: '任務詳情',
+      scopeAll: '全部類型',
+      retry: '重試',
+      ignore: '忽略',
+      retrySuccess: '任務已重新排隊',
+      ignoreSuccess: '死信任務已忽略',
+      retryFailed: '重試失敗',
+      ignoreFailed: '忽略失敗',
+      autoRefresh: '自動刷新',
+      siteAll: '全部站點',
+      actionFailed: '操作失敗'
     },
     cmsAdapters: {
       title: 'CMS 適配器',

@@ -4,6 +4,7 @@ import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
   applyOptimizationSuggestion,
+  batchApplyOptimizationSuggestions,
   getApplyQueue,
   getSiteConnections,
   rollbackApplySnapshot,
@@ -26,6 +27,10 @@ const actionId = ref('');
 const loadError = ref('');
 const actionMessage = ref('');
 const actionError = ref('');
+const selectedSuggestionIds = ref<Set<string>>(new Set());
+const diffSuggestion = ref<OptimizationSuggestion | null>(null);
+const isBatchApplying = ref(false);
+const batchApplyResult = ref('');
 
 const connectedSites = computed(() => sites.value.filter((site) => site.status === 'connected'));
 const siteOptions = computed(() =>
@@ -38,6 +43,19 @@ const siteOptions = computed(() =>
 const approvedSuggestions = computed(() =>
   suggestions.value.filter((suggestion) => suggestion.status === 'approved')
 );
+
+const isApprovedTab = computed(() => activeTab.value === 'approved');
+
+const allApprovedSelected = computed(() => {
+  if (!isApprovedTab.value || approvedSuggestions.value.length === 0) return false;
+  return approvedSuggestions.value.every((s) => selectedSuggestionIds.value.has(s.id));
+});
+
+const someApprovedSelected = computed(() => {
+  if (!isApprovedTab.value) return false;
+  return approvedSuggestions.value.some((s) => selectedSuggestionIds.value.has(s.id));
+});
+
 const appliedSnapshots = computed(() =>
   snapshots.value.filter((snapshot) => snapshot.status === 'applied')
 );
@@ -63,7 +81,7 @@ const suggestionColumns = computed<TableColumnsType<OptimizationSuggestion>>(() 
   { title: t('apply.field'), dataIndex: 'fieldName', key: 'fieldName', width: 150 },
   { title: t('articleSuggestions.suggestion'), dataIndex: 'suggestedValue', key: 'suggestedValue' },
   { title: t('cmsAdapters.status'), dataIndex: 'status', key: 'status', width: 130 },
-  { title: t('articles.action'), key: 'action', width: 150 }
+  { title: t('articles.action'), key: 'action', width: 220 }
 ]);
 
 const taskColumns = computed<TableColumnsType<SyncTask>>(() => [
@@ -104,6 +122,7 @@ async function loadApplyQueue() {
   suggestions.value = result.suggestions;
   tasks.value = result.tasks;
   snapshots.value = result.snapshots;
+  selectedSuggestionIds.value = new Set();
 }
 
 async function refreshPage() {
@@ -151,6 +170,48 @@ async function applySuggestion(suggestionId: string) {
   } finally {
     actionId.value = '';
   }
+}
+
+async function handleBatchApply() {
+  if (selectedSuggestionIds.value.size === 0) return;
+
+  isBatchApplying.value = true;
+  actionError.value = '';
+  actionMessage.value = '';
+  batchApplyResult.value = '';
+
+  try {
+    const ids = Array.from(selectedSuggestionIds.value);
+    const result = await batchApplyOptimizationSuggestions(selectedSiteId.value, ids);
+    await loadApplyQueue();
+    batchApplyResult.value = `${t('apply.batchSucceeded')}: ${result.succeeded} / ${result.total}`;
+
+    if (result.failed > 0) {
+      actionError.value = `${t('apply.batchFailed')}: ${result.failed} ${t('apply.items')}`;
+    }
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : t('apply.actionFailed');
+  } finally {
+    isBatchApplying.value = false;
+  }
+}
+
+function toggleSelectAll() {
+  if (!isApprovedTab.value) return;
+
+  if (allApprovedSelected.value) {
+    selectedSuggestionIds.value = new Set();
+  } else {
+    selectedSuggestionIds.value = new Set(approvedSuggestions.value.map((s) => s.id));
+  }
+}
+
+function showDiff(suggestion: OptimizationSuggestion) {
+  diffSuggestion.value = suggestion;
+}
+
+function closeDiff() {
+  diffSuggestion.value = null;
 }
 
 async function rollbackSnapshot(snapshotId: string) {
@@ -219,12 +280,34 @@ onMounted(() => {
     <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
     <a-alert v-else-if="actionError" class="page-alert" type="error" show-icon :message="actionError" />
     <a-alert v-else-if="actionMessage" class="page-alert" type="success" show-icon :message="actionMessage" />
+    <a-alert v-if="batchApplyResult" class="page-alert" type="info" show-icon :message="batchApplyResult" />
 
     <a-card class="section-card">
-      <a-tabs v-model:active-key="activeTab">
-        <a-tab-pane key="approved" :tab="t('apply.readyTab')" />
-        <a-tab-pane key="history" :tab="t('apply.historyTab')" />
-      </a-tabs>
+      <div class="card-toolbar">
+        <a-tabs v-model:active-key="activeTab" class="card-tabs">
+          <a-tab-pane key="approved" :tab="t('apply.readyTab')" />
+          <a-tab-pane key="history" :tab="t('apply.historyTab')" />
+        </a-tabs>
+
+        <div v-if="isApprovedTab && approvedSuggestions.length > 0" class="batch-toolbar">
+          <a-checkbox
+            :checked="allApprovedSelected"
+            :indeterminate="someApprovedSelected && !allApprovedSelected"
+            @change="toggleSelectAll"
+          >
+            {{ t('common.selectAll') }}
+          </a-checkbox>
+          <a-button
+            type="primary"
+            size="small"
+            :disabled="selectedSuggestionIds.size === 0"
+            :loading="isBatchApplying"
+            @click="handleBatchApply"
+          >
+            {{ t('apply.applySelected') }} ({{ selectedSuggestionIds.size }})
+          </a-button>
+        </div>
+      </div>
 
       <a-table
         row-key="id"
@@ -232,6 +315,12 @@ onMounted(() => {
         :data-source="visibleSuggestions"
         :loading="isLoading"
         :pagination="{ pageSize: 8 }"
+        :row-selection="isApprovedTab ? {
+          selectedRowKeys: Array.from(selectedSuggestionIds),
+          onChange: (_keys: (string | number)[], rows: OptimizationSuggestion[]) => {
+            selectedSuggestionIds = new Set(rows.map((r) => r.id));
+          }
+        } : undefined"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'suggestedValue'">
@@ -243,14 +332,23 @@ onMounted(() => {
             </a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button
-              v-if="(record as OptimizationSuggestion).status === 'approved'"
-              type="link"
-              :loading="actionId === (record as OptimizationSuggestion).id"
-              @click="applySuggestion((record as OptimizationSuggestion).id)"
-            >
-              {{ t('apply.applyOne') }}
-            </a-button>
+            <a-space>
+              <a-button
+                type="link"
+                size="small"
+                @click="showDiff(record as OptimizationSuggestion)"
+              >
+                {{ t('apply.viewDiff') }}
+              </a-button>
+              <a-button
+                v-if="(record as OptimizationSuggestion).status === 'approved'"
+                type="link"
+                :loading="actionId === (record as OptimizationSuggestion).id"
+                @click="applySuggestion((record as OptimizationSuggestion).id)"
+              >
+                {{ t('apply.applyOne') }}
+              </a-button>
+            </a-space>
           </template>
         </template>
       </a-table>
@@ -312,5 +410,143 @@ onMounted(() => {
         </template>
       </a-table>
     </a-card>
+
+    <a-modal
+      :open="Boolean(diffSuggestion)"
+      :title="diffSuggestion ? `${t('apply.viewDiff')} - ${diffSuggestion.fieldName}` : ''"
+      :footer="null"
+      width="720"
+      @cancel="closeDiff"
+    >
+      <template v-if="diffSuggestion">
+        <div class="diff-panel">
+          <div class="diff-section">
+            <h4>{{ t('apply.before') }}</h4>
+            <div class="diff-box diff-before">
+              <pre>{{ diffSuggestion.currentValue || t('apply.noData') }}</pre>
+            </div>
+          </div>
+          <div class="diff-section">
+            <h4>{{ t('apply.after') }}</h4>
+            <div class="diff-box diff-after">
+              <pre>{{ diffSuggestion.suggestedValue || t('apply.noData') }}</pre>
+            </div>
+          </div>
+        </div>
+        <div class="diff-detail">
+          <dl class="detail-list">
+            <dt>{{ t('apply.target') }}</dt>
+            <dd>{{ diffSuggestion.targetCmsId }}</dd>
+            <dt>{{ t('suggestions.type') }}</dt>
+            <dd>{{ diffSuggestion.suggestionType }}</dd>
+            <dt>{{ t('apply.field') }}</dt>
+            <dd>{{ diffSuggestion.fieldName }}</dd>
+            <dt>{{ t('cmsAdapters.status') }}</dt>
+            <dd>
+              <a-tag :color="getStatusColor(diffSuggestion.status)">
+                {{ diffSuggestion.status }}
+              </a-tag>
+            </dd>
+          </dl>
+        </div>
+        <div v-if="diffSuggestion.status === 'approved'" class="diff-actions">
+          <a-button
+            type="primary"
+            :loading="actionId === diffSuggestion.id"
+            @click="applySuggestion(diffSuggestion.id); closeDiff()"
+          >
+            {{ t('apply.applyOne') }}
+          </a-button>
+        </div>
+      </template>
+    </a-modal>
   </section>
 </template>
+
+<style scoped>
+.card-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.page-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diff-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.diff-section h4 {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.diff-box {
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 60px;
+  max-height: 300px;
+  overflow: auto;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diff-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-before {
+  background-color: #fff1f0;
+  border: 1px solid #ffa39e;
+}
+
+.diff-after {
+  background-color: #f6ffed;
+  border: 1px solid #b7eb8f;
+}
+
+.diff-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+</style>
