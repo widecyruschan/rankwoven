@@ -1120,3 +1120,20 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `apps/api/src/siteConnections.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/SitesView.vue`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、本 `README.md`。
 - 驗證結果：`npm run lint` 通過；`npm run build` 通過；已推送 `main`（`b548c8d`），GitHub Actions 將自動部署。
 - 下一步行動清單：部署後在 SaaS 後台驗證站點刪除功能；在 WordPress 插件後台測試「Connect This Site」自動生成流程是否正常。
+
+### 2026-07-28（十八）：修復真實網站 Lighthouse 審計失敗
+
+- 會話的主要目的：解決 `https://cyruschan.com/` 在 SaaS 後台 Lighthouse 審計顯示「Lighthouse 審計失敗」且沒有詳細錯誤的問題。
+- 完成的主要任務：
+  1. 診斷：手動測試發現 Google PageSpeed Insights API 對 `cyruschan.com` 返回 429「Quota exceeded」，因此後端會回退到本機 Lighthouse CLI；本機 Lighthouse CLI 在生產 Docker/Alpine 環境中執行失敗。
+  2. 後端：在 `apps/api/src/lighthouse.ts` 中將 `npx lighthouse` CLI 回退改為程序化 Lighthouse API + `chrome-launcher`，直接啟動 Chromium，避免 `npx` 解析與 CLI 環境問題。
+  3. 後端：新增更穩定的 Chrome 啟動 flags（`--headless --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage` 等）。
+  4. 後端：將錯誤訊息從籠統的「Lighthouse 審計失敗」改為包含實際錯誤細節；新增 `console.error` 伺服器日誌。
+  5. 前端：在 `apps/web/src/api/appInsights.ts` 新增 `ApiError` 類別，保留後端 `error.code` 與 `error.details`。
+  6. 前端：在 `apps/web/src/components/LighthousePanel.vue` 顯示詳細錯誤訊息，便於未來診斷。
+  7. Docker：在 `Dockerfile` 中追加安裝 `nss`、`freetype`、`harfbuzz`、`ttf-freefont`；設定 `LIGHTHOUSE_CHROMIUM_PATH` 環境變數。
+- 關鍵決策和解決方案：PageSpeed API 配額耗盡時必須完全依賴本機 Lighthouse；CLI 方式在 Docker 環境不可靠，改以程序化 `chrome-launcher` + `lighthouse()` 啟動與審計；同時改善前端錯誤顯示，讓用戶和開發者都能看到具體原因。
+- 使用的技術棧：Fastify、TypeScript、Lighthouse 12、chrome-launcher、Docker/Alpine、Vue 3。
+- 新增或修改文件：修改 `apps/api/src/lighthouse.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/components/LighthousePanel.vue`、`Dockerfile`、本 `README.md`。
+- 驗證結果：`npm run lint` 通過；`npm run build` 通過；本機程序化 Lighthouse 對 `https://cyruschan.com/` 審計成功（performance score 0.62）；已推送 `main`（`03b58c6`），GitHub Actions 將自動部署。
+- 下一步行動清單：部署完成後在 SaaS 後台重新對 `https://cyruschan.com/` 執行 Lighthouse 審計，確認不再失敗；若仍有問題，查看後端日誌中的 `[lighthouse] Audit failed` 訊息。
