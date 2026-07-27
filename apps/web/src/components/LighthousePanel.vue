@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { Alert, Button, Card, Collapse, Empty, Input, Spin, Tag } from 'ant-design-vue';
 import { Zap } from 'lucide-vue-next';
 import {
+  ApiError,
   getLighthouseAudit,
   type LighthouseAuditResult,
   type LighthouseDiagnostic
@@ -207,7 +208,11 @@ async function runAudit() {
   try {
     data.value = await getLighthouseAudit(url);
   } catch (err) {
-    error.value = (err as Error).message || t('lighthouse.loadFailed');
+    let message = (err as Error).message || t('lighthouse.loadFailed');
+    if (err instanceof ApiError && err.details) {
+      message += `：${String(err.details)}`;
+    }
+    error.value = message;
   } finally {
     loading.value = false;
   }

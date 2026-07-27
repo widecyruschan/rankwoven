@@ -91,6 +91,10 @@ interface ApiResponse<T> {
   success: boolean;
   message: string;
   data: T;
+  error?: {
+    code?: string;
+    details?: unknown;
+  };
 }
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3011';
@@ -110,6 +114,17 @@ function getStoredToken() {
   }
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredToken();
   const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -124,7 +139,11 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   const body = (await response.json()) as ApiResponse<T>;
 
   if (!response.ok || !body.success) {
-    throw new Error(body.message || 'API request failed');
+    throw new ApiError(
+      body.message || 'API request failed',
+      body.error?.code,
+      body.error?.details
+    );
   }
 
   return body.data;

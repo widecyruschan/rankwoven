@@ -2,9 +2,16 @@ FROM node:22-alpine
 
 WORKDIR /workspace
 
-RUN apk add --no-cache chromium
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
 
 ENV CHROME_PATH=/usr/bin/chromium-browser
+ENV LIGHTHOUSE_CHROMIUM_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV CHROMIUM_FLAGS="--headless --no-sandbox --disable-gpu --disable-dev-shm-usage"
 

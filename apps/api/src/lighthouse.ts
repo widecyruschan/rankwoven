@@ -1,11 +1,10 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { launch as launchChrome } from 'chrome-launcher';
 import { z } from 'zod';
 import { requireAuth, type AuthService } from './auth';
 import type { SiteConnectionRepository } from './siteConnections';
 
-const execFileAsync = promisify(execFile);
+import lighthouse from 'lighthouse';
 
 export interface LighthouseAuditResult {
   url: string;
@@ -181,48 +180,57 @@ async function auditViaPageSpeedApi(url: string, strategy: 'mobile' | 'desktop')
 }
 
 async function auditViaLocalLighthouse(url: string, strategy: 'mobile' | 'desktop'): Promise<LighthouseAuditResult> {
-  const args = [
-    'lighthouse',
-    url,
-    '--output=json',
-    '--chrome-flags=--headless --no-sandbox --disable-gpu --disable-dev-shm-usage',
-    '--only-categories=performance,accessibility,best-practices,seo',
-    '--quiet',
-    '--max-wait-for-load=30000'
-  ];
+  const chromePath = process.env.CHROME_PATH || '/usr/bin/chromium-browser';
+  let chrome: { port: number; kill: () => void } | undefined;
 
-  if (strategy === 'desktop') {
-    args.push('--preset=desktop');
-  } else {
-    args.push('--screenEmulation.mobile');
+  try {
+    chrome = await launchChrome({
+      chromePath,
+      chromeFlags: [
+        '--headless',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-extensions'
+      ]
+    });
+
+    const config = {
+      extends: 'lighthouse:default',
+      settings: {
+        formFactor: strategy,
+        screenEmulation: {
+          mobile: strategy === 'mobile',
+          width: strategy === 'mobile' ? 360 : 1350,
+          height: strategy === 'mobile' ? 640 : 940,
+          deviceScaleFactor: strategy === 'mobile' ? 2 : 1,
+          disabled: false
+        },
+        onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo']
+      }
+    };
+
+    const runnerResult = await lighthouse(
+      url,
+      { port: chrome.port, output: 'json' as const },
+      config
+    );
+
+    if (!runnerResult) {
+      throw new Error('Lighthouse returned no result');
+    }
+
+    return parseLocalLighthouseResult(JSON.stringify(runnerResult.lhr), url);
+  } finally {
+    if (chrome) {
+      chrome.kill();
+    }
   }
-
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    NODE_ENV: (process.env.NODE_ENV as string) ?? 'production'
-  };
-
-  // Ensure Chrome path is set for lighthouse's chrome-launcher
-  if (!env.CHROME_PATH) {
-    env.CHROME_PATH = process.platform === 'linux'
-      ? '/usr/bin/chromium-browser'
-      : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  }
-  if (!env.LIGHTHOUSE_CHROMIUM_PATH) {
-    env.LIGHTHOUSE_CHROMIUM_PATH = env.CHROME_PATH;
-  }
-
-  const { stdout, stderr } = await execFileAsync('npx', args, {
-    maxBuffer: 50 * 1024 * 1024,
-    timeout: 180_000,
-    env
-  });
-
-  if (!stdout) {
-    throw new Error(`Lighthouse CLI returned no output: ${stderr?.slice(0, 200) ?? ''}`);
-  }
-
-  return parseLocalLighthouseResult(stdout, url);
 }
 
 export function createLighthouseService() {
@@ -357,12 +365,14 @@ export function registerLighthouseRoutes(
         data: result
       };
     } catch (error) {
+      const details = error instanceof Error ? error.message : '未知錯誤';
+      console.error(`[lighthouse] Audit failed for ${url}: ${details}`);
       return reply.status(502).send({
         success: false,
-        message: 'Lighthouse 審計失敗',
+        message: `Lighthouse 審計失敗：${details}`,
         error: {
           code: 'LIGHTHOUSE_ERROR',
-          details: error instanceof Error ? error.message : '未知錯誤'
+          details
         }
       });
     }
