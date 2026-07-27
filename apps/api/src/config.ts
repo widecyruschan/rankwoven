@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const optionalUrlSchema = z.preprocess((value) => (value === '' ? undefined : value), z.url().optional());
+
 const envSchema = z.object({
   API_HOST: z.string().default('0.0.0.0'),
   API_PORT: z.coerce.number().int().positive().default(3000),
@@ -30,11 +32,10 @@ const envSchema = z.object({
   QINIU_BUCKET: z.string().optional(),
   QINIU_REGION: z.string().optional(),
   QINIU_PUBLIC_DOMAIN: z.string().optional(),
-  GOOGLE_ANALYTICS_PROPERTY_ID: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS_JSON: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS_BASE64: z.string().optional(),
-  KEYWORD_VOLUME_API_URL: z.url().optional(),
+  KEYWORD_VOLUME_API_URL: optionalUrlSchema,
   KEYWORD_VOLUME_API_KEY: z.string().optional()
 });
 

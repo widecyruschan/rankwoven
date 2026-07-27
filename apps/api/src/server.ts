@@ -1,6 +1,6 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
-import { createNoopAiProviderRegistry } from '@aieo/ai-providers';
+import { createNoopAiProviderRegistry, createWenwenAiProviderRegistry } from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import {
   createAuthService,
@@ -32,19 +32,30 @@ export function createServer(options: CreateServerOptions = {}) {
   const app = Fastify({
     logger: true
   });
-  const aiProviders = createNoopAiProviderRegistry({
-    textProvider: apiConfig.AI_TEXT_PROVIDER,
-    fallbackTextProvider: apiConfig.AI_FALLBACK_TEXT_PROVIDER,
-    embeddingProvider: apiConfig.AI_EMBEDDING_PROVIDER,
-    imageProvider: apiConfig.AI_IMAGE_PROVIDER,
-    imageFallbackProvider: apiConfig.AI_IMAGE_FALLBACK_PROVIDER,
-    mediaStorageProvider: apiConfig.MEDIA_STORAGE_PROVIDER,
-    imageOptimizationProvider: apiConfig.IMAGE_OPTIMIZATION_PROVIDER,
-    proxyBaseUrl: apiConfig.WENWEN_API_BASE_URL,
-    textModel: apiConfig.WENWEN_TEXT_MODEL,
-    embeddingModel: apiConfig.WENWEN_EMBEDDING_MODEL,
-    imageModel: apiConfig.WENWEN_IMAGE_MODEL
-  });
+  const aiProviders = apiConfig.WENWEN_API_KEY
+    ? createWenwenAiProviderRegistry({
+        baseUrl: apiConfig.WENWEN_API_BASE_URL,
+        apiKey: apiConfig.WENWEN_API_KEY,
+        textProvider: apiConfig.AI_TEXT_PROVIDER,
+        textModel: apiConfig.WENWEN_TEXT_MODEL,
+        embeddingProvider: apiConfig.AI_EMBEDDING_PROVIDER,
+        embeddingModel: apiConfig.WENWEN_EMBEDDING_MODEL,
+        imageProvider: apiConfig.AI_IMAGE_PROVIDER,
+        imageModel: apiConfig.WENWEN_IMAGE_MODEL
+      })
+    : createNoopAiProviderRegistry({
+        textProvider: apiConfig.AI_TEXT_PROVIDER,
+        fallbackTextProvider: apiConfig.AI_FALLBACK_TEXT_PROVIDER,
+        embeddingProvider: apiConfig.AI_EMBEDDING_PROVIDER,
+        imageProvider: apiConfig.AI_IMAGE_PROVIDER,
+        imageFallbackProvider: apiConfig.AI_IMAGE_FALLBACK_PROVIDER,
+        mediaStorageProvider: apiConfig.MEDIA_STORAGE_PROVIDER,
+        imageOptimizationProvider: apiConfig.IMAGE_OPTIMIZATION_PROVIDER,
+        proxyBaseUrl: apiConfig.WENWEN_API_BASE_URL,
+        textModel: apiConfig.WENWEN_TEXT_MODEL,
+        embeddingModel: apiConfig.WENWEN_EMBEDDING_MODEL,
+        imageModel: apiConfig.WENWEN_IMAGE_MODEL
+      });
   const authRepository = options.authRepository ?? createDefaultAuthRepository(apiConfig.DATABASE_URL);
   const authService = createAuthService(authRepository);
   const siteConnectionRepository =

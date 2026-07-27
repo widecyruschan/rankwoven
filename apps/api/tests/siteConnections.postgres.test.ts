@@ -74,6 +74,7 @@ describePostgres('PostgreSQL site connection repository', () => {
           siteUrl: 'http://localhost:8088',
           cmsVersion: '6.8.2',
           pluginVersion: '0.1.0',
+          googleAnalyticsPropertyId: '123456789',
           wordpressAdminUsername: 'postgres-admin',
           wordpressApplicationPassword: 'abcd efgh ijkl mnop'
         }
@@ -240,6 +241,7 @@ describePostgres('PostgreSQL site connection repository', () => {
             sc.token_preview,
             sc.wordpress_admin_username,
             sc.wordpress_application_password_encrypted,
+            sc.google_analytics_property_id,
             sc.last_token_used_at,
             MAX(sa.meta_description) AS meta_description,
             COUNT(DISTINCT sa.id)::int AS article_count,
@@ -258,6 +260,7 @@ describePostgres('PostgreSQL site connection repository', () => {
       expect(persisted.rows[0]).toMatchObject({
         token_preview: `${createBody.data.apiToken.slice(0, 8)}...`,
         wordpress_admin_username: 'postgres-admin',
+        google_analytics_property_id: '123456789',
         article_count: 1,
         media_count: 1,
         meta_description: 'PostgreSQL stored meta description for SEO auditing.',

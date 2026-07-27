@@ -918,6 +918,8 @@ WENWEN_API_KEY=
 WENWEN_TEXT_MODEL=gpt-4.1-mini
 WENWEN_EMBEDDING_MODEL=text-embedding-3-small
 WENWEN_IMAGE_MODEL=gemini-2.5-flash-image
+KEYWORD_VOLUME_API_URL=
+KEYWORD_VOLUME_API_KEY=
 QINIU_ACCESS_KEY=
 QINIU_SECRET_KEY=
 QINIU_BUCKET=
@@ -1231,13 +1233,14 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-1. 在生產 `.env` 或 GitHub Secrets 填入正式 `GOOGLE_ANALYTICS_PROPERTY_ID` 和 Google 服務帳號憑據，確認 GA4 Property 已授權服務帳號讀取。
-2. 為關鍵詞建議配置正式搜尋量/難度資料源，例如 Google Search Console、DataForSEO、Ahrefs、Semrush 或其他第三方 API，並驗證 `source`、月搜尋量、CPC 和競爭度準確顯示。
-3. 將 AI Provider 從本地 Noop / fallback 環境切換到正式問問 API 憑據，確認 OpenAI、Google Gemini 和 DeepSeek 代理模型均可產生可解析 JSON。
-4. 為 Worker 死信任務補充管理後台重跑、忽略、批量導出和告警入口，避免需要直接查資料庫處理。
-5. 將寫回快照升級為 Worker 寫回前從 WordPress 即時讀取真實欄位值，降低同步資料過舊時回滾不準確的風險。
-6. 將任務隊列補充站點篩選、類型篩選和可配置自動刷新，方便大站同步時觀察批次進度。
-7. 將生產 Web 容器改為正式靜態構建部署，避免主站繼續由 Vite dev server 對外服務。
-8. 將 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 逐步收斂為只在測試或開發兜底使用，生產以 migration 腳本為主。
-9. 在部署文件中補充資料庫備份恢復演練步驟，包含 staging 驗證和回滾檢查清單。
+1. 在生產 `.env` 或 GitHub Secrets 填入 Google 服務帳號憑據，並在客戶 WordPress 插件錄入各站點 GA4 Property ID；確認該服務帳號已被授權讀取對應 GA4 Property。
+2. 為關鍵詞建議配置正式搜尋量/難度資料源，例如 Google Search Console、DataForSEO、Ahrefs、Semrush 或其他第三方 API，並以真實請求驗證 `source`、月搜尋量、CPC 和競爭度準確顯示。
+3. 在生產 Secrets 填入正式 `WENWEN_API_KEY`，確認 OpenAI、Google Gemini 和 DeepSeek 代理模型均可產生可解析 JSON；測試時不得輸出完整 API Key。
+4. 執行全量 `lint`、`test`、`build`、`security:audit`、PostgreSQL migration、WordPress 插件 PHP 語法檢查和 Docker Desktop 重建。
+5. 為 Worker 死信任務補充管理後台重跑、忽略、批量導出和告警入口，避免需要直接查資料庫處理。
+6. 將寫回快照升級為 Worker 寫回前從 WordPress 即時讀取真實欄位值，降低同步資料過舊時回滾不準確的風險。
+7. 將任務隊列補充站點篩選、類型篩選和可配置自動刷新，方便大站同步時觀察批次進度。
+8. 將生產 Web 容器改為正式靜態構建部署，避免主站繼續由 Vite dev server 對外服務。
+9. 將 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 逐步收斂為只在測試或開發兜底使用，生產以 migration 腳本為主。
+10. 在部署文件中補充資料庫備份恢復演練步驟，包含 staging 驗證和回滾檢查清單。
 10. 為 `/app/apply` 增加差異對比視圖和批量勾選操作，讓用戶在建立寫回任務前能逐項確認修改內容。

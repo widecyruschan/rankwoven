@@ -240,9 +240,22 @@ export interface ProviderRuntimeConfig {
   mediaStorageProvider: MediaStorageProviderName;
   imageOptimizationProvider: ImageOptimizationProviderName;
   proxyBaseUrl?: string;
+  apiKey?: string;
   textModel?: string;
   embeddingModel?: string;
   imageModel?: string;
+}
+
+export interface WenwenProviderOptions {
+  baseUrl: string;
+  apiKey: string;
+  textProvider?: AiTextProviderName;
+  textModel: string;
+  embeddingProvider?: AiEmbeddingProviderName;
+  embeddingModel?: string;
+  imageProvider?: AiImageProviderName;
+  imageModel?: string;
+  fetchImpl?: typeof fetch;
 }
 
 const bytesPerGb = 1024 * 1024 * 1024;
@@ -329,6 +342,124 @@ export function createNoopAiProviderRegistry(config: ProviderRuntimeConfig): AiP
     embedding: createNoopEmbeddingProvider(config.embeddingProvider, config.embeddingModel),
     image: createNoopImageGenerationProvider(config.imageProvider, config.imageModel)
   };
+}
+
+export function createWenwenAiProviderRegistry(options: WenwenProviderOptions): AiProviderRegistry {
+  return {
+    text: createOpenAiCompatibleTextGenerationProvider({
+      provider: options.textProvider ?? 'wenwen',
+      model: options.textModel,
+      baseUrl: options.baseUrl,
+      apiKey: options.apiKey,
+      fetchImpl: options.fetchImpl
+    }),
+    embedding: createNoopEmbeddingProvider(options.embeddingProvider ?? 'wenwen', options.embeddingModel),
+    image: createNoopImageGenerationProvider(options.imageProvider ?? 'wenwen', options.imageModel)
+  };
+}
+
+interface OpenAiCompatibleTextProviderOptions {
+  provider: AiTextProviderName;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+  fetchImpl?: typeof fetch;
+}
+
+function createOpenAiCompatibleTextGenerationProvider(
+  options: OpenAiCompatibleTextProviderOptions
+): TextGenerationProvider {
+  async function generateText(operation: AiOperation, request: TextGenerationRequest) {
+    const text = await requestOpenAiCompatibleChatCompletion(options, operation, request);
+    return text;
+  }
+
+  return {
+    provider: options.provider,
+    model: options.model,
+    generateTitle: (request) => generateText('generate-title', request),
+    generateMetaDescription: (request) => generateText('generate-meta-description', request),
+    generateOutline: (request) => generateText('generate-outline', request),
+    generateArticleDraft: (request) => generateText('generate-article-draft', request),
+    rewriteContent: (request) => generateText('rewrite-content', request),
+    scoreContentQuality: (request) => generateText('score-content-quality', request)
+  };
+}
+
+async function requestOpenAiCompatibleChatCompletion(
+  options: OpenAiCompatibleTextProviderOptions,
+  operation: AiOperation,
+  request: TextGenerationRequest
+): Promise<TextGenerationResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(`${options.baseUrl.replace(/\/$/, '')}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${options.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: options.model,
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are RankWoven SEO assistant. Return concise, structured output. When JSON is requested, return valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: buildTextGenerationPrompt(operation, request)
+        }
+      ]
+    })
+  });
+  const body = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+    };
+    error?: {
+      message?: string;
+    };
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error?.message ?? 'WENWEN_TEXT_PROVIDER_REQUEST_FAILED');
+  }
+
+  const text = body.choices?.[0]?.message?.content;
+  if (!text) {
+    throw new Error('WENWEN_TEXT_PROVIDER_EMPTY_RESPONSE');
+  }
+
+  return {
+    text,
+    model: options.model,
+    usage: {
+      inputTokens: body.usage?.prompt_tokens ?? 0,
+      outputTokens: body.usage?.completion_tokens ?? 0
+    }
+  };
+}
+
+function buildTextGenerationPrompt(operation: AiOperation, request: TextGenerationRequest) {
+  return [
+    `Operation: ${operation}`,
+    request.locale ? `Locale: ${request.locale}` : '',
+    request.keyword ? `Keyword: ${request.keyword}` : '',
+    request.title ? `Instruction: ${request.title}` : '',
+    request.html ? `HTML: ${request.html}` : '',
+    request.outline?.length ? `Outline: ${request.outline.join('\n')}` : '',
+    request.targetWordCount ? `Target word count: ${request.targetWordCount}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function createNoopTextGenerationProvider(

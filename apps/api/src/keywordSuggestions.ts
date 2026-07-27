@@ -37,6 +37,27 @@ interface ThirdPartyKeywordMetric {
   competition?: number;
 }
 
+type KeywordMetricRawValue = string | number | null | undefined;
+
+interface KeywordMetricRawItem {
+  keyword?: KeywordMetricRawValue;
+  query?: KeywordMetricRawValue;
+  text?: KeywordMetricRawValue;
+  monthlySearchVolume?: KeywordMetricRawValue;
+  monthly_search_volume?: KeywordMetricRawValue;
+  search_volume?: KeywordMetricRawValue;
+  volume?: KeywordMetricRawValue;
+  impressions?: KeywordMetricRawValue;
+  cpcUsd?: KeywordMetricRawValue;
+  cpc_usd?: KeywordMetricRawValue;
+  cpc?: KeywordMetricRawValue;
+  competition?: KeywordMetricRawValue;
+  competition_index?: KeywordMetricRawValue;
+  difficulty?: KeywordMetricRawValue;
+  keyword_difficulty?: KeywordMetricRawValue;
+  kd?: KeywordMetricRawValue;
+}
+
 function normalizeSeedKeyword(seedKeyword: string) {
   return seedKeyword.replace(/\s+/g, ' ').trim();
 }
@@ -139,6 +160,89 @@ function calculateOpportunityScore(metric: ThirdPartyKeywordMetric, index: numbe
   return Math.max(45, Math.min(96, 78 + volumeScore - competitionPenalty - index * 3));
 }
 
+function toNumber(value: KeywordMetricRawValue) {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+
+  const numberValue = typeof value === 'number' ? value : Number(String(value).replace(/[$,%]/g, ''));
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function normalizeCompetition(value: KeywordMetricRawValue) {
+  const numberValue = toNumber(value);
+  if (numberValue === undefined) {
+    return undefined;
+  }
+
+  return Number(Math.min(1, Math.max(0, numberValue > 1 ? numberValue / 100 : numberValue)).toFixed(2));
+}
+
+function getMetricItems(body: unknown): KeywordMetricRawItem[] {
+  if (Array.isArray(body)) {
+    return body as KeywordMetricRawItem[];
+  }
+
+  if (!body || typeof body !== 'object') {
+    return [];
+  }
+
+  const record = body as {
+    keywords?: unknown;
+    data?: unknown;
+    results?: unknown;
+    tasks?: Array<{
+      result?: unknown;
+    }>;
+  };
+
+  if (Array.isArray(record.keywords)) {
+    return record.keywords as KeywordMetricRawItem[];
+  }
+
+  if (Array.isArray(record.data)) {
+    return record.data as KeywordMetricRawItem[];
+  }
+
+  if (Array.isArray(record.results)) {
+    return record.results as KeywordMetricRawItem[];
+  }
+
+  const taskResults = record.tasks
+    ?.flatMap((task) => {
+      if (Array.isArray(task.result)) {
+        return task.result as KeywordMetricRawItem[];
+      }
+
+      return [];
+    })
+    .filter(Boolean);
+
+  return taskResults ?? [];
+}
+
+function normalizeThirdPartyKeywordMetrics(body: unknown): ThirdPartyKeywordMetric[] {
+  return getMetricItems(body)
+    .map((item) => {
+      const keyword = normalizeSeedKeyword(String(item.keyword ?? item.query ?? item.text ?? ''));
+      const monthlySearchVolume = toNumber(
+        item.monthlySearchVolume ?? item.monthly_search_volume ?? item.search_volume ?? item.volume ?? item.impressions
+      );
+      const cpcUsd = toNumber(item.cpcUsd ?? item.cpc_usd ?? item.cpc);
+      const competition = normalizeCompetition(
+        item.competition ?? item.competition_index ?? item.difficulty ?? item.keyword_difficulty ?? item.kd
+      );
+
+      return {
+        keyword,
+        monthlySearchVolume,
+        cpcUsd,
+        competition
+      };
+    })
+    .filter((metric) => metric.keyword);
+}
+
 async function fetchThirdPartyKeywordMetrics(
   seedKeyword: string,
   locale: string,
@@ -166,8 +270,9 @@ async function fetchThirdPartyKeywordMetrics(
     return undefined;
   }
 
-  const body = (await response.json()) as { keywords?: ThirdPartyKeywordMetric[] };
-  return Array.isArray(body.keywords) ? body.keywords : undefined;
+  const body = await response.json();
+  const metrics = normalizeThirdPartyKeywordMetrics(body);
+  return metrics.length ? metrics : undefined;
 }
 
 function mapThirdPartyMetrics(

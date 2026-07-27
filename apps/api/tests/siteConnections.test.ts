@@ -13,6 +13,7 @@ interface CreateSiteConnectionResponse {
       tokenPreview: string;
       wordpressAdminUsername?: string;
       wordpressApplicationPasswordConfigured: boolean;
+      googleAnalyticsPropertyId?: string;
     };
     apiToken: string;
   };
@@ -190,6 +191,51 @@ describe('site connection routes', () => {
       }
     });
     expect(JSON.stringify(response.json())).not.toContain('abcd efgh ijkl mnop');
+  });
+
+  it('updates per-site Google Analytics property settings with a site token', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/site-connections/${body.data.site.id}/analytics-settings`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        googleAnalyticsPropertyId: '987654321'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        site: {
+          id: body.data.site.id,
+          googleAnalyticsPropertyId: '987654321'
+        }
+      }
+    });
+
+    const authToken = await loginDemoUser(server);
+    const listResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/site-connections',
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(listResponse.json()).toMatchObject({
+      data: {
+        sites: [
+          {
+            id: body.data.site.id,
+            googleAnalyticsPropertyId: '987654321'
+          }
+        ]
+      }
+    });
   });
 
   it('updates WordPress admin application password credentials for an existing site', async () => {

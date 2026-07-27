@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
 import { createKeywordSuggestionService } from '../src/keywordSuggestions';
+import { apiConfig } from '../src/config';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
 
 describe('api health route', () => {
@@ -120,7 +121,8 @@ describe('analytics and keyword routes', () => {
         name: 'Analytics Site',
         siteUrl: 'https://www.rankwoven.com',
         cmsVersion: '6.8.2',
-        pluginVersion: '0.1.0'
+        pluginVersion: '0.1.0',
+        googleAnalyticsPropertyId: '123456789'
       }
     });
     const siteId = createSiteResponse.json<{ data: { site: { id: string } } }>().data.site.id;
@@ -139,6 +141,7 @@ describe('analytics and keyword routes', () => {
       data: {
         siteId,
         siteHost: 'www.rankwoven.com',
+        propertyId: '123456789',
         startDate: '2026-07-20',
         endDate: '2026-07-26'
       }
@@ -236,5 +239,77 @@ describe('analytics and keyword routes', () => {
         }
       ]
     });
+  });
+
+  it('uses third-party keyword metrics when a volume provider is configured', async () => {
+    const originalApiUrl = apiConfig.KEYWORD_VOLUME_API_URL;
+    const originalApiKey = apiConfig.KEYWORD_VOLUME_API_KEY;
+    apiConfig.KEYWORD_VOLUME_API_URL = 'https://keywords.example.test/query';
+    apiConfig.KEYWORD_VOLUME_API_KEY = 'test-key';
+
+    try {
+      const service = createKeywordSuggestionService(undefined, async (_url, init) => {
+        expect(init?.method).toBe('POST');
+        expect(init?.headers).toMatchObject({
+          Authorization: 'Bearer test-key',
+          'Content-Type': 'application/json'
+        });
+
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                query: 'AI SEO tools',
+                search_volume: '2400',
+                cpc: '3.75',
+                keyword_difficulty: 48
+              },
+              {
+                keyword: 'AI SEO agency',
+                volume: 720,
+                cpc_usd: 6.2,
+                competition: 0.64
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      });
+
+      const result = await service.createSuggestions({
+        seedKeyword: 'AI SEO',
+        locale: 'en',
+        intent: 'commercial',
+        userId: '00000000-0000-4000-8000-000000000001'
+      });
+
+      expect(result).toMatchObject({
+        source: 'third-party-volume',
+        suggestions: [
+          {
+            keyword: 'AI SEO tools',
+            source: 'third-party-volume',
+            monthlySearchVolume: 2400,
+            cpcUsd: 3.75,
+            competition: 0.48,
+            difficulty: 'medium'
+          },
+          {
+            keyword: 'AI SEO agency',
+            monthlySearchVolume: 720,
+            cpcUsd: 6.2,
+            competition: 0.64
+          }
+        ]
+      });
+    } finally {
+      apiConfig.KEYWORD_VOLUME_API_URL = originalApiUrl;
+      apiConfig.KEYWORD_VOLUME_API_KEY = originalApiKey;
+    }
   });
 });

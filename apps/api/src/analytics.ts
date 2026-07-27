@@ -43,6 +43,7 @@ export interface AnalyticsService {
 interface AnalyticsOverviewOptions {
   siteId?: string;
   siteHost?: string;
+  propertyId?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -258,15 +259,14 @@ async function runGoogleAnalyticsReport(
   return (await response.json()) as GoogleAnalyticsReport;
 }
 
-export function createGoogleAnalyticsService(
-  propertyId = process.env.GOOGLE_ANALYTICS_PROPERTY_ID
-): AnalyticsService {
+export function createGoogleAnalyticsService(): AnalyticsService {
   return {
     async getOverview(options = {}) {
       const defaultDateRange = getDefaultDateRange();
       const startDate = options.startDate ?? defaultDateRange.startDate;
       const endDate = options.endDate ?? defaultDateRange.endDate;
       const dimensionFilter = createHostNameFilter(options.siteHost);
+      const propertyId = options.propertyId?.trim();
 
       if (!propertyId) {
         return createDemoOverview(propertyId, { ...options, startDate, endDate });
@@ -374,6 +374,7 @@ export function registerAnalyticsRoutes(
     }
 
     let siteHost: string | undefined;
+    let propertyId: string | undefined;
     if (parsedQuery.data.siteId) {
       const site = await siteRepository.findForWorkspace(parsedQuery.data.siteId, user.workspaceId);
       if (!site) {
@@ -385,6 +386,7 @@ export function registerAnalyticsRoutes(
       }
 
       siteHost = new URL(site.siteUrl).hostname;
+      propertyId = site.googleAnalyticsPropertyId;
     }
 
     return {
@@ -393,6 +395,7 @@ export function registerAnalyticsRoutes(
       data: await analyticsService.getOverview({
         siteId: parsedQuery.data.siteId,
         siteHost,
+        propertyId,
         startDate: parsedQuery.data.startDate,
         endDate: parsedQuery.data.endDate
       })

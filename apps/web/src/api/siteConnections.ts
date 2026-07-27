@@ -27,6 +27,7 @@ export interface SiteConnection {
   siteUrl: string;
   cmsVersion?: string;
   pluginVersion?: string;
+  googleAnalyticsPropertyId?: string;
   status: SiteConnectionStatus;
   createdAt: string;
   lastTokenUsedAt?: string;

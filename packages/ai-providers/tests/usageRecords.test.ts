@@ -3,6 +3,7 @@ import {
   createAiUsageRecord,
   createInMemoryAiUsageRecordRepository,
   createNoopAiProviderRegistry,
+  createWenwenAiProviderRegistry,
   estimateUsageCostUsd,
   summarizeUsageRecords
 } from '../src';
@@ -117,5 +118,88 @@ describe('noop provider registry', () => {
         keyword: 'AI SEO'
       })
     ).rejects.toThrow('AI provider adapter is not configured yet.');
+  });
+});
+
+describe('Wenwen OpenAI-compatible provider registry', () => {
+  it.each([
+    ['openai', 'gpt-4.1-mini'],
+    ['google', 'gemini-2.5-flash'],
+    ['deepseek', 'deepseek-chat']
+  ] as const)('parses JSON text from %s proxy model responses', async (provider, model) => {
+    const registry = createWenwenAiProviderRegistry({
+      baseUrl: 'https://breakout.example.test',
+      apiKey: 'test-api-key',
+      textProvider: provider,
+      textModel: model,
+      fetchImpl: async (url, init) => {
+        expect(String(url)).toBe('https://breakout.example.test/v1/chat/completions');
+        expect(init?.method).toBe('POST');
+        expect(init?.headers).toMatchObject({
+          Authorization: 'Bearer test-api-key',
+          'Content-Type': 'application/json'
+        });
+
+        const payload = JSON.parse(String(init?.body)) as {
+          model: string;
+          messages: Array<{ role: string; content: string }>;
+        };
+        expect(payload.model).toBe(model);
+        expect(payload.messages.at(-1)?.content).toContain('Generate keyword ideas');
+
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    suggestions: [
+                      {
+                        keyword: `${model} JSON keyword`,
+                        difficulty: 'low',
+                        opportunityScore: 88
+                      }
+                    ]
+                  })
+                }
+              }
+            ],
+            usage: {
+              prompt_tokens: 18,
+              completion_tokens: 24
+            }
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+    });
+
+    const result = await registry.text.generateOutline({
+      siteId: 'site-1',
+      userId: 'user-1',
+      locale: 'zh-Hant',
+      keyword: 'AI SEO',
+      title: 'Generate keyword ideas and return JSON.'
+    });
+
+    expect(JSON.parse(result.text)).toMatchObject({
+      suggestions: [
+        {
+          keyword: `${model} JSON keyword`
+        }
+      ]
+    });
+    expect(result).toMatchObject({
+      model,
+      usage: {
+        inputTokens: 18,
+        outputTokens: 24
+      }
+    });
   });
 });

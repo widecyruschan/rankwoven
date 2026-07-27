@@ -6,12 +6,20 @@ import { getBearerToken, requireAuth, type AuthService } from './auth';
 
 const cmsPlatformSchema = z.enum(['wordpress', 'joomla', 'opencart']);
 
+const optionalAnalyticsPropertyIdSchema = z
+  .string()
+  .trim()
+  .max(80)
+  .optional()
+  .transform((value) => value || undefined);
+
 const createConnectionSchema = z.object({
   platform: cmsPlatformSchema.default('wordpress'),
   name: z.string().trim().min(1).max(160),
   siteUrl: z.url(),
   cmsVersion: z.string().trim().max(40).optional(),
   pluginVersion: z.string().trim().max(40).optional(),
+  googleAnalyticsPropertyId: optionalAnalyticsPropertyIdSchema,
   wordpressAdminUsername: z.string().trim().min(1).max(160).optional(),
   wordpressApplicationPassword: z.string().trim().min(1).max(240).optional()
 }).superRefine((input, context) => {
@@ -27,6 +35,10 @@ const createConnectionSchema = z.object({
 const updateWordPressCredentialsSchema = z.object({
   wordpressAdminUsername: z.string().trim().min(1).max(160),
   wordpressApplicationPassword: z.string().trim().min(1).max(240)
+});
+
+const updateSiteAnalyticsSchema = z.object({
+  googleAnalyticsPropertyId: optionalAnalyticsPropertyIdSchema
 });
 
 const syncedArticleSchema = z.object({
@@ -154,6 +166,7 @@ export interface SiteConnection {
   siteUrl: string;
   cmsVersion?: string;
   pluginVersion?: string;
+  googleAnalyticsPropertyId?: string;
   status: SiteConnectionStatus;
   createdAt: string;
   lastTokenUsedAt?: string;
@@ -215,6 +228,10 @@ export interface SiteConnectionRepository {
     siteId: string,
     credentials: WordPressCredentialsInput
   ): Promise<SiteConnection | undefined>;
+  updateAnalyticsSettings(
+    siteId: string,
+    settings: SiteAnalyticsSettingsInput
+  ): Promise<SiteConnection | undefined>;
   regenerateToken(siteId: string): Promise<{ site: SiteConnection; apiToken: string } | undefined>;
   revokeToken(siteId: string): Promise<SiteConnection | undefined>;
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
@@ -241,6 +258,7 @@ interface InMemorySiteConnection extends SiteConnection {
 }
 
 type WordPressCredentialsInput = z.infer<typeof updateWordPressCredentialsSchema>;
+type SiteAnalyticsSettingsInput = z.infer<typeof updateSiteAnalyticsSchema>;
 
 export interface WordPressCredentials {
   site: SiteConnection;
@@ -266,6 +284,7 @@ CREATE TABLE IF NOT EXISTS site_connections (
   last_token_used_at timestamptz,
   last_sync_at timestamptz,
   last_sync_stats jsonb,
+  google_analytics_property_id varchar(80),
   wordpress_admin_username varchar(160),
   wordpress_application_password_encrypted text
 );
@@ -294,6 +313,9 @@ ALTER TABLE site_connections
 
 ALTER TABLE site_connections
   ADD COLUMN IF NOT EXISTS last_token_used_at timestamptz;
+
+ALTER TABLE site_connections
+  ADD COLUMN IF NOT EXISTS google_analytics_property_id varchar(80);
 
 CREATE INDEX IF NOT EXISTS idx_site_connections_last_token_used
   ON site_connections(last_token_used_at DESC);
@@ -541,6 +563,7 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
     siteUrl: connection.siteUrl,
     cmsVersion: connection.cmsVersion,
     pluginVersion: connection.pluginVersion,
+    googleAnalyticsPropertyId: connection.googleAnalyticsPropertyId,
     status: connection.status,
     createdAt: connection.createdAt,
     lastTokenUsedAt: connection.lastTokenUsedAt,
@@ -561,6 +584,7 @@ function mapSiteRow(row: QueryResultRow): SiteConnection {
     siteUrl: row.site_url,
     cmsVersion: row.cms_version ?? undefined,
     pluginVersion: row.plugin_version ?? undefined,
+    googleAnalyticsPropertyId: row.google_analytics_property_id ?? undefined,
     status: row.status,
     createdAt: toIsoString(row.created_at) ?? '',
     lastTokenUsedAt: toIsoString(row.last_token_used_at),
@@ -730,6 +754,7 @@ function createSiteConnection(id: string, input: CreateConnectionInput, apiToken
     siteUrl: input.siteUrl,
     cmsVersion: input.cmsVersion,
     pluginVersion: input.pluginVersion,
+    googleAnalyticsPropertyId: input.googleAnalyticsPropertyId,
     apiToken,
     tokenPreview: getTokenPreview(apiToken),
     status: 'connected',
@@ -785,6 +810,16 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       site.wordpressApplicationPassword = credentials.wordpressApplicationPassword;
       site.wordpressApplicationPasswordConfigured = true;
 
+      return toPublicConnection(site);
+    },
+    async updateAnalyticsSettings(siteId, settings) {
+      const site = sites.get(siteId);
+
+      if (!site) {
+        return undefined;
+      }
+
+      site.googleAnalyticsPropertyId = settings.googleAnalyticsPropertyId?.trim() || undefined;
       return toPublicConnection(site);
     },
     async regenerateToken(siteId) {
@@ -1067,10 +1102,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           token_preview,
           status,
           created_at,
+          google_analytics_property_id,
           wordpress_admin_username,
           wordpress_application_password_encrypted
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'connected', $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'connected', $10, $11, $12, $13)
         RETURNING *
       `,
       [
@@ -1084,6 +1120,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         hashSiteToken(apiToken),
         getTokenPreview(apiToken),
         now,
+        input.googleAnalyticsPropertyId ?? null,
         input.wordpressAdminUsername ?? null,
         input.wordpressApplicationPassword
           ? encryptWordPressCredential(input.wordpressApplicationPassword)
@@ -1162,6 +1199,22 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         credentials.wordpressAdminUsername,
         encryptWordPressCredential(credentials.wordpressApplicationPassword)
       ]
+    );
+
+    return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
+  }
+
+  async updateAnalyticsSettings(siteId: string, settings: SiteAnalyticsSettingsInput) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        UPDATE site_connections
+        SET google_analytics_property_id = $2
+        WHERE id = $1
+        RETURNING *
+      `,
+      [siteId, settings.googleAnalyticsPropertyId?.trim() || null]
     );
 
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
@@ -2084,6 +2137,72 @@ export function registerSiteConnectionRoutes(
     return {
       success: true,
       message: 'WordPress 管理員應用程式密碼已保存',
+      data: {
+        site
+      }
+    };
+  });
+
+  app.put<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/analytics-settings', async (request, reply) => {
+    const parsed = updateSiteAnalyticsSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const existingSite = await repository.find(request.params.siteId);
+    const tokenAuthorized = await repository.verifyToken(
+      request.params.siteId,
+      getBearerToken(request)
+    );
+
+    if (!existingSite) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    if (!tokenAuthorized) {
+      const user = await requireAuth(authService, request, reply);
+
+      if (!user) {
+        return reply;
+      }
+
+      if (existingSite.workspaceId !== user.workspaceId) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: {
+            code: 'SITE_NOT_FOUND'
+          }
+        });
+      }
+    }
+
+    const site = await repository.updateAnalyticsSettings(request.params.siteId, parsed.data);
+
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    return {
+      success: true,
+      message: '站點分析設定已保存',
       data: {
         site
       }

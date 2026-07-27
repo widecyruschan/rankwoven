@@ -19,6 +19,7 @@ final class RankWoven_SEO_Plugin
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
+    private const OPTION_GA4_PROPERTY_ID = 'rankwoven_ga4_property_id';
     private const OPTION_WP_ADMIN_USERNAME = 'rankwoven_wp_admin_username';
     private const OPTION_WP_APPLICATION_PASSWORD = 'rankwoven_wp_application_password';
     private const OPTION_LAST_SYNC_RESULT = 'rankwoven_last_sync_result';
@@ -67,6 +68,7 @@ final class RankWoven_SEO_Plugin
         $api_base_url = get_option(self::OPTION_API_BASE_URL, 'http://localhost:3011');
         $site_id = get_option(self::OPTION_SITE_ID, '');
         $site_token = get_option(self::OPTION_SITE_TOKEN, '');
+        $ga4_property_id = get_option(self::OPTION_GA4_PROPERTY_ID, '');
         $wp_admin_username = get_option(self::OPTION_WP_ADMIN_USERNAME, '');
         $wp_application_password = get_option(self::OPTION_WP_APPLICATION_PASSWORD, '');
         $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
@@ -144,6 +146,24 @@ final class RankWoven_SEO_Plugin
                             />
                             <p class="description">
                                 <?php echo esc_html__('If this token was regenerated or revoked in RankWoven, paste the new Site Token here and save settings before syncing again.', 'rankwoven-seo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="rankwoven_ga4_property_id"><?php echo esc_html__('GA4 Property ID', 'rankwoven-seo'); ?></label>
+                        </th>
+                        <td>
+                            <input
+                                id="rankwoven_ga4_property_id"
+                                name="rankwoven_ga4_property_id"
+                                type="text"
+                                class="regular-text"
+                                value="<?php echo esc_attr($ga4_property_id); ?>"
+                                placeholder="123456789"
+                            />
+                            <p class="description">
+                                <?php echo esc_html__('Enter this WordPress site GA4 Property ID. RankWoven uses it to read SEO analytics for this site after the platform service account has access to the property.', 'rankwoven-seo'); ?>
                             </p>
                         </td>
                     </tr>
@@ -283,6 +303,7 @@ final class RankWoven_SEO_Plugin
         $api_base_url = $this->get_api_base_url();
         $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
         $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
+        $ga4_property_id = sanitize_text_field(get_option(self::OPTION_GA4_PROPERTY_ID, ''));
         $wp_credentials = $this->get_wordpress_admin_credentials();
         $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
         $last_sync_result = is_array($last_sync_result) ? $last_sync_result : [];
@@ -299,6 +320,7 @@ final class RankWoven_SEO_Plugin
                 <?php $this->render_diagnostic_row(__('API connection', 'rankwoven-seo'), $this->get_api_connection_status_label($api_base_url)); ?>
                 <?php $this->render_diagnostic_row(__('Site ID', 'rankwoven-seo'), $site_id !== '' ? $site_id : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Token status', 'rankwoven-seo'), $site_token !== '' ? __('Configured locally', 'rankwoven-seo') : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('GA4 Property ID', 'rankwoven-seo'), $ga4_property_id !== '' ? $ga4_property_id : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Token last local use', 'rankwoven-seo'), $this->get_last_token_used_label()); ?>
                 <?php $this->render_diagnostic_row(__('Last sync', 'rankwoven-seo'), $this->get_last_sync_label($last_sync_result)); ?>
                 <?php $this->render_diagnostic_row(__('Image attribute settings', 'rankwoven-seo'), $this->get_image_attribute_settings_label($image_settings)); ?>
@@ -414,6 +436,9 @@ final class RankWoven_SEO_Plugin
             self::OPTION_SITE_TOKEN,
             sanitize_text_field(wp_unslash($_POST['rankwoven_site_token'] ?? ''))
         );
+        $ga4_property_id = sanitize_text_field(wp_unslash($_POST['rankwoven_ga4_property_id'] ?? ''));
+        update_option(self::OPTION_GA4_PROPERTY_ID, $ga4_property_id);
+
         $wp_admin_username = sanitize_text_field(wp_unslash($_POST['rankwoven_wp_admin_username'] ?? ''));
         $wp_application_password = sanitize_text_field(wp_unslash($_POST['rankwoven_wp_application_password'] ?? ''));
 
@@ -426,6 +451,10 @@ final class RankWoven_SEO_Plugin
         }
 
         $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
+        if ($site_id !== '' && !$this->sync_analytics_settings_to_saas($site_id, $ga4_property_id)) {
+            $this->redirect_with_status('analytics_settings_update_failed');
+        }
+
         if ($site_id !== '' && $wp_admin_username !== '' && $wp_application_password !== '') {
             if (!$this->sync_wordpress_credentials_to_saas($site_id, $wp_admin_username, $wp_application_password)) {
                 $this->redirect_with_status('wordpress_credentials_update_failed');
@@ -465,6 +494,7 @@ final class RankWoven_SEO_Plugin
                 'siteUrl' => home_url('/'),
                 'cmsVersion' => get_bloginfo('version'),
                 'pluginVersion' => self::VERSION,
+                'googleAnalyticsPropertyId' => sanitize_text_field(get_option(self::OPTION_GA4_PROPERTY_ID, '')),
                 'wordpressAdminUsername' => $wp_credentials['username'],
                 'wordpressApplicationPassword' => $wp_credentials['applicationPassword']
             ])
@@ -1639,6 +1669,40 @@ final class RankWoven_SEO_Plugin
         return (bool) ($body['success'] ?? false);
     }
 
+    private function sync_analytics_settings_to_saas(string $site_id, string $ga4_property_id): bool
+    {
+        if ($this->get_api_base_url() === '') {
+            return false;
+        }
+
+        $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
+        if ($site_token === '') {
+            return false;
+        }
+
+        $response = wp_remote_request(
+            $this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/analytics-settings'),
+            [
+                'method' => 'PUT',
+                'timeout' => 30,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $site_token,
+                    'Content-Type' => 'application/json'
+                ],
+                'body' => wp_json_encode([
+                    'googleAnalyticsPropertyId' => $ga4_property_id
+                ])
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $body = $this->decode_response_body($response);
+        return (bool) ($body['success'] ?? false);
+    }
+
     private function decode_response_body(array $response): array
     {
         $body = json_decode((string) wp_remote_retrieve_body($response), true);
@@ -1672,6 +1736,7 @@ final class RankWoven_SEO_Plugin
             'missing_api_base_url' => __('Please set the API Base URL first.', 'rankwoven-seo'),
             'missing_site_credentials' => __('Please connect this site before syncing content.', 'rankwoven-seo'),
             'missing_wordpress_application_password' => __('Please save a WordPress administrator username and application password before connecting this site.', 'rankwoven-seo'),
+            'analytics_settings_update_failed' => __('GA4 Property ID was saved locally, but RankWoven could not update the SaaS analytics setting. Please check the Site Token and API service.', 'rankwoven-seo'),
             'wordpress_credentials_update_failed' => __('WordPress application password was saved locally, but RankWoven could not update the SaaS credential record. Please check the API service.', 'rankwoven-seo'),
             'site_token_invalid' => __('The Site Token is invalid or has been revoked. Regenerate the token in RankWoven, paste the new token here, then sync again.', 'rankwoven-seo'),
             'connection_failed' => __('Site connection failed. Please check the API service.', 'rankwoven-seo'),
@@ -1709,6 +1774,7 @@ final class RankWoven_SEO_Plugin
             'missing_api_base_url' => ['error', __('Please set the API Base URL first.', 'rankwoven-seo')],
             'missing_site_credentials' => ['error', __('Please connect this site before syncing content.', 'rankwoven-seo')],
             'missing_wordpress_application_password' => ['error', __('Please save a WordPress administrator username and application password before connecting this site.', 'rankwoven-seo')],
+            'analytics_settings_update_failed' => ['error', __('GA4 Property ID was saved locally, but RankWoven could not update the SaaS analytics setting. Please check the Site Token and API service.', 'rankwoven-seo')],
             'wordpress_credentials_update_failed' => ['error', __('WordPress application password was saved locally, but RankWoven could not update the SaaS credential record. Please check the API service.', 'rankwoven-seo')],
             'site_token_invalid' => ['error', __('The Site Token is invalid or has been revoked. Regenerate the token in RankWoven, paste the new token here, then sync again.', 'rankwoven-seo')],
             'connection_failed' => ['error', __('Site connection failed. Please check the API service.', 'rankwoven-seo')],

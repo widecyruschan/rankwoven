@@ -288,7 +288,7 @@ const messages = {
       endDate: 'End date',
       demoMode: 'Demo analytics data',
       demoModeDescription:
-        'Configure GOOGLE_ANALYTICS_PROPERTY_ID and Google service account credentials to read live GA4 data.',
+        'Enter this site GA4 Property ID in the WordPress plugin and grant the RankWoven service account read access to the property.',
       loadFailed: 'Unable to load analytics'
     },
     keywords: {
@@ -301,6 +301,7 @@ const messages = {
       difficulty: 'Difficulty',
       volume: 'Monthly volume',
       cpc: 'CPC',
+      competition: 'Competition',
       source: 'Source',
       sourceAi: 'AI provider',
       sourceThirdParty: 'Volume provider',
@@ -897,7 +898,7 @@ const messages = {
       startDate: '開始日期',
       endDate: '結束日期',
       demoMode: '示範分析數據',
-      demoModeDescription: '配置 GOOGLE_ANALYTICS_PROPERTY_ID 和 Google 服務帳號憑據後，即可讀取真實 GA4 數據。',
+      demoModeDescription: '請先在 WordPress 插件輸入此站點的 GA4 Property ID，並授權 RankWoven 服務帳號讀取該 Property。',
       loadFailed: '無法載入分析數據'
     },
     keywords: {
@@ -910,6 +911,7 @@ const messages = {
       difficulty: '難度',
       volume: '月搜尋量',
       cpc: 'CPC',
+      competition: '競爭度',
       source: '來源',
       sourceAi: 'AI Provider',
       sourceThirdParty: '搜尋量來源',

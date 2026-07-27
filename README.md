@@ -165,8 +165,11 @@ WENWEN_EMBEDDING_MODEL=text-embedding-3-small
 WENWEN_IMAGE_MODEL=gemini-2.5-flash-image
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
-GOOGLE_ANALYTICS_PROPERTY_ID=
 GOOGLE_APPLICATION_CREDENTIALS=
+GOOGLE_APPLICATION_CREDENTIALS_JSON=
+GOOGLE_APPLICATION_CREDENTIALS_BASE64=
+KEYWORD_VOLUME_API_URL=
+KEYWORD_VOLUME_API_KEY=
 QINIU_ACCESS_KEY=
 QINIU_SECRET_KEY=
 QINIU_BUCKET=
@@ -257,7 +260,9 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## AI Provider 使用說明
 
-目前已新增 `@aieo/ai-providers` 共享包，先提供最小 Provider Adapter 介面、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；圖片存儲使用七牛雲 Kodo。關鍵詞建議已改為 Provider 化流程：配置 `KEYWORD_VOLUME_API_URL` 和 `KEYWORD_VOLUME_API_KEY` 時優先讀取第三方搜尋量/競爭度資料，未配置時使用 AI Text Provider 產生建議，Provider 不可用時才使用本地 fallback 並標記 `source: fallback`。真實 Search Console 關鍵詞來源尚未接入，後續應在同一服務介面下擴展。
+目前已新增 `@aieo/ai-providers` 共享包，提供最小 Provider Adapter 介面、問問 OpenAI-compatible Text Provider、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；當 `WENWEN_API_KEY` 已配置時 API 會切到正式問問 Text Provider，未配置時保留 Noop/fallback 以支援本地測試。圖片存儲使用七牛雲 Kodo。關鍵詞建議已改為 Provider 化流程：配置 `KEYWORD_VOLUME_API_URL` 和 `KEYWORD_VOLUME_API_KEY` 時優先讀取第三方搜尋量/競爭度資料，支援常見 `keywords`、`data`、`results` 和 DataForSEO `tasks[].result` 回傳形狀，並映射 `source`、月搜尋量、CPC 和競爭度；未配置時使用 AI Text Provider 產生建議，Provider 不可用時才使用本地 fallback 並標記 `source: fallback`。真實 Search Console OAuth 關鍵詞來源尚未接入，後續應在同一服務介面下擴展。
+
+Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4 Property ID，插件會同步到 `PUT /api/v1/site-connections/:siteId/analytics-settings`。SaaS 後端仍使用平台級 Google 服務帳號憑據讀取 GA4 Data API，因此正式環境需要將該服務帳號加入客戶 GA4 Property 的可讀權限；未配置站點 GA4 Property ID 或服務帳號憑據時，分析頁返回示範數據。
 
 ## 元件使用說明
 
@@ -685,7 +690,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 - 會話的主要目的：將 SaaS 前端基座改用 Ant Design Vue，加入 Google Analytics 讀取能力、ECharts 圖表展示和關鍵詞建議入口。
 - 完成的主要任務：前端移除 Element Plus 並按需註冊 Ant Design Vue 元件；新增 `/app/analytics` 流量分析頁，使用 ECharts 顯示 7 日流量趨勢、渠道工作階段和熱門頁面；在 `/app/suggestions` 增加建議狀態環形圖與建議類型柱狀圖；新增 `/app/keywords` 關鍵詞建議頁；後端新增 `GET /api/v1/analytics/overview` 和 `POST /api/v1/keyword-suggestions`。
-- 關鍵決策和解決方案：Google Analytics 先以服務帳號 JWT 調用 GA4 Data API REST 端點，避免引入會觸發 high audit 的 Google Node SDK 依賴；未配置 `GOOGLE_ANALYTICS_PROPERTY_ID` 或服務帳號憑據時返回示範數據，方便原型和本地開發；路由頁面改為動態載入，並用 Vite `manualChunks` 拆分 Vue、AntD 和 ECharts 依賴；Docker Compose 的 `VITE_API_BASE_URL` 預設改回本地 API，生產由 `.env` 覆蓋為 `https://api.rankwoven.com`。
+- 關鍵決策和解決方案：Google Analytics 先以服務帳號 JWT 調用 GA4 Data API REST 端點，避免引入會觸發 high audit 的 Google Node SDK 依賴；未配置站點 GA4 Property ID 或服務帳號憑據時返回示範數據，方便原型和本地開發；路由頁面改為動態載入，並用 Vite `manualChunks` 拆分 Vue、AntD 和 ECharts 依賴；Docker Compose 的 `VITE_API_BASE_URL` 預設改回本地 API，生產由 `.env` 覆蓋為 `https://api.rankwoven.com`。
 - 使用的技術棧：Vue 3、TypeScript、Vite、Vue Router、Vue I18n、Ant Design Vue、ECharts、vue-echarts、Fastify、Google Analytics Data API REST、Vitest。
 - 新增或修改文件：新增 `apps/api/src/analytics.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/components/AnalyticsChart.vue`、`apps/web/src/views/AnalyticsView.vue` 和 `apps/web/src/views/KeywordSuggestionsView.vue`；修改 `apps/api/src/server.ts`、`apps/api/src/config.ts`、`apps/api/tests/health.test.ts`、`apps/web/src/App.vue`、`apps/web/src/components/LanguageSwitcher.vue`、`apps/web/src/i18n.ts`、`apps/web/src/main.ts`、`apps/web/src/router/index.ts`、`apps/web/src/styles.css`、`apps/web/vite.config.ts`、`docker-compose.yml`、`.env.example`、`package.json`、`package-lock.json`、`README.md`、`docs/deployment.md` 和 `docs/seo-ai-platform-prd.md`。
 - 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`。Vite 仍提示 `vendor-antdv` 和 `vendor-echarts` 單獨依賴 chunk 超過 500KB，屬於第三方 UI/圖表庫體積提醒，已通過路由懶載入和 manual chunks 降低首屏主包大小。
@@ -719,7 +724,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、Vue 3、Ant Design Vue、Vue I18n、ECharts、WordPress PHP Plugin、Google Analytics Data API REST。
 - 新增或修改文件：新增 `db/migrations/0002_synced_article_meta_description.sql`；修改 `.env.example`、`docker-compose.yml`、`apps/api/src/analytics.ts`、`apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/views/AnalyticsView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`db/migrations/0001_initial_schema.sql`、`docs/deployment.md`、`docs/seo-ai-platform-prd.md`、`plugins/wordpress/README.md` 和 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`。
 - 驗證結果：`npm run test -w @aieo/api -- health.test.ts siteConnections.test.ts` 通過；`npm run build -w @aieo/api` 通過；`npm run build -w @aieo/web` 通過；`docker run --rm -v "$PWD/plugins/wordpress/rankwoven-seo:/plugin" wordpress:php8.2 php -l /plugin/rankwoven-seo.php` 通過；`npm run test`、`npm run build`、`npm run security:audit`、`npm run lint` 通過；`npm run db:migrate` 已套用 `0002_synced_article_meta_description.sql`；PostgreSQL 整合測試 `RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過。
-- 下一步行動清單：在生產環境安全填入 `GOOGLE_ANALYTICS_PROPERTY_ID` 和 Google 服務帳號憑據；部署前重新執行 migration 和備份；把關鍵詞建議接入 AI Provider 與真實搜尋量/難度來源；為文章與媒體列表補充分頁查詢；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾。
+- 下一步行動清單：在 WordPress 插件錄入各站點 GA4 Property ID，並在生產環境安全填入 Google 服務帳號憑據；部署前重新執行 migration 和備份；把關鍵詞建議接入 AI Provider 與真實搜尋量/難度來源；為文章與媒體列表補充分頁查詢；為 Worker 任務加入重試、退避和死信列表；為已批准建議寫回補充快照與回滾。
 
 ### 2026-07-27：Ant Design Vue 表格統一與文章媒體分頁查詢
 
@@ -759,4 +764,14 @@ SUPPORT_EMAIL=support@rankwoven.com
 - 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、pg、Vitest、Vue 3、Ant Design Vue、Vue I18n、Worker、WordPress REST API、AI Provider Adapter。
 - 新增或修改文件：新增 `db/migrations/0003_apply_snapshots_and_task_retries.sql`；修改 `.env.example`、`apps/api/src/config.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/KeywordSuggestionsView.vue`、`apps/web/src/views/ApplySuggestionsView.vue`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/ArticleSyncView.vue`、`apps/web/src/views/TasksView.vue`、`apps/worker/src/index.ts`、`apps/worker/tests/worker.test.ts`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
 - 驗證結果：`npm run lint` 通過；`npm run test` 通過；`npm run build` 通過；`npm run security:audit` 返回 `found 0 vulnerabilities`；`npm run db:migrate` 確認 `0003_apply_snapshots_and_task_retries.sql` 已套用且可跳過重跑；`RUN_POSTGRES_TESTS=1 TEST_DATABASE_URL=postgresql://aieo:aieo_password@localhost:5432/aieo npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 通過；Docker Desktop 已用 `docker compose --profile data up -d --build` 重建 API/Web/Worker，`http://localhost:3011/health`、登入 smoke、`/api/v1/keyword-suggestions` 和 `http://localhost:8080/app/apply` 均可用。Vite 仍提示 AntD/ECharts 第三方依賴 chunk 超過 500KB，屬於既有非阻塞提醒。
-- 下一步行動清單：在生產環境配置正式 GA4 和關鍵詞搜尋量/難度資料源；將 AI Provider 切到正式問問 API 憑據並驗證 JSON 可解析；為 Worker 死信任務補充管理後台重跑和忽略入口；將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值；將生產 Web 容器改為正式靜態構建部署。
+- 下一步行動清單：在 WordPress 插件錄入各站點 GA4 Property ID 並配置 Google 服務帳號權限；在生產環境配置正式關鍵詞搜尋量/難度資料源；將 AI Provider 切到正式問問 API 憑據並驗證 JSON 可解析；為 Worker 死信任務補充管理後台重跑和忽略入口；將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值；將生產 Web 容器改為正式靜態構建部署。
+
+### 2026-07-27：站點 GA4、關鍵詞資料源與問問 Provider 正式配置入口
+
+- 會話的主要目的：把 GA4 從平台全局設定改為由客戶在 WordPress 後台按站點輸入，同時補齊正式關鍵詞搜尋量/難度資料源和問問 API Provider 的可部署接入。
+- 完成的主要任務：新增站點 `googleAnalyticsPropertyId` migration、Repository 欄位和 `PUT /api/v1/site-connections/:siteId/analytics-settings`；WordPress 插件新增 GA4 Property ID 設定、診斷顯示和保存後同步到 SaaS；分析 API 依照選中站點讀取 GA4 Property ID；關鍵詞第三方資料源支援多種常見回傳格式並映射 `source`、月搜尋量、CPC 和競爭度；API server 在 `WENWEN_API_KEY` 存在時切到問問 OpenAI-compatible Text Provider；關鍵詞表格新增競爭度欄位。
+- 關鍵決策和解決方案：GA4 Property ID 屬於客戶站點資料，由 WordPress 插件錄入與同步；Google 服務帳號憑據仍是平台級讀取憑據，需在客戶 GA4 Property 中授予讀取權限；本機沒有 `.env`，因此不做真實 Key 的 live smoke，只用 mock 驗證 OpenAI、Google Gemini 和 DeepSeek 代理模型回傳 JSON 的解析鏈路。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、Vue 3、Ant Design Vue、Vue I18n、WordPress PHP Plugin、Google Analytics Data API REST、問問 OpenAI-compatible API。
+- 新增或修改文件：新增 `db/migrations/0004_site_ga4_property.sql`；修改 `.env.example`、`docker-compose.yml`、`apps/api/src/analytics.ts`、`apps/api/src/config.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/KeywordSuggestionsView.vue`、`packages/ai-providers/src/index.ts`、`packages/ai-providers/tests/usageRecords.test.ts`、`plugins/wordpress/README.md`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
+- 驗證結果：`npm run test -w @aieo/api -- health.test.ts siteConnections.test.ts` 通過；`npm run test -w @aieo/ai-providers -- usageRecords.test.ts` 通過。本機沒有 `.env`，未執行真實問問 API、DataForSEO/Ahrefs/Semrush 或 GA4 live smoke。
+- 下一步行動清單：在生產 Secrets 配置 `WENWEN_API_KEY`、`KEYWORD_VOLUME_API_URL`、`KEYWORD_VOLUME_API_KEY` 和 Google 服務帳號憑據；在 WordPress 插件為測試站點填入 GA4 Property ID 並授權服務帳號讀取；用正式問問 API 分別 smoke OpenAI、Gemini、DeepSeek 模型 JSON 輸出；用正式搜尋量供應商 smoke `source`、月搜尋量、CPC 和競爭度顯示；執行全量 lint/test/build/security audit、migration、PHP 語法檢查和 Docker Desktop 重建。

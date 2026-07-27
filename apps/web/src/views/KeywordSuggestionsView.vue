@@ -26,6 +26,7 @@ const columns = computed<ColumnsType<KeywordSuggestion>>(() => [
   { title: t('keywords.difficulty'), dataIndex: 'difficulty', key: 'difficulty' },
   { title: t('keywords.volume'), dataIndex: 'monthlySearchVolume', key: 'monthlySearchVolume', width: 120 },
   { title: t('keywords.cpc'), dataIndex: 'cpcUsd', key: 'cpcUsd', width: 110 },
+  { title: t('keywords.competition'), dataIndex: 'competition', key: 'competition', width: 120 },
   { title: t('keywords.source'), dataIndex: 'source', key: 'source', width: 150 },
   { title: t('keywords.opportunity'), dataIndex: 'opportunityScore', key: 'opportunityScore' },
   { title: t('keywords.angle'), dataIndex: 'contentAngle', key: 'contentAngle' }
@@ -155,6 +156,13 @@ async function generateSuggestions() {
           </template>
           <template v-else-if="column.key === 'cpcUsd'">
             {{ (record as KeywordSuggestion).cpcUsd === undefined ? '--' : `$${(record as KeywordSuggestion).cpcUsd}` }}
+          </template>
+          <template v-else-if="column.key === 'competition'">
+            {{
+              (record as KeywordSuggestion).competition === undefined
+                ? '--'
+                : `${Math.round(((record as KeywordSuggestion).competition ?? 0) * 100)}%`
+            }}
           </template>
           <template v-else-if="column.key === 'source'">
             <a-tag>{{ getSourceLabel((record as KeywordSuggestion).source) }}</a-tag>
