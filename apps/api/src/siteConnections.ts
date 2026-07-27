@@ -1347,7 +1347,8 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
       [workspaceId ?? null]
     );
 
-    return result.rows.map(mapSiteRow);
+    const sites = result.rows.map(mapSiteRow);
+    return dedupeSiteConnections(sites);
   }
 
   async find(siteId: string) {

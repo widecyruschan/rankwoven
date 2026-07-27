@@ -9,11 +9,15 @@
 -- 2. 建立唯一索引（若已存在則跳過）。
 -- 可重複執行，對已乾淨的資料庫無副作用。
 
--- 1. 去重：刪除同一 (workspace_id, platform, site_url) 組合中較舊的重複列。
---    使用普通 CTE 比視窗函數更兼容舊版 PostgreSQL。
+-- 1. 去重：對每一組 (workspace_id, platform, site_url) 保留 created_at 最新的一筆，
+--    並在刪除前把該組內最新（最大）的 last_token_used_at、last_sync_at、last_sync_stats
+--    合併到保留列，避免遺失最近的同步統計。
 DO $$
 DECLARE
   r RECORD;
+  v_last_token_used_at TIMESTAMP WITH TIME ZONE;
+  v_last_sync_at TIMESTAMP WITH TIME ZONE;
+  v_last_sync_stats JSONB;
 BEGIN
   FOR r IN
     SELECT workspace_id, platform, site_url, MAX(created_at) AS keep_created
@@ -21,6 +25,26 @@ BEGIN
     GROUP BY workspace_id, platform, site_url
     HAVING COUNT(*) > 1
   LOOP
+    SELECT
+      MAX(last_token_used_at),
+      MAX(last_sync_at),
+      (ARRAY_AGG(last_sync_stats ORDER BY COALESCE(last_sync_at, created_at) DESC NULLS LAST))[1]
+    INTO v_last_token_used_at, v_last_sync_at, v_last_sync_stats
+    FROM site_connections
+    WHERE workspace_id = r.workspace_id
+      AND platform = r.platform
+      AND site_url = r.site_url;
+
+    UPDATE site_connections
+    SET
+      last_token_used_at = GREATEST(last_token_used_at, v_last_token_used_at),
+      last_sync_at = GREATEST(last_sync_at, v_last_sync_at),
+      last_sync_stats = COALESCE(v_last_sync_stats, last_sync_stats)
+    WHERE workspace_id = r.workspace_id
+      AND platform = r.platform
+      AND site_url = r.site_url
+      AND created_at = r.keep_created;
+
     DELETE FROM site_connections
     WHERE workspace_id = r.workspace_id
       AND platform = r.platform

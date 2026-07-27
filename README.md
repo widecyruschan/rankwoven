@@ -855,3 +855,17 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：`apps/api/src/siteConnections.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`db/migrations/0005_site_url_unique.sql`、`docs/seo-ai-platform-prd.md`、本 README。
 - 驗證結果：`lint` / `test` / `build`（含 API `tsc`）/ `security:audit` 全過；插件 `php -l` 無語法錯誤；本地 upsert smoke 通過。
 - 下一步行動清單：生產部署後觀察 SaaS 後台是否仍有重複站點；於生產執行 `0005` migration（會先去重再建索引）；後續依 PRD 第 17 節推進 Google 憑據與關鍵詞資料源配置。
+
+### 2026-07-27（四）：補強站點去重，解決站點管理顯示多個相同 item
+
+- 會話的主要目的：針對截圖顯示「同一 http://localhost:8088 站點出現多筆」的問題，補強後端與前端去重，確保站點管理每個站點只顯示一個 item。
+- 完成的主要任務：
+  1. API `siteConnections.ts`：Postgres `list()` 加入 `dedupeSiteConnections`，讓資料庫層回傳結果即去重（與 in-memory 一致）。
+  2. 前端 `SitesView.vue`：增加依正規化 URL 的前端去重，作為後端漏網時的 UI 防線。
+  3. Migration `0005_site_url_unique.sql` 改進：去重時把同一組 (workspace_id, platform, site_url) 內最新的 `last_token_used_at` / `last_sync_at` / `last_sync_stats` 合併到保留列，避免遺失同步統計。
+  4. Docker Desktop `aieo` 重建 `api` / `web` 容器；本地 API/Web smoke OK。
+- 關鍵決策和解決方案：後端 `list()` 去重為主、前端去重為輔；migration 保留最新列並合併同步資訊；upsert 已在上一回合完成，本回合專注消除既有重複在 UI 與資料層的顯示。
+- 使用的技術棧：TypeScript / Fastify / PostgreSQL / Vue 3 / Docker Compose。
+- 新增或修改文件：`apps/api/src/siteConnections.ts`、`apps/web/src/views/SitesView.vue`、`db/migrations/0005_site_url_unique.sql`、`docs/seo-ai-platform-prd.md`、本 README。
+- 驗證結果：`lint` / `test` / `build` / `security:audit` 全過；Docker 本地 API/Web 200。
+- 下一步行動清單：推送後確認生產 migration `0005` 執行成功、SaaS 後台重複站點消失；持續監控 WordPress 插件更新是否仍會新增重複。

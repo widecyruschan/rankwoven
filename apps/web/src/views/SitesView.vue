@@ -18,8 +18,34 @@ const platformLabels: Record<CmsPlatform, string> = {
   opencart: 'OpenCart'
 };
 
+function normalizeSiteUrl(siteUrl: string): string {
+  try {
+    const url = new globalThis.URL(siteUrl);
+    url.hash = '';
+    url.search = '';
+    const path = url.pathname.replace(/\/+$/, '');
+    return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}${path}`;
+  } catch {
+    return siteUrl.toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+const dedupedApiSites = computed(() => {
+  const siteByKey = new Map<string, SiteConnection>();
+
+  for (const site of apiSites.value) {
+    const key = `${site.platform}:${normalizeSiteUrl(site.siteUrl)}`;
+
+    if (!siteByKey.has(key)) {
+      siteByKey.set(key, site);
+    }
+  }
+
+  return Array.from(siteByKey.values());
+});
+
 const siteRows = computed(() =>
-  apiSites.value.map((site) => ({
+  dedupedApiSites.value.map((site) => ({
     id: site.id,
     raw: site,
     name: site.name,
