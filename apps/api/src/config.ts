@@ -9,7 +9,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   WENWEN_API_BASE_URL: z.url().default('https://breakout.wenwen-ai.com'),
   WENWEN_API_KEY: z.string().optional(),
-  WENWEN_TEXT_MODEL: z.string().default('gpt-4.1-mini'),
+  WENWEN_TEXT_MODEL: z.string().default('gpt-4o-mini'),
   WENWEN_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   WENWEN_IMAGE_MODEL: z.string().default('gemini-2.5-flash-image'),
   AI_TEXT_PROVIDER: z
@@ -35,8 +35,15 @@ const envSchema = z.object({
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS_JSON: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS_BASE64: z.string().optional(),
+  KEYWORD_VOLUME_PROVIDER: z
+    .enum(['dataforseo', 'ahrefs', 'semrush', 'generic'])
+    .default('generic'),
   KEYWORD_VOLUME_API_URL: optionalUrlSchema,
-  KEYWORD_VOLUME_API_KEY: z.string().optional()
+  KEYWORD_VOLUME_API_KEY: z.string().optional(),
+  AHREFS_API_URL: optionalUrlSchema,
+  AHREFS_API_KEY: z.string().optional(),
+  SEMRUSH_API_URL: optionalUrlSchema,
+  SEMRUSH_API_KEY: z.string().optional()
 });
 
 export const apiConfig = envSchema.parse(process.env);

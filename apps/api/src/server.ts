@@ -10,7 +10,9 @@ import {
 } from './auth';
 import { registerAnalyticsRoutes } from './analytics';
 import { apiConfig } from './config';
-import { createKeywordSuggestionService, registerKeywordSuggestionRoutes } from './keywordSuggestions';
+import { createKeywordSuggestionService, registerKeywordSuggestionRoutes, setGscKeywordMapGetter } from './keywordSuggestions';
+import { registerLighthouseRoutes } from './lighthouse';
+import { registerSearchConsoleRoutes, getGscKeywordMap } from './searchConsole';
 import {
   createDefaultSeoOptimizationRepository,
   type SeoOptimizationRepository,
@@ -146,6 +148,11 @@ export function createServer(options: CreateServerOptions = {}) {
 
   registerAuthRoutes(app, authService, authRepository);
   registerAnalyticsRoutes(app, authService, siteConnectionRepository);
+  registerSearchConsoleRoutes(app, authService, siteConnectionRepository);
+  registerLighthouseRoutes(app, authService, siteConnectionRepository);
+
+  // Wire GSC keyword data into the keyword suggestion enrichment pipeline
+  setGscKeywordMapGetter(getGscKeywordMap);
   registerKeywordSuggestionRoutes(app, authService, createKeywordSuggestionService(aiProviders.text));
 
   registerSiteConnectionRoutes(app, siteConnectionRepository, authService);

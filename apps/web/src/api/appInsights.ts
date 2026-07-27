@@ -35,6 +35,32 @@ export interface AnalyticsOverviewParams {
   endDate?: string;
 }
 
+// ── Keyword Suggestions ──────────────────────────────────────────
+
+export type KeywordDataSource =
+  | 'dataforseo'
+  | 'ahrefs'
+  | 'semrush'
+  | 'gsc'
+  | 'ai-provider'
+  | 'fallback';
+
+export interface KeywordSourceTrace {
+  keywordIdea: 'ai-provider' | 'template';
+  volume: KeywordDataSource | 'estimated';
+  cpc: KeywordDataSource | 'estimated';
+  competition: KeywordDataSource | 'estimated';
+  difficulty: KeywordDataSource | 'estimated';
+  verified: boolean;
+}
+
+export interface KeywordGscData {
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 export interface KeywordSuggestion {
   keyword: string;
   intent: 'informational' | 'commercial' | 'transactional' | 'local';
@@ -43,9 +69,22 @@ export interface KeywordSuggestion {
   monthlySearchVolume?: number;
   cpcUsd?: number;
   competition?: number;
-  source: 'ai-provider' | 'third-party-volume' | 'fallback';
+  source: KeywordDataSource;
+  sourceTrace: KeywordSourceTrace;
   searchIntentSummary: string;
   contentAngle: string;
+  gscData?: KeywordGscData;
+}
+
+export interface KeywordEnrichedItem {
+  keyword: string;
+  found: boolean;
+  monthlySearchVolume?: number;
+  cpcUsd?: number;
+  competition?: number;
+  keywordDifficulty?: number;
+  source?: string;
+  gscData?: KeywordGscData;
 }
 
 interface ApiResponse<T> {
@@ -113,14 +152,130 @@ export async function createKeywordSuggestions(payload: {
   seedKeyword: string;
   locale: string;
   intent: KeywordSuggestion['intent'];
+  siteUrl?: string;
 }) {
   return requestApi<{
     seedKeyword: string;
     locale: string;
-    source: KeywordSuggestion['source'];
+    source: 'enriched' | 'ai-provider' | 'fallback';
     suggestions: KeywordSuggestion[];
   }>('/api/v1/keyword-suggestions', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
+}
+
+export async function enrichKeywords(payload: {
+  keywords: string[];
+  locale: string;
+}) {
+  return requestApi<{
+    enriched: KeywordEnrichedItem[];
+  }>('/api/v1/keyword-suggestions/enrich', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getKeywordSources() {
+  return requestApi<{
+    sources: Array<{
+      id: string;
+      name: string;
+      active: boolean;
+      description: string;
+    }>;
+    activeProvider: string | null;
+  }>('/api/v1/keyword-suggestions/sources');
+}
+
+// ── Search Console ──────────────────────────────────────────────
+
+export interface SearchConsoleKeyword {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface SearchConsoleKeywordsResult {
+  configured: boolean;
+  source: string;
+  siteUrl: string;
+  keywords: SearchConsoleKeyword[];
+  totals: {
+    totalClicks: number;
+    totalImpressions: number;
+    averageCtr: number;
+    averagePosition: number;
+  };
+}
+
+export interface SearchConsoleKeywordsParams {
+  siteUrl?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export async function getSearchConsoleKeywords(
+  params: SearchConsoleKeywordsParams = {}
+): Promise<SearchConsoleKeywordsResult> {
+  const searchParams = new URLSearchParams();
+
+  if (params.siteUrl) {
+    searchParams.set('siteUrl', params.siteUrl);
+  }
+
+  if (params.startDate) {
+    searchParams.set('startDate', params.startDate);
+  }
+
+  if (params.endDate) {
+    searchParams.set('endDate', params.endDate);
+  }
+
+  const queryString = searchParams.toString();
+  return requestApi<SearchConsoleKeywordsResult>(
+    `/api/v1/search-console/keywords${queryString ? `?${queryString}` : ''}`
+  );
+}
+
+// ── Lighthouse ──────────────────────────────────────────────────
+
+export interface LighthouseScores {
+  performance: number;
+  accessibility: number;
+  bestPractices: number;
+  seo: number;
+}
+
+export interface LighthouseMetrics {
+  firstContentfulPaint: number;
+  largestContentfulPaint: number;
+  totalBlockingTime: number;
+  cumulativeLayoutShift: number;
+  speedIndex: number;
+  interactive: number;
+}
+
+export interface LighthouseDiagnostic {
+  title: string;
+  description: string;
+  score: number;
+  category?: string;
+}
+
+export interface LighthouseAuditResult {
+  url: string;
+  scores: LighthouseScores;
+  metrics: LighthouseMetrics;
+  diagnostics: LighthouseDiagnostic[];
+  timestamp: string;
+}
+
+export async function getLighthouseAudit(url: string): Promise<LighthouseAuditResult> {
+  return requestApi<LighthouseAuditResult>(
+    `/api/v1/lighthouse/audit?url=${encodeURIComponent(url)}`
+  );
 }

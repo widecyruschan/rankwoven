@@ -1240,15 +1240,23 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 - 修復 WordPress 插件在站點設定頁「修改資訊」時 SaaS 後台重複新增站點的問題：API `site-connections` `create()` 改為 upsert（依正規化 `site_url` + `workspace_id` 去重，更新資訊並沿用既有 token 不重發）；新增 `PUT /api/v1/site-connections/:siteId` 路由與 `findByUrl` / `updateSiteInfo`；插件在已連接站點改用 `PUT` 更新（帶既有 token）並只在 API 回傳新 token 時覆寫本機 token；新增 migration `0005_site_url_unique.sql` 建立 `(workspace_id, platform, site_url)` 唯一索引作為資料層防線。本地 smoke 驗證：同 URL 連續 POST 兩次回傳同一 `site id` 且第二次不回傳 `apiToken`（UPSERT_OK）。
 - Docker Desktop `aieo` 專案已重建 `api` / `web` 容器載入新程式碼並通過本地 smoke check。
 - 補強去重：API Postgres `list()` 加入 `dedupeSiteConnections`；`SitesView.vue` 增加前端依正規化 URL 去重，確保站點管理每個站點只顯示一個 item；migration `0005` 改為去重時合併 `last_token_used_at` / `last_sync_at` / `last_sync_stats` 到保留列。
+- 關鍵詞資料源策略定稿：評估 DataForSEO（需最低充值 $50 USD + 手機驗證）後，決定改用**免費組合方案**（Google Search Console API + 自建 Lighthouse + AI 估算）。`KEYWORD_VOLUME_PROVIDER` 設為 `generic`（AI fallback），DataForSEO 程式碼路徑保留以便未來充值後直接切換。
+- 實現共享 Google 認證模組 `apps/api/src/googleAuth.ts`：JWT 簽名 + OAuth token 交換 + 多 scope 快取，同時服務 GA4、Search Console 和 PageSpeed Insights。
+- 實現 Search Console API 模組 `apps/api/src/searchConsole.ts`：`GET /api/v1/search-console/keywords?siteUrl=` 查詢自有網站關鍵詞點擊、曝光、CTR、平均排名。支援 URL 格式自動回退至 `sc-domain:` 域名屬性格式。`rankwoven.com` 已添加服務帳號為 Search Console 使用者，API 返回 `source: "search-console"`（新網站目前 0 個關鍵詞，隨流量增長將自動出現）。
+- 實現 Lighthouse 模組 `apps/api/src/lighthouse.ts`：`GET /api/v1/lighthouse/audit?url=&strategy=` 雙通道設計—優先 PageSpeed Insights API，配額耗盡或 429 時自動回退本地 Chromium CLI。Dockerfile 新增 Chromium 支援。`rankwoven.com` 審計結果：perf=51, a11y=96, seo=83, bp=96。
+- 重構 `apps/api/src/analytics.ts`：GA4 認證邏輯抽取至 `googleAuth.ts`，消除重複 JWT 實作。
+- 清理 `.env.example` 格式問題（移除洩露的服務帳號私鑰），修正 `KEYWORD_VOLUME_PROVIDER` 預設值為 `generic`。
+- **WENWEN_API_KEY 生產部署與多模型驗證**：在生產 `.env` 修復 `WENWEN_API_KEY` `sk-` 前綴並設定 `WENWEN_TEXT_MODEL=gpt-4o-mini`。通過 Wenwen 代理 (`https://breakout.wenwen-ai.com`) 驗證 OpenAI `gpt-4o-mini`、Google `gemini-2.5-flash`、Google `gemini-2.5-pro` 三個模型對基本 JSON 物件、巢狀 SEO Schema、JSON 陣列均可產生可解析 JSON（9/9 全部通過）。DeepSeek 模型當前無可用渠道。撰寫 `scripts/test-ai-models.mjs` 多模型 JSON 驗證腳本。
+- **全量 CI/CD 檢查通過**：執行 lint (0 errors 0 warnings)、test (35 passed 1 skipped)、build (vue-tsc + vite + tsc)、security audit (0 vulnerabilities)、PostgreSQL migration (0005 applied)、WordPress PHP 語法檢查 (no errors)、Docker Desktop 重建 (5 containers healthy)。修復類型錯誤（`VitalsRow`、`ColumnType`、`@/` 別名）、lint 警告（`vue/attribute-hyphenation`、`vue/attributes-order`）、測試期望值、重建損壞的 `SearchConsolePanel.vue`。
 
 ### 待辦（按優先順序）
 1. 生產部署完成後確認 SaaS 後台重複站點已消失；若仍有殘留，手動執行或確認 migration `0005` 已套用並清理重複。
 2. 在生產 `.env` 或 GitHub Secrets 填入 Google 服務帳號憑據，並於客戶 WordPress 插件錄入各站點 GA4 Property ID；確認服務帳號已授權讀取對應 GA4 Property。
-3. 為關鍵詞建議配置正式搜尋量/難度資料源（GSC、DataForSEO、Ahrefs、Semrush 等），以真實請求驗證 `source`、月搜尋量、CPC、競爭度。
-4. 在生產 Secrets 填入正式 `WENWEN_API_KEY`，確認 OpenAI / Gemini / DeepSeek 代理模型可產生可解析 JSON（不得輸出完整 Key）。
-5. 收斂 Repository 啟動時的 `CREATE TABLE IF NOT EXISTS` 至僅測試/開發兜底；對插件跑 `php -l`。
-6. 為 Worker 死信任務補管理後台重跑 / 忽略 / 批量導出 / 告警入口。
-7. 將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值。
-8. 任務隊列補站點 / 類型篩選與可配置自動刷新。
-9. 生產 Web 容器改為正式靜態構建部署，避免 Vite dev server 對外。
-10. 部署文件補資料庫備份恢復演練與回滾清單；為 `/app/apply` 增加差異對比視圖與批量勾選。
+3. 前端接入 Search Console 關鍵詞面板：在站點儀表板或文章詳情頁展示 GSC 關鍵詞數據（點擊、曝光、CTR、排名），並在關鍵詞建議頁標註哪些詞已有真實 GSC 表現。
+4. 前端接入 Lighthouse 審計面板：在站點儀表板或審計頁展示頁面效能、無障礙、SEO 和最佳實踐四維度分數，並列出 Core Web Vitals（LCP、CLS、TBT、FCP、SI）及診斷建議。
+5. 為 Worker 死信任務補管理後台重跑 / 忽略 / 批量導出 / 告警入口。
+6. 將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值。
+7. 任務隊列補站點 / 類型篩選與可配置自動刷新。
+8. 生產 Web 容器改為正式靜態構建部署，避免 Vite dev server 對外。
+9. 部署文件補資料庫備份恢復演練與回滾清單；為 `/app/apply` 增加差異對比視圖與批量勾選。
+10. 如後續需要精確關鍵詞搜尋量/CPC/競爭度，可充值 DataForSEO 後將 `KEYWORD_VOLUME_PROVIDER` 切回 `dataforseo`，現有程式碼無需改動即可啟用。

@@ -1,8 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { createSign, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { requireAuth, type AuthService } from './auth';
+import { readGoogleCredentials, requestGoogleAccessToken } from './googleAuth';
 import type { SiteConnectionRepository } from './siteConnections';
 
 export interface AnalyticsOverview {
@@ -48,11 +47,6 @@ interface AnalyticsOverviewOptions {
   endDate?: string;
 }
 
-interface GoogleServiceAccountCredentials {
-  client_email: string;
-  private_key: string;
-}
-
 interface GoogleAnalyticsRow {
   dimensionValues?: Array<{ value?: string }>;
   metricValues?: Array<{ value?: string }>;
@@ -63,7 +57,6 @@ interface GoogleAnalyticsReport {
 }
 
 const googleAnalyticsScope = 'https://www.googleapis.com/auth/analytics.readonly';
-const googleTokenUrl = 'https://oauth2.googleapis.com/token';
 const googleAnalyticsDataUrl = 'https://analyticsdata.googleapis.com/v1beta';
 const analyticsOverviewQuerySchema = z.object({
   siteId: z.string().uuid().optional(),
@@ -164,79 +157,7 @@ function createHostNameFilter(siteHost?: string) {
   };
 }
 
-function base64UrlEncode(value: Buffer | string) {
-  return Buffer.from(value).toString('base64url');
-}
 
-async function readGoogleCredentials(credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  const inlineCredentials =
-    process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ??
-    (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64
-      ? Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8')
-      : '');
-  if (inlineCredentials) {
-    return parseGoogleCredentials(inlineCredentials);
-  }
-
-  if (!credentialsPath) {
-    return null;
-  }
-
-  const rawValue = await readFile(credentialsPath, 'utf8');
-  return parseGoogleCredentials(rawValue);
-}
-
-function parseGoogleCredentials(rawValue: string) {
-  const credentials = JSON.parse(rawValue) as Partial<GoogleServiceAccountCredentials>;
-
-  if (!credentials.client_email || !credentials.private_key) {
-    return null;
-  }
-
-  return {
-    client_email: credentials.client_email,
-    private_key: credentials.private_key
-  };
-}
-
-function createServiceAccountJwt(credentials: GoogleServiceAccountCredentials) {
-  const issuedAtSeconds = Math.floor(Date.now() / 1000);
-  const header = base64UrlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = base64UrlEncode(
-    JSON.stringify({
-      iss: credentials.client_email,
-      scope: googleAnalyticsScope,
-      aud: googleTokenUrl,
-      exp: issuedAtSeconds + 3600,
-      iat: issuedAtSeconds,
-      jti: randomUUID()
-    })
-  );
-  const unsignedToken = `${header}.${payload}`;
-  const signature = createSign('RSA-SHA256').update(unsignedToken).sign(credentials.private_key, 'base64url');
-
-  return `${unsignedToken}.${signature}`;
-}
-
-async function requestGoogleAccessToken(credentials: GoogleServiceAccountCredentials) {
-  const response = await fetch(googleTokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: createServiceAccountJwt(credentials)
-    })
-  });
-  const body = (await response.json()) as { access_token?: string };
-
-  if (!response.ok || !body.access_token) {
-    throw new Error('Google Analytics access token request failed');
-  }
-
-  return body.access_token;
-}
 
 async function runGoogleAnalyticsReport(
   propertyId: string,
@@ -278,7 +199,7 @@ export function createGoogleAnalyticsService(): AnalyticsService {
           return createDemoOverview(propertyId, { ...options, startDate, endDate });
         }
 
-        const accessToken = await requestGoogleAccessToken(credentials);
+        const accessToken = await requestGoogleAccessToken(credentials, googleAnalyticsScope);
         const [dailyReport, channelReport, pageReport] = await Promise.all([
           runGoogleAnalyticsReport(propertyId, accessToken, {
             dateRanges: [{ startDate, endDate }],

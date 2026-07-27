@@ -869,3 +869,45 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：`apps/api/src/siteConnections.ts`、`apps/web/src/views/SitesView.vue`、`db/migrations/0005_site_url_unique.sql`、`docs/seo-ai-platform-prd.md`、本 README。
 - 驗證結果：`lint` / `test` / `build` / `security:audit` 全過；Docker 本地 API/Web 200。
 - 下一步行動清單：推送後確認生產 migration `0005` 執行成功、SaaS 後台重複站點消失；持續監控 WordPress 插件更新是否仍會新增重複。
+
+### 2026-07-27（五）：生產 WENWEN_API_KEY 設定與多模型 JSON 驗證
+
+- 會話的主要目的：在生產 Secrets 填入正式 `WENWEN_API_KEY`，確認 OpenAI、Google Gemini 和 DeepSeek 代理模型均可產生可解析 JSON；測試時不得輸出完整 API Key。
+- 完成的主要任務：
+  1. 生產 VPS `.env` 修復：`WENWEN_API_KEY` 補 `sk-` 前綴（51 chars），`WENWEN_TEXT_MODEL` 從不可用的 `gpt-4.1-mini` 改為 `gpt-4o-mini`，`docker compose up -d --force-recreate api` 載入新配置。容器內驗證 Key 正確載入，未輸出完整 Key。
+  2. 撰寫 `scripts/test-ai-models.mjs` 多模型 JSON 驗證腳本：透過 Wenwen 代理測試 3 個模型 × 3 種 JSON 複雜度（基本物件、巢狀 SEO Schema、陣列），共 9/9 全部通過：
+     - OpenAI `gpt-4o-mini` ✓ (3/3)
+     - Google `gemini-2.5-flash` ✓ (3/3)
+     - Google `gemini-2.5-pro` ✓ (3/3, 自動剝離 markdown 包裝後解析成功)
+  3. DeepSeek 模型（`deepseek-chat`/`deepseek-v3`/`deepseek-r1`/`deepseek-reasoner`）當前在此 Wenwen 代理上無可用渠道，需聯繫管理員開通。
+  4. 預設模型配置更新：`apps/api/src/config.ts`、`.env.example`、本地 `.env`、生產 `.env` 同步改為 `WENWEN_TEXT_MODEL=gpt-4o-mini`。
+- 關鍵決策和解決方案：測試腳本僅輸出 Key 前綴 `sk-PEKBG...`，不暴露完整 Key；`python3` 替代 `jq` 解析 JSON；Gemini 模型有時會用 markdown 包裝 JSON，腳本自動剝離 ` ```json ``` ` 後再解析。
+- 使用的技術棧：Node.js (mjs)、Wenwen API Proxy、SSH、Docker Compose (VPS)、Python3 (JSON parsing)。
+- 新增或修改文件：新增 `scripts/test-ai-models.mjs`；修改 `apps/api/src/config.ts`、`.env.example`、`.env`（本地）、生產 `/docker/rankwoven/.env`。
+- 驗證結果：9/9 模型 × JSON 組合全部解析成功；生產 `https://api.rankwoven.com/health` 正常；容器內 `WENWEN_API_KEY` 確認為 51 字符。
+- 下一步行動清單：聯繫 Wenwen 管理員開通 DeepSeek 渠道；執行全量 lint/test/build/security:audit 確認整體健康。
+
+### 2026-07-27（六）：全量 CI/CD 檢查 — Lint / Test / Build / Security Audit / Migration / PHP / Docker
+
+- 會話的主要目的：執行全量 lint、test、build、security:audit、PostgreSQL migration、WordPress 插件 PHP 語法檢查和 Docker Desktop 重建。
+- 完成的主要任務：
+  1. **Lint** (ESLint `.ts,.vue --max-warnings 0`)：修復 48+ 錯誤至 **0 errors, 0 warnings**。主要修復類型：`no-unused-vars`（移除 `Tabs`/`Tag`/`TabsProps`/`ColumnType` 未使用導入）、`vue/attribute-hyphenation`（`v-model:activeKey` 添加 eslint-disable 註釋，Ant Design Vue 要求 camelCase）、`vue/attributes-order`（`v-if` 放最前）、`etc/no-throw-literal`（改用 `new Error()` 包裝）。
+  2. **Test** (API/Web/Worker/AI/CMS)：**35 passed, 1 skipped, 0 failed**。修復 4 個因新架構導致的測試期望值：`source` 改為 `'enriched'|'fallback'`、`monthlySearchVolume` 改為 `difficulty`、`sourceTrace` 精確匹配、添加 `KEYWORD_VOLUME_PROVIDER` 設定。
+  3. **Build** (vue-tsc + vite + tsc)：修復 25+ TypeScript 錯誤至全部通過：
+     - `VitalsRow` 介面補 `statusTag?`/`statusColor?` 可選欄位
+     - `ColumnType` 改為 inferred type
+     - `v-model:active-key` → `v-model:activeKey`（Ant Design Vue 正確語法）
+     - `tsconfig.json` 補 `paths: { "@/*": ["./src/*"] }`
+     - `vite.config.ts` 補 `resolve.alias: { '@': fileURLToPath(...) }`
+     - `diagnosticsByCategory` 迭代改用 `diagnosticEntries` (entries 陣列)
+     - `getSearchConsoleKeywords()` 參數改為物件格式
+  4. **Security Audit**：`npm audit` 返回 0 vulnerabilities。
+  5. **PostgreSQL Migration**：`db:migrate` 正常套用，5 個 migration 全部已執行。
+  6. **WordPress PHP 語法**：`docker run --rm -v php:8.2-cli php -l` 無語法錯誤。
+  7. **Docker Desktop 重建**：5 個容器（api/web/worker/postgres/redis）全部 healthy，`localhost:3011/health` 返回 200。
+  8. **文件修復**：`SearchConsolePanel.vue` 被 `sed -i` 損壞後根據原始碼重建。
+- 關鍵決策和解決方案：`vue/attribute-hyphenation` 使用 `<!-- eslint-disable -->` 而非強制轉 `active-key`，因 Ant Design Vue 組件內部使用 camelCase props；TypeScript `@/` 別名需同時在 `tsconfig.json` (paths for vue-tsc) 和 `vite.config.ts` (resolve.alias for Vite) 配置；vitest 超時問題需要在 vitest.config 正確設定 `test.testTimeout`。
+- 使用的技術棧：ESLint 9 + Vue ESLint Plugin、Vitest、vue-tsc、Vite、TypeScript、PostgreSQL 16、Docker Compose、PHP 8.2 CLI。
+- 新增或修改文件：19 個文件修改 (+2128/-585)：`apps/api/src/config.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/api/tests/health.test.ts`、`apps/web/src/views/DashboardView.vue`、`apps/web/src/views/KeywordSuggestionsView.vue`、`apps/web/src/components/SearchConsolePanel.vue`、`apps/web/src/components/LighthousePanel.vue`、`apps/web/src/api/appInsights.ts`、`apps/web/src/i18n.ts`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json`、`eslint.config.js`、`Dockerfile`、`.env.example`、`.env`、`docker-compose.yml` 等。
+- 驗證結果：6 大檢查項全部通過（見上方），Docker Desktop 5 容器 healthy。
+- 下一步行動清單：部署更新到 Docker Desktop；推送至 GitHub `main` 分支觸發生產部署；更新 PRD 下一步清單；將生產 Web 容器改為靜態構建部署（待辦 #8）；開始前端 GSC 和 Lighthouse 面板接入（待辦 #3、#4）。

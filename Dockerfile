@@ -2,6 +2,12 @@ FROM node:22-alpine
 
 WORKDIR /workspace
 
+RUN apk add --no-cache chromium
+
+ENV CHROME_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV CHROMIUM_FLAGS="--headless --no-sandbox --disable-gpu --disable-dev-shm-usage"
+
 COPY package.json package-lock.json* ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/api/package.json apps/api/package.json

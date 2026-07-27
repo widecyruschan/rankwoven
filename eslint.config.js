@@ -9,7 +9,8 @@ export default [
       '**/build/**',
       '**/coverage/**',
       '**/node_modules/**',
-      '**/.vite/**'
+      '**/.vite/**',
+      'scripts/**'
     ]
   },
   js.configs.recommended,

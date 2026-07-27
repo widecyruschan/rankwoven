@@ -183,6 +183,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/app/lighthouse',
+    name: 'AppLighthouse',
+    component: () => import('../views/AuditView.vue'),
+    meta: {
+      titleKey: 'nav.lighthouse',
+      layout: 'app',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/admin',
     name: 'AdminOverview',
     component: () => import('../views/AdminOverviewView.vue'),

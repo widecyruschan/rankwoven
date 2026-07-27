@@ -8,6 +8,7 @@ import {
   CheckCheck,
   CreditCard,
   FileSearch,
+  Gauge,
   Image,
   LayoutDashboard,
   Link2,
@@ -53,6 +54,7 @@ const appNavigationItems = [
   { to: '/app/links', labelKey: 'nav.links', icon: Link2 },
   { to: '/app/tasks', labelKey: 'nav.tasks', icon: ListChecks },
   { to: '/app/cms-adapters', labelKey: 'nav.cmsAdapters', icon: PlugZap },
+  { to: '/app/lighthouse', labelKey: 'nav.lighthouse', icon: Gauge },
   { to: '/app/settings', labelKey: 'nav.settings', icon: Settings }
 ];
 

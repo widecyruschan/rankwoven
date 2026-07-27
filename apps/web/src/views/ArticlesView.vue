@@ -10,6 +10,7 @@ import {
   type SiteConnection,
   type SyncedArticle
 } from '../api/siteConnections';
+import SearchConsolePanel from '@/components/SearchConsolePanel.vue';
 
 const { t } = useI18n();
 
@@ -34,6 +35,10 @@ const siteOptions = computed(() =>
     label: site.name,
     value: site.id
   }))
+);
+
+const selectedSite = computed(() =>
+  sites.value.find((s) => s.id === selectedSiteId.value)
 );
 
 const statusOptions = computed(() => [
@@ -274,5 +279,13 @@ watch(statusFilter, () => {
         <dd>{{ formatDate(selectedArticle.updatedAt) }}</dd>
       </dl>
     </a-modal>
+
+    <!-- GSC Keywords for selected site -->
+    <SearchConsolePanel
+      v-if="selectedSiteId"
+      :key="selectedSiteId"
+      :site-url="selectedSite?.siteUrl"
+      :compact="true"
+    />
   </section>
 </template>
