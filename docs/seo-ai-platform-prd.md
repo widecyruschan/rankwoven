@@ -1236,6 +1236,8 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 ### 已完成（最近一次收尾：2026-07-27 晚間）
 - **生產環境重複站點驗證**：確認 migration `0005` 在生產 PostgreSQL 已套用，唯一索引 `uq_site_connections_workspace_platform_url` 存在，`site_connections` 表查詢 0 個重複記錄。目前生產尚無連接站點，無需清理殘留資料。
 - **Google 服務帳號憑據驗證**：生產 `.env` 中 `GOOGLE_APPLICATION_CREDENTIALS_JSON` 已設定（service account: `rankwoven-ga4-reader@gtm-nfhhng6d-nmi4m.iam.gserviceaccount.com`，1831 chars）。在生產 API 容器內測試 OAuth token 交換成功；Analytics Data API (`analyticsdata.googleapis.com`) 已啟用；Search Console API 已啟用且服務帳號擁有 `rankwoven.com`、`sc-domain:rankwoven.com`、`http://gsc.rankwoven.com/` 的 `siteFullUser` 權限。WordPress 插件 (`rankwoven-seo.php`) 已完整支援 GA4 Property ID 收集（設定頁 `OPTION_GA4_PROPERTY_ID`）、同步至 SaaS（`sync_analytics_settings_to_saas`）及連接時發送（`googleAnalyticsPropertyId` 欄位）。編寫 `scripts/test-google-auth.mjs` 多服務 API 測試腳本。
+- **前端接入 Search Console 關鍵詞面板**：在 Dashboard Overview 分頁新增 GSC 摘要卡片（總點擊、總曝光、平均 CTR、平均排名、Top 3 關鍵詞點擊量條形圖）。`SearchConsolePanel.vue` 增加關鍵詞搜尋篩選（含過濾計數器）、Top 5 關鍵詞點擊量條形圖（CSS 漸層橫條）、篩選後統計自動更新。`KeywordSuggestionsView.vue` enrich 流程合併 `gscData` 並新增 GSC 匹配摘要提示（`gscAlerts` i18n）。Dashboard Overview 分頁無站點時顯示提示，有站點時自動載入 GSC + Lighthouse 數據。
+- **前端接入 Lighthouse 審計面板**：Dashboard Overview 分頁新增 Lighthouse 摘要卡片（效能/無障礙/最佳實踐/SEO 四維度 SVG 環形儀表）。`LighthousePanel.vue` 新增 `siteUrl` prop 監聽自動填入審計 URL、compact 模式細化（縮小儀表環、隱藏診斷、縮小 Vitals 網格）、快速審計按鈕。`AuditView.vue` 獨立審計頁使用全尺寸面板。Dashboard 各分頁的站點選擇器統一顯示。
 - 配置 Hostinger MCP（hosting / domains / dns / billing / reach / vps 六個 server，Token 置於使用者級 `~/.codebuddy/mcp.json`，不進倉庫）。
 - 提交並推送 site connections 同步、SEO 優化、Tasks / ApplySuggestions UI、auth、i18n（feat）與 WordPress `TESTING.md`、rankwoven-dev 技能、部署文件（docs）至 `main`，觸發 GitHub Actions 生產部署。
 - 通過 `lint` / `test` / `build`（含 API `tsc` 型別檢查）/ `security:audit`，`https://api.rankwoven.com/health` 基線正常。
@@ -1252,11 +1254,9 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 - **全量 CI/CD 檢查通過**：執行 lint (0 errors 0 warnings)、test (35 passed 1 skipped)、build (vue-tsc + vite + tsc)、security audit (0 vulnerabilities)、PostgreSQL migration (0005 applied)、WordPress PHP 語法檢查 (no errors)、Docker Desktop 重建 (5 containers healthy)。修復類型錯誤（`VitalsRow`、`ColumnType`、`@/` 別名）、lint 警告（`vue/attribute-hyphenation`、`vue/attributes-order`）、測試期望值、重建損壞的 `SearchConsolePanel.vue`。
 
 ### 待辦（按優先順序）
-1. 前端接入 Search Console 關鍵詞面板：在站點儀表板或文章詳情頁展示 GSC 關鍵詞數據（點擊、曝光、CTR、排名），並在關鍵詞建議頁標註哪些詞已有真實 GSC 表現。
-2. 前端接入 Lighthouse 審計面板：在站點儀表板或審計頁展示頁面效能、無障礙、SEO 和最佳實踐四維度分數，並列出 Core Web Vitals（LCP、CLS、TBT、FCP、SI）及診斷建議。
-3. 為 Worker 死信任務補管理後台重跑 / 忽略 / 批量導出 / 告警入口。
-4. 將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值。
-5. 任務隊列補站點 / 類型篩選與可配置自動刷新。
-6. 生產 Web 容器改為正式靜態構建部署，避免 Vite dev server 對外。
-7. 部署文件補資料庫備份恢復演練與回滾清單；為 `/app/apply` 增加差異對比視圖與批量勾選。
-8. 如後續需要精確關鍵詞搜尋量/CPC/競爭度，可充值 DataForSEO 後將 `KEYWORD_VOLUME_PROVIDER` 切回 `dataforseo`，現有程式碼無需改動即可啟用。
+1. 為 Worker 死信任務補管理後台重跑 / 忽略 / 批量導出 / 告警入口。
+2. 將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值。
+3. 任務隊列補站點 / 類型篩選與可配置自動刷新。
+4. 生產 Web 容器改為正式靜態構建部署，避免 Vite dev server 對外。
+5. 部署文件補資料庫備份恢復演練與回滾清單；為 `/app/apply` 增加差異對比視圖與批量勾選。
+6. 如後續需要精確關鍵詞搜尋量/CPC/競爭度，可充值 DataForSEO 後將 `KEYWORD_VOLUME_PROVIDER` 切回 `dataforseo`，現有程式碼無需改動即可啟用。

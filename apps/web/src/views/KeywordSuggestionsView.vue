@@ -28,7 +28,9 @@ const loading = ref(false);
 const errorMsg = ref('');
 const enriching = ref(false);
 const enrichmentMsg = ref('');
+const enrichmentType = ref<'success' | 'info' | 'warning' | 'error'>('info');
 const expandedTrace = ref<string | null>(null);
+const gscMatchedCount = ref(0);
 
 const locale = computed(() => i18nLocale.value || 'zh-Hant');
 
@@ -127,6 +129,8 @@ async function enrichAll() {
 
   enriching.value = true;
   enrichmentMsg.value = '';
+  enrichmentType.value = 'info';
+  gscMatchedCount.value = 0;
 
   try {
     const result = await enrichKeywords({
@@ -134,7 +138,7 @@ async function enrichAll() {
       locale: locale.value
     });
 
-    const enrichedCount = result.enriched.filter((e) => e.found).length;
+    let gscCount = 0;
 
     // Merge enriched metrics back into suggestions
     suggestions.value = suggestions.value.map((s) => {
@@ -142,6 +146,10 @@ async function enrichAll() {
         (e) => e.keyword.toLowerCase() === s.keyword.toLowerCase()
       );
       if (enriched?.found) {
+        // Merge GSC data if available
+        if (enriched.gscData) {
+          gscCount++;
+        }
         return {
           ...s,
           monthlySearchVolume:
@@ -149,6 +157,7 @@ async function enrichAll() {
           cpcUsd: enriched.cpcUsd ?? s.cpcUsd,
           competition: enriched.competition ?? s.competition,
           source: (enriched.source as KeywordSuggestion['source']) ?? s.source,
+          gscData: enriched.gscData ?? s.gscData,
           sourceTrace: {
             ...s.sourceTrace,
             volume: (enriched.source as KeywordSuggestion['sourceTrace']['volume']) ?? s.sourceTrace.volume,
@@ -162,15 +171,21 @@ async function enrichAll() {
       return s;
     });
 
+    gscMatchedCount.value = gscCount;
+    const enrichedCount = result.enriched.filter((e) => e.found).length;
+
     if (enrichedCount > 0) {
       enrichmentMsg.value = t('keywords.enrichmentSuccess');
       resultSource.value = 'enriched';
+      enrichmentType.value = 'success';
     } else {
       enrichmentMsg.value = t('keywords.enrichmentEmpty');
+      enrichmentType.value = 'warning';
     }
   } catch (err: unknown) {
     enrichmentMsg.value =
       err instanceof Error ? err.message : t('keywords.enrichmentFailed');
+    enrichmentType.value = 'error';
   } finally {
     enriching.value = false;
   }
@@ -311,13 +326,27 @@ const resultMeta = computed(() => {
     <!-- Enrichment status -->
     <a-alert
       v-if="enrichmentMsg"
-      :type="enrichmentMsg.includes(t('keywords.enrichmentSuccess')) ? 'success' : 'info'"
+      :type="enrichmentType"
       :message="enrichmentMsg"
       show-icon
       closable
       style="margin-top: 12px"
       @close="enrichmentMsg = ''"
     />
+
+    <!-- GSC enrichment summary -->
+    <a-alert
+      v-if="gscMatchedCount > 0"
+      type="success"
+      show-icon
+      closable
+      style="margin-top: 8px"
+      @close="gscMatchedCount = 0"
+    >
+      <template #message>
+        {{ t('keywords.gscAlerts', { matched: gscMatchedCount, total: suggestions.length }) }}
+      </template>
+    </a-alert>
 
     <!-- Result header -->
     <div v-if="suggestions.length > 0" class="result-header">

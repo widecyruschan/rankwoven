@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Alert, Button, Card, Collapse, Empty, Input, Spin, Tag } from 'ant-design-vue';
+import { Zap } from 'lucide-vue-next';
 import {
   getLighthouseAudit,
   type LighthouseAuditResult,
@@ -10,7 +11,7 @@ import {
 
 const { t } = useI18n();
 
-defineProps<{
+const props = defineProps<{
   siteUrl?: string;
   compact?: boolean;
 }>();
@@ -20,6 +21,23 @@ const error = ref<string | null>(null);
 const data = ref<LighthouseAuditResult | null>(null);
 const auditUrl = ref('');
 const activeDiagnostics = ref<string[]>([]);
+
+// ── Auto-fill URL when siteUrl prop changes ─────────────────────
+watch(
+  () => props.siteUrl,
+  (newUrl) => {
+    if (newUrl && !auditUrl.value) {
+      auditUrl.value = newUrl.replace(/\/+$/, '');
+    }
+  },
+  { immediate: true }
+);
+
+onMounted(() => {
+  if (props.siteUrl && !auditUrl.value) {
+    auditUrl.value = props.siteUrl.replace(/\/+$/, '');
+  }
+});
 
 // ── Score helpers ────────────────────────────────────────────────
 
@@ -214,7 +232,7 @@ function ringOffset(score: number): number {
 </script>
 
 <template>
-  <Card :title="t('lighthouse.title')" class="lighthouse-panel">
+  <Card :title="t('lighthouse.title')" class="lighthouse-panel" :class="{ 'lh--compact': compact }">
     <Spin :spinning="loading" :tip="t('lighthouse.running')">
       <!-- URL input bar (aitdk-inspired compact toolbar) -->
       <div class="audit-toolbar">
@@ -226,6 +244,15 @@ function ringOffset(score: number): number {
         />
         <Button type="primary" :loading="loading" @click="runAudit">
           {{ loading ? t('lighthouse.running') : t('lighthouse.runAudit') }}
+        </Button>
+        <Button
+          v-if="siteUrl && !data && !loading"
+          size="small"
+          class="quick-audit-btn"
+          @click="runAudit"
+        >
+          <Zap :size="14" />
+          {{ compact ? '' : t('lighthouse.quickAudit') }}
         </Button>
       </div>
 
@@ -261,7 +288,7 @@ function ringOffset(score: number): number {
             :key="card.key"
             class="gauge-card"
           >
-            <div class="gauge-ring">
+            <div class="gauge-ring" :class="{ 'gauge-ring--compact': compact }">
               <svg viewBox="0 0 100 100" class="gauge-svg">
                 <circle
                   cx="50" cy="50"
@@ -283,12 +310,12 @@ function ringOffset(score: number): number {
                   class="gauge-arc"
                 />
               </svg>
-              <span class="gauge-value" :style="{ color: scoreColor(card.value) }">
+              <span class="gauge-value" :class="{ 'gauge-value--compact': compact }" :style="{ color: scoreColor(card.value) }">
                 {{ card.value }}
               </span>
             </div>
-            <div class="gauge-label">{{ card.label }}</div>
-            <Tag :color="scoreLabelColor(card.value)" class="gauge-status">
+            <div class="gauge-label" :class="{ 'gauge-label--compact': compact }">{{ card.label }}</div>
+            <Tag v-if="!compact" :color="scoreLabelColor(card.value)" class="gauge-status">
               {{ scoreLabel(card.value) }}
             </Tag>
           </div>
@@ -297,11 +324,12 @@ function ringOffset(score: number): number {
         <!-- Core Web Vitals -->
         <div v-if="vitalsRows.length > 0" class="vitals-section">
           <h3 class="section-title">{{ t('lighthouse.coreWebVitals') }}</h3>
-          <div class="vitals-grid">
+          <div class="vitals-grid" :class="{ 'vitals-grid--compact': compact }">
             <div
               v-for="row in vitalsRows"
               :key="row.key"
               class="vital-item"
+              :class="{ 'vital-item--compact': compact }"
             >
               <div class="vital-header">
                 <span class="vital-name">{{ row.label }}</span>
@@ -309,16 +337,22 @@ function ringOffset(score: number): number {
                   {{ row.statusTag }}
                 </Tag>
               </div>
-              <div class="vital-value" :class="`vital--${row.status}`">
+              <div
+                class="vital-value"
+                :class="[
+                  { 'vital-value--compact': compact },
+                  `vital--${row.status}`
+                ]"
+              >
                 {{ row.value }}
               </div>
-              <div class="vital-desc">{{ row.desc }}</div>
+              <div v-if="!compact" class="vital-desc">{{ row.desc }}</div>
             </div>
           </div>
         </div>
 
-        <!-- Diagnostics -->
-        <div v-if="data.diagnostics.length > 0" class="diagnostics-section">
+        <!-- Diagnostics (hidden in compact mode) -->
+        <div v-if="!compact && data.diagnostics.length > 0" class="diagnostics-section">
           <h3 class="section-title">{{ t('lighthouse.diagnostics') }}</h3>
           <!-- eslint-disable vue/attribute-hyphenation -->
           <Collapse
@@ -627,5 +661,58 @@ function ringOffset(score: number): number {
   .vitals-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Quick audit button ───────────────────────────────────────── */
+
+.quick-audit-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #1677ff;
+  border-color: #1677ff20;
+  background: #1677ff08;
+}
+
+/* ── Compact mode ─────────────────────────────────────────────── */
+
+.lh--compact .score-gauges {
+  gap: 12px;
+  padding: 16px 0;
+  margin-top: 12px;
+}
+
+.gauge-ring--compact {
+  width: 60px;
+  height: 60px;
+}
+
+.gauge-value--compact {
+  font-size: 18px;
+}
+
+.gauge-label--compact {
+  font-size: 11px;
+}
+
+.vitals-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.vital-item--compact {
+  padding: 10px 12px;
+  gap: 4px;
+}
+
+.vital-value--compact {
+  font-size: 18px;
+}
+
+.lh--compact .vitals-section {
+  margin-top: 16px;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 </style>

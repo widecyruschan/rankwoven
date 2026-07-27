@@ -274,7 +274,22 @@ const messages = {
       priorityImage: 'Add alt text for 18 images',
       priorityLinks: 'Review 12 internal link opportunities',
       overview: 'Overview',
-      noSitesConnected: 'Connect a WordPress site to unlock GSC keywords and Lighthouse audits.'
+      noSitesConnected: 'Connect a WordPress site to unlock GSC keywords and Lighthouse audits.',
+      gscSummary: 'Search Console',
+      gscSummaryHint: 'Top keywords from Google Search Console',
+      gscTotalClicks: 'Total clicks',
+      gscTotalImpr: 'Total impressions',
+      gscAvgCtr: 'Avg. CTR',
+      gscAvgPosition: 'Avg. position',
+      gscNoData: 'No Search Console data yet',
+      lighthouseSummary: 'Lighthouse',
+      lighthouseSummaryHint: 'Page quality scores',
+      lighthouseNoData: 'No audit data yet',
+      viewFullReport: 'View full report',
+      performance: 'Perf',
+      accessibility: 'A11y',
+      bestPractices: 'BP',
+      selectSitePrompt: 'Select a site to view SEO insights'
     },
     analytics: {
       title: 'Google Analytics',
@@ -317,7 +332,8 @@ const messages = {
       gscBadge: 'Real data',
       gscBadgeTooltip: 'This keyword has real Google Search Console performance data',
       siteLabel: 'Site',
-      emptyState: 'No keywords returned from Search Console for the selected period. The site may be new or have very low search volume.'
+      emptyState: 'No keywords returned from Search Console for the selected period. The site may be new or have very low search volume.',
+      last28Days: 'Last 28 days'
     },
     lighthouse: {
       title: 'Lighthouse Audit',
@@ -355,7 +371,8 @@ const messages = {
       severityPass: 'Good',
       categoryAll: 'All categories',
       errorNoUrl: 'Please enter a valid URL',
-      allPassed: 'All checks passed'
+      allPassed: 'All checks passed',
+      quickAudit: 'Quick audit'
     },
     keywords: {
       title: 'Keyword Suggestions',
@@ -407,7 +424,9 @@ const messages = {
       intentLocal: 'Local',
       difficultyLow: 'Low',
       difficultyMedium: 'Medium',
-      difficultyHigh: 'High'
+      difficultyHigh: 'High',
+      gscAlerts: '{matched} of {total} keywords have real Search Console data',
+      topKeywordsByClicks: 'Top keywords by clicks'
     },
     sites: {
       title: 'Site Management',
@@ -990,7 +1009,22 @@ const messages = {
       priorityImage: '補齊 18 張圖片 Alt Text',
       priorityLinks: '審核 12 個內部連結機會',
       overview: '總覽',
-      noSitesConnected: '連接 WordPress 站點以解鎖 GSC 關鍵詞與 Lighthouse 審計功能。'
+      noSitesConnected: '連接 WordPress 站點以解鎖 GSC 關鍵詞與 Lighthouse 審計功能。',
+      gscSummary: 'Search Console',
+      gscSummaryHint: '來自 Google Search Console 的熱門關鍵詞',
+      gscTotalClicks: '總點擊',
+      gscTotalImpr: '總曝光',
+      gscAvgCtr: '平均 CTR',
+      gscAvgPosition: '平均排名',
+      gscNoData: '尚無 Search Console 數據',
+      lighthouseSummary: 'Lighthouse',
+      lighthouseSummaryHint: '頁面品質分數',
+      lighthouseNoData: '尚無審計數據',
+      viewFullReport: '檢視完整報告',
+      performance: '效能',
+      accessibility: '無障礙',
+      bestPractices: '最佳實踐',
+      selectSitePrompt: '選擇站點以檢視 SEO 洞察'
     },
     analytics: {
       title: 'Google Analytics',
@@ -1032,7 +1066,8 @@ const messages = {
       gscBadge: '真實數據',
       gscBadgeTooltip: '此關鍵詞已有 Google Search Console 真實表現數據',
       siteLabel: '站點',
-      emptyState: 'Search Console 在選定期間內未返回關鍵詞數據。站點可能為新建或搜尋流量極低。'
+      emptyState: 'Search Console 在選定期間內未返回關鍵詞數據。站點可能為新建或搜尋流量極低。',
+      last28Days: '最近 28 天'
     },
     lighthouse: {
       title: 'Lighthouse 審計',
@@ -1070,7 +1105,8 @@ const messages = {
       severityPass: '良好',
       categoryAll: '全部分類',
       errorNoUrl: '請輸入有效的網址',
-      allPassed: '全部檢查通過'
+      allPassed: '全部檢查通過',
+      quickAudit: '快速審計'
     },
     keywords: {
       title: '關鍵詞建議',
@@ -1122,7 +1158,9 @@ const messages = {
       intentLocal: '本地搜尋',
       difficultyLow: '低',
       difficultyMedium: '中',
-      difficultyHigh: '高'
+      difficultyHigh: '高',
+      gscAlerts: '{matched}/{total} 個關鍵詞已有 Search Console 真實數據',
+      topKeywordsByClicks: '點擊量最高關鍵詞'
     },
     sites: {
       title: '站點管理',

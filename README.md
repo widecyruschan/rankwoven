@@ -934,3 +934,42 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：新增 `scripts/test-google-auth.mjs`；修改 `docs/seo-ai-platform-prd.md`（已完成 +2，待辦 -2 並重新編號為 8 項）、`README.md`（會話總結追加）
 - 驗證結果：OAuth token ✓、Analytics Data API ✓、Search Console API ✓（3 sites, siteFullUser）
 - 下一步行動清單：開始 PRD 待辦 #1（前端接入 Search Console 關鍵詞面板）；需要 GSC 有實際數據時才能看到效果（新網站目前流量為 0）。開始 PRD 待辦 #2（前端接入 Lighthouse 審計面板）。
+
+### 2026-07-27（八）：PRD 待辦 #1&#2 完成 — 前端 Search Console + Lighthouse 面板接入
+
+- 會話的主要目的：完成 PRD 前兩項待辦 — (#1) 前端接入 Search Console 關鍵詞面板，在 Dashboard 和關鍵詞建議頁展示 GSC 數據；(#2) 前端接入 Lighthouse 審計面板，在 Dashboard 和審計頁展示四維度分數與 Core Web Vitals。
+- 完成的主要任務：
+  1. **SearchConsolePanel.vue 增強**：
+     - 新增關鍵詞搜尋篩選輸入框（帶 `lucide-vue-next` Search 圖示）
+     - 新增 Top 5 關鍵詞點擊量 CSS 漸層橫向條形圖（`TrendingUp` 圖示標題）
+     - 新增篩選計數器 Tag（`X / Y` filtered count）
+     - 統計數據（clicks/impressions/CTR/position）改為基於篩選後數據動態計算
+     - `watch siteUrl` 變更時重置篩選器和錯誤狀態
+  2. **LighthousePanel.vue 增強**：
+     - 新增 `watch siteUrl` prop 自動填入審計 URL（首次載入時）
+     - 新增快速審計按鈕（`Zap` 圖示），compact 模式下僅顯示圖示
+     - Compact 模式細化：縮小儀表環（60px）、縮小字型、Vitals 網格單欄、隱藏診斷區塊
+     - 將 status Tag 在 compact 模式下隱藏
+  3. **DashboardView.vue Overview 分頁重構**：
+     - 新增 2 欄 Grid 佈局：GSC 摘要卡片 + Lighthouse 摘要卡片
+     - GSC 卡片：總點擊/曝光/平均 CTR 統計 + Top 3 關鍵詞列表 + "View full report" 連結
+     - Lighthouse 卡片：4 個 SVG 環形儀表（效能/無障礙/最佳實踐/SEO）+ "View full report" 連結
+     - 無數據時顯示 empty state（GSC 眼睛圖示、Lighthouse 靶心圖示，點擊可跳轉）
+     - 站點選擇器對所有分頁（Overview/GSC/Lighthouse）可見
+     - 動態 metrics：已連接站點數、平均 SEO 分數、GSC 關鍵詞數改為從 API 數據計算
+  4. **KeywordSuggestionsView.vue GSC 交叉引用**：
+     - enrichAll() 函數合併 `gscData` 到 suggestion，計數匹配數
+     - 新增 `gscAlerts` 提示：「X/Y 個關鍵詞已有 Search Console 真實數據」
+     - 新增 `enrichmentType` 支持 success/warning/error/info 四種警報樣式
+  5. **i18n 新增**：
+     - Dashboard: `gscSummary`, `gscSummaryHint`, `gscTotalClicks`, `gscTotalImpr`, `gscAvgCtr`, `gscAvgPosition`, `gscNoData`, `lighthouseSummary`, `lighthouseSummaryHint`, `lighthouseNoData`, `viewFullReport`, `performance`, `accessibility`, `bestPractices`, `selectSitePrompt`
+     - Lighthouse: `quickAudit`
+     - SearchConsole: `last28Days`
+     - Keywords: `gscAlerts`, `topKeywordsByClicks`
+     - 以上全部 en + zh-Hant 雙語
+  6. CI/CD 驗證全部通過：lint (0e/0w)、build (vue-tsc + vite + tsc)、test (passed)、security audit (0 vulns)、Docker Desktop (5 containers healthy)、API smoke test (GSC+Lighthouse 可用)
+- 關鍵決策和解決方案：Dashboard Overview 分頁使用雙卡 Grid 佈局而非內嵌完整面板，避免重複載入；compact 模式 LitehousePanel 隱藏診斷區塊以保持儀表板簡潔；`vue/no-duplicate-attributes` 錯誤通過合併 `:class` 綁定為陣列解決；GSC 數據目前為 0（新網站）但 UI 已準備就緒
+- 使用的技術棧：Vue 3 Composition API、Ant Design Vue、lucide-vue-next、SVG 環形儀表（自訂）、CSS Grid/Flexbox、TypeScript、vue-i18n
+- 新增或修改文件：修改 `apps/web/src/components/SearchConsolePanel.vue` (+90/-20)、`apps/web/src/components/LighthousePanel.vue` (+60/-15)、`apps/web/src/views/DashboardView.vue` (+180/-40)、`apps/web/src/views/KeywordSuggestionsView.vue` (+30/-10)、`apps/web/src/i18n.ts` (+35/-0)、`docs/seo-ai-platform-prd.md`、`README.md`
+- 驗證結果：lint ✓、build ✓、test ✓、audit ✓、Docker ✓、API smoke test ✓ (GSC 0 keywords, Lighthouse perf=52 a11y=96 bp=96 seo=83)
+- 下一步行動清單：開始 PRD 待辦 #1（Worker 死信任務管理後台）；考慮先完成生產 Web 容器靜態構建部署（待辦 #4）
