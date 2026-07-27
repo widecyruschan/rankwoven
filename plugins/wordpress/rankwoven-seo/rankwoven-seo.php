@@ -67,7 +67,6 @@ final class RankWoven_SEO_Plugin
 
         $api_base_url = get_option(self::OPTION_API_BASE_URL, 'http://localhost:3011');
         $site_id = get_option(self::OPTION_SITE_ID, '');
-        $site_token = get_option(self::OPTION_SITE_TOKEN, '');
         $ga4_property_id = get_option(self::OPTION_GA4_PROPERTY_ID, '');
         $wp_admin_username = get_option(self::OPTION_WP_ADMIN_USERNAME, '');
         $wp_application_password = get_option(self::OPTION_WP_APPLICATION_PASSWORD, '');
@@ -119,34 +118,19 @@ final class RankWoven_SEO_Plugin
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="rankwoven_site_id"><?php echo esc_html__('Site ID', 'rankwoven-seo'); ?></label>
+                            <label><?php echo esc_html__('Site ID', 'rankwoven-seo'); ?></label>
                         </th>
                         <td>
-                            <input
-                                id="rankwoven_site_id"
-                                name="rankwoven_site_id"
-                                type="text"
-                                class="regular-text"
-                                value="<?php echo esc_attr($site_id); ?>"
-                            />
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">
-                            <label for="rankwoven_site_token"><?php echo esc_html__('Site Token', 'rankwoven-seo'); ?></label>
-                        </th>
-                        <td>
-                            <input
-                                id="rankwoven_site_token"
-                                name="rankwoven_site_token"
-                                type="password"
-                                class="regular-text"
-                                value="<?php echo esc_attr($site_token); ?>"
-                                autocomplete="off"
-                            />
-                            <p class="description">
-                                <?php echo esc_html__('If this token was regenerated or revoked in RankWoven, paste the new Site Token here and save settings before syncing again.', 'rankwoven-seo'); ?>
-                            </p>
+                            <?php if ($site_id !== '') : ?>
+                                <code style="font-size:14px;"><?php echo esc_html($site_id); ?></code>
+                                <p class="description">
+                                    <?php echo esc_html__('Automatically generated when this site is connected to RankWoven.', 'rankwoven-seo'); ?>
+                                </p>
+                            <?php else : ?>
+                                <span class="description">
+                                    <?php echo esc_html__('Not connected yet. Click "Connect This Site" below to auto-generate your Site ID and Token.', 'rankwoven-seo'); ?>
+                                </span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
@@ -427,14 +411,6 @@ final class RankWoven_SEO_Plugin
         update_option(
             self::OPTION_API_BASE_URL,
             esc_url_raw(wp_unslash($_POST['rankwoven_api_base_url'] ?? ''))
-        );
-        update_option(
-            self::OPTION_SITE_ID,
-            sanitize_text_field(wp_unslash($_POST['rankwoven_site_id'] ?? ''))
-        );
-        update_option(
-            self::OPTION_SITE_TOKEN,
-            sanitize_text_field(wp_unslash($_POST['rankwoven_site_token'] ?? ''))
         );
         $ga4_property_id = sanitize_text_field(wp_unslash($_POST['rankwoven_ga4_property_id'] ?? ''));
         update_option(self::OPTION_GA4_PROPERTY_ID, $ga4_property_id);

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
-import { getSiteConnections, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
+import { getSiteConnections, deleteSiteConnection, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
 
 const { t, locale } = useI18n();
 
@@ -11,6 +11,7 @@ const isLoading = ref(false);
 const loadError = ref('');
 const activeTab = ref('connected');
 const selectedSite = ref<SiteConnection | null>(null);
+const isDeleting = ref(false);
 
 const platformLabels: Record<CmsPlatform, string> = {
   wordpress: 'WordPress',
@@ -114,7 +115,7 @@ const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() =
   {
     title: t('articles.action'),
     key: 'action',
-    width: 110
+    width: 180
   }
 ]);
 
@@ -146,6 +147,19 @@ async function loadSites() {
     loadError.value = error instanceof Error ? error.message : t('sites.loadFailed');
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function handleDelete(site: SiteConnection) {
+  isDeleting.value = true;
+
+  try {
+    await deleteSiteConnection(site.id);
+    await loadSites();
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : t('sites.deleteFailed');
+  } finally {
+    isDeleting.value = false;
   }
 }
 
@@ -198,6 +212,14 @@ onMounted(() => {
               <a-button type="link" @click="selectedSite = record.raw">
                 {{ t('common.viewDetails') }}
               </a-button>
+              <a-popconfirm
+                :title="t('sites.deleteWarning')"
+                :ok-text="t('sites.deleteConfirm')"
+                :cancel-text="t('sites.deleteCancelled')"
+                @confirm="handleDelete(record.raw)"
+              >
+                <a-button type="link" danger>{{ t('sites.delete') }}</a-button>
+              </a-popconfirm>
             </template>
           </template>
         </a-table>

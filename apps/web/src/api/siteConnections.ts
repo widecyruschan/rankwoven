@@ -473,3 +473,8 @@ export async function rollbackApplySnapshot(siteId: string, snapshotId: string) 
     }
   );
 }
+
+/** DELETE /api/v1/site-connections/:siteId — remove a site and all cascaded data */
+export async function deleteSiteConnection(siteId: string): Promise<void> {
+  await requestApi<void>(`/api/v1/site-connections/${encodeURIComponent(siteId)}`, { method: 'DELETE' });
+}

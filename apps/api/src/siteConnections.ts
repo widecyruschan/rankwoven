@@ -244,6 +244,7 @@ export interface SiteConnectionRepository {
   ): Promise<SiteConnection | undefined>;
   regenerateToken(siteId: string): Promise<{ site: SiteConnection; apiToken: string } | undefined>;
   revokeToken(siteId: string): Promise<SiteConnection | undefined>;
+  deleteSite(siteId: string, workspaceId: string): Promise<boolean>;
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
   saveSync(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
   createSyncTask(siteId: string, input: CreateSyncTaskInput): Promise<SyncTask | undefined>;
@@ -960,6 +961,16 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
 
       return toPublicConnection(site);
     },
+    async deleteSite(siteId) {
+      const existed = sites.has(siteId);
+      if (!existed) {
+        return false;
+      }
+      sites.delete(siteId);
+      articlesBySite.delete(siteId);
+      mediaBySite.delete(siteId);
+      return true;
+    },
     async verifyToken(siteId, apiToken) {
       const site = sites.get(siteId);
       if (site?.status !== 'connected' || site.apiToken !== apiToken) {
@@ -1555,6 +1566,21 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     );
 
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
+  }
+
+  async deleteSite(siteId: string, workspaceId: string) {
+    await this.ensureSchema();
+
+    const result = await this.pool.query(
+      `
+        DELETE FROM site_connections
+        WHERE id = $1 AND workspace_id = $2
+        RETURNING id
+      `,
+      [siteId, workspaceId]
+    );
+
+    return (result.rowCount ?? 0) > 0;
   }
 
   async verifyToken(siteId: string, apiToken: string) {
@@ -3293,5 +3319,34 @@ export function registerSiteConnectionRoutes(
         pagination: mediaResult.pagination
       }
     };
+  });
+
+  // DELETE /api/v1/site-connections/:siteId — remove a site and all its cascaded data
+  app.delete<{
+    Params: { siteId: string };
+  }>('/api/v1/site-connections/:siteId', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+
+    if (!user) {
+      return reply;
+    }
+
+    const site = await repository.findForWorkspace(request.params.siteId, user.workspaceId);
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: { code: 'SITE_NOT_FOUND' }
+      });
+    }
+
+    const deleted = await repository.deleteSite(request.params.siteId, user.workspaceId);
+
+    if (!deleted) {
+      reply.code(404);
+      return { success: false, message: '找不到站點或已刪除' };
+    }
+
+    return { success: true, message: '站點已刪除' };
   });
 }

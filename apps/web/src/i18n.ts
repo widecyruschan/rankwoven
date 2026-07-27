@@ -455,7 +455,14 @@ const messages = {
       connectStepThree: 'Start content sync',
       connectedTab: 'Connected',
       revokedTab: 'Revoked',
-      detailTitle: 'Site details'
+      detailTitle: 'Site details',
+      delete: 'Delete',
+      deleteConfirm: 'Confirm delete',
+      deleteCancelled: 'Cancelled',
+      deleteWarning:
+        'Are you sure you want to delete this site? All synced articles, media, audit results, and suggestions will be permanently removed. This action cannot be undone.',
+      deleteSuccess: 'Site deleted',
+      deleteFailed: 'Failed to delete site'
     },
     articles: {
       title: 'Article Audit',
@@ -1207,7 +1214,14 @@ const messages = {
       connectStepThree: '開始內容同步',
       connectedTab: '已連接',
       revokedTab: '已吊銷',
-      detailTitle: '站點詳情'
+      detailTitle: '站點詳情',
+      delete: '刪除',
+      deleteConfirm: '確認刪除',
+      deleteCancelled: '已取消',
+      deleteWarning:
+        '確定要刪除此站點嗎？所有已同步的文章、媒體、審計結果和建議將被永久移除。此操作無法復原。',
+      deleteSuccess: '站點已刪除',
+      deleteFailed: '站點刪除失敗'
     },
     articles: {
       title: '文章審計',
