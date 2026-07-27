@@ -197,10 +197,25 @@ async function auditViaLocalLighthouse(url: string, strategy: 'mobile' | 'deskto
     args.push('--screenEmulation.mobile');
   }
 
+  const env: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    NODE_ENV: (process.env.NODE_ENV as string) ?? 'production'
+  };
+
+  // Ensure Chrome path is set for lighthouse's chrome-launcher
+  if (!env.CHROME_PATH) {
+    env.CHROME_PATH = process.platform === 'linux'
+      ? '/usr/bin/chromium-browser'
+      : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  }
+  if (!env.LIGHTHOUSE_CHROMIUM_PATH) {
+    env.LIGHTHOUSE_CHROMIUM_PATH = env.CHROME_PATH;
+  }
+
   const { stdout, stderr } = await execFileAsync('npx', args, {
     maxBuffer: 50 * 1024 * 1024,
-    timeout: 120_000,
-    env: { ...process.env, NODE_ENV: process.env.NODE_ENV ?? 'production' }
+    timeout: 180_000,
+    env
   });
 
   if (!stdout) {

@@ -167,10 +167,10 @@ const lhScoreCards = computed(() => {
   if (!overviewLhScores.value) return [];
   const s = overviewLhScores.value;
   return [
-    { key: 'performance', label: t('dashboard.performance'), value: Math.round(s.performance * 100) },
-    { key: 'accessibility', label: t('dashboard.accessibility'), value: Math.round(s.accessibility * 100) },
-    { key: 'bestPractices', label: t('dashboard.bestPractices'), value: Math.round(s.bestPractices * 100) },
-    { key: 'seo', label: t('lighthouse.seo'), value: Math.round(s.seo * 100) }
+    { key: 'performance', label: t('dashboard.performance'), value: Math.round(s.performance) },
+    { key: 'accessibility', label: t('dashboard.accessibility'), value: Math.round(s.accessibility) },
+    { key: 'bestPractices', label: t('dashboard.bestPractices'), value: Math.round(s.bestPractices) },
+    { key: 'seo', label: t('lighthouse.seo'), value: Math.round(s.seo) }
   ];
 });
 

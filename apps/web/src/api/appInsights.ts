@@ -250,13 +250,18 @@ export interface LighthouseScores {
   seo: number;
 }
 
+export interface LighthouseMetricEntry {
+  value: number;
+  score: number;
+}
+
 export interface LighthouseMetrics {
-  firstContentfulPaint: number;
-  largestContentfulPaint: number;
-  totalBlockingTime: number;
-  cumulativeLayoutShift: number;
-  speedIndex: number;
-  interactive: number;
+  firstContentfulPaint: LighthouseMetricEntry;
+  largestContentfulPaint: LighthouseMetricEntry;
+  totalBlockingTime: LighthouseMetricEntry;
+  cumulativeLayoutShift: LighthouseMetricEntry;
+  speedIndex: LighthouseMetricEntry;
+  interactive: LighthouseMetricEntry;
 }
 
 export interface LighthouseDiagnostic {

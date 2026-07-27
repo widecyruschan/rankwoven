@@ -973,3 +973,49 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `apps/web/src/components/SearchConsolePanel.vue` (+90/-20)、`apps/web/src/components/LighthousePanel.vue` (+60/-15)、`apps/web/src/views/DashboardView.vue` (+180/-40)、`apps/web/src/views/KeywordSuggestionsView.vue` (+30/-10)、`apps/web/src/i18n.ts` (+35/-0)、`docs/seo-ai-platform-prd.md`、`README.md`
 - 驗證結果：lint ✓、build ✓、test ✓、audit ✓、Docker ✓、API smoke test ✓ (GSC 0 keywords, Lighthouse perf=52 a11y=96 bp=96 seo=83)
 - 下一步行動清單：開始 PRD 待辦 #1（Worker 死信任務管理後台）；考慮先完成生產 Web 容器靜態構建部署（待辦 #4）
+
+### 2026-07-27（九）：Worker 死信任務管理後台 + 快照寫回升級
+
+- 會話的主要目的：為 Worker 死信任務補齊 SaaS 管理後台功能（重跑、忽略、批量導出、告警入口），並將快照寫回升級為 Worker 在寫回前即時讀取 WordPress 真實欄位值。
+- 完成的主要任務：
+  1. **資料庫 Migration**：新增 `db/migrations/0004_add_snapshot_matched_at.sql`，為 `apply_snapshots` 表增加 `snapshot_matched_at` 時間戳欄位。
+  2. **Worker 快照寫回修復**：修正 `apps/worker/src/index.ts` 中 `applySnapshotId` 列名映射錯誤導致的 null 查詢，改為以 `suggestion_id + task_id` 精確定位 snapshot；UPDATE 也補上 `task_id` 條件；寫回前即時調用 WordPress REST API 讀取欄位真實值，與 `before_value` 比對後才更新。
+  3. **後端 API 擴展**：在 `apps/api/src/siteConnections.ts` 的 Repository 與 Memory 實作中新增 `batchRetrySyncTasks`、`batchIgnoreDeadLetterTasks`、`getTasksForExport`、`getDeadLetterStats`，並註冊 4 條新路由：`POST /api/v1/sync-tasks/batch/retry`、`POST /api/v1/sync-tasks/batch/ignore`、`GET /api/v1/sync-tasks/export`、`GET /api/v1/sync-tasks/dead-letter-stats`。
+  4. **前端 TasksView 重構**：`apps/web/src/views/TasksView.vue` 新增行選擇、批量操作欄、死信告警 Alert、CSV/JSON 導出下拉選單；僅 `dead_letter` 與 `failed` 狀態任務可勾選。
+  5. **API 層擴展**：`apps/web/src/api/siteConnections.ts` 新增 `batchRetrySyncTasks`、`batchIgnoreDeadLetterTasks`、`exportSyncTasks`、`getDeadLetterStats` 及對應 TypeScript 類型。
+  6. **i18n 國際化**：`apps/web/src/i18n.ts` 中英雙語新增批量操作、導出、告警相關 20+ 個鍵。
+  7. **品質修復**：移除未使用的 `deadLetterCount` computed、修正 `TableRowSelection` 類型推斷、補齊 `DownOutlined` 導入、修正 `URL.createObjectURL` 全局調用。
+  8. **驗證**：ESLint 0 errors、TypeScript 全 workspace build passed、Vitest 1 passed、npm audit 0 vulnerabilities。
+- 關鍵決策和解決方案：死信任務批量操作直接通過 Repository 層更新狀態，不走 Worker 重新入隊，降低複雜度；快照寫回前即時讀取真實值可避免舊 snapshot 覆蓋用戶在審核期間手動做的修改；導出功能使用原始 fetch + Blob 下載，繞過 `requestApi` 的 JSON 解析。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL、Vue 3 Composition API、Ant Design Vue、Pinia、vue-i18n。
+- 新增或修改文件：`db/migrations/0004_add_snapshot_matched_at.sql`、`apps/worker/src/index.ts`、`apps/api/src/siteConnections.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/TasksView.vue`、`apps/web/src/i18n.ts`。
+- 驗證結果：lint ✓、build ✓、test ✓、security audit ✓。
+- 下一步行動清單：部署最新 `main` 到生產；驗證死信批量操作在生產環境可用；觀察 Worker 快照寫回是否還有覆蓋衝突。
+
+### 2026-07-27（十）：Lighthouse 審計失敗修復
+
+- 會話的主要目的：解決生產環境 Lighthouse 審計失敗的問題，並確認部署後的 API Base URL。
+- 完成的主要任務：
+  1. **根因定位**：`apps/api/src/lighthouse.ts` 使用 `npx lighthouse` 調用本地 Lighthouse CLI，但 `lighthouse` npm 包未宣告在 `apps/api/package.json` 依賴中，導致生產容器每次都要即時從 npm registry 下載約 200MB+ 套件，極易因網路/超時/磁碟失敗。
+  2. **新增依賴**：在 `apps/api/package.json` 加入 `"lighthouse": "^12.6.0"`，使 Docker 構建時預裝。
+  3. **環境變數增強**：在 `lighthouse.ts` 中為 `chrome-launcher` 顯式設定 `CHROME_PATH` 與 `LIGHTHOUSE_CHROMIUM_PATH`，並將超時從 120 秒延長至 180 秒。
+  4. **本地驗證**：`node_modules/.bin/lighthouse` 正確安裝；`npm run lint`、`npm run build -w @aieo/api` 均通過。
+- 關鍵決策和解決方案：將 `lighthouse` 從運行時下載改為構建時安裝，消除生產容器對 npm registry 的運行時依賴；保留 `npx lighthouse` 調用方式不變，因本地安裝後 `npx` 會優先使用 `node_modules/.bin` 的二進制而不會重複下載。
+- 使用的技術棧：npm、TypeScript、Docker、Chrome/Chromium、Lighthouse CLI。
+- 新增或修改文件：`apps/api/package.json`、`apps/api/src/lighthouse.ts`。
+- 驗證結果：lint ✓、build ✓、lighthouse CLI 已安裝。
+- 下一步行動清單：重新部署以包含 lighthouse 依賴；在生產容器內執行一次 Lighthouse 審計確認可用；觀察是否有 chromium 路徑或沙箱權限問題。
+
+### 2026-07-27（十一）：GA4/Site Token/API 連接診斷
+
+- 會話的主要目的：排查 WordPress 插件提示「GA4 屬性 ID 已本地保存，但 RankWoven 無法更新 SaaS 統計設置」以及「部署後無法連接測試網站 Site Token 和 API 服務」的問題。
+- 完成的主要任務：
+  1. **API Base URL 診斷**：用戶截圖中的 API Base URL 為 `https://app.rankwoven.com`，但 `dig` 顯示該子域名無 DNS 記錄；正確的 API 域名為 `https://api.rankwoven.com`（解析至 VPS `72.62.253.72`，`/health` 返回 200）。
+  2. **VPS 容器狀態檢查**：通過 Hostinger MCP 確認 `rankwoven` 專案 5 個容器（api/web/worker/postgres/redis）全部 `running`，postgres 與 redis 標記 `healthy`。
+  3. **API 路由可達性**：`GET /api/v1/cms-adapters` 返回 200，確認 API 已載入最新路由；`PUT /api/v1/site-connections/{id}/analytics-settings` 使用錯誤 token 測試返回 404，推測為站點 ID 在生產資料庫中不存在（代碼邏輯：找不到站點時回 404）。
+  4. **程式碼審查**：確認 `rankwoven-seo.php` 的 `sync_analytics_settings_to_saas()` 會向 `PUT /api/v1/site-connections/{site_id}/analytics-settings` 發送請求，並在失敗時顯示截圖中的錯誤訊息；`apps/api/src/siteConnections.ts` 的對應路由會驗證 Bearer Token 並更新 `google_analytics_property_id`。
+- 關鍵決策和解決方案：主要根因是插件填寫了錯誤的 API Base URL（`app.rankwoven.com` 不存在）。修復後若仍失敗，則需檢查生產資料庫中是否存在該 Site ID，若不存在須在 SaaS 後台重新創建站點連接並更新 Site Token。
+- 使用的技術棧：curl、dig、Hostinger VPS MCP、Fastify、PostgreSQL、WordPress PHP 插件。
+- 新增或修改文件：僅診斷，未修改業務程式碼（本次會話前已修改的 `apps/api/package.json` 與 `apps/api/src/lighthouse.ts` 屬於上一任務）。
+- 驗證結果：`api.rankwoven.com/health` ✓、`api.rankwoven.com/api/v1/cms-adapters` ✓、VPS 容器 healthy ✓、`app.rankwoven.com` DNS 無法解析 ✗。
+- 下一步行動清單：將 WordPress 插件的「API 基礎 URL」從 `https://app.rankwoven.com` 改為 `https://api.rankwoven.com` 並保存；若仍報錯，登入 SaaS 後台檢查站點 `b95887cb-08a7-424d-af9b-ff9cef52275a` 是否存在，不存在則重新創建並更新 Site ID 與 Site Token；再次保存 GA4 屬性 ID 並觀察同步狀態。

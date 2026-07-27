@@ -63,10 +63,10 @@ const scoreCards = computed(() => {
   if (!data.value) return [];
   const { scores } = data.value;
   return [
-    { key: 'performance', label: t('lighthouse.performance'), value: Math.round(scores.performance * 100) },
-    { key: 'accessibility', label: t('lighthouse.accessibility'), value: Math.round(scores.accessibility * 100) },
-    { key: 'bestPractices', label: t('lighthouse.bestPractices'), value: Math.round(scores.bestPractices * 100) },
-    { key: 'seo', label: t('lighthouse.seo'), value: Math.round(scores.seo * 100) }
+    { key: 'performance', label: t('lighthouse.performance'), value: Math.round(scores.performance) },
+    { key: 'accessibility', label: t('lighthouse.accessibility'), value: Math.round(scores.accessibility) },
+    { key: 'bestPractices', label: t('lighthouse.bestPractices'), value: Math.round(scores.bestPractices) },
+    { key: 'seo', label: t('lighthouse.seo'), value: Math.round(scores.seo) }
   ];
 });
 
@@ -131,28 +131,28 @@ const vitalsRows = computed<VitalsRow[]>(() => {
   const rows: VitalsRow[] = [
     {
       key: 'lcp', label: t('lighthouse.lcp'), desc: t('lighthouse.lcpDesc'),
-      value: `${(m.largestContentfulPaint / 1000).toFixed(2)}s`,
-      status: lcpStatus(m.largestContentfulPaint)
+      value: `${(m.largestContentfulPaint.value / 1000).toFixed(2)}s`,
+      status: lcpStatus(m.largestContentfulPaint.value)
     },
     {
       key: 'cls', label: t('lighthouse.cls'), desc: t('lighthouse.clsDesc'),
-      value: m.cumulativeLayoutShift.toFixed(3),
-      status: clsStatus(m.cumulativeLayoutShift)
+      value: m.cumulativeLayoutShift.value.toFixed(3),
+      status: clsStatus(m.cumulativeLayoutShift.value)
     },
     {
       key: 'tbt', label: t('lighthouse.tbt'), desc: t('lighthouse.tbtDesc'),
-      value: `${Math.round(m.totalBlockingTime)}ms`,
-      status: tbtStatus(m.totalBlockingTime)
+      value: `${Math.round(m.totalBlockingTime.value)}ms`,
+      status: tbtStatus(m.totalBlockingTime.value)
     },
     {
       key: 'fcp', label: t('lighthouse.fcp'), desc: t('lighthouse.fcpDesc'),
-      value: `${(m.firstContentfulPaint / 1000).toFixed(2)}s`,
-      status: fcpStatus(m.firstContentfulPaint)
+      value: `${(m.firstContentfulPaint.value / 1000).toFixed(2)}s`,
+      status: fcpStatus(m.firstContentfulPaint.value)
     },
     {
       key: 'si', label: t('lighthouse.si'), desc: t('lighthouse.siDesc'),
-      value: `${(m.speedIndex / 1000).toFixed(2)}s`,
-      status: siStatus(m.speedIndex)
+      value: `${(m.speedIndex.value / 1000).toFixed(2)}s`,
+      status: siStatus(m.speedIndex.value)
     }
   ];
 

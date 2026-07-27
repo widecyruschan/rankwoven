@@ -283,6 +283,62 @@ export async function ignoreDeadLetterTask(taskId: string) {
   });
 }
 
+export async function batchRetrySyncTasks(taskIds: string[]) {
+  return requestApi<{
+    tasks: SyncTask[];
+    retriedCount: number;
+  }>('/api/v1/sync-tasks/batch/retry', {
+    method: 'POST',
+    body: JSON.stringify({ taskIds })
+  });
+}
+
+export async function batchIgnoreDeadLetterTasks(taskIds: string[]) {
+  return requestApi<{
+    tasks: SyncTask[];
+    ignoredCount: number;
+  }>('/api/v1/sync-tasks/batch/ignore', {
+    method: 'POST',
+    body: JSON.stringify({ taskIds })
+  });
+}
+
+export async function exportSyncTasks(params: {
+  siteId?: string;
+  scope?: string;
+  status?: string;
+  format?: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.siteId) searchParams.set('siteId', params.siteId);
+  if (params.scope) searchParams.set('scope', params.scope);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.format) searchParams.set('format', params.format);
+  const query = searchParams.toString();
+  const path = `/api/v1/sync-tasks/export${query ? `?${query}` : ''}`;
+
+  // Return raw response for file download
+  const token = getStoredToken();
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+
+  if (!response.ok) {
+    throw new Error('Export failed');
+  }
+
+  return response;
+}
+
+export interface DeadLetterStats {
+  totalDeadLetters: number;
+  bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
+}
+
+export async function getDeadLetterStats() {
+  return requestApi<DeadLetterStats>('/api/v1/sync-tasks/dead-letter-stats');
+}
+
 export async function createManualRefreshTask(siteId: string, payload: ManualRefreshTaskPayload) {
   return requestApi<{
     task: SyncTask;

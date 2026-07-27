@@ -348,18 +348,18 @@ async function processSuggestionApplyTask(
     }
   }
 
-  // Update snapshot before_value to the real WordPress value for accurate rollback
+  // Read WordPress real-time field value and update snapshot for accurate rollback
   if (realCurrentValue !== '') {
-    const existingSnapshot = suggestion.applySnapshotId
-      ? await client.query(
-          `
-            SELECT before_value
-            FROM apply_snapshots
-            WHERE id = $1
-          `,
-          [suggestion.applySnapshotId]
-        )
-      : null;
+    const existingSnapshot = await client.query(
+      `
+        SELECT before_value
+        FROM apply_snapshots
+        WHERE suggestion_id = $1
+          AND task_id = $2
+        LIMIT 1
+      `,
+      [task.suggestionId, task.id]
+    );
 
     const snapshotBeforeValue = String(existingSnapshot?.rows[0]?.before_value ?? '');
 
@@ -370,8 +370,9 @@ async function processSuggestionApplyTask(
           SET before_value = $2,
               snapshot_matched_at = now()
           WHERE suggestion_id = $1
+            AND task_id = $3
         `,
-        [task.suggestionId, realCurrentValue]
+        [task.suggestionId, realCurrentValue, task.id]
       );
     }
   }

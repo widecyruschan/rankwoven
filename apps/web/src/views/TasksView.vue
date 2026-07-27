@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { Modal, message } from 'ant-design-vue';
+import { DownOutlined } from '@ant-design/icons-vue';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
   getSyncTasks,
   retrySyncTask,
   ignoreDeadLetterTask,
+  batchRetrySyncTasks,
+  batchIgnoreDeadLetterTasks,
+  exportSyncTasks,
+  getDeadLetterStats,
   type SyncTask,
   type SyncTaskScope,
-  type SyncTaskStatus
+  type SyncTaskStatus,
+  type DeadLetterStats
 } from '../api/siteConnections';
 
 const { t, locale } = useI18n();
@@ -23,6 +30,9 @@ const filterStatus = ref<string>('');
 const autoRefreshEnabled = ref(true);
 const retryingTaskIds = ref<Set<string>>(new Set());
 const ignoringTaskIds = ref<Set<string>>(new Set());
+const selectedRowKeys = ref<string[]>([]);
+const isBatchLoading = ref(false);
+const deadLetterStats = ref<DeadLetterStats | null>(null);
 let autoRefreshTimer: number | null = null;
 
 const AUTO_REFRESH_INTERVAL_MS = 15000;
@@ -65,6 +75,21 @@ const taskRows = computed(() =>
 const filteredTasks = computed(() =>
   tasks.value.filter((task) => activeTab.value === 'all' || task.status === activeTab.value)
 );
+
+const batchableRows = computed(() =>
+  taskRows.value.filter((r) => r.isRetryable)
+);
+
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys: (string | number)[]) => {
+    selectedRowKeys.value = keys as string[];
+  },
+  getCheckboxProps: (record: { isRetryable: boolean; id: string }) => ({
+    disabled: !record.isRetryable,
+    name: record.id
+  })
+}));
 
 const columns = computed<TableColumnsType<(typeof taskRows.value)[number]>>(() => [
   {
@@ -226,13 +251,23 @@ async function loadTasks() {
   }
 }
 
+async function loadDeadLetterStats() {
+  try {
+    const result = await getDeadLetterStats();
+    deadLetterStats.value = result;
+  } catch {
+    // Silently ignore stats load failures
+  }
+}
+
 async function handleRetry(taskId: string) {
   retryingTaskIds.value = new Set([...retryingTaskIds.value, taskId]);
   try {
     await retrySyncTask(taskId);
-    await loadTasks();
+    selectedRowKeys.value = selectedRowKeys.value.filter((k) => k !== taskId);
+    await Promise.all([loadTasks(), loadDeadLetterStats()]);
   } catch {
-    window.alert(t('tasks.retryFailed'));
+    void message.error(t('tasks.retryFailed'));
   } finally {
     const next = new Set(retryingTaskIds.value);
     next.delete(taskId);
@@ -244,13 +279,95 @@ async function handleIgnore(taskId: string) {
   ignoringTaskIds.value = new Set([...ignoringTaskIds.value, taskId]);
   try {
     await ignoreDeadLetterTask(taskId);
-    await loadTasks();
+    selectedRowKeys.value = selectedRowKeys.value.filter((k) => k !== taskId);
+    await Promise.all([loadTasks(), loadDeadLetterStats()]);
   } catch {
-    window.alert(t('tasks.ignoreFailed'));
+    void message.error(t('tasks.ignoreFailed'));
   } finally {
     const next = new Set(ignoringTaskIds.value);
     next.delete(taskId);
     ignoringTaskIds.value = next;
+  }
+}
+
+async function handleBatchRetry() {
+  if (!selectedRowKeys.value.length) {
+    void message.warning(t('tasks.emptySelected'));
+    return;
+  }
+
+  Modal.confirm({
+    title: t('tasks.batchRetry'),
+    content: t('tasks.batchRetryConfirm', { count: selectedRowKeys.value.length }),
+    onOk: async () => {
+      isBatchLoading.value = true;
+      try {
+        await batchRetrySyncTasks(selectedRowKeys.value);
+        void message.success(t('tasks.batchRetrySuccess', { count: selectedRowKeys.value.length }));
+        selectedRowKeys.value = [];
+        await Promise.all([loadTasks(), loadDeadLetterStats()]);
+      } catch {
+        void message.error(t('tasks.batchActionFailed'));
+      } finally {
+        isBatchLoading.value = false;
+      }
+    }
+  });
+}
+
+async function handleBatchIgnore() {
+  if (!selectedRowKeys.value.length) {
+    void message.warning(t('tasks.emptySelected'));
+    return;
+  }
+
+  const deadLetterOnly = selectedRowKeys.value.filter(
+    (id) => filteredTasks.value.find((t) => t.id === id)?.status === 'dead_letter'
+  );
+
+  if (!deadLetterOnly.length) {
+    void message.warning(t('tasks.emptySelected'));
+    return;
+  }
+
+  Modal.confirm({
+    title: t('tasks.batchIgnore'),
+    content: t('tasks.batchIgnoreConfirm', { count: deadLetterOnly.length }),
+    onOk: async () => {
+      isBatchLoading.value = true;
+      try {
+        await batchIgnoreDeadLetterTasks(deadLetterOnly);
+        void message.success(t('tasks.batchIgnoreSuccess', { count: deadLetterOnly.length }));
+        selectedRowKeys.value = [];
+        await Promise.all([loadTasks(), loadDeadLetterStats()]);
+      } catch {
+        void message.error(t('tasks.batchActionFailed'));
+      } finally {
+        isBatchLoading.value = false;
+      }
+    }
+  });
+}
+
+async function handleExport(format: 'csv' | 'json') {
+  try {
+    const response = await exportSyncTasks({
+      scope: filterScope.value || undefined,
+      status: filterStatus.value || undefined,
+      format
+    });
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sync-tasks-export.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  } catch {
+    void message.error(t('tasks.actionFailed'));
   }
 }
 
@@ -259,6 +376,7 @@ function startAutoRefresh() {
   if (!autoRefreshEnabled.value) return;
   autoRefreshTimer = window.setInterval(() => {
     loadTasks();
+    loadDeadLetterStats();
   }, AUTO_REFRESH_INTERVAL_MS);
 }
 
@@ -280,6 +398,7 @@ function toggleAutoRefresh() {
 
 onMounted(() => {
   void loadTasks();
+  void loadDeadLetterStats();
   startAutoRefresh();
 });
 
@@ -306,8 +425,31 @@ onUnmounted(() => {
     </div>
 
     <section class="content-panel">
+      <!-- Dead-letter stats alert -->
+      <a-alert
+        v-if="deadLetterStats && deadLetterStats.totalDeadLetters > 0"
+        class="page-alert"
+        type="warning"
+        show-icon
+        closable
+      >
+        <template #message>
+          <div class="dead-letter-alert-content">
+            <span>{{ t('tasks.deadLetterAlert', { count: deadLetterStats.totalDeadLetters }) }}</span>
+            <template v-if="deadLetterStats.bySite.length > 0">
+              <span class="dead-letter-site-detail">
+                <a-tag v-for="site in deadLetterStats.bySite" :key="site.siteId" color="orange">
+                  {{ site.siteName }}: {{ site.count }}
+                </a-tag>
+              </span>
+            </template>
+          </div>
+        </template>
+      </a-alert>
+
       <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
 
+      <!-- Batch action toolbar + filters -->
       <div class="filter-row">
         <a-select
           v-model:value="filterScope"
@@ -337,9 +479,52 @@ onUnmounted(() => {
             {{ opt.label }}
           </a-select-option>
         </a-select>
+
+        <span v-if="selectedRowKeys.length > 0" class="selected-count">
+          {{ t('tasks.selectedCount', { count: selectedRowKeys.length }) }}
+        </span>
+
+        <div class="filter-row-spacer" />
+
+        <a-space v-if="batchableRows.length > 0">
+          <a-button
+            v-if="selectedRowKeys.length > 0"
+            type="primary"
+            size="small"
+            :loading="isBatchLoading"
+            @click="handleBatchRetry"
+          >
+            {{ t('tasks.batchRetry') }}
+          </a-button>
+          <a-button
+            v-if="selectedRowKeys.length > 0"
+            danger
+            size="small"
+            :loading="isBatchLoading"
+            @click="handleBatchIgnore"
+          >
+            {{ t('tasks.batchIgnore') }}
+          </a-button>
+        </a-space>
+
+        <a-dropdown>
+          <template #overlay>
+            <a-menu>
+              <a-menu-item key="csv" @click="handleExport('csv')">
+                {{ t('tasks.exportCsv') }}
+              </a-menu-item>
+              <a-menu-item key="json" @click="handleExport('json')">
+                {{ t('tasks.exportJson') }}
+              </a-menu-item>
+            </a-menu>
+          </template>
+          <a-button size="small">
+            {{ t('tasks.export') }} <DownOutlined />
+          </a-button>
+        </a-dropdown>
       </div>
 
-      <a-tabs v-model:active-key="activeTab">
+      <a-tabs v-model:active-key="activeTab" @change="selectedRowKeys = []">
         <a-tab-pane key="all" :tab="t('tasks.allTab')" />
         <a-tab-pane key="queued" :tab="t('tasks.statusQueued')" />
         <a-tab-pane key="running" :tab="t('tasks.statusRunning')" />
@@ -354,6 +539,7 @@ onUnmounted(() => {
         :data-source="taskRows"
         :loading="isLoading"
         :pagination="false"
+        :row-selection="rowSelection"
       >
         <template #emptyText>{{ t('tasks.empty') }}</template>
         <template #bodyCell="{ column, record }">

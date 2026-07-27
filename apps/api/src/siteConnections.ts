@@ -253,6 +253,13 @@ export interface SiteConnectionRepository {
   markSyncTaskFailed(syncTaskId: string, errorMessage: string): Promise<SyncTask | undefined>;
   retrySyncTask(syncTaskId: string): Promise<SyncTask | undefined>;
   ignoreDeadLetterTask(syncTaskId: string): Promise<SyncTask | undefined>;
+  batchRetrySyncTasks(taskIds: string[]): Promise<SyncTask[]>;
+  batchIgnoreDeadLetterTasks(taskIds: string[]): Promise<SyncTask[]>;
+  getTasksForExport(options?: SyncTaskListOptions): Promise<SyncTask[]>;
+  getDeadLetterStats(): Promise<{
+    totalDeadLetters: number;
+    bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
+  }>;
   saveSyncBatch(
     siteId: string,
     syncTaskId: string,
@@ -1111,6 +1118,55 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         siteName: sites.get(task.siteId)?.name
       };
     },
+    async batchRetrySyncTasks(taskIds) {
+      const result: SyncTask[] = [];
+      for (const tid of taskIds) {
+        const task = syncTasks.get(tid);
+        if (!task || !['dead_letter', 'failed'].includes(task.status)) continue;
+        task.status = 'queued';
+        task.errorMessage = undefined;
+        task.retryCount = 0;
+        task.deadLetteredAt = undefined;
+        task.nextRunAt = new Date().toISOString();
+        result.push({ ...task, siteName: sites.get(task.siteId)?.name });
+      }
+      return result;
+    },
+    async batchIgnoreDeadLetterTasks(taskIds) {
+      const result: SyncTask[] = [];
+      for (const tid of taskIds) {
+        const task = syncTasks.get(tid);
+        if (!task || task.status !== 'dead_letter') continue;
+        task.status = 'failed';
+        task.completedAt = new Date().toISOString();
+        result.push({ ...task, siteName: sites.get(task.siteId)?.name });
+      }
+      return result;
+    },
+    async getTasksForExport(options) {
+      const tasks = await this.listSyncTasks(options);
+      return tasks;
+    },
+    async getDeadLetterStats() {
+      const deadLetterTasks = Array.from(syncTasks.values()).filter((t) => t.status === 'dead_letter');
+      const bySiteMap = new Map<string, { count: number; latest: string }>();
+      for (const t of deadLetterTasks) {
+        const entry = bySiteMap.get(t.siteId) || { count: 0, latest: '' };
+        entry.count++;
+        const tdl = t.deadLetteredAt || '';
+        if (tdl > entry.latest) entry.latest = tdl;
+        bySiteMap.set(t.siteId, entry);
+      }
+      return {
+        totalDeadLetters: deadLetterTasks.length,
+        bySite: Array.from(bySiteMap.entries()).map(([siteId, v]) => ({
+          siteId,
+          siteName: sites.get(siteId)?.name ?? '',
+          count: v.count,
+          latestDeadLetter: v.latest || null
+        }))
+      };
+    },
     async saveSyncBatch(siteId, syncTaskId, payload) {
       const site = sites.get(siteId);
       const task = syncTasks.get(syncTaskId);
@@ -1786,6 +1842,131 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     );
 
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
+  }
+
+  async batchRetrySyncTasks(taskIds: string[]) {
+    await this.ensureSchema();
+
+    if (!taskIds.length) return [];
+
+    const placeholders = taskIds.map((_, i) => `$${i + 1}::uuid`).join(', ');
+    const result = await this.pool.query(
+      `
+        UPDATE sync_tasks
+        SET status = 'queued',
+            error_message = NULL,
+            retry_count = 0,
+            dead_lettered_at = NULL,
+            next_run_at = now()
+        WHERE id IN (${placeholders})
+          AND status IN ('dead_letter', 'failed')
+        RETURNING *
+      `,
+      taskIds
+    );
+
+    return result.rows.map(mapSyncTaskRow);
+  }
+
+  async batchIgnoreDeadLetterTasks(taskIds: string[]) {
+    await this.ensureSchema();
+
+    if (!taskIds.length) return [];
+
+    const placeholders = taskIds.map((_, i) => `$${i + 1}::uuid`).join(', ');
+    const result = await this.pool.query(
+      `
+        UPDATE sync_tasks
+        SET status = 'failed',
+            completed_at = now()
+        WHERE id IN (${placeholders})
+          AND status = 'dead_letter'
+        RETURNING *
+      `,
+      taskIds
+    );
+
+    return result.rows.map(mapSyncTaskRow);
+  }
+
+  async getTasksForExport(options?: SyncTaskListOptions) {
+    await this.ensureSchema();
+
+    const siteId = options?.siteId;
+    const scope = options?.scope;
+    const status = options?.status;
+
+    const conditions: string[] = [];
+    const params: (string | null)[] = [];
+
+    if (siteId) {
+      conditions.push(`st.site_id = $${params.length + 1}::uuid`);
+      params.push(siteId);
+    }
+    if (scope) {
+      conditions.push(`st.scope = $${params.length + 1}`);
+      params.push(scope);
+    }
+    if (status) {
+      conditions.push(`st.status = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    const result = await this.pool.query(
+      `
+        SELECT
+          st.*,
+          sc.name AS site_name
+        FROM sync_tasks st
+        JOIN site_connections sc ON sc.id = st.site_id
+        ${whereClause}
+        ORDER BY st.created_at DESC
+      `,
+      params
+    );
+
+    return result.rows.map(mapSyncTaskRow);
+  }
+
+  async getDeadLetterStats() {
+    await this.ensureSchema();
+
+    const totalResult = await this.pool.query(
+      `
+        SELECT COUNT(*)::int AS count
+        FROM sync_tasks
+        WHERE status = 'dead_letter'
+      `
+    );
+
+    const bySiteResult = await this.pool.query(
+      `
+        SELECT
+          sc.id AS site_id,
+          sc.name AS site_name,
+          COUNT(*)::int AS count,
+          MAX(st.dead_lettered_at) AS latest_dead_letter
+        FROM sync_tasks st
+        JOIN site_connections sc ON sc.id = st.site_id
+        WHERE st.status = 'dead_letter'
+        GROUP BY sc.id, sc.name
+        ORDER BY count DESC
+      `
+    );
+
+    return {
+      totalDeadLetters: totalResult.rows[0]?.count ?? 0,
+      bySite: bySiteResult.rows.map((row) => ({
+        siteId: row.site_id,
+        siteName: row.site_name,
+        count: row.count,
+        latestDeadLetter: row.latest_dead_letter ? new Date(row.latest_dead_letter).toISOString() : null
+      }))
+    };
   }
 
   async saveSyncBatch(siteId: string, syncTaskId: string, payload: SyncBatchPayload) {
@@ -2900,6 +3081,122 @@ export function registerSiteConnectionRoutes(
       success: true,
       message: '死信任務已忽略',
       data: { task }
+    };
+  });
+
+  app.post<{
+    Body: {
+      taskIds: string[];
+    };
+  }>('/api/v1/sync-tasks/batch/retry', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const { taskIds } = request.body;
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return reply.status(400).send({
+        success: false,
+        message: '請提供有效的任務 ID 列表',
+        error: { code: 'INVALID_TASK_IDS' }
+      });
+    }
+
+    const tasks = await repository.batchRetrySyncTasks(taskIds);
+    return {
+      success: true,
+      message: `已重新加入 ${tasks.length} 個任務到隊列`,
+      data: { tasks, retriedCount: tasks.length }
+    };
+  });
+
+  app.post<{
+    Body: {
+      taskIds: string[];
+    };
+  }>('/api/v1/sync-tasks/batch/ignore', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const { taskIds } = request.body;
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return reply.status(400).send({
+        success: false,
+        message: '請提供有效的任務 ID 列表',
+        error: { code: 'INVALID_TASK_IDS' }
+      });
+    }
+
+    const tasks = await repository.batchIgnoreDeadLetterTasks(taskIds);
+    return {
+      success: true,
+      message: `已忽略 ${tasks.length} 個死信任務`,
+      data: { tasks, ignoredCount: tasks.length }
+    };
+  });
+
+  app.get<{
+    Querystring: {
+      siteId?: string;
+      scope?: string;
+      status?: string;
+      format?: string;
+    };
+  }>('/api/v1/sync-tasks/export', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const { siteId, scope, status, format } = request.query;
+    const tasks = await repository.getTasksForExport({
+      siteId: siteId || undefined,
+      scope: scope as SyncTaskScope | undefined,
+      status: status as SyncTaskStatus | undefined
+    });
+
+    const exportFormat = format === 'json' ? 'json' : 'csv';
+
+    if (exportFormat === 'json') {
+      return reply.header('Content-Type', 'application/json').header(
+        'Content-Disposition',
+        'attachment; filename="sync-tasks-export.json"'
+      ).send(JSON.stringify(tasks, null, 2));
+    }
+
+    const csvHeaders = ['id', 'siteName', 'scope', 'status', 'retryCount', 'maxRetries', 'errorMessage', 'createdAt', 'completedAt', 'deadLetteredAt'];
+    const csvRows = tasks.map((t) =>
+      [
+        t.id,
+        t.siteName ?? '',
+        t.scope,
+        t.status,
+        t.retryCount,
+        t.maxRetries,
+        (t.errorMessage ?? '').replace(/"/g, '""'),
+        t.createdAt ?? '',
+        t.completedAt ?? '',
+        t.deadLetteredAt ?? ''
+      ].map((v) => `"${v}"`).join(',')
+    );
+
+    const csv = [csvHeaders.join(','), ...csvRows].join('\n');
+    return reply.header('Content-Type', 'text/csv; charset=utf-8').header(
+      'Content-Disposition',
+      'attachment; filename="sync-tasks-export.csv"'
+    ).send(csv);
+  });
+
+  app.get<{
+    Querystring: {
+      siteId?: string;
+    };
+  }>('/api/v1/sync-tasks/dead-letter-stats', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const stats = await repository.getDeadLetterStats();
+    return {
+      success: true,
+      message: '操作成功',
+      data: stats
     };
   });
 
