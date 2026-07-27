@@ -775,3 +775,13 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：新增 `db/migrations/0004_site_ga4_property.sql`；修改 `.env.example`、`docker-compose.yml`、`apps/api/src/analytics.ts`、`apps/api/src/config.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/KeywordSuggestionsView.vue`、`packages/ai-providers/src/index.ts`、`packages/ai-providers/tests/usageRecords.test.ts`、`plugins/wordpress/README.md`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`docs/seo-ai-platform-prd.md` 和 `README.md`。
 - 驗證結果：`npm run test -w @aieo/api -- health.test.ts siteConnections.test.ts` 通過；`npm run test -w @aieo/ai-providers -- usageRecords.test.ts` 通過。本機沒有 `.env`，未執行真實問問 API、DataForSEO/Ahrefs/Semrush 或 GA4 live smoke。
 - 下一步行動清單：在生產 Secrets 配置 `WENWEN_API_KEY`、`KEYWORD_VOLUME_API_URL`、`KEYWORD_VOLUME_API_KEY` 和 Google 服務帳號憑據；在 WordPress 插件為測試站點填入 GA4 Property ID 並授權服務帳號讀取；用正式問問 API 分別 smoke OpenAI、Gemini、DeepSeek 模型 JSON 輸出；用正式搜尋量供應商 smoke `source`、月搜尋量、CPC 和競爭度顯示；執行全量 lint/test/build/security audit、migration、PHP 語法檢查和 Docker Desktop 重建。
+
+### 2026-07-27：修復 WordPress 測試站插件未同步新版 GA4 欄位
+
+- 會話的主要目的：排查 Docker Desktop WordPress 後台沒有顯示 GA4 Property ID 輸入欄位的原因。
+- 完成的主要任務：確認 AIEO 倉庫插件源碼已包含 GA4 Property ID 和 Diagnostics；確認 `cyruschan-wp` 容器實際掛載 `/Volumes/Extreme SSD/gitCode/cyruschan.com`，且測試站插件仍是舊版；將新版 `rankwoven-seo.php` 同步到測試站 `wp-content/plugins/rankwoven-seo/` 並重啟 WordPress 容器。
+- 關鍵決策和解決方案：問題不是後端或插件源碼功能缺失，而是測試站掛載目錄未同步最新插件檔案；後續每次修改插件後，都要同步到 `cyruschan.com/wp-content/plugins/rankwoven-seo/` 或改為直接 bind mount AIEO 插件目錄。
+- 使用的技術棧：Docker Desktop、WordPress PHP Plugin、PHP 8.2、AIEO monorepo。
+- 新增或修改文件：修改測試站外部掛載文件 `/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`；修改本 README 追加排查記錄。AIEO 源碼文件未新增功能變更。
+- 驗證結果：`docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過；容器內 `grep` 已確認包含 `GA4 Property ID`、`rankwoven_ga4_property_id` 和 `Diagnostics`；`docker restart cyruschan-wp` 後容器正常運行。
+- 下一步行動清單：刷新 WordPress 後台 `Settings -> RankWoven SEO`；如仍未顯示，清除瀏覽器快取或重新登入 WordPress；後續優先把 AIEO 插件目錄直接 bind mount 到測試站，避免手動同步遺漏；在插件 UI 中可考慮顯示版本號或 build time，方便確認當前載入版本。
