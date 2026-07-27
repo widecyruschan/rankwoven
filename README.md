@@ -911,3 +911,26 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：19 個文件修改 (+2128/-585)：`apps/api/src/config.ts`、`apps/api/src/keywordSuggestions.ts`、`apps/api/tests/health.test.ts`、`apps/web/src/views/DashboardView.vue`、`apps/web/src/views/KeywordSuggestionsView.vue`、`apps/web/src/components/SearchConsolePanel.vue`、`apps/web/src/components/LighthousePanel.vue`、`apps/web/src/api/appInsights.ts`、`apps/web/src/i18n.ts`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json`、`eslint.config.js`、`Dockerfile`、`.env.example`、`.env`、`docker-compose.yml` 等。
 - 驗證結果：6 大檢查項全部通過（見上方），Docker Desktop 5 容器 healthy。
 - 下一步行動清單：部署更新到 Docker Desktop；推送至 GitHub `main` 分支觸發生產部署；更新 PRD 下一步清單；將生產 Web 容器改為靜態構建部署（待辦 #8）；開始前端 GSC 和 Lighthouse 面板接入（待辦 #3、#4）。
+
+### 2026-07-27（七）：PRD 待辦 #1&#2 — 生產重複站點驗證 + Google 服務帳號 GA4 憑據確認
+
+- 會話的主要目的：完成 PRD 前兩項待辦 — (#1) 確認生產部署後 SaaS 後台重複站點已消失，確認 migration 0005 已套用；(#2) 確認生產 `.env` 中 Google 服務帳號憑據有效，驗證 GA4/Search Console 可連通。
+- 完成的主要任務：
+  1. **#1 生產重複站點驗證**：
+     - 確認生產 PostgreSQL 中 migration `0005` 已套用（`schema_migrations` 共 5 筆）
+     - 確認唯一索引 `uq_site_connections_workspace_platform_url` 存在於 `site_connections` 表
+     - 查詢 `GROUP BY workspace_id, platform, site_url HAVING COUNT(*) > 1` 返回 0 筆重複
+     - 目前生產無連接的 WordPress 站點，無需清理殘留資料
+  2. **#2 Google 服務帳號憑據驗證**：
+     - 生產 `.env` 中 `GOOGLE_APPLICATION_CREDENTIALS_JSON` 已設定（1831 chars），`client_email: rankwoven-ga4-reader@gtm-nfhhng6d-nmi4m.iam.gserviceaccount.com`
+     - 在生產 API 容器內以 Node.js 腳本驗證 OAuth token 交換成功（JWT RS256 簽名 → `ya29.c...`）
+     - **Analytics Data API** (`analyticsdata.googleapis.com`)：已啟用，metadata 查詢返回 HTTP 200 ✓
+     - **Search Console API** (`searchconsole.googleapis.com`)：已啟用，服務帳號擁有 3 個網站的 `siteFullUser` 權限（`rankwoven.com`、`sc-domain:rankwoven.com`、`http://gsc.rankwoven.com/`）
+     - **WordPress 插件** (`rankwoven-seo.php`)：已完整支援 GA4 Property ID — 設定頁 `OPTION_GA4_PROPERTY_ID`、連接時發送 `googleAnalyticsPropertyId`、`sync_analytics_settings_to_saas` 同步至 SaaS
+  3. 編寫 `scripts/test-google-auth.mjs`：多服務 Google API 可用性自動化測試腳本，測試 OAuth token、Analytics Data API、Search Console API
+  4. 提交並推送 PRD 更新至 GitHub
+- 關鍵決策和解決方案：Google Analytics Admin API (`analyticsadmin.googleapis.com`) 目前未啟用，但不影響 RankWoven 核心流程——RankWoven 使用 Analytics Data API (`analyticsdata.googleapis.com`) 直接查詢已知 property ID，無需透過 Admin API 動態列舉帳號/屬性。WordPress 插件已從站點設定頁收集 `googleAnalyticsPropertyId`，連接時自動發送至 SaaS。
+- 使用的技術棧：Node.js (ESM)、Google OAuth 2.0 (JWT RS256)、docker exec、PostgreSQL、SSH
+- 新增或修改文件：新增 `scripts/test-google-auth.mjs`；修改 `docs/seo-ai-platform-prd.md`（已完成 +2，待辦 -2 並重新編號為 8 項）、`README.md`（會話總結追加）
+- 驗證結果：OAuth token ✓、Analytics Data API ✓、Search Console API ✓（3 sites, siteFullUser）
+- 下一步行動清單：開始 PRD 待辦 #1（前端接入 Search Console 關鍵詞面板）；需要 GSC 有實際數據時才能看到效果（新網站目前流量為 0）。開始 PRD 待辦 #2（前端接入 Lighthouse 審計面板）。
