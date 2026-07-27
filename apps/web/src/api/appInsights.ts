@@ -118,7 +118,8 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers
-    }
+    },
+    signal: init?.signal
   });
   const body = (await response.json()) as ApiResponse<T>;
 
@@ -127,6 +128,15 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return body.data;
+}
+
+// ── Shared abort helpers ────────────────────────────────────────
+const LIGHTHOUSE_TIMEOUT_MS = 90_000; // 90s timeout for Lighthouse audits
+
+function requestWithTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fn(controller.signal).finally(() => clearTimeout(timer));
 }
 
 export async function getAnalyticsOverview(params: AnalyticsOverviewParams = {}) {
@@ -280,7 +290,9 @@ export interface LighthouseAuditResult {
 }
 
 export async function getLighthouseAudit(url: string): Promise<LighthouseAuditResult> {
-  return requestApi<LighthouseAuditResult>(
-    `/api/v1/lighthouse/audit?url=${encodeURIComponent(url)}`
+  return requestWithTimeout(
+    (signal) =>
+      requestApi<LighthouseAuditResult>(`/api/v1/lighthouse/audit?url=${encodeURIComponent(url)}`, { signal }),
+    LIGHTHOUSE_TIMEOUT_MS
   );
 }

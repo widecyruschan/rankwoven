@@ -341,10 +341,20 @@ export function registerLighthouseRoutes(
     }
 
     try {
+      // Wrap audit in a timeout so the connection never hangs indefinitely.
+      // Slightly longer than the frontend timeout (90s) so the frontend receives
+      // an error response instead of a network-level abort.
+      const AUDIT_TIMEOUT_MS = 95_000;
+      const result = await Promise.race([
+        lighthouseService.auditUrl(url, parsedQuery.data.strategy),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Lighthouse 審計超時（超過 95 秒），請稍後重試')), AUDIT_TIMEOUT_MS)
+        )
+      ]);
       return {
         success: true,
         message: '操作成功',
-        data: await lighthouseService.auditUrl(url, parsedQuery.data.strategy)
+        data: result
       };
     } catch (error) {
       return reply.status(502).send({
