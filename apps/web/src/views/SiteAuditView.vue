@@ -227,7 +227,7 @@ async function saveConfig() {
   }
 }
 
-async function handleRunAudit() {
+function handleRunAudit() {
   if (!selectedSiteId.value) return;
   // Check quota before even showing the dialog
   if (quotaStats.value && quotaStats.value.remaining <= 0) {
@@ -241,6 +241,8 @@ async function handleRunAudit() {
     cancelText: tc('cancel'),
     onOk: async () => {
       runningAudit.value = true;
+      // Keep old latestResult visible while re-audit runs;
+      // set reauditPending to show a "re-detecting" badge on the existing card
       try {
         const result = await runSiteAudit(selectedSiteId.value, formPageLimit.value);
         latestResult.value = result;
@@ -313,13 +315,19 @@ function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
 
 // ── watch ──
 watch(selectedSiteId, () => {
-  config.value = null;
-  results.value = [];
-  latestResult.value = null;
   if (selectedSiteId.value) {
+    // Set loading flags first so the spinner shows immediately,
+    // keeping the previous result visible behind it until new data arrives.
+    // Data is only replaced when loadConfig/loadResults succeed.
+    loadingConfig.value = true;
+    loadingResults.value = true;
     loadQuota();
     loadConfig();
     loadResults();
+  } else {
+    config.value = null;
+    results.value = [];
+    latestResult.value = null;
   }
 });
 
@@ -436,7 +444,10 @@ onMounted(async () => {
           size="small"
         >
           <template #extra>
-            <Badge :status="statusColor" :text="tc(`status_${latestResult.status}`)" />
+            <span style="display: inline-flex; align-items: center; gap: 8px;">
+              <Badge :status="statusColor" :text="tc(`status_${latestResult.status}`)" />
+              <Tag v-if="runningAudit" color="processing">{{ tc('running') }}</Tag>
+            </span>
           </template>
 
           <Descriptions bordered size="small" :column="2">

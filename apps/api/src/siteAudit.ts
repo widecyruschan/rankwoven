@@ -96,7 +96,8 @@ interface SerpApiSearchResponse {
 const SERPAPI_BASE_URL = 'https://serpapi.com/search';
 
 function getSerpApiKey(): string {
-  const key = process.env.SERPAPI_KEY;
+  const raw = process.env.SERPAPI_KEY ?? '';
+  const key = raw.trim();
   if (!key) {
     throw new Error('未設定 SERPAPI_KEY 環境變數');
   }
@@ -159,8 +160,13 @@ async function fetchIndexedPages(
     const data: SerpApiSearchResponse = await response.json();
 
     if (data.error) {
-      console.error(`[siteAudit] SerpApi error: ${data.error}`);
-      break;
+      const errMsg = data.error;
+      console.error(`[siteAudit] SerpApi error for site:${domain}: ${errMsg}`);
+      // 判斷是否為 API key 無效
+      if (errMsg.toLowerCase().includes('invalid') || errMsg.toLowerCase().includes('api key')) {
+        throw new Error(`SerpApi 驗證失敗：${errMsg}。請檢查 SERPAPI_KEY 是否正確。`);
+      }
+      throw new Error(`SerpApi 查詢失敗：${errMsg}`);
     }
 
     if (data.organic_results) {
@@ -1114,8 +1120,9 @@ export function registerSiteAuditRoutes(
       const config = await auditRepository.getConfig(site.id);
       const pageLimit = parsed.data?.pageLimit ?? config?.pageLimit ?? 100;
 
-      // 檢查 SerpApi key
-      if (!process.env.SERPAPI_KEY) {
+      // 檢查 SerpApi key（先 trim 避免空白字元）
+      const serpApiKey = (process.env.SERPAPI_KEY ?? '').trim();
+      if (!serpApiKey) {
         return reply.status(500).send({
           success: false,
           message: '未設定 SERPAPI_KEY 環境變數',
@@ -1246,7 +1253,7 @@ export function registerSiteAuditRoutes(
     }
     try {
       const stats = await auditRepository.getSerpapiUsageStats();
-      const keyConfigured = Boolean(process.env.SERPAPI_KEY);
+      const keyConfigured = Boolean((process.env.SERPAPI_KEY ?? '').trim());
       return {
         success: true,
         message: '操作成功',
@@ -1295,7 +1302,8 @@ export async function processDueScheduledAudits(
   auditRepository: SiteAuditRepository,
   logger: Pick<Console, 'log' | 'error'> = console
 ): Promise<number> {
-  if (!process.env.SERPAPI_KEY) {
+  const trimmedKey = (process.env.SERPAPI_KEY ?? '').trim();
+  if (!trimmedKey) {
     return 0;
   }
 
