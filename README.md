@@ -1152,3 +1152,20 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `apps/api/package.json`、`package-lock.json`、本 `README.md`。
 - 驗證結果：`npm run lint` 通過；`npm run build` 通過；`npm audit --registry=https://registry.npmjs.org` 顯示 0 漏洞；本機程序化 Lighthouse 對 `https://cyruschan.com/` 審計成功；已推送 `main`（`a146537`），GitHub Actions 將重新執行部署。
 - 下一步行動清單：等待 GitHub Actions 部署完成，確認 Verify 與 Deploy 兩個 job 都成功。
+
+### 2026-07-28（十八之三）：進一步修復 Lighthouse 在真實網站失敗
+
+- 會話的主要目的：解決 `https://cyruschan.com/` 在生產環境仍然審計失敗的問題，這次錯誤已顯示詳細原因。
+- 完成的主要任務：
+  1. 診斷：詳細錯誤顯示兩個問題：
+     - PageSpeed Insights API 配額用罄（429）。
+     - 本機 Lighthouse 回退在 Docker/Alpine 中無法連線到 Chrome 的 CDP WebSocket（`Failed to fetch browser webSocket URL`）。
+  2. 在本地 Docker 容器重現問題，發現根本原因是 `--single-process` 導致 Chrome 無法啟動 CDP server。
+  3. 移除 `--single-process` 後，本機 Lighthouse 能運作，但 `cyruschan.com` 返回 403，因 Hostinger CDN 偵測到 `HeadlessChrome` client hint。
+  4. 引入 `puppeteer-core` 取代 `chrome-launcher` 啟動 Chrome，並在頁面層級攔截請求，覆寫 `sec-ch-ua`、`sec-ch-ua-mobile`、`sec-ch-ua-platform` 為正常 Chrome 瀏覽器值，繞過 bot protection。
+  5. 將 `puppeteer-core` 加入 `apps/api/package.json` 作為直接依賴，並更新 `package-lock.json`。
+- 關鍵決策和解決方案：直接以 `puppeteer-core` 開啟瀏覽器並傳入 Lighthouse，透過 Puppeteer 的 request interception 修改 client hints；既解決 Docker 中 Chrome 啟動問題，也繞過 CDN 對 HeadlessChrome 的封鎖。
+- 使用的技術棧：Fastify、TypeScript、Lighthouse 13、puppeteer-core、Docker/Alpine。
+- 新增或修改文件：修改 `apps/api/src/lighthouse.ts`、`apps/api/package.json`、`package-lock.json`、本 `README.md`。
+- 驗證結果：`npm run lint` 通過；`npm run build` 通過；`npm audit` 0 漏洞；在本地 Docker 容器中對 `https://cyruschan.com/` 執行 mobile/desktop Lighthouse 均成功（mobile performance 0.53、desktop performance 0.54）；已推送 `main`（`5f4bdf1`）。
+- 下一步行動清單：等待 GitHub Actions 部署完成後，在 SaaS 後台重新對 `https://cyruschan.com/` 執行 Lighthouse 審計。
