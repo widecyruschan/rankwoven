@@ -151,8 +151,9 @@ DATABASE_BACKUP_DIR='$DEPLOY_DATABASE_BACKUP_DIR' bash scripts/backup-database.s
 bash scripts/migrate-database.sh
 # Tear down the existing Compose project before rebuilding. This avoids stale network
 # endpoints / port bindings (e.g. 8080) that can remain during an in-place recreate.
-# Named volumes (postgres_data, redis_data) are preserved.
-docker compose \$COMPOSE_FILES down --remove-orphans || true
+# Use --profile so that data services (postgres/redis) are also stopped and the
+# network is fully removed. Named volumes (postgres_data, redis_data) are preserved.
+docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' down --remove-orphans || true
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' ps"
 
