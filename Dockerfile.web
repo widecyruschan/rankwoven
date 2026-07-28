@@ -18,6 +18,8 @@ RUN npm run build -w @aieo/cms-adapters
 RUN npm run build -w @aieo/ai-providers
 
 # Build web (vue-tsc + vite build)
+# VITE_API_BASE_URL is inlined by Vite at build time — must point to the public API.
+ENV VITE_API_BASE_URL=https://api.rankwoven.com
 RUN npm run build -w @aieo/web
 
 # ── Runtime stage ──
