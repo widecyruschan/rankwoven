@@ -154,6 +154,12 @@ bash scripts/migrate-database.sh
 # Use --profile so that data services (postgres/redis) are also stopped and the
 # network is fully removed. Named volumes (postgres_data, redis_data) are preserved.
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' down --remove-orphans || true
+# Diagnostics: log anything still holding port 8080.
+echo '=== Port 8080 listeners after down ==='
+ss -tlnp | grep ':8080' || true
+docker ps -a --filter publish=8080 --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+# Forcefully release any stale docker-proxy for port 8080.
+pkill -f 'docker-proxy.*:8080' || true
 # Allow Docker to fully release host port bindings before recreating containers.
 sleep 10
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
