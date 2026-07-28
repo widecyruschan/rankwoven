@@ -14,17 +14,24 @@ RankWoven 是面向網站經營者、SEO 團隊與代理商的 AI SEO 自動優�
 
 主要 Logo 檔案：
 
-- `apps/web/src/assets/rankwoven-logo.svg`
+- 完整橫式 Logo：`apps/web/src/assets/rankwoven-logo.svg`
+- 純圖標標誌：`apps/web/src/assets/rankwoven-icon.svg`
+- Favicon：`apps/web/public/favicon.svg`、`apps/web/public/favicon.png`
+- Apple Touch Icon：`apps/web/public/apple-touch-icon.png`
+- PWA 圖標：`apps/web/public/icon-192.png`
+- 橫式 PNG 版本：`rankwoven-logo-horizontal.png`
+- 正方形圖標 PNG 版本：`rankwoven-favicon.png`
 
-Logo 由方形標誌與 RankWoven 字標組成。方形標誌使用兩條交錯曲線表示內容與連結的編織，中心直線表示可衡量的排名增長軸。
+新 Logo 採用「盾牌編織」概念：以深青綠 `#0B6F63` → `#084C45` 漸變的盾牌/皇冠輪廓為標誌外形，內部由雙層交織 W 線條（白色主線 + 淺青副線）隱喻內容與連結的編織網絡；右下角金色漸變增長箭頭代表 SEO 排名持續上升。整體風格為時尚立體、現代科技、高端 SaaS 感。
 
 使用規則：
 
 - 優先使用完整橫式 Logo。
 - 在側邊欄、登入頁、文件頁眉中使用完整 Logo。
-- 在 favicon、窄版導覽或小尺寸按鈕中可只使用方形標誌。
+- 在 favicon、窄版導覽或小尺寸按鈕中可只使用盾牌圖標標誌。
 - Logo 周圍至少保留一個標誌寬度 25% 的留白。
 - 不要拉伸、旋轉、加陰影或改變標誌內部比例。
+- 深色背景時文字改為 `#FFFFFF`，圖標本身保持原色（漸變盾牌在深色背景上也清晰可見）。
 
 ## 3. 品牌色
 

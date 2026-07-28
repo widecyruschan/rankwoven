@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { getSiteConnections, deleteSiteConnection, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
 
 const { t, locale } = useI18n();
+const router = useRouter();
 
 const apiSites = ref<SiteConnection[]>([]);
 const isLoading = ref(false);
@@ -63,12 +65,6 @@ const siteRows = computed(() =>
 const filteredSiteRows = computed(() =>
   siteRows.value.filter((site) => (activeTab.value === 'connected' ? site.status === 'connected' : site.status === 'revoked'))
 );
-
-const connectionSteps = computed(() => [
-  t('sites.connectStepOne'),
-  t('sites.connectStepTwo'),
-  t('sites.connectStepThree')
-]);
 
 const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() => [
   {
@@ -182,58 +178,54 @@ onMounted(() => {
 
     <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
 
-    <div class="prototype-grid">
-      <section class="content-panel panel-wide">
-        <a-tabs v-model:active-key="activeTab">
-          <a-tab-pane key="connected" :tab="t('sites.connectedTab')" />
-          <a-tab-pane key="revoked" :tab="t('sites.revokedTab')" />
-        </a-tabs>
+    <section class="content-panel">
+      <a-tabs v-model:active-key="activeTab">
+        <a-tab-pane key="connected" :tab="t('sites.connectedTab')" />
+        <a-tab-pane key="revoked" :tab="t('sites.revokedTab')" />
+      </a-tabs>
 
-        <a-table
-          row-key="id"
-          :columns="columns"
-          :data-source="filteredSiteRows"
-          :loading="isLoading"
-          :pagination="false"
-        >
-          <template #emptyText>{{ t('sites.empty') }}</template>
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'name'">
-              <strong>{{ record.name }}</strong>
-              <div class="table-subtext">{{ record.raw.siteUrl }}</div>
-            </template>
-            <template v-else-if="column.key === 'health'">
-              <a-tag :color="record.status === 'connected' ? 'green' : 'red'">{{ record.health }}</a-tag>
-            </template>
-            <template v-else-if="column.key === 'statusLabel'">
-              <a-tag :color="record.status === 'connected' ? 'blue' : 'default'">{{ record.statusLabel }}</a-tag>
-            </template>
-            <template v-else-if="column.key === 'action'">
-              <a-button type="link" @click="selectedSite = record.raw">
-                {{ t('common.viewDetails') }}
-              </a-button>
-              <a-popconfirm
-                :title="t('sites.deleteWarning')"
-                :ok-text="t('sites.deleteConfirm')"
-                :cancel-text="t('sites.deleteCancelled')"
-                @confirm="handleDelete(record.raw)"
-              >
-                <a-button type="link" danger>{{ t('sites.delete') }}</a-button>
-              </a-popconfirm>
-            </template>
+      <a-table
+        row-key="id"
+        :columns="columns"
+        :data-source="filteredSiteRows"
+        :loading="isLoading"
+        :pagination="false"
+      >
+        <template #emptyText>{{ t('sites.empty') }}</template>
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'name'">
+            <strong>{{ record.name }}</strong>
+            <div class="table-subtext">{{ record.raw.siteUrl }}</div>
           </template>
-        </a-table>
-      </section>
-
-      <section class="content-panel">
-        <div class="panel-heading">
-          <h2>{{ t('sites.connectTitle') }}</h2>
-        </div>
-        <ol class="step-list">
-          <li v-for="step in connectionSteps" :key="step">{{ step }}</li>
-        </ol>
-      </section>
-    </div>
+          <template v-else-if="column.key === 'health'">
+            <a-tag :color="record.status === 'connected' ? 'green' : 'red'">{{ record.health }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'statusLabel'">
+            <a-tag :color="record.status === 'connected' ? 'blue' : 'default'">{{ record.statusLabel }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-button type="link" @click="selectedSite = record.raw">
+              {{ t('common.viewDetails') }}
+            </a-button>
+            <a-button
+              v-if="record.status === 'connected'"
+              type="link"
+              @click="router.push({ path: '/app/site-audit', query: { siteId: record.id } })"
+            >
+              {{ t('nav.siteAudit') }}
+            </a-button>
+            <a-popconfirm
+              :title="t('sites.deleteWarning')"
+              :ok-text="t('sites.deleteConfirm')"
+              :cancel-text="t('sites.deleteCancelled')"
+              @confirm="handleDelete(record.raw)"
+            >
+              <a-button type="link" danger>{{ t('sites.delete') }}</a-button>
+            </a-popconfirm>
+          </template>
+        </template>
+      </a-table>
+    </section>
 
     <a-modal
       :open="Boolean(selectedSite)"

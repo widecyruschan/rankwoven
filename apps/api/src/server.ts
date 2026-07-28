@@ -19,6 +19,12 @@ import {
   registerSeoOptimizationRoutes
 } from './seoOptimization';
 import {
+  createDefaultSiteAuditRepository,
+  type SiteAuditRepository,
+  registerSiteAuditRoutes,
+  startSiteAuditScheduler
+} from './siteAudit';
+import {
   createDefaultSiteConnectionRepository,
   type SiteConnectionRepository,
   registerSiteConnectionRoutes
@@ -28,6 +34,7 @@ interface CreateServerOptions {
   siteConnectionRepository?: SiteConnectionRepository;
   authRepository?: AuthRepository;
   seoOptimizationRepository?: SeoOptimizationRepository;
+  siteAuditRepository?: SiteAuditRepository;
 }
 
 export function createServer(options: CreateServerOptions = {}) {
@@ -163,6 +170,21 @@ export function createServer(options: CreateServerOptions = {}) {
     options.seoOptimizationRepository ?? createDefaultSeoOptimizationRepository(apiConfig.DATABASE_URL),
     authService
   );
+
+  registerSiteAuditRoutes(
+    app,
+    siteConnectionRepository,
+    options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL),
+    authService
+  );
+
+  // 啟動站點稽核排程器（每 30 分鐘檢查一次）
+  const stopScheduler = startSiteAuditScheduler(
+    options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL)
+  );
+  app.addHook('onClose', () => {
+    stopScheduler();
+  });
 
   return app;
 }

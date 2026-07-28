@@ -1169,3 +1169,21 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `apps/api/src/lighthouse.ts`、`apps/api/package.json`、`package-lock.json`、本 `README.md`。
 - 驗證結果：`npm run lint` 通過；`npm run build` 通過；`npm audit` 0 漏洞；在本地 Docker 容器中對 `https://cyruschan.com/` 執行 mobile/desktop Lighthouse 均成功（mobile performance 0.53、desktop performance 0.54）；已推送 `main`（`5f4bdf1`）。
 - 下一步行動清單：等待 GitHub Actions 部署完成後，在 SaaS 後台重新對 `https://cyruschan.com/` 執行 Lighthouse 審計。
+
+---
+
+### 2026-07-28 下午 — SEO Site Audit 全棧實作收尾與本地驗證
+
+- 會話的主要目的：完成 Site Audit 模組的收尾工作（資料庫 migration 執行、SerpApi 金鑰配置、Docker 環境驗證）並更新項目文檔。
+- 完成的主要任務：
+  1. 在本地 `.env` 配置 `SERPAPI_KEY`（free tier: 250 次/月）。
+  2. 執行 `npm run db:migrate`，成功套用 `0006_site_audit.sql`（`site_audit_configs`、`site_audit_results`、`site_audit_issues` 三張表建立並記錄在 `schema_migrations`）。
+  3. 啟動 `npm run docker:up`，確 5 個容器全部 healthy，API health check HTTP 200。
+  4. 確認 PostgreSQL 中獲得 3 個已連接站點（`cyruschan.com`、`rankwoven.com`、`gsc.rankwoven.com`）可供審計測試。
+  5. 打開 `/app/site-audit` 前端頁面於 IDE 瀏覽器。
+  6. 更新 PRD 第 17 節「下一步行動清單」：將 Site Audit 全棧實作標記為已完成、移除重複條目、在待辦頂部新增 3 項 Site Audit 相關行動項（實際審計測試、配額保護、詳情展開）。
+- 關鍵決策和解決方案：選用 SerpApi 免費層作為審計引擎，成本可控且無需充值門檻。審計排程器在 API 進程內以 `setInterval` 30 分鐘運行，不依賴獨立 Worker 服務。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL、Vue 3、Ant Design Vue、SerpApi、Docker Compose。
+- 新增或修改文件：修改 `.env`、`docs/seo-ai-platform-prd.md`、本 `README.md`。
+- 驗證結果：`db:migrate` 套用成功（schema_migrations 記錄 id=7, file=0006_site_audit.sql）；PostgreSQL `\dt site_audit*` 確認三張表；Docker Compose ps 確 5 容器；API `/health` 200；前端頁面可訪問（需登錄後執行審計測試）。
+- 下一步行動清單：在 `/app/site-audit` 頁面登錄後對 `cyruschan.com` / `rankwoven.com` 執行實際審計；為審計加入 SerpApi 配額計數器與前端額度展示；審計結果頁增加點擊展開問題詳情。

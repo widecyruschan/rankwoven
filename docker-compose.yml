@@ -1,9 +1,20 @@
+x-aieo-dev: &aieo-dev
+  build:
+    context: .
+  working_dir: /workspace
+  volumes:
+    - .:/workspace:cached
+    - node_modules_root:/workspace/node_modules
+    - node_modules_api:/workspace/apps/api/node_modules
+    - node_modules_web:/workspace/apps/web/node_modules
+    - node_modules_worker:/workspace/apps/worker/node_modules
+    - node_modules_ai_providers:/workspace/packages/ai-providers/node_modules
+    - node_modules_cms_adapters:/workspace/packages/cms-adapters/node_modules
+
 services:
   web:
-    build:
-      context: .
+    <<: *aieo-dev
     command: sh -c "npm install && npm run dev -w @aieo/web -- --host 0.0.0.0"
-    working_dir: /workspace
     ports:
       - '8080:5173'
     environment:
@@ -12,10 +23,8 @@ services:
       - api
 
   api:
-    build:
-      context: .
+    <<: *aieo-dev
     command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run dev -w @aieo/api"
-    working_dir: /workspace
     ports:
       - '3011:3000'
     environment:
@@ -41,12 +50,11 @@ services:
       KEYWORD_VOLUME_PROVIDER: ${KEYWORD_VOLUME_PROVIDER:-generic}
       KEYWORD_VOLUME_API_URL: ${KEYWORD_VOLUME_API_URL:-}
       KEYWORD_VOLUME_API_KEY: ${KEYWORD_VOLUME_API_KEY:-}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
 
   worker:
-    build:
-      context: .
+    <<: *aieo-dev
     command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run dev -w @aieo/worker"
-    working_dir: /workspace
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://aieo:aieo_password@postgres:5432/aieo
@@ -54,6 +62,7 @@ services:
       WORDPRESS_CREDENTIAL_ENCRYPTION_KEY: ${WORDPRESS_CREDENTIAL_ENCRYPTION_KEY:-rankwoven-local-development-key}
       WENWEN_API_BASE_URL: ${WENWEN_API_BASE_URL:-https://breakout.wenwen-ai.com}
       WENWEN_API_KEY: ${WENWEN_API_KEY:-}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
 
   postgres:
     profiles:
@@ -90,3 +99,9 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  node_modules_root:
+  node_modules_api:
+  node_modules_web:
+  node_modules_worker:
+  node_modules_ai_providers:
+  node_modules_cms_adapters:

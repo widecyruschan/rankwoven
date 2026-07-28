@@ -96,6 +96,7 @@ export interface ApplySnapshot {
   createdAt: string;
   appliedAt?: string;
   rolledBackAt?: string;
+  matchedAt?: string;
   errorMessage?: string;
 }
 
@@ -339,6 +340,27 @@ export async function getDeadLetterStats() {
   return requestApi<DeadLetterStats>('/api/v1/sync-tasks/dead-letter-stats');
 }
 
+export async function getDeadLetterAlert() {
+  return requestApi<{
+    totalDeadLetters: number;
+    exceeded: boolean;
+    severity: 'normal' | 'warning' | 'critical';
+    threshold: number;
+    bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
+  }>('/api/v1/sync-tasks/dead-letter-alert');
+}
+
+export async function getDeadLetterAlertConfig() {
+  return requestApi<{ threshold: number }>('/api/v1/sync-tasks/dead-letter-alert-config');
+}
+
+export async function updateDeadLetterAlertConfig(threshold: number) {
+  return requestApi<{ threshold: number }>('/api/v1/sync-tasks/dead-letter-alert-config', {
+    method: 'PUT',
+    body: JSON.stringify({ threshold })
+  });
+}
+
 export async function createManualRefreshTask(siteId: string, payload: ManualRefreshTaskPayload) {
   return requestApi<{
     task: SyncTask;
@@ -477,4 +499,132 @@ export async function rollbackApplySnapshot(siteId: string, snapshotId: string) 
 /** DELETE /api/v1/site-connections/:siteId — remove a site and all cascaded data */
 export async function deleteSiteConnection(siteId: string): Promise<void> {
   await requestApi<void>(`/api/v1/site-connections/${encodeURIComponent(siteId)}`, { method: 'DELETE' });
+}
+
+// ── Site Audit ──────────────────────────────────────────────────────────────
+
+export type SiteAuditSchedule = 'weekly' | 'monthly' | 'disabled';
+export type SiteAuditCrawlSource = 'website' | 'sitemap' | 'robots_txt';
+export type SiteAuditStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type SiteAuditIssueCategory =
+  | 'meta_tags'
+  | 'headings'
+  | 'content_quality'
+  | 'links'
+  | 'images'
+  | 'structured_data'
+  | 'mobile'
+  | 'performance'
+  | 'indexability'
+  | 'security'
+  | 'other';
+export type SiteAuditIssueSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface SiteAuditConfig {
+  siteId: string;
+  schedule: SiteAuditSchedule;
+  pageLimit: number;
+  crawlSource: SiteAuditCrawlSource;
+  emailNotification: boolean;
+  lastAuditAt?: string;
+  nextAuditAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SiteAuditResult {
+  id: string;
+  siteId: string;
+  status: SiteAuditStatus;
+  overallScore?: number;
+  pagesCrawled: number;
+  pagesIndexed: number;
+  serpapiCreditsUsed: number;
+  errorMessage?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface SiteAuditIssue {
+  id: string;
+  auditId: string;
+  siteId: string;
+  category: SiteAuditIssueCategory;
+  severity: SiteAuditIssueSeverity;
+  title: string;
+  description: string;
+  url?: string;
+  affectedCount: number;
+  recommendation?: string;
+  createdAt: string;
+}
+
+export interface SiteAuditResultWithIssues extends SiteAuditResult {
+  issues: SiteAuditIssue[];
+  issueSummary: {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    byCategory: Record<string, number>;
+  };
+}
+
+export async function getSiteAuditConfig(siteId: string) {
+  return requestApi<{ config: SiteAuditConfig }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/config`
+  );
+}
+
+export async function updateSiteAuditConfig(
+  siteId: string,
+  config: {
+    schedule: SiteAuditSchedule;
+    pageLimit: number;
+    crawlSource: SiteAuditCrawlSource;
+    emailNotification: boolean;
+  }
+) {
+  return requestApi<{ config: SiteAuditConfig }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/config`,
+    { method: 'PUT', body: JSON.stringify(config) }
+  );
+}
+
+export async function runSiteAudit(siteId: string, pageLimit?: number) {
+  return requestApi<SiteAuditResultWithIssues>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/run`,
+    { method: 'POST', body: JSON.stringify({ pageLimit }) }
+  );
+}
+
+export async function getSiteAuditResults(siteId: string) {
+  return requestApi<{
+    results: SiteAuditResult[];
+    latest: SiteAuditResultWithIssues | null;
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/results`);
+}
+
+export async function getSiteAuditResultDetail(siteId: string, auditId: string) {
+  return requestApi<SiteAuditResultWithIssues>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/results/${encodeURIComponent(auditId)}`
+  );
+}
+
+// ── Admin SerpApi Usage ──────────────────────────────────────────────────────
+
+export interface SerpapiUsageStats {
+  totalCreditsUsed: number;
+  monthlyLimit: number;
+  remaining: number;
+  totalAudits: number;
+  lastAuditAt?: string;
+  keyConfigured: boolean;
+  freeTierReset: string;
+}
+
+export async function getAdminSerpapiUsage() {
+  return requestApi<SerpapiUsageStats>('/api/v1/admin/serpapi-usage');
 }

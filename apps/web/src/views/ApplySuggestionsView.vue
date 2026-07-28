@@ -98,6 +98,7 @@ const snapshotColumns = computed<TableColumnsType<ApplySnapshot>>(() => [
   { title: t('cmsAdapters.status'), dataIndex: 'status', key: 'status', width: 130 },
   { title: t('apply.before'), dataIndex: 'beforeValue', key: 'beforeValue' },
   { title: t('apply.after'), dataIndex: 'afterValue', key: 'afterValue' },
+  { title: t('apply.matchedAt'), dataIndex: 'matchedAt', key: 'matchedAt', width: 180 },
   { title: t('articles.action'), key: 'action', width: 150 }
 ]);
 
@@ -396,6 +397,12 @@ onMounted(() => {
             <div class="table-subtext">
               {{ String((record as ApplySnapshot)[column.key as 'beforeValue' | 'afterValue'] ?? '--') }}
             </div>
+          </template>
+          <template v-else-if="column.key === 'matchedAt'">
+            <span v-if="(record as ApplySnapshot).matchedAt" class="table-subtext">
+              {{ new Date((record as ApplySnapshot).matchedAt!).toLocaleString() }}
+            </span>
+            <span v-else class="table-subtext muted">--</span>
           </template>
           <template v-else-if="column.key === 'action'">
             <a-button

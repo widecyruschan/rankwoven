@@ -348,8 +348,11 @@ async function processSuggestionApplyTask(
     }
   }
 
-  // Read WordPress real-time field value and update snapshot for accurate rollback
-  if (realCurrentValue !== '') {
+  // Read WordPress real-time field value and update snapshot for accurate rollback.
+  // This ensures the snapshot's before_value reflects the actual WordPress value
+  // at writeback time, not the potentially stale audit value.
+  const beforeValueSnapshotUpdated = realCurrentValue !== '';
+  if (beforeValueSnapshotUpdated) {
     const existingSnapshot = await client.query(
       `
         SELECT before_value
@@ -364,17 +367,26 @@ async function processSuggestionApplyTask(
     const snapshotBeforeValue = String(existingSnapshot?.rows[0]?.before_value ?? '');
 
     if (snapshotBeforeValue !== realCurrentValue) {
-      await client.query(
-        `
-          UPDATE apply_snapshots
-          SET before_value = $2,
-              snapshot_matched_at = now()
-          WHERE suggestion_id = $1
-            AND task_id = $3
-        `,
-        [task.suggestionId, realCurrentValue, task.id]
+      console.log(
+        '[suggestion_apply] snapshot before_value mismatch: audit_value=%s wordpress_real_value=%s field=%s article=%s',
+        snapshotBeforeValue,
+        realCurrentValue,
+        fieldName,
+        task.targetCmsId
       );
     }
+
+    // Always update the snapshot with the real WordPress value and record the match timestamp
+    await client.query(
+      `
+        UPDATE apply_snapshots
+        SET before_value = $2,
+            snapshot_matched_at = now()
+        WHERE suggestion_id = $1
+          AND task_id = $3
+      `,
+      [task.suggestionId, realCurrentValue, task.id]
+    );
   }
 
   const payload = buildSuggestionPayload(suggestion);

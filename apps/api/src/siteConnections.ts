@@ -3226,6 +3226,85 @@ export function registerSiteConnectionRoutes(
     };
   });
 
+  // Dead-letter alert thresholds (in-memory config, defaults to 5)
+  let deadLetterAlertThreshold = 5;
+
+  app.get<{
+    Reply: {
+      success: boolean;
+      data: {
+        totalDeadLetters: number;
+        exceeded: boolean;
+        severity: 'normal' | 'warning' | 'critical';
+        threshold: number;
+        bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
+      };
+    };
+  }>('/api/v1/sync-tasks/dead-letter-alert', async () => {
+    const stats = await repository.getDeadLetterStats();
+    const { totalDeadLetters, bySite } = stats;
+
+    let severity: 'normal' | 'warning' | 'critical';
+    if (totalDeadLetters === 0) {
+      severity = 'normal';
+    } else if (totalDeadLetters >= deadLetterAlertThreshold) {
+      severity = 'critical';
+    } else {
+      severity = 'warning';
+    }
+
+    return {
+      success: true,
+      data: {
+        totalDeadLetters,
+        exceeded: totalDeadLetters >= deadLetterAlertThreshold,
+        severity,
+        threshold: deadLetterAlertThreshold,
+        bySite
+      }
+    };
+  });
+
+  app.get<{
+    Reply: {
+      success: boolean;
+      data: { threshold: number };
+    };
+  }>('/api/v1/sync-tasks/dead-letter-alert-config', async () => {
+    return {
+      success: true,
+      data: { threshold: deadLetterAlertThreshold }
+    };
+  });
+
+  app.put<{
+    Body: { threshold: number };
+    Reply: {
+      success: boolean;
+      message: string;
+      data?: { threshold: number };
+    };
+  }>('/api/v1/sync-tasks/dead-letter-alert-config', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const { threshold } = request.body;
+    if (typeof threshold !== 'number' || threshold < 1 || threshold > 1000) {
+      return reply.status(400).send({
+        success: false,
+        message: 'Threshold must be a number between 1 and 1000'
+      });
+    }
+
+    deadLetterAlertThreshold = Math.floor(threshold);
+
+    return {
+      success: true,
+      message: '操作成功',
+      data: { threshold: deadLetterAlertThreshold }
+    };
+  });
+
   app.post<{
     Params: {
       siteId: string;

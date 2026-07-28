@@ -1,0 +1,20 @@
+<svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">RankWoven</title>
+  <desc id="desc">RankWoven logo: hub connecting content, keywords and growth</desc>
+  <rect width="40" height="40" rx="8" fill="#084C45"/>
+  <!-- Central hexagon node -->
+  <polygon points="20,14 25.2,17 25.2,23 20,26 14.8,23 14.8,17" stroke="#F6D365" stroke-width="2" stroke-linejoin="round" fill="none"/>
+  <!-- Three converging data streams with endpoints -->
+  <!-- Stream top-right to center -->
+  <line x1="32" y1="10" x2="25.2" y2="17" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="32" cy="10" r="2" fill="#F6D365"/>
+  <!-- Stream bottom-right to center -->
+  <line x1="32" y1="30" x2="25.2" y2="23" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="32" cy="30" r="2" fill="#F6D365"/>
+  <!-- Stream bottom-center to center -->
+  <line x1="14.8" y1="30" x2="14.8" y2="23" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="14.8" cy="30" r="2" fill="#F6D365"/>
+  <!-- Center growth indicator -->
+  <path d="M20 10L20 14M17 12L20 10L23 12" stroke="#F6D365" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="52" y="26" fill="#14231F" font-family="Instrument Sans, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">RankWoven</text>
+</svg>

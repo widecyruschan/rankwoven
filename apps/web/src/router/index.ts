@@ -193,6 +193,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/app/site-audit',
+    name: 'AppSiteAudit',
+    component: () => import('../views/SiteAuditView.vue'),
+    meta: {
+      titleKey: 'nav.siteAudit',
+      layout: 'app',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/admin',
     name: 'AdminOverview',
     component: () => import('../views/AdminOverviewView.vue'),

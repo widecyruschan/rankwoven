@@ -11,11 +11,12 @@ import {
   batchRetrySyncTasks,
   batchIgnoreDeadLetterTasks,
   exportSyncTasks,
-  getDeadLetterStats,
+  getDeadLetterAlert,
+  getDeadLetterAlertConfig,
+  updateDeadLetterAlertConfig,
   type SyncTask,
   type SyncTaskScope,
-  type SyncTaskStatus,
-  type DeadLetterStats
+  type SyncTaskStatus
 } from '../api/siteConnections';
 
 const { t, locale } = useI18n();
@@ -32,7 +33,16 @@ const retryingTaskIds = ref<Set<string>>(new Set());
 const ignoringTaskIds = ref<Set<string>>(new Set());
 const selectedRowKeys = ref<string[]>([]);
 const isBatchLoading = ref(false);
-const deadLetterStats = ref<DeadLetterStats | null>(null);
+const deadLetterAlertData = ref<{
+  totalDeadLetters: number;
+  exceeded: boolean;
+  severity: 'normal' | 'warning' | 'critical';
+  threshold: number;
+  bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
+} | null>(null);
+const alertThreshold = ref(5);
+const alertConfigLoading = ref(false);
+const showAlertSettings = ref(false);
 let autoRefreshTimer: number | null = null;
 
 const AUTO_REFRESH_INTERVAL_MS = 15000;
@@ -251,12 +261,35 @@ async function loadTasks() {
   }
 }
 
-async function loadDeadLetterStats() {
+async function loadDeadLetterAlert() {
   try {
-    const result = await getDeadLetterStats();
-    deadLetterStats.value = result;
+    const result = await getDeadLetterAlert();
+    deadLetterAlertData.value = result;
   } catch {
-    // Silently ignore stats load failures
+    // Silently ignore alert load failures
+  }
+}
+
+async function loadAlertConfig() {
+  try {
+    const result = await getDeadLetterAlertConfig();
+    alertThreshold.value = result.threshold;
+  } catch {
+    // Keep default threshold
+  }
+}
+
+async function handleUpdateAlertThreshold() {
+  alertConfigLoading.value = true;
+  try {
+    await updateDeadLetterAlertConfig(alertThreshold.value);
+    void message.success(t('tasks.deadLetterAlertConfigSaved'));
+    showAlertSettings.value = false;
+    await loadDeadLetterAlert();
+  } catch (error) {
+    void message.error(error instanceof Error ? error.message : t('tasks.actionFailed'));
+  } finally {
+    alertConfigLoading.value = false;
   }
 }
 
@@ -265,7 +298,7 @@ async function handleRetry(taskId: string) {
   try {
     await retrySyncTask(taskId);
     selectedRowKeys.value = selectedRowKeys.value.filter((k) => k !== taskId);
-    await Promise.all([loadTasks(), loadDeadLetterStats()]);
+    await Promise.all([loadTasks(), loadDeadLetterAlert()]);
   } catch {
     void message.error(t('tasks.retryFailed'));
   } finally {
@@ -280,7 +313,7 @@ async function handleIgnore(taskId: string) {
   try {
     await ignoreDeadLetterTask(taskId);
     selectedRowKeys.value = selectedRowKeys.value.filter((k) => k !== taskId);
-    await Promise.all([loadTasks(), loadDeadLetterStats()]);
+    await Promise.all([loadTasks(), loadDeadLetterAlert()]);
   } catch {
     void message.error(t('tasks.ignoreFailed'));
   } finally {
@@ -305,7 +338,7 @@ async function handleBatchRetry() {
         await batchRetrySyncTasks(selectedRowKeys.value);
         void message.success(t('tasks.batchRetrySuccess', { count: selectedRowKeys.value.length }));
         selectedRowKeys.value = [];
-        await Promise.all([loadTasks(), loadDeadLetterStats()]);
+        await Promise.all([loadTasks(), loadDeadLetterAlert()]);
       } catch {
         void message.error(t('tasks.batchActionFailed'));
       } finally {
@@ -339,7 +372,7 @@ async function handleBatchIgnore() {
         await batchIgnoreDeadLetterTasks(deadLetterOnly);
         void message.success(t('tasks.batchIgnoreSuccess', { count: deadLetterOnly.length }));
         selectedRowKeys.value = [];
-        await Promise.all([loadTasks(), loadDeadLetterStats()]);
+        await Promise.all([loadTasks(), loadDeadLetterAlert()]);
       } catch {
         void message.error(t('tasks.batchActionFailed'));
       } finally {
@@ -376,7 +409,7 @@ function startAutoRefresh() {
   if (!autoRefreshEnabled.value) return;
   autoRefreshTimer = window.setInterval(() => {
     loadTasks();
-    loadDeadLetterStats();
+    loadDeadLetterAlert();
   }, AUTO_REFRESH_INTERVAL_MS);
 }
 
@@ -398,7 +431,8 @@ function toggleAutoRefresh() {
 
 onMounted(() => {
   void loadTasks();
-  void loadDeadLetterStats();
+  void loadDeadLetterAlert();
+  void loadAlertConfig();
   startAutoRefresh();
 });
 
@@ -425,27 +459,59 @@ onUnmounted(() => {
     </div>
 
     <section class="content-panel">
-      <!-- Dead-letter stats alert -->
+      <!-- Dead-letter alert with severity levels -->
       <a-alert
-        v-if="deadLetterStats && deadLetterStats.totalDeadLetters > 0"
+        v-if="deadLetterAlertData && deadLetterAlertData.totalDeadLetters > 0"
         class="page-alert"
-        type="warning"
+        :type="deadLetterAlertData.severity === 'critical' ? 'error' : 'warning'"
+        :banner="deadLetterAlertData.severity === 'critical'"
         show-icon
         closable
       >
         <template #message>
           <div class="dead-letter-alert-content">
-            <span>{{ t('tasks.deadLetterAlert', { count: deadLetterStats.totalDeadLetters }) }}</span>
-            <template v-if="deadLetterStats.bySite.length > 0">
-              <span class="dead-letter-site-detail">
-                <a-tag v-for="site in deadLetterStats.bySite" :key="site.siteId" color="orange">
-                  {{ site.siteName }}: {{ site.count }}
-                </a-tag>
-              </span>
-            </template>
+            <span>
+              {{
+                deadLetterAlertData.severity === 'critical'
+                  ? t('tasks.deadLetterAlertCritical', { count: deadLetterAlertData.totalDeadLetters })
+                  : t('tasks.deadLetterAlertWarning', { count: deadLetterAlertData.totalDeadLetters })
+              }}
+            </span>
+            <span v-if="deadLetterAlertData.bySite.length > 0" class="dead-letter-site-detail">
+              <a-tag
+                v-for="site in deadLetterAlertData.bySite"
+                :key="site.siteId"
+                :color="deadLetterAlertData.severity === 'critical' ? 'red' : 'orange'"
+              >
+                {{ site.siteName }}: {{ site.count }}
+              </a-tag>
+            </span>
+            <a-button size="small" type="link" @click="showAlertSettings = true">
+              {{ t('tasks.deadLetterAlertSettings') }}
+            </a-button>
           </div>
         </template>
       </a-alert>
+
+      <!-- Dead-letter alert settings drawer/modal -->
+      <a-modal
+        v-model:open="showAlertSettings"
+        :title="t('tasks.deadLetterAlertSettings')"
+        :confirm-loading="alertConfigLoading"
+        @ok="handleUpdateAlertThreshold"
+      >
+        <a-form layout="vertical">
+          <a-form-item :label="t('tasks.deadLetterAlertThreshold')">
+            <a-input-number
+              v-model:value="alertThreshold"
+              :min="1"
+              :max="100"
+              style="width: 100%"
+            />
+          </a-form-item>
+          <p class="form-hint">{{ t('tasks.deadLetterAlertThresholdDesc') }}</p>
+        </a-form>
+      </a-modal>
 
       <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
 

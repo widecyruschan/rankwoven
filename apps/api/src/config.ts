@@ -43,7 +43,8 @@ const envSchema = z.object({
   AHREFS_API_URL: optionalUrlSchema,
   AHREFS_API_KEY: z.string().optional(),
   SEMRUSH_API_URL: optionalUrlSchema,
-  SEMRUSH_API_KEY: z.string().optional()
+  SEMRUSH_API_KEY: z.string().optional(),
+  SERPAPI_KEY: z.string().optional()
 });
 
 export const apiConfig = envSchema.parse(process.env);

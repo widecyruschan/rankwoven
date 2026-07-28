@@ -71,6 +71,7 @@ export interface ApplySnapshot {
   createdAt: string;
   appliedAt?: string;
   rolledBackAt?: string;
+  matchedAt?: string;
   errorMessage?: string;
 }
 
@@ -219,6 +220,7 @@ CREATE TABLE IF NOT EXISTS apply_snapshots (
   created_at timestamptz NOT NULL DEFAULT now(),
   applied_at timestamptz,
   rolled_back_at timestamptz,
+  snapshot_matched_at timestamptz,
   error_message text
 );
 
@@ -300,6 +302,7 @@ function mapApplySnapshotRow(row: QueryResultRow): ApplySnapshot {
     createdAt: toIsoString(row.created_at) ?? '',
     appliedAt: toIsoString(row.applied_at),
     rolledBackAt: toIsoString(row.rolled_back_at),
+    matchedAt: toIsoString(row.snapshot_matched_at),
     errorMessage: row.error_message ?? undefined
   };
 }
