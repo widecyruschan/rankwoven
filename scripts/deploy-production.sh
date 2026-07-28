@@ -154,6 +154,8 @@ bash scripts/migrate-database.sh
 # Use --profile so that data services (postgres/redis) are also stopped and the
 # network is fully removed. Named volumes (postgres_data, redis_data) are preserved.
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' down --remove-orphans || true
+# Allow Docker to fully release host port bindings before recreating containers.
+sleep 10
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' ps"
 
