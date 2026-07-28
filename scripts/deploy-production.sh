@@ -149,6 +149,10 @@ for attempt in \$(seq 1 30); do
 done
 DATABASE_BACKUP_DIR='$DEPLOY_DATABASE_BACKUP_DIR' bash scripts/backup-database.sh
 bash scripts/migrate-database.sh
+# Stop and remove the existing web container before rebuilding to avoid port 8080 conflicts
+# during recreate (old container holds the port while the new one tries to bind).
+docker compose \$COMPOSE_FILES stop web || true
+docker compose \$COMPOSE_FILES rm -f web || true
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' ps"
 
