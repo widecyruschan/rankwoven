@@ -1233,35 +1233,76 @@ Joomla 和 OpenCart 屬於 MVP 後擴展，建議在 WordPress Beta 穩定後再
 
 本清單在每次完成開發、測試、部署或文件更新後都需要同步更新，並只保留最接近當前狀態的可執行事項。
 
-### 已完成（最近一次收尾：2026-07-28 下午）
-- **SEO Site Audit 全棧實作**：基於 SerpApi 的站點 SEO 審計模組，涵蓋 11 個審計類別（meta_tags / headings / content_quality / links / images / structured_data / mobile / performance / indexability / security / other）、4 級嚴重度（Critical / High / Medium / Low）。資料庫新增 `site_audit_configs`、`site_audit_results`、`site_audit_issues` 三張表（migration `0006`）。API 提供 5 個端點（`GET/POST /api/v1/site-audit/config`、`POST /api/v1/site-audit/run`、`GET /api/v1/site-audit/results`、`GET /api/v1/site-audit/results/:id`）。前端 `/app/site-audit` 頁面包含審計配置（排程 / 頁面限制 / 爬取來源 / 郵件通知）、即時執行審計（含進度確認）、審計結果儀表板（總分 + 指標卡片 + 問題分類摘要）、審計歷史列表。後台 API 進程內含 30 分鐘定時排程器，自動執行到期排程審計。本地 `.env` 已配置 `SERPAPI_KEY`。
-- 本地驗證通過：`db:migrate` 確認 `0006` 套用並記錄、PostgreSQL 3 張 site_audit 表已建立、API health 200、Docker 5 容器 healthy、Lint / Build / Test / Security Audit 全部通過。
-- **生產環境重複站點驗證**：確認 migration `0005` 在生產 PostgreSQL 已套用，唯一索引 `uq_site_connections_workspace_platform_url` 存在，`site_connections` 表查詢 0 個重複記錄。目前生產尚無連接站點，無需清理殘留資料。
-- **Google 服務帳號憑據驗證**：生產 `.env` 中 `GOOGLE_APPLICATION_CREDENTIALS_JSON` 已設定（service account: `rankwoven-ga4-reader@gtm-nfhhng6d-nmi4m.iam.gserviceaccount.com`，1831 chars）。在生產 API 容器內測試 OAuth token 交換成功；Analytics Data API (`analyticsdata.googleapis.com`) 已啟用；Search Console API 已啟用且服務帳號擁有 `rankwoven.com`、`sc-domain:rankwoven.com`、`http://gsc.rankwoven.com/` 的 `siteFullUser` 權限。WordPress 插件 (`rankwoven-seo.php`) 已完整支援 GA4 Property ID 收集（設定頁 `OPTION_GA4_PROPERTY_ID`）、同步至 SaaS（`sync_analytics_settings_to_saas`）及連接時發送（`googleAnalyticsPropertyId` 欄位）。編寫 `scripts/test-google-auth.mjs` 多服務 API 測試腳本。
-- **前端接入 Search Console 關鍵詞面板**：在 Dashboard Overview 分頁新增 GSC 摘要卡片（總點擊、總曝光、平均 CTR、平均排名、Top 3 關鍵詞點擊量條形圖）。`SearchConsolePanel.vue` 增加關鍵詞搜尋篩選（含過濾計數器）、Top 5 關鍵詞點擊量條形圖（CSS 漸層橫條）、篩選後統計自動更新。`KeywordSuggestionsView.vue` enrich 流程合併 `gscData` 並新增 GSC 匹配摘要提示（`gscAlerts` i18n）。Dashboard Overview 分頁無站點時顯示提示，有站點時自動載入 GSC + Lighthouse 數據。
-- **前端接入 Lighthouse 審計面板**：Dashboard Overview 分頁新增 Lighthouse 摘要卡片（效能/無障礙/最佳實踐/SEO 四維度 SVG 環形儀表）。`LighthousePanel.vue` 新增 `siteUrl` prop 監聽自動填入審計 URL、compact 模式細化（縮小儀表環、隱藏診斷、縮小 Vitals 網格）、快速審計按鈕。`AuditView.vue` 獨立審計頁使用全尺寸面板。Dashboard 各分頁的站點選擇器統一顯示。
-- 配置 Hostinger MCP（hosting / domains / dns / billing / reach / vps 六個 server，Token 置於使用者級 `~/.codebuddy/mcp.json`，不進倉庫）。
-- 提交並推送 site connections 同步、SEO 優化、Tasks / ApplySuggestions UI、auth、i18n（feat）與 WordPress `TESTING.md`、rankwoven-dev 技能、部署文件（docs）至 `main`，觸發 GitHub Actions 生產部署。
-- 通過 `lint` / `test` / `build`（含 API `tsc` 型別檢查）/ `security:audit`，`https://api.rankwoven.com/health` 基線正常。
-- 修復 WordPress 插件在站點設定頁「修改資訊」時 SaaS 後台重複新增站點的問題：API `site-connections` `create()` 改為 upsert（依正規化 `site_url` + `workspace_id` 去重，更新資訊並沿用既有 token 不重發）；新增 `PUT /api/v1/site-connections/:siteId` 路由與 `findByUrl` / `updateSiteInfo`；插件在已連接站點改用 `PUT` 更新（帶既有 token）並只在 API 回傳新 token 時覆寫本機 token；新增 migration `0005_site_url_unique.sql` 建立 `(workspace_id, platform, site_url)` 唯一索引作為資料層防線。本地 smoke 驗證：同 URL 連續 POST 兩次回傳同一 `site id` 且第二次不回傳 `apiToken`（UPSERT_OK）。
-- Docker Desktop `aieo` 專案已重建 `api` / `web` 容器載入新程式碼並通過本地 smoke check。
-- 補強去重：API Postgres `list()` 加入 `dedupeSiteConnections`；`SitesView.vue` 增加前端依正規化 URL 去重，確保站點管理每個站點只顯示一個 item；migration `0005` 改為去重時合併 `last_token_used_at` / `last_sync_at` / `last_sync_stats` 到保留列。
-- 關鍵詞資料源策略定稿：評估 DataForSEO（需最低充值 $50 USD + 手機驗證）後，決定改用**免費組合方案**（Google Search Console API + 自建 Lighthouse + AI 估算）。`KEYWORD_VOLUME_PROVIDER` 設為 `generic`（AI fallback），DataForSEO 程式碼路徑保留以便未來充值後直接切換。
-- 實現共享 Google 認證模組 `apps/api/src/googleAuth.ts`：JWT 簽名 + OAuth token 交換 + 多 scope 快取，同時服務 GA4、Search Console 和 PageSpeed Insights。
-- 實現 Search Console API 模組 `apps/api/src/searchConsole.ts`：`GET /api/v1/search-console/keywords?siteUrl=` 查詢自有網站關鍵詞點擊、曝光、CTR、平均排名。支援 URL 格式自動回退至 `sc-domain:` 域名屬性格式。`rankwoven.com` 已添加服務帳號為 Search Console 使用者，API 返回 `source: "search-console"`（新網站目前 0 個關鍵詞，隨流量增長將自動出現）。
-- 實現 Lighthouse 模組 `apps/api/src/lighthouse.ts`：`GET /api/v1/lighthouse/audit?url=&strategy=` 雙通道設計—優先 PageSpeed Insights API，配額耗盡或 429 時自動回退本地 Chromium CLI。Dockerfile 新增 Chromium 支援。`rankwoven.com` 審計結果：perf=51, a11y=96, seo=83, bp=96。
-- 重構 `apps/api/src/analytics.ts`：GA4 認證邏輯抽取至 `googleAuth.ts`，消除重複 JWT 實作。
-- 清理 `.env.example` 格式問題（移除洩露的服務帳號私鑰），修正 `KEYWORD_VOLUME_PROVIDER` 預設值為 `generic`。
-- **WENWEN_API_KEY 生產部署與多模型驗證**：在生產 `.env` 修復 `WENWEN_API_KEY` `sk-` 前綴並設定 `WENWEN_TEXT_MODEL=gpt-4o-mini`。通過 Wenwen 代理 (`https://breakout.wenwen-ai.com`) 驗證 OpenAI `gpt-4o-mini`、Google `gemini-2.5-flash`、Google `gemini-2.5-pro` 三個模型對基本 JSON 物件、巢狀 SEO Schema、JSON 陣列均可產生可解析 JSON（9/9 全部通過）。DeepSeek 模型當前無可用渠道。撰寫 `scripts/test-ai-models.mjs` 多模型 JSON 驗證腳本。
-- **全量 CI/CD 檢查通過**：執行 lint (0 errors 0 warnings)、test (35 passed 1 skipped)、build (vue-tsc + vite + tsc)、security audit (0 vulnerabilities)、PostgreSQL migration (0005 applied)、WordPress PHP 語法檢查 (no errors)、Docker Desktop 重建 (5 containers healthy)。修復類型錯誤（`VitalsRow`、`ColumnType`、`@/` 別名）、lint 警告（`vue/attribute-hyphenation`、`vue/attributes-order`）、測試期望值、重建損壞的 `SearchConsolePanel.vue`。
+### 模組覆蓋度總覽（2026-07-28 全面審計）
 
-### 待辦（按優先順序）
-1. 在本地 `/app/site-audit` 頁面對已連接站點（`cyruschan.com` / `rankwoven.com`）執行實際審計，驗證 SerpApi 返回數據與前端儀表板渲染。
-2. SerpApi 免費層 250 次/月限額：為審計加入底層請求計數器與配額保護，並在前端展示剩餘額度。
-3. Site Audit 審計結果頁增加點擊展開問題詳情（當前僅顯示類別摘要），包含問題 URL、修復建議及可選的一鍵修正（連結到 `/app/apply`）。
-4. 為 Worker 死信任務補管理後台重跑 / 忽略 / 批量導出 / 告警入口。
-5. 將寫回快照升級為 Worker 寫回前即時讀取 WordPress 真實欄位值。
-6. 任務隊列補站點 / 類型篩選與可配置自動刷新。
-7. 生產 Web 容器改為正式靜態構建部署，避免 Vite dev server 對外。
-8. 部署文件補資料庫備份恢復演練與回滾清單；為 `/app/apply` 增加差異對比視圖與批量勾選。
-9. 如後續需要精確關鍵詞搜尋量/CPC/競爭度，可充值 DataForSEO 後將 `KEYWORD_VOLUME_PROVIDER` 切回 `dataforseo`，現有程式碼無需改動即可啟用。
+| 模組 | 覆蓋度 | 狀態 |
+|------|--------|------|
+| 認證與工作區 | 60% | 登入/會話恢復/admin-role ✅，缺：註冊/密碼重置/OAuth/多工作區 |
+| 站點連接管理 | 100% | WP CRC/Upsert 去重/Token 管理/GA4 設定/死信隊列/批量操作 |
+| 內容同步 | 100% | 文章/媒體同步、手動刷新、死信告警、批量重試/忽略 |
+| SEO 審計引擎 | 100% | 11 類別審計、建議生成、審計歷史 |
+| SerpApi 站點檢測 | 100% | 4 級嚴重度、排程、儀表板、管理端用量 |
+| Lighthouse 審計 | 100% | PSI + Chromium 回退、雙策略、環形儀表 |
+| Search Console | 100% | 關鍵詞拉取、Dashboard 條形圖、篩選 |
+| Google Analytics | 100% | GA4 API、Demo 模式、共享認證模組 |
+| AI 內容優化 | 80% | 標題/描述/大綱/改寫，缺：批量優化/優化計劃 |
+| 圖片 SEO | 100% | Alt Text/檔名/簡報 |
+| 內部連結 | 100% | 來源/目標/錨文本推薦 |
+| 審批與應用 | 80% | 單條審批/Review 對比/Apply 隊列/快照/回滾，缺：批量審批 |
+| 關鍵詞研究 | 60% | 多源（GSC/AI）建議，缺：精確搜索量/競爭度/趨勢 |
+| 分析儀表盤 | 70% | Dashboard GSC+Lighthouse 卡片，缺：多站點對比/報告 |
+| WordPress 插件 | 50% | 連接/Token/GA4，缺：內容推送/文章草稿寫入 |
+| Worker 任務隊列 | 40% | BullMQ 框架/定時調度，缺：完整重試策略/監控面板 |
+| 國際化 | 100% | en / zh-Hant 雙語 |
+| 管理後台 | 90% | 概覽/客戶/用量(含 SerpApi)/運營/設定 |
+| 品牌與首頁 | 100% | Logo/三角色版塊/核心功能/CTA/雙語 |
+| CI/CD | 100% | GitHub Actions 生產部署、全量檢查通過 |
+| 報告與導出 | 0% | 完全缺失 |
+| 定價與訂閱 | 20% | 僅靜態 PricingView |
+| Docker 開發 | 100% | Bind mount 源碼同步、5 容器 healthy |
+
+### 待辦（按優先順序 P0→P3）
+
+#### 🔴 P0 — 阻塞 Beta 上線
+
+| # | 事項 | 說明 |
+|---|------|------|
+| P0-1 | 生產 Web 容器改為靜態構建部署 | `npm run dev` 對外不安全且效能差，改用 `build` + Nginx 靜態服務 |
+| P0-2 | SerpApi 配額保護 | 請求計數器、硬限制 250次/月、前端展示剩餘額度 |
+| P0-3 | API Rate Limiting | 各端點缺少限流保護 |
+
+#### 🟡 P1 — Beta 上線前應完成
+
+| # | 事項 | 說明 |
+|---|------|------|
+| P1-1 | 用戶註冊與密碼管理 | 僅有 login，需註冊/密碼重置/郵箱驗證 |
+| P1-2 | Site Audit 問題詳情展開 | 點擊展開具體 URL、修復建議、一鍵修正連結 |
+| P1-3 | /app/apply 差異對比視圖 | 缺少改前 vs 改後的 side-by-side 對比 |
+| P1-4 | 批量審批與批量應用 | 僅支援單條，需全選/多選後批量 Approve/Apply |
+| P1-5 | 實際審計端到端驗證 | 對已連接站點執行完整 SerpApi 審計 |
+| P1-6 | Worker 死信隊列管理後台 | 重跑/忽略/批量導出/告警入口 |
+| P1-7 | 快照寫回前讀取 WP 真實值 | Worker 寫回前先 GET 最新欄位值 |
+
+#### 🟢 P2 — MVP 後優先擴展
+
+| # | 事項 | 說明 |
+|---|------|------|
+| P2-1 | WordPress 插件內容推送 | 反向推送草稿/更新到 WP |
+| P2-2 | AI 文章生成 (M5) | 關鍵詞→標題/大綱/文章草稿、配圖、內鏈、推送 WP 草稿 |
+| P2-3 | 關鍵詞精確搜索量 | 充值 DataForSEO 後切換 `KEYWORD_VOLUME_PROVIDER=dataforseo` |
+| P2-4 | 報告與導出 (PRD §11) | PDF/CSV 審計報告、成效對比、白標報告 |
+| P2-5 | 工作區多用戶協作 | 邀請成員、角色權限、多工作區切換 |
+| P2-6 | 定價與訂閱管理 | 套餐、用量計費、支付集成 |
+| P2-7 | 多站點對比分析 | Dashboard 多站點並行 GSC/GA 對比 |
+
+#### 🔵 P3 — 長期路線圖
+
+| # | 事項 | 說明 |
+|---|------|------|
+| P3-1 | Joomla 擴展 (M8) | CMS 適配器、文章同步、審計、應用回滾 |
+| P3-2 | OpenCart 擴展 (M9) | 產品 SEO、欄位白名單保護交易資料 |
+| P3-3 | AI 成本控制 | 用量預估、額度限制、緩存和任務限流 |
+| P3-4 | SEO 內容品質評分 | 品質打分、過度優化檢測 |
+| P3-5 | 定時自動應用排程 | 設定排程自動應用已批准建議 |
+| P3-6 | OAuth 第三方登入 | Google / GitHub OAuth |
+| P3-7 | 更多語言支援 | 日文、韓文等

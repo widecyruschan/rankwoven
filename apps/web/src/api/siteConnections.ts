@@ -484,6 +484,16 @@ export async function batchApplyOptimizationSuggestions(siteId: string, suggesti
   );
 }
 
+export async function batchApproveOptimizationSuggestions(siteId: string, suggestionIds: string[]) {
+  return requestApi<BatchApplyResult>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions/batch-approve`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ suggestionIds })
+    }
+  );
+}
+
 export async function rollbackApplySnapshot(siteId: string, snapshotId: string) {
   return requestApi<{
     snapshot?: ApplySnapshot;

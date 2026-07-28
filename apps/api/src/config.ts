@@ -44,7 +44,10 @@ const envSchema = z.object({
   AHREFS_API_KEY: z.string().optional(),
   SEMRUSH_API_URL: optionalUrlSchema,
   SEMRUSH_API_KEY: z.string().optional(),
-  SERPAPI_KEY: z.string().optional()
+  SERPAPI_KEY: z.string().optional(),
+  SERPAPI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(250),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+  RATE_LIMIT_TIME_WINDOW_MS: z.coerce.number().int().positive().default(60_000)
 });
 
 export const apiConfig = envSchema.parse(process.env);

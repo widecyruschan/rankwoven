@@ -8,6 +8,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const { isLoggedIn } = authStore;
 
 const formState = reactive({
   email: 'demo@rankwoven.com',
@@ -43,6 +44,10 @@ async function submitLogin() {
         <p class="eyebrow">{{ t('login.eyebrow') }}</p>
         <h1>{{ t('login.title') }}</h1>
         <p>{{ t('login.body') }}</p>
+        <div v-if="!isLoggedIn" class="login-hint">
+          <p><router-link to="/register">{{ t('login.registerLink') }}</router-link></p>
+          <p><router-link to="/forgot-password">{{ t('login.forgotPasswordLink') }}</router-link></p>
+        </div>
       </div>
 
       <a-form class="login-form" layout="vertical" :model="formState" @finish="submitLogin">

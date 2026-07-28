@@ -72,7 +72,7 @@ onMounted(async () => {
 <style scoped>
 .page-section {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 

@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { createNoopAiProviderRegistry, createWenwenAiProviderRegistry } from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
@@ -72,6 +73,26 @@ export function createServer(options: CreateServerOptions = {}) {
 
   app.register(cors, {
     origin: true
+  });
+
+  // ── Global Rate Limiting ──
+  app.register(rateLimit, {
+    max: apiConfig.RATE_LIMIT_MAX,
+    timeWindow: apiConfig.RATE_LIMIT_TIME_WINDOW_MS,
+    keyGenerator: (request) => {
+      // Use X-Forwarded-For if behind reverse proxy
+      const xff = request.headers['x-forwarded-for'];
+      const ip = Array.isArray(xff) ? xff[0] : (xff ?? request.ip);
+      return String(ip);
+    },
+    errorResponseBuilder: (_request, context) => ({
+      success: false,
+      message: '請求過於頻繁，請稍後再試',
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfterSec: Math.ceil(context.ttl / 1000)
+      }
+    })
   });
 
   app.get('/health', async () => ({

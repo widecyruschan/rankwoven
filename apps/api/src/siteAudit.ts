@@ -103,6 +103,24 @@ function getSerpApiKey(): string {
   return key;
 }
 
+function getSerpApiMonthlyLimit(): number {
+  const limit = process.env.SERPAPI_MONTHLY_LIMIT;
+  return Number(limit) || 250;
+}
+
+export class SerpApiQuotaExceededError extends Error {
+  public readonly code = 'SERPAPI_QUOTA_EXCEEDED';
+  public readonly used: number;
+  public readonly limit: number;
+
+  constructor(used: number, limit: number) {
+    super(`SerpApi 本月配額已用盡（已用 ${used}/${limit}）`);
+    this.name = 'SerpApiQuotaExceededError';
+    this.used = used;
+    this.limit = limit;
+  }
+}
+
 /**
  * 透過 SerpApi 查詢 Google `site:` 搜尋，找出網站已建立索引的頁面。
  * 支援分頁取得結果，最多回傳 pageLimit 筆。
@@ -485,6 +503,7 @@ function createInMemorySiteAuditRepository(): SiteAuditRepository {
         .map(([siteId]) => ({ siteId, siteUrl: '' }));
     },
     async getSerpapiUsageStats() {
+      const monthlyLimit = getSerpApiMonthlyLimit();
       const totalCreditsUsed = Array.from(results.values()).reduce((sum, r) => sum + r.serpapiCreditsUsed, 0);
       const completedResults = Array.from(results.values()).filter((r) => r.status === 'completed');
       const lastAuditAt = completedResults.length > 0
@@ -492,8 +511,8 @@ function createInMemorySiteAuditRepository(): SiteAuditRepository {
         : undefined;
       return {
         totalCreditsUsed,
-        monthlyLimit: 250,
-        remaining: Math.max(0, 250 - totalCreditsUsed),
+        monthlyLimit,
+        remaining: Math.max(0, monthlyLimit - totalCreditsUsed),
         totalAudits: completedResults.length,
         lastAuditAt: lastAuditAt || undefined
       };
@@ -829,6 +848,7 @@ export class PostgresSiteAuditRepository implements SiteAuditRepository {
 
   async getSerpapiUsageStats(): Promise<SerpapiUsageStats> {
     await this.ensureSchema();
+    const monthlyLimit = getSerpApiMonthlyLimit();
     const result = await this.pool.query(
       `
         SELECT
@@ -841,8 +861,8 @@ export class PostgresSiteAuditRepository implements SiteAuditRepository {
     const row = result.rows[0];
     return {
       totalCreditsUsed: Number(row.total_credits_used),
-      monthlyLimit: 250,
-      remaining: Math.max(0, 250 - Number(row.total_credits_used)),
+      monthlyLimit,
+      remaining: Math.max(0, monthlyLimit - Number(row.total_credits_used)),
       totalAudits: Number(row.total_audits),
       lastAuditAt: row.last_audit_at ? new Date(row.last_audit_at).toISOString() : undefined
     };
@@ -916,6 +936,12 @@ export async function executeSiteAudit(
   auditRepository: SiteAuditRepository,
   pageLimit: number
 ): Promise<SiteAuditResult> {
+  // ── Quota pre-check ──
+  const stats = await auditRepository.getSerpapiUsageStats();
+  if (stats.remaining <= 0) {
+    throw new SerpApiQuotaExceededError(stats.totalCreditsUsed, stats.monthlyLimit);
+  }
+
   const startedAt = new Date().toISOString();
 
   // 建立稽核記錄 (status: running)
@@ -1121,6 +1147,18 @@ export function registerSiteAuditRoutes(
           data: fullResult ?? result
         });
       } catch (error) {
+        if (error instanceof SerpApiQuotaExceededError) {
+          return reply.status(429).send({
+            success: false,
+            message: error.message,
+            error: {
+              code: error.code,
+              used: error.used,
+              limit: error.limit,
+              remaining: Math.max(0, error.limit - error.used)
+            }
+          });
+        }
         const message = error instanceof Error ? error.message : '稽核失敗';
         return reply.status(500).send({
           success: false,
@@ -1262,6 +1300,13 @@ export async function processDueScheduledAudits(
   }
 
   try {
+    // ── Quota pre-check ──
+    const stats = await auditRepository.getSerpapiUsageStats();
+    if (stats.remaining <= 0) {
+      logger.log(`[siteAudit] SerpApi 本月配額已用盡（${stats.totalCreditsUsed}/${stats.monthlyLimit}），跳過排程稽核`);
+      return 0;
+    }
+
     const dueSites = await auditRepository.findSitesDueForAudit();
     if (dueSites.length === 0) return 0;
 

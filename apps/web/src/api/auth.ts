@@ -46,6 +46,39 @@ export async function login(email: string, password: string) {
   });
 }
 
+export async function registerUser(name: string, email: string, password: string) {
+  return requestApi<AuthSession>('/api/v1/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      email,
+      password
+    })
+  });
+}
+
+export async function forgotPassword(email: string) {
+  return requestApi<{ _devResetToken?: string }>('/api/v1/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  return requestApi<Record<string, never>>('/api/v1/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword })
+  });
+}
+
+export async function changePassword(token: string, currentPassword: string, newPassword: string) {
+  return requestApi<Record<string, never>>('/api/v1/auth/change-password', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+}
+
 export async function getMe(token: string) {
   return requestApi<{
     user: AuthUser;

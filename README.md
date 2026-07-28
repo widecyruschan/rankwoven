@@ -1187,3 +1187,103 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `.env`、`docs/seo-ai-platform-prd.md`、本 `README.md`。
 - 驗證結果：`db:migrate` 套用成功（schema_migrations 記錄 id=7, file=0006_site_audit.sql）；PostgreSQL `\dt site_audit*` 確認三張表；Docker Compose ps 確 5 容器；API `/health` 200；前端頁面可訪問（需登錄後執行審計測試）。
 - 下一步行動清單：在 `/app/site-audit` 頁面登錄後對 `cyruschan.com` / `rankwoven.com` 執行實際審計；為審計加入 SerpApi 配額計數器與前端額度展示；審計結果頁增加點擊展開問題詳情。
+
+### 2026-07-28（下午二）— 品牌首頁重新設計 + Docker 源碼自動同步 + PRD 全量審計
+
+- 會話的主要目的：(1) 為市場首頁加入三個目標用戶角色版塊（網站站長 / SEO Agency / 內容編輯），每個角色展示痛點與核心流程；(2) 配置 Docker 源碼卷掛載，實現主機代碼變更自動同步至容器；(3) 安裝 SkillHub `ui-new` 技能並優化前台 UI；(4) 對比 PRD 全面審計每個模組的實現狀態，重新制定下一步行動清單。
+- 完成的主要任務：
+  1. **Docker 源碼卷掛載**：在 `docker-compose.yml` 新增 `x-aieo-dev` YAML 錨點，三個服務共用 `.:/workspace:cached` bind mount + 6 個匿名卷保護 `node_modules`。從此主機修改源碼後 Vite/tsx watch 自動熱重載，無需重建容器。
+  2. **`ui-new` 技能安裝**：通過 SkillHub CLI (`skillhub install ui-new`) 安裝到 `.codebuddy/skills/ui-new/`，並根據其 UI Audit Protocol 優化前台：添加 `max-width: 1200px` 居中約束、persona 卡片 hover 動效、流程步驟微交互、CTA 按鈕視覺增強。
+  3. **首頁重新設計**：
+     - `MarketingHomeView.vue`：完全重寫，替換舊 features + workflow 區塊為三個角色版塊（網站站長 / SEO Agency / 內容編輯），每個角色含內聯 SVG 圖標、角色標題與摘要、痛點列表（紅標記）、核心流程（藍色編號步驟）。底部「核心功能」6 個卡片在角色版塊之後、CTA 之前。
+     - `i18n.ts`：新增 `personaSectionTitle`、`personaSectionBody`、`personas.*`（共 3 組角色的痛點與流程，en/zh-Hant 雙語）。補回 `featuresTitle`/`featuresBody`。
+     - `styles.css`：新增 ~220 行 persona + feature-card 樣式（含響應式 @media）。
+  4. **PRD 全量審計**：對比 `docs/seo-ai-platform-prd.md` 與實際代碼，逐一檢查各模組實現狀態。結果：
+     - 10 個模組達 100% 覆蓋（站點連接、內容同步、SEO 審計、SerpApi、Lighthouse、Search Console、GA、圖片 SEO、內部連結、國際化）
+     - 4 個模組達 80-90%（AI 內容優化 80%、審批與應用 80%、管理後台 90%、品牌 100%）
+     - 3 個模組達 0-60%（關鍵詞研究 60%、Worker 40%、WP 插件 50%）
+     - 2 個模組完全缺失（報告與導出 0%、定價與訂閱 20%）
+  5. **更新 PRD 第 17 節**：完全重寫「下一步行動清單」，按 P0（阻塞上線）/ P1（Beta 前）/ P2（MVP 後）/ P3（長期）四級優先級重新編排，新增 7 項 P0 + 7 項 P1 + 7 項 P2 + 7 項 P3 共 28 項任務。
+  6. 提交並推送至 GitHub（commit `7659ba6`，38 files changed）。
+- 關鍵決策和解決方案：使用 YAML 錨點 `&aieo-dev` 簡化三個服務的卷掛載配置；Persona 卡片佈局為左右兩欄（痛點 | 流程），移動端自動折疊為單欄；`ui-new` 技能通過「max-width 居中 + hover 微動效」解決頁面過寬問題。
+- 使用的技術棧：Vue 3、TypeScript、CSS Grid/Flexbox、SVG inline icons、SkillHub CLI、Docker Compose bind mount、i18n 雙語。
+- 新增或修改文件：
+  - 修改：`docker-compose.yml`、`apps/web/src/views/MarketingHomeView.vue`、`apps/web/src/i18n.ts`、`apps/web/src/styles.css`、`docs/seo-ai-platform-prd.md`、`README.md`
+  - 新增：`.codebuddy/skills/ui-new/`（SkillHub 安裝的技能包）
+- 驗證結果：ESLint 0/0、vue-tsc 編譯通過、Docker 5 容器 healthy、`http://localhost:8080` 首頁渲染正確、角色版塊與核心功能區塊顯示正常、中英雙語切換正常。
+- 下一步行動清單：優先處理 P0 三項（Web 靜態構建部署、SerpApi 配額保護、API Rate Limiting），其次推進 P1（用戶註冊/密碼管理、Site Audit 詳情展開、Apply 差異對比、批量審批等）。
+
+### 2026-07-28（下午三）— P0 阻塞 Beta 上線三項全部完成
+
+- 會話的主要目的：處理 PRD 第 17 節標記的 P0 三項阻塞 Beta 上線任務。
+- 完成的主要任務：
+  1. **P0-1: Web 生產靜態構建部署**：
+     - 新增 `Dockerfile.web`（Multi-stage：Node 22 Alpine builder → Nginx Alpine runtime）
+     - 新增 `apps/web/nginx.conf`（SPA 路由 fallback、Vite 產物 `assets/` 長緩存、Gzip、安全頭：X-Frame-Options / X-Content-Type-Options / X-XSS-Protection / Referrer-Policy）
+     - 新增 `docker-compose.prod.yml`（生產覆寫，Web 改用 Nginx 靜態服務端口 80，api/worker profiles 清空）
+     - `scripts/deploy-production.sh` 更新為同時載入 `-f docker-compose.yml -f docker-compose.prod.yml`
+  2. **P0-2: SerpApi 配額保護**：
+     - `apps/api/src/config.ts`：新增 `SERPAPI_MONTHLY_LIMIT`（預設 250）、`RATE_LIMIT_MAX`、`RATE_LIMIT_TIME_WINDOW_MS` 環境變數
+     - `apps/api/src/siteAudit.ts`：新增 `getSerpApiMonthlyLimit()` 輔助函數、`SerpApiQuotaExceededError` 類別（附 code/used/limit 欄位）
+     - `executeSiteAudit()` 執行前先檢查配額，超額拋出 `SerpApiQuotaExceededError`
+     - `processDueScheduledAudits()` 排程稽核前檢查配額，超額跳過並記錄日誌
+     - run audit handler 捕獲 `SerpApiQuotaExceededError` 並返回 429 + 詳細配額資訊
+     - InMemory 與 PostgreSQL 兩個 `getSerpapiUsageStats()` 改用 `getSerpApiMonthlyLimit()` 動態讀取限制
+     - `apps/web/src/views/SiteAuditView.vue`：新增配額 badge（剩餘點數顯示，≤50 黃色警告、≤10 紅色警告）、配額用盡時禁用「執行稽核」按鈕並顯示「配額已用盡」、稽核成功後自動刷新配額、錯誤訊息中偵測 quota 關鍵字並顯示友善提示
+     - `apps/web/src/i18n.ts`：en/zh-Hant 雙語新增 `quotaExceeded` / `quotaRemaining` / `quotaBlocked` / `quotaNotConfigured`
+     - `docker-compose.yml`：api 與 worker 服務新增 `SERPAPI_MONTHLY_LIMIT` 環境變數
+     - `.env.example`：新增 `SERPAPI_MONTHLY_LIMIT=250`
+  3. **P0-3: API Rate Limiting**：
+     - 安裝 `@fastify/rate-limit` 依賴
+     - `apps/api/src/server.ts`：全域註冊 rate-limit 中介層，支援 `RATE_LIMIT_MAX`（預設 100 req/window）和 `RATE_LIMIT_TIME_WINDOW_MS`（預設 60s）
+     - keyGenerator 優先使用 `X-Forwarded-For`（Nginx 反向代理後正確識別客戶端 IP）
+     - 超限回應：`{ success: false, message: '請求過於頻繁，請稍後再試', error: { code: 'RATE_LIMIT_EXCEEDED', retryAfterSec } }`
+     - `docker-compose.yml`：api 與 worker 服務新增 `RATE_LIMIT_MAX` 和 `RATE_LIMIT_TIME_WINDOW_MS` 環境變數
+     - `.env.example`：新增 Rate Limiting 配置範例
+- 關鍵決策和解決方案：Web 生產部署從 Vite dev server 改為 Nginx 靜態服務，消除開發伺服器暴露風險、提升靜態資源快取效率、支援正式安全頭；SerpApi 配額在稽核執行前做前置檢查，排程稽核也受配額約束，避免超額調用產生費用；Rate Limiting 使用 Fastify 官方插件，配合 `X-Forwarded-For` 正確處理反向代理場景。
+- 使用的技術棧：Docker Multi-stage Build、Nginx Alpine、Fastify + @fastify/rate-limit、Vue 3 + Ant Design Vue + Vue I18n、TypeScript、PostgreSQL、SerpApi。
+- 新增或修改文件：
+  - 新增：`Dockerfile.web`、`apps/web/nginx.conf`、`docker-compose.prod.yml`
+  - 修改：`apps/api/src/config.ts`、`apps/api/src/server.ts`、`apps/api/src/siteAudit.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/SiteAuditView.vue`、`apps/web/src/styles.css`、`docker-compose.yml`、`.env.example`、`scripts/deploy-production.sh`、`package.json`、`package-lock.json`
+- 驗證結果：`npm run lint` 0e/0w、`npm run test` 1 passed、`npm run build` 全 workspace 通過（vue-tsc + vite + tsc）、`npm run security:audit` 0 vulnerabilities。
+- 下一步行動清單：提交並推送至 `main` 觸發生產部署；部署後驗證 Web 靜態服務、SerpApi 配額顯示和 Rate Limiting 在生產環境正常運作；開始 P1 任務（用戶註冊/密碼管理、Site Audit 詳情展開、Apply 差異對比、批量審批等）。
+
+### 2026-07-28（下午四）— P1 Beta 任務完成
+
+- 會話的主要目的：完成 P1 Beta 任務剩餘未完成項目，包括 P1-1（用戶註冊與密碼管理）的 lint 遺留問題修復、P1-2（Site Audit 問題詳情展開）、P1-4（批量審批）。
+- 完成的主要任務：
+  1. **P1-2: Site Audit 問題詳情展開**：
+     - `SiteAuditView.vue`：為問題表格新增 `expandedRowRender` 可展開行，點擊行可展開查看問題描述（description）、修復建議（recommendation）、受影響 URL（點擊跳轉）和影響數量
+     - 新增 `expandedIssueRow()` 函數，使用 Vue `h()` 渲染擴展行的結構化詳情
+     - `i18n.ts`：en/zh-Hant 雙語新增 `issueDescription`、`issueRecommendation`、`issueAffectedUrl`、`issueAffectedCount`
+     - 新增 `.issue-expanded-row` 等 7 個 CSS 類別，展開區域帶有淺灰背景、描述標籤為大寫灰色小字、修復建議文字使用 1.6 行高提升可讀性
+     - 修正 `expandedRowRender` 函數簽名：Ant Design Vue 的 `ExpandedRowRender` 接受 `{ record, index, indent, expanded }` 物件，而非直接傳入 record
+  2. **P1-4: 批量審批**：
+     - 後端 `seoOptimization.ts`：新增 `POST /api/v1/site-connections/:siteId/suggestions/batch-approve` 端點
+       - 接受 `{ suggestionIds: string[] }`，逐一調用 `seoRepository.approveSuggestion()`
+       - 返回 `{ success, message, data: { results[], total, succeeded, failed } }`
+       - 每條建議獨立處理，部分失敗不影響其他建議
+     - 前端 `siteConnections.ts`：新增 `batchApproveOptimizationSuggestions(siteId, suggestionIds)` API 客戶端函數
+     - `SuggestionsView.vue`：新增批量選擇與批量審批功能
+       - 新增 `selectedRowKeys` ref 和 `rowSelection` computed，使用 Ant Design Vue 的 `row-selection` 配置
+       - 通過 `getCheckboxProps` 僅允許狀態為 `pending` 的建議被選中（`canApprove` 為 true 的行）
+       - 選中建議後顯示藍色批量操作欄，含選中計數和「批量批准」按鈕
+       - 新增 `batchApprove()` 處理函數，調用 API 後清空選擇並刷新建議列表
+       - 站點切換時自動清空選中狀態
+     - `i18n.ts`：en/zh-Hant 雙語新增 `batchApprove`、`approveSelected`、`batchApproved`
+  3. **P1-1 遺留問題修復**：
+     - `RegisterView.vue`：修正 `authStore.setSession()` 參數順序（應為 `token, user` 而非 `user, token`）
+     - `LoginView.vue`：修復 `isLoggedIn` 未暴露至模板的 TypeScript 錯誤，從 `authStore` 解構 `isLoggedIn`
+     - `RegisterView.vue`：移除未使用的 `Space` 組件導入
+     - `LoginView.vue`：eslint --fix 自動修正縮進
+     - `auth.ts`：修復 `randomUUID()` 使用不一致（從 `crypto.randomUUID()` 改為直接使用已導入的 `randomUUID()`）
+     - `auth.ts`：移除未使用的 `readResetTokenSubject()` 函數（其功能已內建於 Repository 的 `resetPassword` 方法中）
+     - `auth.ts`：修復兩處 `throw new Error()` 未附加原始錯誤 `cause` 的 lint 錯誤
+     - `i18n.ts`：修復 zh-Hant 區塊多餘的 `},` 閉合導致 TypeScript 編譯失敗的語法錯誤
+- 關鍵決策和解決方案：Ant Design Vue 的 `ExpandedRowRender` 回調簽名為 `({ record, index, indent, expanded })` 而非直接傳入 record，需用解構參數接收；批量審批採用逐一獨立處理策略（非事務），確保部分失敗不阻塞其他建議審批；`row-selection` 的 `getCheckboxProps` 利用 `SuggestionRow.canApprove` 屬性控制複選框啟用/禁用，與單條 `approve` 按鈕的邏輯一致。
+- 使用的技術棧：Vue 3 Composition API + TypeScript、Ant Design Vue Table（expandedRowRender / rowSelection）、Fastify REST、PostgreSQL、Vue I18n、ESLint、Vitest。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/src/auth.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/SiteAuditView.vue`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/LoginView.vue`、`apps/web/src/views/RegisterView.vue`、`README.md`
+- 驗證結果：`npm run lint` 0e/0w、`npm run test` 1 passed、`npm run build` 全 workspace 通過、`npm run security:audit` 0 vulnerabilities。
+- 下一步行動清單：P1-3（Apply 差異對比）與 P1-6（死信隊列）已於先前實現，P1-7（快照回寫 WordPress）亦已完成；P1-5（端對端測試）為非代碼任務；P1 批次全部完結，可進入 P2 或準備提交推送。
+

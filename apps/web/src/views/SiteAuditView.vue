@@ -23,21 +23,25 @@ import {
   Row,
   Col
 } from 'ant-design-vue';
+import { h } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   getSiteConnections,
   getSiteAuditConfig,
   updateSiteAuditConfig,
   runSiteAudit,
-  getSiteAuditResults
+  getSiteAuditResults,
+  getAdminSerpapiUsage
 } from '../api/siteConnections';
 import type {
   SiteConnection,
   SiteAuditConfig,
   SiteAuditResult,
   SiteAuditResultWithIssues,
+  SiteAuditIssue,
   SiteAuditSchedule,
-  SiteAuditCrawlSource
+  SiteAuditCrawlSource,
+  SerpapiUsageStats
 } from '../api/siteConnections';
 
 const { t } = useI18n();
@@ -55,6 +59,7 @@ const configModalOpen = ref(false);
 const config = ref<SiteAuditConfig | null>(null);
 const results = ref<SiteAuditResult[]>([]);
 const latestResult = ref<SiteAuditResultWithIssues | null>(null);
+const quotaStats = ref<SerpapiUsageStats | null>(null);
 
 // ── form model ──
 const formSchedule = ref<SiteAuditSchedule>('disabled');
@@ -224,6 +229,11 @@ async function saveConfig() {
 
 async function handleRunAudit() {
   if (!selectedSiteId.value) return;
+  // Check quota before even showing the dialog
+  if (quotaStats.value && quotaStats.value.remaining <= 0) {
+    message.warning(tc('quotaExceeded').replace('{used}', String(quotaStats.value.totalCreditsUsed)).replace('{limit}', String(quotaStats.value.monthlyLimit)));
+    return;
+  }
   Modal.confirm({
     title: tc('confirmationTitle'),
     content: tc('confirmationContent'),
@@ -237,13 +247,29 @@ async function handleRunAudit() {
         const res = await getSiteAuditResults(selectedSiteId.value);
         results.value = res.results;
         message.success(tc('status_completed'));
+        loadQuota(); // Refresh quota after successful audit
       } catch (e: unknown) {
-        message.error((e instanceof Error ? e.message : undefined) || tc('errorRunAudit'));
+        // Check for quota exceeded error
+        const errMsg = e instanceof Error ? e.message : '';
+        if (errMsg.includes('配額') || errMsg.includes('quota') || errMsg.includes('SERPAPI_QUOTA')) {
+          message.warning(errMsg);
+          loadQuota(); // Refresh quota display
+        } else {
+          message.error(errMsg || tc('errorRunAudit'));
+        }
       } finally {
         runningAudit.value = false;
       }
     }
   });
+}
+
+async function loadQuota() {
+  try {
+    quotaStats.value = await getAdminSerpapiUsage();
+  } catch {
+    // Silently fail — quota is a nice-to-have display
+  }
 }
 
 function formatDate(s?: string): string {
@@ -255,12 +281,43 @@ function tc(key: string): string {
   return t(`siteAudit.${key}`);
 }
 
+// ── expanded row render for issues ──
+function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
+  return h('div', { class: 'issue-expanded-row' }, [
+    record.description
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueDescription')),
+          h('p', { class: 'issue-detail-text' }, record.description)
+        ])
+      : null,
+    record.recommendation
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueRecommendation')),
+          h('p', { class: 'issue-detail-text' }, record.recommendation)
+        ])
+      : null,
+    record.url
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueAffectedUrl')),
+          h('a', { href: record.url, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, record.url)
+        ])
+      : null,
+    record.affectedCount > 1
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueAffectedCount')),
+          h('span', { class: 'issue-detail-text' }, String(record.affectedCount))
+        ])
+      : null
+  ]);
+}
+
 // ── watch ──
 watch(selectedSiteId, () => {
   config.value = null;
   results.value = [];
   latestResult.value = null;
   if (selectedSiteId.value) {
+    loadQuota();
     loadConfig();
     loadResults();
   }
@@ -318,10 +375,14 @@ onMounted(async () => {
           <Button
             type="primary"
             :loading="runningAudit"
+            :disabled="quotaStats?.remaining != null && quotaStats.remaining <= 0"
             @click="handleRunAudit"
           >
-            {{ runningAudit ? tc('running') : tc('runNow') }}
+            {{ runningAudit ? tc('running') : quotaStats?.remaining != null && quotaStats.remaining <= 0 ? tc('quotaBlocked') : tc('runNow') }}
           </Button>
+          <span v-if="quotaStats" class="quota-badge" :style="{ color: quotaStats.remaining <= 10 ? '#ff4d4f' : quotaStats.remaining <= 50 ? '#faad14' : undefined }">
+            {{ tc('quotaRemaining').replace('{remaining}', String(quotaStats.remaining)).replace('{limit}', String(quotaStats.monthlyLimit)) }}
+          </span>
           <span v-if="config?.schedule !== 'disabled'" class="schedule-hint">
             {{ tc('schedule') }}: {{ tc(`schedule${config?.schedule === 'weekly' ? 'Weekly' : 'Monthly'}`) }}
             &nbsp;|&nbsp;
@@ -420,6 +481,8 @@ onMounted(async () => {
             :columns="issueColumns"
             :data-source="latestResult.issues"
             :pagination="{ pageSize: 10 }"
+            :expanded-row-render="expandedIssueRow"
+            :expand-row-by-click="true"
             size="small"
             row-key="id"
             class="issues-table"
@@ -537,7 +600,7 @@ onMounted(async () => {
 
 <style scoped>
 .site-audit-view {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 8px;
 }
@@ -593,6 +656,42 @@ onMounted(async () => {
 
 .issues-table {
   margin-top: 12px;
+}
+
+.issue-expanded-row {
+  padding: 8px 16px 8px 40px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.issue-detail-section {
+  margin-bottom: 10px;
+}
+
+.issue-detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.issue-detail-label {
+  font-weight: 600;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.issue-detail-text {
+  margin: 0;
+  color: #262626;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.issue-detail-link {
+  color: #1677ff;
+  font-size: 13px;
+  word-break: break-all;
 }
 
 .error-msg {

@@ -70,6 +70,65 @@ const messages = {
         suggestions: 'review items',
         links: 'link paths'
       },
+      personaSectionTitle: 'Tailored for every SEO role',
+      personaSectionBody: 'Three distinct workflows designed around real pain points, from site owners to agencies to content editors.',
+      personas: {
+        owner: {
+          label: 'Site Owner',
+          summary: 'AI-driven SEO audits, content optimization, and link suggestions — no SEO expertise required.',
+          painTitle: 'Pain Points',
+          pains: [
+            'Unsure which old articles need optimization.',
+            'No time to manually update titles, descriptions, and image alt text.',
+            'Don\'t know how to build internal links.'
+          ],
+          flowTitle: 'Core Workflow',
+          flow: [
+            'Install the WordPress plugin.',
+            'Connect to the SaaS API.',
+            'Sync posts and media library.',
+            'Review SEO audit results.',
+            'Approve optimization suggestions.',
+            'Apply to WordPress and track results.'
+          ]
+        },
+        agency: {
+          label: 'SEO Agency',
+          summary: 'Manage multiple client sites with batch audits, team review, and white-label reports.',
+          painTitle: 'Pain Points',
+          pains: [
+            'Manual inspections across many client sites are expensive.',
+            'Hard to scale optimization delivery.',
+            'Report generation is time-consuming.'
+          ],
+          flowTitle: 'Core Workflow',
+          flow: [
+            'Create client workspaces.',
+            'Connect multiple client sites.',
+            'Launch batch audit tasks.',
+            'Assign editors for review.',
+            'Export optimization reports and performance comparisons.'
+          ]
+        },
+        editor: {
+          label: 'Content Editor',
+          summary: 'Keyword-driven topic discovery, AI-generated drafts, and automatic internal link recommendations.',
+          painTitle: 'Pain Points',
+          pains: [
+            'Lack topic ideas and keyword direction.',
+            'Titles and excerpts don\'t attract enough clicks.',
+            'New articles lack internal link support after publishing.'
+          ],
+          flowTitle: 'Core Workflow',
+          flow: [
+            'Enter target keywords and tone.',
+            'Generate titles, outlines, and article drafts.',
+            'Select image direction.',
+            'Auto-recommend older articles to link.',
+            'Push as WordPress draft.'
+          ]
+        }
+      },
       featuresTitle: 'Core features',
       featuresBody: 'The front office introduces what RankWoven does before users enter the SaaS dashboard.',
       nav: {
@@ -91,14 +150,6 @@ const messages = {
         cmsBody: 'Start with WordPress and reserve adapter flows for Joomla, OpenCart, and other systems.',
         i18nTitle: 'Multilingual frontend',
         i18nBody: 'Use i18n from day one so the product can serve Traditional Chinese, English, and more locales.'
-      },
-      workflowTitle: 'Review-first workflow',
-      workflowBody: 'The MVP keeps automated SEO safe by separating generation from publishing.',
-      workflow: {
-        connect: 'Connect a website through the CMS extension and sync content inventory.',
-        audit: 'Run SEO, image, and internal link analysis on existing pages.',
-        review: 'Let users compare current content with AI suggestions before approval.',
-        publish: 'Apply approved changes with task logs, snapshots, and rollback paths.'
       }
     },
     pricing: {
@@ -154,7 +205,55 @@ const messages = {
       emailRequired: 'Enter a valid email address.',
       passwordRequired: 'Enter your password.',
       customerEntry: 'Open customer dashboard',
-      adminEntry: 'Open admin dashboard'
+      adminEntry: 'Open admin dashboard',
+      registerLink: "Don't have an account? Register",
+      forgotPasswordLink: 'Forgot your password?',
+      successRegistered: 'Registration successful! You are now logged in.'
+    },
+    register: {
+      title: 'Create Your Account',
+      body: 'Start optimizing your SEO with RankWoven AI workflows.',
+      name: 'Your Name',
+      email: 'Email',
+      password: 'Password',
+      confirmPassword: 'Confirm Password',
+      submit: 'Create Account',
+      submitting: 'Creating...',
+      loginLink: 'Already have an account? Log in',
+      passwordMismatch: 'Passwords do not match.',
+      nameRequired: 'Enter your name.',
+      failed: 'Registration failed.'
+    },
+    forgotPassword: {
+      title: 'Reset Your Password',
+      body: 'Enter your email and we will send you a reset link.',
+      email: 'Email',
+      submit: 'Send Reset Link',
+      submitting: 'Sending...',
+      success: 'If that email is registered, a reset link has been sent.',
+      backToLogin: 'Back to login'
+    },
+    resetPassword: {
+      title: 'Set New Password',
+      body: 'Enter your new password twice.',
+      newPassword: 'New Password',
+      confirmPassword: 'Confirm Password',
+      submit: 'Reset Password',
+      submitting: 'Resetting...',
+      success: 'Password reset successful. Redirecting to login...',
+      invalidToken: 'The reset link is expired or invalid. Please request a new one.',
+      passwordMismatch: 'Passwords do not match.',
+      backToLogin: 'Back to login'
+    },
+    changePassword: {
+      title: 'Change Password',
+      currentPassword: 'Current Password',
+      newPassword: 'New Password',
+      confirmPassword: 'Confirm New Password',
+      submit: 'Update Password',
+      success: 'Password updated successfully.',
+      failed: 'Password change failed. Please verify your current password.',
+      passwordMismatch: 'New passwords do not match.'
     },
     admin: {
       subtitle: 'Platform Admin',
@@ -435,6 +534,10 @@ const messages = {
       nextAudit: 'Next Scheduled',
       never: 'Never',
       viewDetail: 'View Detail',
+      quotaExceeded: 'SerpApi monthly quota exceeded ({used}/{limit}). Please upgrade or wait for next billing cycle.',
+      quotaRemaining: '{remaining} of {limit} credits remaining this month',
+      quotaBlocked: 'Quota Exhausted',
+      quotaNotConfigured: 'SerpApi key not configured. Please set SERPAPI_KEY in environment variables.',
       close: 'Close',
       errorLoadConfig: 'Failed to load audit configuration.',
       errorSaveConfig: 'Failed to save audit configuration.',
@@ -443,7 +546,11 @@ const messages = {
       confirmationTitle: 'Start Audit',
       confirmationContent: 'Running an audit will consume SerpApi search credits (approx. 1 credit per page analyzed). Continue?',
       confirm: 'Start',
-      cancel: 'Cancel'
+      cancel: 'Cancel',
+      issueDescription: 'Description',
+      issueRecommendation: 'How to Fix',
+      issueAffectedUrl: 'Affected URL',
+      issueAffectedCount: 'Affected Count'
     },
     keywords: {
       title: 'Keyword Suggestions',
@@ -658,7 +765,10 @@ const messages = {
       mediaQueue: 'Media',
       workflowChartTitle: 'Optimization workflow',
       statusChartTitle: 'Suggestion status',
-      typeChartTitle: 'Suggestion type distribution'
+      typeChartTitle: 'Suggestion type distribution',
+      batchApprove: 'Batch Approve',
+      approveSelected: 'Approve Selected ({count})',
+      batchApproved: '{count} suggestions approved'
     },
     media: {
       title: 'Media Processing',
@@ -911,6 +1021,65 @@ const messages = {
         suggestions: '審核項',
         links: '連結路徑'
       },
+      personaSectionTitle: '為每個 SEO 角色量身打造',
+      personaSectionBody: '三種針對真實痛點設計的工作流程，從站長到代理商到內容編輯，各自找到最適合的路徑。',
+      personas: {
+        owner: {
+          label: '網站站長',
+          summary: 'AI 驅動的 SEO 審計、內容優化與連結建議 — 無需 SEO 專業知識即可上手。',
+          painTitle: '痛點',
+          pains: [
+            '不知道哪些舊文章需要優化。',
+            '沒時間逐篇補標題、描述和圖片 Alt。',
+            '不懂內部連結該怎麼做。'
+          ],
+          flowTitle: '核心流程',
+          flow: [
+            '安裝 WordPress 插件。',
+            '連接 SaaS API。',
+            '同步文章和媒體庫。',
+            '查看 SEO 審計結果。',
+            '批准優化建議。',
+            '應用到 WordPress 並追蹤結果。'
+          ]
+        },
+        agency: {
+          label: 'SEO Agency',
+          summary: '管理多個客戶站點，批量審計、團隊協作審核、白標報告一鍵導出。',
+          painTitle: '痛點',
+          pains: [
+            '客戶網站多，人工巡檢成本高。',
+            '優化建議難以規模化交付。',
+            '報告製作耗時。'
+          ],
+          flowTitle: '核心流程',
+          flow: [
+            '創建客戶工作區。',
+            '連接多個客戶站點。',
+            '批量發起審計任務。',
+            '分配編輯審核。',
+            '導出優化報告和成效對比。'
+          ]
+        },
+        editor: {
+          label: '內容編輯',
+          summary: '關鍵詞驅動的選題發現、AI 生成草稿與自動內部連結推薦。',
+          painTitle: '痛點',
+          pains: [
+            '缺少選題和關鍵詞方向。',
+            '標題和摘要不夠吸引點擊。',
+            '新文章發佈後缺少站內連結支援。'
+          ],
+          flowTitle: '核心流程',
+          flow: [
+            '輸入目標關鍵詞和語氣。',
+            '生成標題、大綱和文章草稿。',
+            '選擇配圖方向。',
+            '自動推薦可連結舊文章。',
+            '推送為 WordPress 草稿。'
+          ]
+        }
+      },
       featuresTitle: '核心功能',
       featuresBody: '前台頁面用於讓用戶在進入 SaaS 後台前，快速理解 RankWoven 可解決的問題。',
       nav: {
@@ -932,14 +1101,6 @@ const messages = {
         cmsBody: '先做 WordPress，並為 Joomla、OpenCart 與其他系統預留適配流程。',
         i18nTitle: '多語言前端',
         i18nBody: '從第一版開始使用 i18n，支援繁體中文、英文與後續更多語言。'
-      },
-      workflowTitle: '先審核後套用',
-      workflowBody: 'MVP 將生成與發佈分離，讓自動 SEO 優化更可控。',
-      workflow: {
-        connect: '通過 CMS 擴展連接網站，並同步內容庫存。',
-        audit: '對現有頁面執行 SEO、圖片與內部連結分析。',
-        review: '讓用戶在批准前對比目前內容與 AI 建議。',
-        publish: '套用已批准變更，保留任務日誌、快照與回滾路徑。'
       }
     },
     pricing: {
@@ -995,7 +1156,55 @@ const messages = {
       emailRequired: '請輸入有效電郵。',
       passwordRequired: '請輸入密碼。',
       customerEntry: '打開客戶後台',
-      adminEntry: '打開管理後台'
+      adminEntry: '打開管理後台',
+      registerLink: '還沒有帳號？註冊',
+      forgotPasswordLink: '忘記密碼？',
+      successRegistered: '註冊成功！您已自動登入。'
+    },
+    register: {
+      title: '建立您的帳號',
+      body: '使用 RankWoven AI 工作流開始優化您的 SEO。',
+      name: '您的姓名',
+      email: '電郵',
+      password: '密碼',
+      confirmPassword: '確認密碼',
+      submit: '建立帳號',
+      submitting: '建立中...',
+      loginLink: '已有帳號？登入',
+      passwordMismatch: '兩次輸入的密碼不一致。',
+      nameRequired: '請輸入您的姓名。',
+      failed: '註冊失敗。'
+    },
+    forgotPassword: {
+      title: '重設密碼',
+      body: '輸入您的電郵，我們將發送重設連結。',
+      email: '電郵',
+      submit: '發送重設連結',
+      submitting: '發送中...',
+      success: '如果此電郵已註冊，重設連結已發送。',
+      backToLogin: '返回登入'
+    },
+    resetPassword: {
+      title: '設定新密碼',
+      body: '請輸入新密碼兩次。',
+      newPassword: '新密碼',
+      confirmPassword: '確認密碼',
+      submit: '重設密碼',
+      submitting: '重設中...',
+      success: '密碼重設成功，即將跳轉至登入頁...',
+      invalidToken: '重設連結已失效或無效，請重新申請。',
+      passwordMismatch: '兩次輸入的密碼不一致。',
+      backToLogin: '返回登入'
+    },
+    changePassword: {
+      title: '變更密碼',
+      currentPassword: '目前密碼',
+      newPassword: '新密碼',
+      confirmPassword: '確認新密碼',
+      submit: '更新密碼',
+      success: '密碼更新成功。',
+      failed: '密碼變更失敗，請確認目前密碼正確。',
+      passwordMismatch: '兩次輸入的新密碼不一致。'
     },
     admin: {
       subtitle: '平台管理後台',
@@ -1275,6 +1484,10 @@ const messages = {
       nextAudit: '下次排程',
       never: '從未',
       viewDetail: '查看詳情',
+      quotaExceeded: 'SerpApi 本月配額已用盡（{used}/{limit}）。請升級方案或等待下個計費週期。',
+      quotaRemaining: '本月剩餘 {remaining}/{limit} 點數',
+      quotaBlocked: '配額已用盡',
+      quotaNotConfigured: '未設定 SerpApi 金鑰，請在環境變數中設定 SERPAPI_KEY。',
       close: '關閉',
       errorLoadConfig: '載入檢測配置失敗。',
       errorSaveConfig: '儲存檢測配置失敗。',
@@ -1283,7 +1496,11 @@ const messages = {
       confirmationTitle: '開始檢測',
       confirmationContent: '執行檢測將消耗 SerpApi 搜尋點數（每個分析頁面約 1 點）。確認繼續？',
       confirm: '開始',
-      cancel: '取消'
+      cancel: '取消',
+      issueDescription: '問題描述',
+      issueRecommendation: '修復建議',
+      issueAffectedUrl: '受影響 URL',
+      issueAffectedCount: '影響數量'
     },
     keywords: {
       title: '關鍵詞建議',
@@ -1498,7 +1715,10 @@ const messages = {
       mediaQueue: '媒體',
       workflowChartTitle: '優化流程',
       statusChartTitle: '建議狀態',
-      typeChartTitle: '建議類型分佈'
+      typeChartTitle: '建議類型分佈',
+      batchApprove: '批量批准',
+      approveSelected: '批准所選 ({count})',
+      batchApproved: '已批准 {count} 項建議'
     },
     media: {
       title: '媒體處理',

@@ -134,7 +134,8 @@ echo \"Activated release: $DEPLOY_PATH\""
 
 ssh "$REMOTE" "set -euo pipefail
 cd '$DEPLOY_PATH'
-docker compose --profile '$DEPLOY_PROFILE' up -d postgres
+COMPOSE_FILES='-f docker-compose.yml -f docker-compose.prod.yml'
+docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d postgres
 for attempt in \$(seq 1 30); do
   if docker compose exec -T postgres pg_isready -U \"\${POSTGRES_USER:-aieo}\" -d \"\${POSTGRES_DB:-aieo}\" >/dev/null 2>&1; then
     echo \"PostgreSQL is ready\"
@@ -148,8 +149,8 @@ for attempt in \$(seq 1 30); do
 done
 DATABASE_BACKUP_DIR='$DEPLOY_DATABASE_BACKUP_DIR' bash scripts/backup-database.sh
 bash scripts/migrate-database.sh
-docker compose --profile '$DEPLOY_PROFILE' up -d --build
-docker compose --profile '$DEPLOY_PROFILE' ps"
+docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
+docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' ps"
 
 wait_for_url "$DEPLOY_HEALTH_URL" "Health"
 wait_for_authenticated_url "$DEPLOY_SMOKE_URL" "Smoke"

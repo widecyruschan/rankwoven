@@ -1320,6 +1320,69 @@ export function registerSeoOptimizationRoutes(
     }
   );
 
+  app.post<{ Params: { siteId: string }; Body: { suggestionIds: string[] } }>(
+    '/api/v1/site-connections/:siteId/suggestions/batch-approve',
+    async (request, reply) => {
+      const user = await requireAuth(authService, request, reply);
+      if (!user) {
+        return reply;
+      }
+
+      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      if (!site) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const { suggestionIds } = request.body;
+
+      if (!Array.isArray(suggestionIds) || suggestionIds.length === 0) {
+        return reply.status(400).send({
+          success: false,
+          message: '請提供至少一個建議 ID',
+          error: { code: 'INVALID_INPUT' }
+        });
+      }
+
+      const results: Array<{
+        suggestionId: string;
+        success: boolean;
+        error?: string;
+      }> = [];
+
+      for (const suggestionId of suggestionIds) {
+        try {
+          const suggestion = await seoRepository.approveSuggestion(site.id, suggestionId);
+          if (!suggestion) {
+            results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_FOUND' });
+          } else {
+            results.push({ suggestionId, success: true });
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'UNKNOWN_ERROR';
+          results.push({ suggestionId, success: false, error: message });
+        }
+      }
+
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      return {
+        success: true,
+        message: `批量批准完成：${succeeded} 個成功，${failed} 個失敗`,
+        data: {
+          results,
+          total: suggestionIds.length,
+          succeeded,
+          failed
+        }
+      };
+    }
+  );
+
   app.post<{ Params: { siteId: string; suggestionId: string } }>(
     '/api/v1/site-connections/:siteId/suggestions/:suggestionId/apply',
     async (request, reply) => {

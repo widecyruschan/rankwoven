@@ -8,6 +8,7 @@ import AnalyticsChart from '../components/AnalyticsChart.vue';
 import {
   applyOptimizationSuggestion,
   approveOptimizationSuggestion,
+  batchApproveOptimizationSuggestions,
   createSeoAudit,
   getOptimizationSuggestions,
   getSiteConnections,
@@ -30,6 +31,8 @@ const actionSuggestionId = ref('');
 const loadError = ref('');
 const actionMessage = ref('');
 const actionError = ref('');
+const selectedRowKeys = ref<string[]>([]);
+const isBatchApproving = ref(false);
 
 interface SuggestionRow {
   id: string;
@@ -269,6 +272,7 @@ async function handleSiteChange() {
   loadError.value = '';
   actionMessage.value = '';
   actionError.value = '';
+  selectedRowKeys.value = [];
 
   try {
     await loadSuggestions();
@@ -339,6 +343,42 @@ function replaceSuggestion(nextSuggestion: OptimizationSuggestion) {
   );
 }
 
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys: (string | number)[]) => {
+    selectedRowKeys.value = keys as string[];
+  },
+  getCheckboxProps: (record: SuggestionRow) => ({
+    disabled: !record.canApprove,
+    name: record.id
+  })
+}));
+
+async function batchApprove() {
+  if (!selectedSiteId.value || selectedRowKeys.value.length === 0) return;
+
+  isBatchApproving.value = true;
+  actionMessage.value = '';
+  actionError.value = '';
+
+  try {
+    const result = await batchApproveOptimizationSuggestions(selectedSiteId.value, selectedRowKeys.value);
+    selectedRowKeys.value = [];
+
+    if (result.succeeded > 0) {
+      actionMessage.value = t('suggestions.batchApproved', { count: result.succeeded });
+    } else if (result.failed > 0) {
+      actionError.value = t('suggestions.actionFailed');
+    }
+
+    await loadSuggestions();
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : t('suggestions.actionFailed');
+  } finally {
+    isBatchApproving.value = false;
+  }
+}
+
 onMounted(() => {
   void loadSitesAndSuggestions();
 });
@@ -389,12 +429,20 @@ onMounted(() => {
       <div v-else-if="actionError" class="form-message form-message-error">{{ actionError }}</div>
       <div v-else-if="actionMessage" class="form-message">{{ actionMessage }}</div>
 
+      <div v-if="selectedRowKeys.length > 0" class="batch-action-bar">
+        <span class="batch-count">{{ t('suggestions.approveSelected', { count: selectedRowKeys.length }) }}</span>
+        <a-button type="primary" :loading="isBatchApproving" @click="batchApprove">
+          {{ t('suggestions.batchApprove') }}
+        </a-button>
+      </div>
+
       <a-table
         row-key="id"
         :columns="suggestionColumns"
         :data-source="suggestionRows"
         :loading="isLoading"
         :pagination="{ pageSize: 10 }"
+        :row-selection="rowSelection"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'target'">
@@ -433,3 +481,22 @@ onMounted(() => {
     </section>
   </section>
 </template>
+
+<style scoped>
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+  border-radius: 6px;
+}
+
+.batch-count {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1677ff;
+}
+</style>

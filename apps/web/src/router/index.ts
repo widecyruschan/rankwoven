@@ -33,6 +33,36 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/register',
+    name: 'Register',
+    component: () => import('../views/RegisterView.vue'),
+    meta: {
+      titleKey: 'register.title',
+      layout: 'marketing',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('../views/ForgotPasswordView.vue'),
+    meta: {
+      titleKey: 'forgotPassword.title',
+      layout: 'marketing',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('../views/ResetPasswordView.vue'),
+    meta: {
+      titleKey: 'resetPassword.title',
+      layout: 'marketing',
+      requiresAuth: false
+    }
+  },
+  {
     path: '/app',
     name: 'AppDashboard',
     component: () => import('../views/DashboardView.vue'),
@@ -284,6 +314,12 @@ router.beforeEach(async (to) => {
   }
 
   if (to.path === '/login' && authStore.isLoggedIn) {
+    return '/app';
+  }
+
+  // Redirect logged-in users away from auth pages
+  const authOnlyPaths = ['/login', '/register', '/forgot-password', '/reset-password'];
+  if (authOnlyPaths.includes(to.path) && authStore.isLoggedIn) {
     return '/app';
   }
 
