@@ -149,14 +149,11 @@ for attempt in \$(seq 1 30); do
 done
 DATABASE_BACKUP_DIR='$DEPLOY_DATABASE_BACKUP_DIR' bash scripts/backup-database.sh
 bash scripts/migrate-database.sh
-# Rebuild the Compose project. We stop + rm all containers first to release port
-# bindings (especially 8080 for the web container that Nginx proxies to), then
-# prune stale networks before starting the new stack.
-docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' down --remove-orphans || true
-docker container prune -f || true
-docker network prune -f || true
-sleep 3
-docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
+# Rebuild the Compose project. Use stop + up --force-recreate instead of down + up
+# to avoid port-binding race conditions (especially 8080 for Nginx -> web proxy).
+# Data services (postgres/redis) use named volumes so data is preserved.
+docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' stop || true
+docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build --force-recreate
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' ps"
 
 wait_for_url "$DEPLOY_HEALTH_URL" "Health"
