@@ -1137,3 +1137,18 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：修改 `apps/api/src/lighthouse.ts`、`apps/web/src/api/appInsights.ts`、`apps/web/src/components/LighthousePanel.vue`、`Dockerfile`、本 `README.md`。
 - 驗證結果：`npm run lint` 通過；`npm run build` 通過；本機程序化 Lighthouse 對 `https://cyruschan.com/` 審計成功（performance score 0.62）；已推送 `main`（`03b58c6`），GitHub Actions 將自動部署。
 - 下一步行動清單：部署完成後在 SaaS 後台重新對 `https://cyruschan.com/` 執行 Lighthouse 審計，確認不再失敗；若仍有問題，查看後端日誌中的 `[lighthouse] Audit failed` 訊息。
+
+### 2026-07-28（十八之二）：修復 GitHub Actions 安全審計失敗
+
+- 會話的主要目的：解決 GitHub Actions `security:audit` 步驟報告 19 個漏洞（16 moderate、3 high）導致部署中斷的問題。
+- 完成的主要任務：
+  1. 診斷：所有漏洞均來自 `lighthouse` 12.x 的傳遞依賴 `@sentry/node` 與 `@opentelemetry/*`，以及 `@sentry/node` 下的 `brace-expansion` / `minimatch`。
+  2. 將 `apps/api/package.json` 中的 `lighthouse` 從 `^12.6.0` 升級到 `^13.4.1`。
+  3. 重新執行 `npm install` 更新 `package-lock.json`。
+  4. 驗證 `npm audit` 顯示 `found 0 vulnerabilities`。
+  5. 驗證程序化 Lighthouse API 在 v13.4.1 下對 `https://cyruschan.com/` 審計仍然成功。
+- 關鍵決策和解決方案：`npm audit fix` 無法自動修復（傳遞依賴版本被 lighthouse 鎖定），因此直接升級 lighthouse 到已修復漏洞的最新穩定版；v13 程序化 API 與 v12 相容，無需改動業務程式碼。
+- 使用的技術棧：npm audit、Lighthouse 13、Node.js。
+- 新增或修改文件：修改 `apps/api/package.json`、`package-lock.json`、本 `README.md`。
+- 驗證結果：`npm run lint` 通過；`npm run build` 通過；`npm audit --registry=https://registry.npmjs.org` 顯示 0 漏洞；本機程序化 Lighthouse 對 `https://cyruschan.com/` 審計成功；已推送 `main`（`a146537`），GitHub Actions 將重新執行部署。
+- 下一步行動清單：等待 GitHub Actions 部署完成，確認 Verify 與 Deploy 兩個 job 都成功。
