@@ -149,19 +149,13 @@ for attempt in \$(seq 1 30); do
 done
 DATABASE_BACKUP_DIR='$DEPLOY_DATABASE_BACKUP_DIR' bash scripts/backup-database.sh
 bash scripts/migrate-database.sh
-# Tear down the existing Compose project before rebuilding. This avoids stale network
-# endpoints / port bindings (e.g. 8080) that can remain during an in-place recreate.
-# Use --profile so that data services (postgres/redis) are also stopped and the
-# network is fully removed. Named volumes (postgres_data, redis_data) are preserved.
+# Rebuild the Compose project. We stop + rm all containers first to release port
+# bindings (especially 8080 for the web container that Nginx proxies to), then
+# prune stale networks before starting the new stack.
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' down --remove-orphans || true
-# Diagnostics: log anything still holding port 8080.
-echo '=== Port 8080 listeners after down ==='
-ss -tlnp | grep ':8080' || true
-docker ps -a --filter publish=8080 --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
-# Forcefully release any stale docker-proxy for port 8080.
-pkill -f 'docker-proxy.*:8080' || true
-# Allow Docker to fully release host port bindings before recreating containers.
-sleep 10
+docker container prune -f || true
+docker network prune -f || true
+sleep 3
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d --build
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' ps"
 
