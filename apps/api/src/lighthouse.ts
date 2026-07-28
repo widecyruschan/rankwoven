@@ -1,10 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { launch as launchChrome } from 'chrome-launcher';
+import lighthouse from 'lighthouse';
+import puppeteer from 'puppeteer-core';
 import { z } from 'zod';
 import { requireAuth, type AuthService } from './auth';
 import type { SiteConnectionRepository } from './siteConnections';
-
-import lighthouse from 'lighthouse';
 
 export interface LighthouseAuditResult {
   url: string;
@@ -181,25 +180,33 @@ async function auditViaPageSpeedApi(url: string, strategy: 'mobile' | 'desktop')
 
 async function auditViaLocalLighthouse(url: string, strategy: 'mobile' | 'desktop'): Promise<LighthouseAuditResult> {
   const chromePath = process.env.CHROME_PATH || '/usr/bin/chromium-browser';
-  let chrome: { port: number; kill: () => void } | undefined;
+  const browser = await puppeteer.launch({
+    executablePath: chromePath,
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--disable-extensions'
+    ]
+  });
+
+  const page = await browser.newPage();
+
+  // Override client hint headers so bot protection / CDN rules do not block
+  // headless Chrome based on the default "HeadlessChrome" Sec-CH-UA value.
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    const headers = request.headers();
+    const majorVersion = '126';
+    headers['sec-ch-ua'] = `"Chromium";v="${majorVersion}", "Google Chrome";v="${majorVersion}"`;
+    headers['sec-ch-ua-mobile'] = strategy === 'mobile' ? '?1' : '?0';
+    headers['sec-ch-ua-platform'] = strategy === 'mobile' ? '"Android"' : '"Windows"';
+    void request.continue({ headers });
+  });
 
   try {
-    chrome = await launchChrome({
-      chromePath,
-      chromeFlags: [
-        '--headless',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-extensions'
-      ]
-    });
-
     const config = {
       extends: 'lighthouse:default',
       settings: {
@@ -217,8 +224,9 @@ async function auditViaLocalLighthouse(url: string, strategy: 'mobile' | 'deskto
 
     const runnerResult = await lighthouse(
       url,
-      { port: chrome.port, output: 'json' as const },
-      config
+      { output: 'json' as const },
+      config,
+      page
     );
 
     if (!runnerResult) {
@@ -227,9 +235,7 @@ async function auditViaLocalLighthouse(url: string, strategy: 'mobile' | 'deskto
 
     return parseLocalLighthouseResult(JSON.stringify(runnerResult.lhr), url);
   } finally {
-    if (chrome) {
-      chrome.kill();
-    }
+    await browser.close();
   }
 }
 
