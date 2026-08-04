@@ -23,7 +23,7 @@ Workflow：`.github/workflows/production-deploy.yml`
 4. 執行 `npm run test`。
 5. 執行 `npm run build`。
 6. 執行 `npm run security:audit`，使用官方 npm registry 檢查 high 以上漏洞。
-7. 通過後 SSH 到 VPS，備份現有配置，部署 `git archive HEAD` 打包出的乾淨代碼。
+7. 通過後先以 IPv4 做 TCP 連通性檢查，再用真實 SSH 登入探測驗證 GitHub Actions runner 可連上 VPS，之後才進入部署。
 8. 先啟動 PostgreSQL，等待 `pg_isready` 通過。
 9. 執行 `scripts/backup-database.sh` 建立部署前資料庫備份。
 10. 執行 `scripts/migrate-database.sh` 套用尚未執行的 SQL migration。
@@ -34,11 +34,17 @@ Workflow：`.github/workflows/production-deploy.yml`
 
 | Secret | 用途 |
 |---|---|
-| `HOSTINGER_VPS_HOST` | Hostinger VPS IPv4，建議直接填 `72.62.253.72`，避免 GitHub Actions 在 SSH keyscan 階段遇到主機名解析或 IPv6 問題 |
+| `HOSTINGER_VPS_HOST` | Hostinger VPS IPv4，建議直接填 `72.62.253.72`，避免 GitHub Actions 在 SSH 連通性探測階段遇到主機名解析或 IPv6 問題 |
 | `HOSTINGER_VPS_PORT` | 可選，SSH 端口，預設 `22` |
 | `HOSTINGER_VPS_USER` | SSH 用戶，目前為 `root` |
 | `HOSTINGER_VPS_SSH_KEY` | 專用部署私鑰 |
 | `HOSTINGER_DEPLOY_PATH` | 部署目錄，預設 `/docker/rankwoven` |
+
+`Configure SSH` 步驟目前不再依賴 `ssh-keyscan` 取得 host key，而是先做 `nc` 端口檢查，再直接用部署私鑰執行一次 `ssh ... "echo SSH ready"` 探測，並配合 `StrictHostKeyChecking=accept-new` 寫入 `known_hosts`。如果這一步仍失敗，通常代表：
+
+1. `HOSTINGER_VPS_HOST` 不是目前可達的公網 IPv4。
+2. GitHub Actions runner 無法連入 VPS 的 `22` 端口。
+3. `HOSTINGER_VPS_SSH_KEY` 與 VPS `authorized_keys` 不匹配。
 
 生產 `.env` 需要設定 `VITE_API_BASE_URL=https://api.rankwoven.com`，避免前端容器使用本地開發預設 API 地址。
 

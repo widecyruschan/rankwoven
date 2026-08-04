@@ -1518,3 +1518,29 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 到 GitHub Secrets 確認 `HOSTINGER_VPS_HOST` 是否為目前生效的 IPv4，而不是過期主機名。
   2. 重新執行 `Production Deploy` workflow，觀察 `Configure SSH` 是否恢復正常。
+
+### 2026-08-04（星期二）— Deploy SSH 探測改為真實登入驗證
+
+- 會話的主要目的：處理 GitHub Actions 仍停留在舊版 `ssh-keyscan` 流程導致的部署失敗，將 `Configure SSH` 改為更接近實際部署條件的登入探測。
+- 完成的主要任務：
+  1. `.github/workflows/production-deploy.yml`
+     - 保留 `nc -4` TCP 探測。
+     - 移除 `ssh-keyscan` 重試流程。
+     - 改為直接用部署私鑰執行一次 `ssh -4 ... "echo SSH ready"`。
+     - `StrictHostKeyChecking` 改為 `accept-new`，讓首次連線時自動寫入 `known_hosts`。
+     - 失敗提示補充 SSH 私鑰與 `authorized_keys` 不匹配的檢查方向。
+  2. `docs/deployment.md`
+     - 同步記錄 GitHub Actions 現在的 SSH 探測方式與常見失敗原因。
+  3. `README.md`
+     - 追加本次會話總結，避免後續誤以為生產仍使用 `ssh-keyscan` 方案。
+- 關鍵決策和解決方案：既然本機已確認 `72.62.253.72:22` 可達且可直接 SSH 登入，workflow 再卡在 `ssh-keyscan` 已無排查價值；改為用與實際部署一致的 SSH 私鑰登入探測，能更快分辨問題到底是網路、主機、還是金鑰。
+- 使用的技術棧：GitHub Actions、OpenSSH、netcat、Markdown。
+- 新增或修改文件：
+  - 修改：`.github/workflows/production-deploy.yml`、`docs/deployment.md`、`README.md`
+- 驗證結果：
+  - 已確認：`git diff -- .github/workflows/production-deploy.yml docs/deployment.md README.md`
+  - 已確認：workflow `Configure SSH` 已不再包含 `ssh-keyscan`
+  - 未直接驗證：GitHub Actions 雲端部署結果，需推送後由 CI 實際執行
+- 下一步行動清單：
+  1. 推送 `main` 讓 GitHub Actions 重新使用新的 `Configure SSH` 流程。
+  2. 若仍失敗，優先檢查 `HOSTINGER_VPS_SSH_KEY` 是否仍對應 VPS 上目前的 `authorized_keys`。

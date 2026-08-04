@@ -78,13 +78,22 @@ jobs:
           echo "Checking SSH connectivity to ${HOSTINGER_VPS_HOST}:${HOSTINGER_VPS_PORT}"
           for attempt in 1 2 3 4 5; do
             if timeout 15 bash -lc "nc -4 -zvw5 '$HOSTINGER_VPS_HOST' '$HOSTINGER_VPS_PORT'" >/dev/null 2>&1; then
-              if timeout 15 ssh-keyscan -4 -T 10 -p "$HOSTINGER_VPS_PORT" -H "$HOSTINGER_VPS_HOST" >> ~/.ssh/known_hosts; then
+              if timeout 20 ssh \
+                -4 \
+                -i ~/.ssh/rankwoven_production \
+                -p "$HOSTINGER_VPS_PORT" \
+                -o BatchMode=yes \
+                -o ConnectTimeout=10 \
+                -o StrictHostKeyChecking=accept-new \
+                -o UserKnownHostsFile=~/.ssh/known_hosts \
+                "$HOSTINGER_VPS_USER@$HOSTINGER_VPS_HOST" \
+                "echo SSH ready" >/dev/null 2>&1; then
                 break
               fi
             fi
             if [ "$attempt" = "5" ]; then
-              echo "ssh-keyscan failed after 5 attempts" >&2
-              echo "Hint: verify HOSTINGER_VPS_HOST uses the current IPv4 and that port ${HOSTINGER_VPS_PORT} is reachable from GitHub Actions." >&2
+              echo "SSH connectivity probe failed after 5 attempts" >&2
+              echo "Hint: verify HOSTINGER_VPS_HOST uses the current IPv4, port ${HOSTINGER_VPS_PORT} is reachable from GitHub Actions, and the SSH private key matches the VPS authorized_keys entry." >&2
               exit 1
             fi
             sleep 5
@@ -96,7 +105,9 @@ jobs:
             User $HOSTINGER_VPS_USER
             IdentityFile ~/.ssh/rankwoven_production
             IdentitiesOnly yes
-            StrictHostKeyChecking yes
+            StrictHostKeyChecking accept-new
+            UserKnownHostsFile ~/.ssh/known_hosts
+            AddressFamily inet
           EOF
           chmod 600 ~/.ssh/config
 
