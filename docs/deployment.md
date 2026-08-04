@@ -34,7 +34,8 @@ Workflow：`.github/workflows/production-deploy.yml`
 
 | Secret | 用途 |
 |---|---|
-| `HOSTINGER_VPS_HOST` | Hostinger VPS IP 或主機名 |
+| `HOSTINGER_VPS_HOST` | Hostinger VPS IPv4，建議直接填 `72.62.253.72`，避免 GitHub Actions 在 SSH keyscan 階段遇到主機名解析或 IPv6 問題 |
+| `HOSTINGER_VPS_PORT` | 可選，SSH 端口，預設 `22` |
 | `HOSTINGER_VPS_USER` | SSH 用戶，目前為 `root` |
 | `HOSTINGER_VPS_SSH_KEY` | 專用部署私鑰 |
 | `HOSTINGER_DEPLOY_PATH` | 部署目錄，預設 `/docker/rankwoven` |

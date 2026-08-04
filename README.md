@@ -1493,3 +1493,28 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 若部署後頁面仍報錯，下一步應直接查 production / staging 的最新 build 是否已完成。
   2. 若要避免未來 audit 再次受本機 `npmmirror` 影響，建議本地也固定使用官方 registry 跑 `security:audit`。
+
+### 2026-08-04（星期二）— GitHub Actions SSH keyscan 失敗修復
+
+- 會話的主要目的：修正 Production Deploy workflow 在 `Deploy to Hostinger VPS` 的 `Configure SSH` 階段卡住 `ssh-keyscan failed after 5 attempts` 的問題。
+- 完成的主要任務：
+  1. `.github/workflows/production-deploy.yml`
+     - 新增可選 `HOSTINGER_VPS_PORT`，預設為 `22`。
+     - 在 `ssh-keyscan` 前先用 `nc` 檢查 SSH 端口可達性。
+     - `ssh-keyscan` 改為 `-4` 強制走 IPv4，避免 hostname / IPv6 解析問題。
+     - SSH config 補上 `Port` 欄位。
+     - 失敗時新增更明確的提示，提醒檢查 `HOSTINGER_VPS_HOST` 是否為最新 IPv4。
+  2. `docs/deployment.md`
+     - 更新 Secrets 說明，明確建議 `HOSTINGER_VPS_HOST` 直接填 `72.62.253.72` 這類 IPv4。
+     - 補充 `HOSTINGER_VPS_PORT` 的可選用途。
+- 關鍵決策和解決方案：本機已驗證 `72.62.253.72:22` 可達且 `ssh-keyscan` 可成功返回 host key，因此這次更像是 GitHub Actions runner 在 hostname / IPv6 / 端口探測階段的不穩定問題；用最小改動把 workflow 改成優先走 IPv4，並提前做 TCP 連通性檢查。
+- 使用的技術棧：GitHub Actions、OpenSSH、netcat、Hostinger VPS。
+- 新增或修改文件：
+  - 修改：`.github/workflows/production-deploy.yml`、`docs/deployment.md`、`README.md`
+- 驗證結果：
+  - 已通過：本機 `nc -vz 72.62.253.72 22`
+  - 已通過：本機 `ssh-keyscan -4 -T 10 72.62.253.72`
+  - 已通過：本機 `ssh root@72.62.253.72 'echo ok'`
+- 下一步行動清單：
+  1. 到 GitHub Secrets 確認 `HOSTINGER_VPS_HOST` 是否為目前生效的 IPv4，而不是過期主機名。
+  2. 重新執行 `Production Deploy` workflow，觀察 `Configure SSH` 是否恢復正常。
