@@ -9,6 +9,7 @@ import {
   getOptimizationSuggestions,
   getSiteConnections,
   getSyncedMedia,
+  scanSiteMedia,
   type MediaListParams,
   type OptimizationSuggestion,
   type PaginationMeta,
@@ -43,11 +44,16 @@ const pagination = ref<PaginationMeta>({
   totalPages: 0
 });
 const isLoading = ref(false);
-const isGenerating = ref(false);
+const isScanning = ref(false);
 const actionSuggestionId = ref('');
 const errorMessage = ref('');
 const successMessage = ref('');
 const selectedMedia = ref<SyncedMedia | null>(null);
+
+const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
+const canScanSelectedSite = computed(() =>
+  Boolean(selectedSite.value && selectedSite.value.wordpressApplicationPasswordConfigured)
+);
 
 const siteOptions = computed(() =>
   sites.value.map((site) => ({
@@ -238,24 +244,36 @@ async function refreshPageData(nextPage = pagination.value.page, nextPageSize = 
   await Promise.all([loadMedia(nextPage, nextPageSize), loadSuggestions()]);
 }
 
-async function generateMediaSuggestions() {
+async function scanAndAnalyzeMedia() {
   if (!selectedSiteId.value) {
+    errorMessage.value = t('media.selectSiteRequired');
     return;
   }
 
-  isGenerating.value = true;
+  if (!canScanSelectedSite.value) {
+    errorMessage.value = t('media.credentialsRequired');
+    return;
+  }
+
+  isScanning.value = true;
   errorMessage.value = '';
   successMessage.value = '';
 
   try {
-    const result = await createSeoAudit(selectedSiteId.value);
-    const mediaIssueCount = result.issues.filter((issue) => issue.targetType === 'media').length;
-    successMessage.value = t('media.generateSuccess', { count: mediaIssueCount });
+    const scanResult = await scanSiteMedia(selectedSiteId.value);
+    const auditResult = await createSeoAudit(selectedSiteId.value);
+    const mediaIssueCount = auditResult.issues.filter((issue) => issue.targetType === 'media').length;
+
+    successMessage.value = t('media.scanSuccess', {
+      media: scanResult.mediaReceived,
+      articles: scanResult.articlesReceived,
+      suggestions: mediaIssueCount
+    });
     await refreshPageData(1, pagination.value.pageSize);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : t('media.generateFailed');
+    errorMessage.value = error instanceof Error ? error.message : t('media.scanFailed');
   } finally {
-    isGenerating.value = false;
+    isScanning.value = false;
   }
 }
 
@@ -451,11 +469,13 @@ watch(activeTab, () => {
           allow-clear
           @search="handleSearch"
         />
-        <a-button type="default" :disabled="!selectedSiteId" :loading="isGenerating" @click="generateMediaSuggestions">
-          {{ t('media.generate') }}
-        </a-button>
-        <a-button type="primary" :loading="isLoading" @click="loadMedia(1, pagination.pageSize)">
-          {{ t('sites.refresh') }}
+        <a-button
+          type="primary"
+          :disabled="!selectedSiteId || !canScanSelectedSite"
+          :loading="isScanning"
+          @click="scanAndAnalyzeMedia"
+        >
+          {{ t('media.scanAction') }}
         </a-button>
       </div>
     </div>
@@ -476,7 +496,22 @@ watch(activeTab, () => {
         <a-tab-pane key="filename" :tab="t('media.filenameTab')" />
       </a-tabs>
 
+      <a-empty
+        v-if="!isLoading && media.length === 0"
+        :description="selectedSiteId ? t('media.emptyDescription') : t('media.selectSiteRequired')"
+      >
+        <a-button
+          type="primary"
+          :disabled="!selectedSiteId || !canScanSelectedSite"
+          :loading="isScanning"
+          @click="scanAndAnalyzeMedia"
+        >
+          {{ t('media.scanAction') }}
+        </a-button>
+      </a-empty>
+
       <a-table
+        v-else
         row-key="cmsId"
         :columns="columns"
         :data-source="media"

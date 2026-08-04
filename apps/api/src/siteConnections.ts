@@ -89,6 +89,10 @@ const manualRefreshTaskSchema = z.object({
   cmsId: z.string().trim().min(1).max(80)
 });
 
+const mediaScanSchema = z.object({
+  updatedAfter: z.string().trim().max(80).optional()
+});
+
 const syncBatchPayloadSchema = syncPayloadSchema.extend({
   batchIndex: z.number().int().min(1).max(1_000_000),
   isFinalBatch: z.boolean().default(false)
@@ -115,6 +119,7 @@ export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
 export type ManualRefreshTaskInput = z.infer<typeof manualRefreshTaskSchema>;
+export type MediaScanInput = z.infer<typeof mediaScanSchema>;
 export type CreateSyncTaskInput = z.infer<typeof createSyncTaskSchema> & {
   scope?: SyncTaskScope;
   targetCmsId?: string;
@@ -249,6 +254,7 @@ export interface SiteConnectionRepository {
   deleteSite(siteId: string, workspaceId: string): Promise<boolean>;
   verifyToken(siteId: string, apiToken: string): Promise<boolean>;
   saveSync(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
+  saveMediaScan(siteId: string, payload: SyncPayload): Promise<SaveSyncResult>;
   createSyncTask(siteId: string, input: CreateSyncTaskInput): Promise<SyncTask | undefined>;
   listSyncTasks(options?: SyncTaskListOptions): Promise<SyncTask[]>;
   getSyncTask(syncTaskId: string): Promise<SyncTask | undefined>;
@@ -813,6 +819,251 @@ function filterMedia(mediaItems: SyncedMedia[], options?: MediaListOptions) {
   });
 }
 
+interface WordPressRenderedField {
+  rendered?: unknown;
+}
+
+interface WordPressMediaResponseItem {
+  id: number;
+  title?: WordPressRenderedField;
+  source_url?: unknown;
+  media_type?: unknown;
+  mime_type?: unknown;
+  alt_text?: unknown;
+  caption?: WordPressRenderedField;
+  description?: WordPressRenderedField;
+  post?: unknown;
+  modified_gmt?: unknown;
+}
+
+interface WordPressContentResponseItem {
+  id: number;
+  type?: unknown;
+  title?: WordPressRenderedField;
+  slug?: unknown;
+  status?: unknown;
+  link?: unknown;
+  excerpt?: WordPressRenderedField;
+  content?: WordPressRenderedField;
+  author?: unknown;
+  categories?: unknown;
+  tags?: unknown;
+  featured_media?: unknown;
+  date_gmt?: unknown;
+  modified_gmt?: unknown;
+}
+
+function createBasicAuthHeader(credentials: WordPressCredentials) {
+  return `Basic ${Buffer.from(`${credentials.username}:${credentials.applicationPassword}`).toString('base64')}`;
+}
+
+function buildWordPressUrl(siteUrl: string, path: string) {
+  const normalizedSiteUrl = siteUrl.endsWith('/') ? siteUrl : `${siteUrl}/`;
+  return new URL(path.replace(/^\/+/, ''), normalizedSiteUrl).toString();
+}
+
+function stripHtml(value: string) {
+  return value.replace(/<[^>]*>/g, ' ');
+}
+
+function extractRenderedText(value: unknown) {
+  if (typeof value === 'string') {
+    return stripHtml(value).replace(/\s+/g, ' ').trim();
+  }
+
+  if (value && typeof value === 'object') {
+    const rendered = (value as WordPressRenderedField).rendered;
+    if (typeof rendered === 'string') {
+      return stripHtml(rendered).replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  return '';
+}
+
+function extractRenderedHtml(value: unknown) {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (value && typeof value === 'object') {
+    const rendered = (value as WordPressRenderedField).rendered;
+    if (typeof rendered === 'string') {
+      return rendered.trim();
+    }
+  }
+
+  return '';
+}
+
+async function fetchWordPressJson<T>(
+  fetchImpl: typeof fetch,
+  url: string,
+  credentials: WordPressCredentials,
+  init?: RequestInit
+): Promise<{ body: T; response: Response }> {
+  const response = await fetchImpl(url, {
+    ...init,
+    headers: {
+      Authorization: createBasicAuthHeader(credentials),
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`WORDPRESS_REST_${response.status}`);
+  }
+
+  return {
+    body: (await response.json()) as T,
+    response
+  };
+}
+
+function mapWordPressMedia(item: WordPressMediaResponseItem): SyncedMedia {
+  const sourceUrl = typeof item.source_url === 'string' ? item.source_url : '';
+  const fileName = sourceUrl ? sourceUrl.split('/').pop()?.split('?')[0] ?? '' : '';
+  const mediaTitle = extractRenderedText(item.title);
+  const attachedToCmsId =
+    typeof item.post === 'number' && item.post > 0 ? String(item.post) : '';
+  const modifiedAt = typeof item.modified_gmt === 'string' && item.modified_gmt !== ''
+    ? new Date(item.modified_gmt).toISOString()
+    : new Date().toISOString();
+
+  return {
+    cmsId: String(item.id),
+    title: mediaTitle || fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || '圖片',
+    url: sourceUrl,
+    mimeType: typeof item.mime_type === 'string' ? item.mime_type : undefined,
+    fileName: fileName || undefined,
+    caption: extractRenderedText(item.caption) || undefined,
+    description: extractRenderedText(item.description) || undefined,
+    altText: typeof item.alt_text === 'string' ? item.alt_text.trim() : undefined,
+    attachedToCmsId: attachedToCmsId || undefined,
+    updatedAt: modifiedAt
+  };
+}
+
+function mapWordPressContent(item: WordPressContentResponseItem): SyncedArticle {
+  const contentType = item.type === 'page' ? 'page' : 'post';
+  const updatedAt = typeof item.modified_gmt === 'string' && item.modified_gmt !== ''
+    ? new Date(item.modified_gmt).toISOString()
+    : new Date().toISOString();
+  const publishedAt = typeof item.date_gmt === 'string' && item.date_gmt !== ''
+    ? new Date(item.date_gmt).toISOString()
+    : updatedAt;
+  const featuredImageId =
+    typeof item.featured_media === 'number' && item.featured_media > 0
+      ? String(item.featured_media)
+      : undefined;
+
+  return {
+    cmsId: String(item.id),
+    type: contentType,
+    title: extractRenderedText(item.title) || '未命名內容',
+    slug: typeof item.slug === 'string' ? item.slug : '',
+    status: typeof item.status === 'string' ? item.status : 'publish',
+    url: typeof item.link === 'string' ? item.link : '',
+    excerpt: extractRenderedText(item.excerpt) || undefined,
+    metaDescription: undefined,
+    contentHtml: extractRenderedHtml(item.content) || undefined,
+    author: typeof item.author === 'number' ? String(item.author) : undefined,
+    categories: [],
+    tags: [],
+    featuredImageId,
+    publishedAt,
+    updatedAt
+  };
+}
+
+async function fetchWordPressContentById(
+  fetchImpl: typeof fetch,
+  siteUrl: string,
+  credentials: WordPressCredentials,
+  contentId: string
+) {
+  const fields = 'id,type,title,slug,status,link,excerpt,content,author,categories,tags,featured_media,date_gmt,modified_gmt';
+  const paths = [
+    `wp-json/wp/v2/posts/${encodeURIComponent(contentId)}?_fields=${fields}`,
+    `wp-json/wp/v2/pages/${encodeURIComponent(contentId)}?_fields=${fields}`
+  ];
+
+  for (const path of paths) {
+    try {
+      const result = await fetchWordPressJson<WordPressContentResponseItem>(fetchImpl, buildWordPressUrl(siteUrl, path), credentials);
+      return mapWordPressContent(result.body);
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'WORDPRESS_REST_404') {
+        throw error;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+async function scanWordPressMediaLibrary(
+  fetchImpl: typeof fetch,
+  siteUrl: string,
+  credentials: WordPressCredentials,
+  updatedAfter = ''
+) {
+  const media: SyncedMedia[] = [];
+  const parentIds = new Set<string>();
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const query = new URLSearchParams({
+      per_page: String(pageSize),
+      page: String(page),
+      media_type: 'image',
+      status: 'inherit',
+      _fields: 'id,title,source_url,media_type,mime_type,alt_text,caption,description,post,modified_gmt'
+    });
+
+    if (updatedAfter !== '') {
+      query.set('modified_after', updatedAfter);
+    }
+
+    const result = await fetchWordPressJson<WordPressMediaResponseItem[]>(
+      fetchImpl,
+      buildWordPressUrl(siteUrl, `wp-json/wp/v2/media?${query.toString()}`),
+      credentials
+    );
+
+    const items = Array.isArray(result.body) ? result.body : [];
+    totalPages = Math.max(1, Number(result.response.headers.get('X-WP-TotalPages') ?? totalPages ?? 1));
+
+    for (const item of items) {
+      const mediaItem = mapWordPressMedia(item);
+      media.push(mediaItem);
+
+      if (mediaItem.attachedToCmsId) {
+        parentIds.add(mediaItem.attachedToCmsId);
+      }
+    }
+
+    if (items.length < pageSize) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  const articles: SyncedArticle[] = [];
+  for (const contentId of parentIds) {
+    const article = await fetchWordPressContentById(fetchImpl, siteUrl, credentials, contentId);
+    if (article) {
+      articles.push(article);
+    }
+  }
+
+  return { articles, media };
+}
+
 function createSiteConnection(id: string, input: CreateConnectionInput, apiToken: string): InMemorySiteConnection {
   return {
     id,
@@ -1016,6 +1267,40 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       site.lastSyncAt = new Date().toISOString();
       site.lastSyncStats = {
         articlesReceived: payload.articles.length,
+        mediaReceived: payload.media.length
+      };
+
+      return {
+        site: toPublicConnection(site),
+        articlesReceived: payload.articles.length,
+        mediaReceived: payload.media.length
+      };
+    },
+    async saveMediaScan(siteId, payload) {
+      const site = sites.get(siteId);
+
+      if (!site) {
+        throw new Error('SITE_NOT_FOUND');
+      }
+
+      const siteArticles = articlesBySite.get(siteId) ?? new Map<string, SyncedArticle>();
+      const siteMedia = mediaBySite.get(siteId) ?? new Map<string, SyncedMedia>();
+
+      for (const article of payload.articles) {
+        siteArticles.set(article.cmsId, article);
+      }
+
+      for (const media of payload.media) {
+        siteMedia.set(media.cmsId, media);
+      }
+
+      articlesBySite.set(siteId, siteArticles);
+      mediaBySite.set(siteId, siteMedia);
+
+      const previousArticleCount = site.lastSyncStats?.articlesReceived ?? payload.articles.length;
+      site.lastSyncAt = new Date().toISOString();
+      site.lastSyncStats = {
+        articlesReceived: previousArticleCount,
         mediaReceived: payload.media.length
       };
 
@@ -1685,6 +1970,100 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           RETURNING *
         `,
         [siteId, completedAt, JSON.stringify(lastSyncStats)]
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        site: mapSiteRow(updatedSite.rows[0]),
+        articlesReceived: payload.articles.length,
+        mediaReceived: payload.media.length
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async saveMediaScan(siteId: string, payload: SyncPayload) {
+    await this.ensureSchema();
+
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const siteResult = await client.query(
+        `
+          SELECT *
+          FROM site_connections
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [siteId]
+      );
+
+      if (!siteResult.rows[0]) {
+        throw new Error('SITE_NOT_FOUND');
+      }
+
+      const completedAt = new Date();
+      const previousStats = siteResult.rows[0].last_sync_stats as { articlesReceived?: unknown } | null;
+      const preservedArticleCount = Number(previousStats?.articlesReceived ?? payload.articles.length);
+
+      for (const article of payload.articles) {
+        await this.upsertArticle(client, siteId, article, completedAt);
+      }
+
+      for (const media of payload.media) {
+        await this.upsertMedia(client, siteId, media, completedAt);
+      }
+
+      await client.query(
+        `
+          INSERT INTO sync_runs (
+            id,
+            site_id,
+            task_id,
+            batch_index,
+            sync_started_at,
+            updated_after,
+            completed_at,
+            articles_received,
+            media_received,
+            status
+          )
+          VALUES ($1, $2, NULL, NULL, $3, $4, $5, $6, $7, 'completed')
+        `,
+        [
+          crypto.randomUUID(),
+          siteId,
+          payload.syncStartedAt ?? null,
+          payload.updatedAfter ?? null,
+          completedAt,
+          payload.articles.length,
+          payload.media.length
+        ]
+      );
+
+      const updatedSite = await client.query(
+        `
+          UPDATE site_connections
+          SET last_sync_at = $2,
+              last_sync_stats = $3
+          WHERE id = $1
+          RETURNING *
+        `,
+        [
+          siteId,
+          completedAt,
+          JSON.stringify({
+            articlesReceived: preservedArticleCount,
+            mediaReceived: payload.media.length
+          })
+        ]
       );
 
       await client.query('COMMIT');
@@ -3418,6 +3797,94 @@ export function registerSiteConnectionRoutes(
         pagination: mediaResult.pagination
       }
     };
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+    };
+    Body: MediaScanInput;
+  }>('/api/v1/site-connections/:siteId/media-scan', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) {
+      return reply;
+    }
+
+    const site = await repository.findForWorkspace(request.params.siteId, user.workspaceId);
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    if (site.platform !== 'wordpress') {
+      return reply.status(400).send({
+        success: false,
+        message: '目前只支援 WordPress 站點掃描',
+        error: {
+          code: 'WORDPRESS_SCAN_UNSUPPORTED'
+        }
+      });
+    }
+
+    const parsed = mediaScanSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const credentials = await repository.getWordPressCredentials(request.params.siteId);
+    if (!credentials) {
+      return reply.status(400).send({
+        success: false,
+        message: '尚未配置 WordPress 管理員憑證',
+        error: {
+          code: 'WORDPRESS_CREDENTIALS_NOT_CONFIGURED'
+        }
+      });
+    }
+
+    const updatedAfter = parsed.data.updatedAfter ?? site.lastSyncAt ?? '';
+
+    try {
+      const scanResult = await scanWordPressMediaLibrary(
+        fetch,
+        site.siteUrl,
+        credentials,
+        updatedAfter
+      );
+      const result = await repository.saveMediaScan(request.params.siteId, {
+        syncStartedAt: new Date().toISOString(),
+        updatedAfter: updatedAfter || undefined,
+        articles: scanResult.articles,
+        media: scanResult.media
+      });
+
+      return reply.status(200).send({
+        success: true,
+        message: '站點媒體已掃描',
+        data: {
+          ...result,
+          updatedAfter: updatedAfter || undefined
+        }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('WORDPRESS_REST_')) {
+        const statusCode = Number(error.message.slice('WORDPRESS_REST_'.length));
+        return reply.status(statusCode === 401 ? 400 : 502).send({
+          success: false,
+          message: statusCode === 401 ? 'WordPress 憑證無效或已過期' : 'WordPress 媒體掃描失敗',
+          error: {
+            code: statusCode === 401 ? 'WORDPRESS_CREDENTIALS_INVALID' : 'WORDPRESS_MEDIA_SCAN_FAILED'
+          }
+        });
+      }
+
+      throw error;
+    }
   });
 
   // DELETE /api/v1/site-connections/:siteId — remove a site and all its cascaded data

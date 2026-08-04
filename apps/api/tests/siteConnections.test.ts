@@ -601,6 +601,163 @@ describe('site connection routes', () => {
     });
   });
 
+  it('scans WordPress media, stores related content, and generates contextual media suggestions', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+    const authToken = await loginDemoUser(server);
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/wp-json/wp/v2/media')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 904,
+              title: { rendered: 'Hero Image' },
+              source_url: 'http://localhost:8088/wp-content/uploads/hero-image.jpg',
+              media_type: 'image',
+              mime_type: 'image/jpeg',
+              alt_text: '',
+              caption: { rendered: '<p>Hero image caption from WordPress.</p>' },
+              description: { rendered: '<p>Hero image description from WordPress.</p>' },
+              post: 404,
+              modified_gmt: '2026-08-04T08:00:00'
+            }
+          ]),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-TotalPages': '1'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wp/v2/posts/404')) {
+        return new Response(
+          JSON.stringify({
+            id: 404,
+            type: 'post',
+            title: { rendered: 'Parent Article' },
+            slug: 'parent-article',
+            status: 'publish',
+            link: 'http://localhost:8088/parent-article/',
+            excerpt: { rendered: '<p>Parent article excerpt for media context.</p>' },
+            content: { rendered: '<p>Parent article body for media context.</p>' },
+            author: 1,
+            categories: [],
+            tags: [],
+            featured_media: 904,
+            date_gmt: '2026-08-04T07:30:00',
+            modified_gmt: '2026-08-04T08:00:00'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wp/v2/pages/404')) {
+        return new Response('', { status: 404 });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const scanResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/media-scan`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {}
+      });
+      const mediaResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/media`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const auditResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const suggestionsResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(scanResponse.statusCode).toBe(200);
+      expect(scanResponse.json()).toMatchObject({
+        success: true,
+        data: {
+          site: {
+            id: body.data.site.id,
+            lastSyncStats: {
+              articlesReceived: 1,
+              mediaReceived: 1
+            }
+          },
+          articlesReceived: 1,
+          mediaReceived: 1
+        }
+      });
+      expect(mediaResponse.statusCode).toBe(200);
+      expect(mediaResponse.json()).toMatchObject({
+        data: {
+          media: [
+            {
+              cmsId: '904',
+              title: 'Hero Image',
+              caption: 'Hero image caption from WordPress.',
+              description: 'Hero image description from WordPress.',
+              altText: '',
+              attachedToCmsId: '404'
+            }
+          ]
+        }
+      });
+      expect(auditResponse.statusCode).toBe(201);
+      expect(suggestionsResponse.statusCode).toBe(200);
+      expect(suggestionsResponse.json()).toMatchObject({
+        data: {
+          suggestions: expect.arrayContaining([
+            expect.objectContaining({
+              targetType: 'media',
+              fieldName: 'title',
+              suggestionType: 'media_title',
+              suggestedValue: 'Parent Article - Hero Image'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              fieldName: 'altText',
+              suggestionType: 'media_alt_text',
+              suggestedValue: 'Parent Article - Hero Image'
+            })
+          ])
+        }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('creates a sync task and stores incremental batches until the final batch completes', async () => {
     const { server, body } = await createWordPressConnection();
     const updatedAfter = '2026-07-25T08:00:00+00:00';

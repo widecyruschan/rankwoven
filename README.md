@@ -1342,3 +1342,34 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 若要做完整人工回歸，可登入 `http://localhost:8088/cyrus/` 後檢查 `Settings -> RankWoven SEO` 頁面渲染與媒體同步行為。
   2. 若 Docker I/O 問題持續，建議先修復本機 Desktop 映像層，再恢復 `wpcli` 路徑的自動化驗證。
+
+### 2026-08-04（星期二）— 媒體處理頁新增站點媒體掃描與 AI 審核
+
+- 會話的主要目的：把 `/app/media` 由「只讀已同步媒體列表」升級成可一鍵掃描站點媒體、根據上下文生成 AI 審核建議，並供用戶修改後提交更新的工作流。
+- 完成的主要任務：
+  1. `apps/api/src/siteConnections.ts` 新增 `POST /api/v1/site-connections/:siteId/media-scan`。
+     - 直接使用已保存的 WordPress 管理員憑證連接站點 REST API。
+     - 掃描 `/wp-json/wp/v2/media` 圖片媒體，並自動抓取關聯文章 / 頁面作為上下文。
+     - 將掃描結果寫入現有 `synced_media` / `synced_articles`，同時保留站點最後同步統計。
+  2. `apps/web/src/views/MediaOptimizationView.vue` 的右上角按鈕改成真正的「掃描並分析」。
+     - 選取站點後，一鍵讀取網站媒體庫。
+     - 掃描完成後自動執行 SEO 審核，列出圖片標題、Meta、Alt Text、Caption、Description 與檔名建議。
+     - 空狀態加入 CTA，方便首次未掃描時直接開始。
+  3. `apps/web/src/api/siteConnections.ts` 新增 `scanSiteMedia()`。
+  4. `apps/web/src/i18n.ts` 新增掃描、權限不足、空狀態與成功提示文案。
+  5. `apps/api/tests/siteConnections.test.ts` 新增 `media-scan` 整合測試，驗證：
+     - WordPress 媒體掃描成功寫回資料庫。
+     - 關聯文章內容一併帶入。
+     - SEO 審核能產生媒體上下文建議。
+- 關鍵決策和解決方案：不再只依賴既有的同步列表或單筆刷新，而是把媒體頁直接接成「掃描站點媒體 -> AI 分析 -> 使用者審核 -> 套用更新」的閉環；這樣即使頁面一開始沒有資料，使用者也能先按掃描按鈕把網站媒體讀進來再做審核。
+- 使用的技術棧：Fastify + TypeScript、WordPress REST API + Application Password、Vue 3 + Ant Design Vue、Vitest。
+- 新增或修改文件：
+  - 修改：`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run build -w @aieo/web`
+  - 已通過：`npm run test -w @aieo/api`
+- 下一步行動清單：
+  1. 若要進一步提升可用性，可在媒體詳情彈窗加入「AI 建議來源上下文」預覽。
+  2. 若要減少人工逐條處理，可再補媒體建議的批量批准與批量套用。

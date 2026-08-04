@@ -191,6 +191,13 @@ export interface MediaListParams extends PaginationParams {
   issue?: 'missing_alt' | 'missing_file_name';
 }
 
+export interface MediaScanResult {
+  site: SiteConnection;
+  articlesReceived: number;
+  mediaReceived: number;
+  updatedAfter?: string;
+}
+
 export interface ManualRefreshTaskPayload {
   type: 'article' | 'media';
   cmsId: string;
@@ -416,6 +423,15 @@ export async function getSyncedMedia(siteId: string, params?: MediaListParams) {
     media: SyncedMedia[];
     pagination: PaginationMeta;
   }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/media${createPaginationQuery(params)}`);
+}
+
+export async function scanSiteMedia(siteId: string, updatedAfter?: string) {
+  return requestApi<MediaScanResult>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/media-scan`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(updatedAfter ? { updatedAfter } : {})
+    })
+  });
 }
 
 export async function getOptimizationSuggestions(siteId: string) {
