@@ -1373,3 +1373,39 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 若要進一步提升可用性，可在媒體詳情彈窗加入「AI 建議來源上下文」預覽。
   2. 若要減少人工逐條處理，可再補媒體建議的批量批准與批量套用。
+
+### 2026-08-04（星期二）— 媒體建議可編輯與按關聯文章 slug 重命名
+
+- 會話的主要目的：讓媒體處理頁不只掃描與產生 AI 建議，還能根據關聯文章 slug 生成檔名建議，並允許用戶手動修改建議內容後再提交到網站媒體庫。
+- 完成的主要任務：
+  1. `apps/api/src/seoOptimization.ts`
+     - 媒體上下文新增 `contextSlug` 與副檔名資訊。
+     - `fileName` 建議改為優先使用關聯文章 slug，例如 `what-is-seo.jpg`。
+     - 新增 `MEDIA_FILE_NAME_CONTEXT` 規則，沿用 `media_file_name` 建議類型。
+     - 新增 `updateSuggestionSchema`、`updateSuggestion()` repository 方法與 `PUT /api/v1/site-connections/:siteId/suggestions/:suggestionId`。
+  2. `apps/web/src/views/MediaOptimizationView.vue`
+     - 媒體審核彈窗的 AI 建議欄位改為可編輯輸入框 / 文字區域。
+     - 新增「保存修改」按鈕，保存後再批准 / 套用。
+     - 掃描、批准、套用、保存後都會刷新當前媒體的草稿建議。
+  3. `apps/web/src/api/siteConnections.ts`
+     - 新增 `updateOptimizationSuggestion()` API client。
+  4. `apps/web/src/i18n.ts`
+     - 補齊保存修改成功 / 失敗等文案。
+  5. `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+     - `fileName` 套用不再只寫入建議 meta。
+     - 新增實際附件檔案重命名邏輯，會更新主圖、各尺寸衍生圖與 attachment metadata。
+  6. `apps/api/tests/siteConnections.test.ts`
+     - 補上 `media-scan` 路徑對 slug 檔名建議與 `PUT suggestion` 更新的整合測試。
+- 關鍵決策和解決方案：這次不直接假設使用者一定接受 AI 原句，而是把媒體審核流程改成「AI 先給草稿，用戶可再改，再批准與寫回」；同時檔名建議不再只修飾原圖檔名，而是優先對齊文章 slug，對應 `what-is-seo` 這類實際 SEO 需求。
+- 使用的技術棧：Fastify、TypeScript、Vue 3、Ant Design Vue、Vitest、WordPress PHP。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run build -w @aieo/web`
+  - 已通過：`npm run test -w @aieo/api`
+  - 已通過：`docker exec cyruschan-wp /bin/bash -lc 'php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php'`
+- 下一步行動清單：
+  1. 若要對你截圖中的特定媒體直接落資料，需先確認該文章 / 媒體存在於目前本地 WordPress 測試站資料庫；我剛核對時，本地 `post=1670` 與截圖所示內容不一致，所以未直接改站點資料。
+  2. 若你要我繼續，我可以下一步直接對本地測試站或你指定的線上站點，把這張圖的標題、Alt、Caption、Description 和檔名實際更新。

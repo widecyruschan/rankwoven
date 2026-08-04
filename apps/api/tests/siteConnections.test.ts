@@ -749,8 +749,48 @@ describe('site connection routes', () => {
               fieldName: 'altText',
               suggestionType: 'media_alt_text',
               suggestedValue: 'Parent Article - Hero Image'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              fieldName: 'fileName',
+              suggestionType: 'media_file_name',
+              suggestedValue: 'parent-article.jpg'
             })
           ])
+        }
+      });
+
+      const fileNameSuggestion = suggestionsResponse
+        .json<{
+          data: {
+            suggestions: Array<{
+              id: string;
+              fieldName: string;
+              targetType: string;
+            }>;
+          };
+        }>()
+        .data.suggestions.find((suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'fileName');
+
+      const updateSuggestionResponse = await server.inject({
+        method: 'PUT',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${fileNameSuggestion?.id}`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {
+          suggestedValue: 'what-is-seo.jpg'
+        }
+      });
+
+      expect(updateSuggestionResponse.statusCode).toBe(200);
+      expect(updateSuggestionResponse.json()).toMatchObject({
+        data: {
+          suggestion: {
+            id: fileNameSuggestion?.id,
+            fieldName: 'fileName',
+            suggestedValue: 'what-is-seo.jpg'
+          }
         }
       });
     } finally {

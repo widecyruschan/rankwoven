@@ -104,6 +104,7 @@ export interface SeoOptimizationRepository {
   createSuggestion(siteId: string, input: CreateSuggestionInput, auditIssueId?: string): Promise<OptimizationSuggestion>;
   listSuggestions(siteId: string): Promise<OptimizationSuggestion[]>;
   findSuggestion(siteId: string, suggestionId: string): Promise<OptimizationSuggestion | undefined>;
+  updateSuggestion(siteId: string, suggestionId: string, suggestedValue: string): Promise<OptimizationSuggestion | undefined>;
   approveSuggestion(siteId: string, suggestionId: string): Promise<OptimizationSuggestion | undefined>;
   markSuggestionApplyQueued(
     siteId: string,
@@ -158,6 +159,10 @@ const createSuggestionSchema = z.object({
   ]),
   fieldName: z.string().trim().min(1).max(80),
   currentValue: z.string().max(20_000).optional(),
+  suggestedValue: z.string().trim().min(1).max(20_000)
+});
+
+const updateSuggestionSchema = z.object({
   suggestedValue: z.string().trim().min(1).max(20_000)
 });
 
@@ -436,15 +441,20 @@ function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
       });
     }
 
-    if (mediaItem.fileName && !/^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+$/i.test(mediaItem.fileName)) {
+    const suggestedFileName = buildMediaFileNameSuggestion(mediaItem, mediaContext);
+    if (
+      mediaItem.fileName &&
+      suggestedFileName &&
+      normalizeComparableText(mediaItem.fileName) !== normalizeComparableText(suggestedFileName)
+    ) {
       issues.push({
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
-        ruleCode: 'MEDIA_FILE_NAME_FORMAT',
+        ruleCode: mediaContext.contextSlug ? 'MEDIA_FILE_NAME_CONTEXT' : 'MEDIA_FILE_NAME_FORMAT',
         severity: 'medium',
-        message: '圖片檔名不利於搜尋引擎理解',
+        message: mediaContext.contextSlug ? '圖片檔名應根據關聯內容 slug 命名' : '圖片檔名不利於搜尋引擎理解',
         currentValue: mediaItem.fileName,
-        suggestedValue: normalizeFileName(mediaItem.fileName),
+        suggestedValue: suggestedFileName,
         fieldName: 'fileName'
       });
     }
@@ -487,9 +497,11 @@ function normalizeImageText(value: string) {
 
 interface MediaContext {
   contextTitle: string;
+  contextSlug: string;
   contextSummary: string;
   contextDetail: string;
   imageDescriptor: string;
+  extension: string;
 }
 
 function buildMediaContext(
@@ -498,15 +510,21 @@ function buildMediaContext(
 ): MediaContext {
   const attachedArticle = mediaItem.attachedToCmsId ? articleById.get(mediaItem.attachedToCmsId) : undefined;
   const contextTitle = attachedArticle?.title.trim() ?? '';
+  const contextSlug = attachedArticle?.slug.trim() ?? '';
   const contextSummary = normalizeSeoText(attachedArticle?.excerpt ?? stripHtml(attachedArticle?.contentHtml ?? ''));
   const contextDetail = normalizeSeoText(stripHtml(attachedArticle?.contentHtml ?? '') || contextSummary);
   const imageDescriptor = normalizeImageText(mediaItem.title || mediaItem.fileName || '');
+  const extension = mediaItem.fileName?.includes('.')
+    ? mediaItem.fileName.split('.').pop()?.toLowerCase() ?? 'jpg'
+    : 'jpg';
 
   return {
     contextTitle,
+    contextSlug,
     contextSummary,
     contextDetail,
-    imageDescriptor
+    imageDescriptor,
+    extension
   };
 }
 
@@ -564,6 +582,17 @@ function buildMediaAltTextSuggestion(mediaContext: MediaContext) {
   return trimSeoText(suggestion, 125);
 }
 
+function buildMediaFileNameSuggestion(mediaItem: SyncedMedia, mediaContext: MediaContext) {
+  if (mediaContext.contextSlug) {
+    const normalizedSlug = normalizeSlugForFileName(mediaContext.contextSlug);
+    if (normalizedSlug) {
+      return `${normalizedSlug}.${mediaContext.extension || 'jpg'}`;
+    }
+  }
+
+  return mediaItem.fileName ? normalizeFileName(mediaItem.fileName) : '';
+}
+
 function normalizeSeoText(value: string) {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -597,6 +626,14 @@ function normalizeFileName(value: string) {
   return `${normalized || 'rankwoven-image'}.${extension || 'jpg'}`;
 }
 
+function normalizeSlugForFileName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
 function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>): SuggestionType {
   if (issue.ruleCode === 'MEDIA_TITLE_CONTEXT') {
     return 'media_title';
@@ -614,7 +651,7 @@ function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId'
     return 'media_alt_text';
   }
 
-  if (issue.ruleCode === 'MEDIA_FILE_NAME_FORMAT') {
+  if (issue.ruleCode === 'MEDIA_FILE_NAME_FORMAT' || issue.ruleCode === 'MEDIA_FILE_NAME_CONTEXT') {
     return 'media_file_name';
   }
 
@@ -683,6 +720,16 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
     async findSuggestion(siteId, suggestionId) {
       const suggestion = suggestions.get(suggestionId);
       return suggestion?.siteId === siteId ? suggestion : undefined;
+    },
+    async updateSuggestion(siteId, suggestionId, suggestedValue) {
+      const suggestion = suggestions.get(suggestionId);
+      if (!suggestion || suggestion.siteId !== siteId) {
+        return undefined;
+      }
+
+      suggestion.suggestedValue = suggestedValue;
+      suggestion.errorMessage = undefined;
+      return suggestion;
     },
     async approveSuggestion(siteId, suggestionId) {
       const suggestion = suggestions.get(suggestionId);
@@ -933,6 +980,22 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
         LIMIT 1
       `,
       [suggestionId, siteId]
+    );
+    return result.rows[0] ? mapSuggestionRow(result.rows[0]) : undefined;
+  }
+
+  async updateSuggestion(siteId: string, suggestionId: string, suggestedValue: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `
+        UPDATE optimization_suggestions
+        SET suggested_value = $3,
+            error_message = NULL
+        WHERE id = $1
+          AND site_id = $2
+        RETURNING *
+      `,
+      [suggestionId, siteId, suggestedValue]
     );
     return result.rows[0] ? mapSuggestionRow(result.rows[0]) : undefined;
   }
@@ -1449,6 +1512,49 @@ export function registerSeoOptimizationRoutes(
         message: '建議已建立',
         data: { suggestion }
       });
+    }
+  );
+
+  app.put<{ Params: { siteId: string; suggestionId: string } }>(
+    '/api/v1/site-connections/:siteId/suggestions/:suggestionId',
+    async (request, reply) => {
+      const user = await requireAuth(authService, request, reply);
+      if (!user) {
+        return reply;
+      }
+
+      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      if (!site) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const parsed = updateSuggestionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return validationError(reply, parsed.error);
+      }
+
+      const suggestion = await seoRepository.updateSuggestion(
+        site.id,
+        request.params.suggestionId,
+        parsed.data.suggestedValue
+      );
+      if (!suggestion) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到優化建議',
+          error: { code: 'SUGGESTION_NOT_FOUND' }
+        });
+      }
+
+      return {
+        success: true,
+        message: '建議已更新',
+        data: { suggestion }
+      };
     }
   );
 

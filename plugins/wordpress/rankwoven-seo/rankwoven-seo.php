@@ -913,7 +913,13 @@ final class RankWoven_SEO_Plugin
         }
 
         if (isset($payload['fileName'])) {
-            update_post_meta($attachment_id, '_rankwoven_suggested_file_name', sanitize_file_name((string) $payload['fileName']));
+            $rename_result = $this->rename_attachment_file($attachment_id, (string) $payload['fileName']);
+            if (is_wp_error($rename_result)) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => $rename_result->get_error_message()
+                ], 500);
+            }
             $changed_fields[] = 'fileName';
         }
 
@@ -933,6 +939,91 @@ final class RankWoven_SEO_Plugin
             'appliedAt' => gmdate('c'),
             'media' => $this->get_synced_media_by_id($attachment_id)
         ]);
+    }
+
+    private function rename_attachment_file(int $attachment_id, string $requested_file_name)
+    {
+        $attached_file = get_attached_file($attachment_id);
+        if (!is_string($attached_file) || $attached_file === '' || !file_exists($attached_file)) {
+            return new WP_Error('rankwoven_attachment_file_missing', __('Attachment file not found on disk.', 'rankwoven-seo'));
+        }
+
+        $current_filename = basename($attached_file);
+        $current_extension = pathinfo($current_filename, PATHINFO_EXTENSION);
+        $current_directory = dirname($attached_file);
+        $sanitized_file_name = sanitize_file_name($requested_file_name);
+        $desired_basename = pathinfo($sanitized_file_name, PATHINFO_FILENAME);
+
+        if ($desired_basename === '') {
+            return new WP_Error('rankwoven_invalid_file_name', __('Invalid media filename.', 'rankwoven-seo'));
+        }
+
+        $target_filename = $desired_basename . ($current_extension !== '' ? '.' . $current_extension : '');
+        if ($target_filename === $current_filename) {
+            return true;
+        }
+
+        $target_filename = wp_unique_filename($current_directory, $target_filename);
+        $target_path = trailingslashit($current_directory) . $target_filename;
+
+        if (!@rename($attached_file, $target_path)) {
+            return new WP_Error('rankwoven_attachment_rename_failed', __('Unable to rename attachment file.', 'rankwoven-seo'));
+        }
+
+        $metadata = wp_get_attachment_metadata($attachment_id);
+        $current_basename = pathinfo($current_filename, PATHINFO_FILENAME);
+        $new_basename = pathinfo($target_filename, PATHINFO_FILENAME);
+
+        if (is_array($metadata)) {
+            if (!empty($metadata['sizes']) && is_array($metadata['sizes'])) {
+                foreach ($metadata['sizes'] as $size_key => $size_meta) {
+                    if (empty($size_meta['file']) || !is_string($size_meta['file'])) {
+                        continue;
+                    }
+
+                    $old_size_file = $size_meta['file'];
+                    $suffix = str_starts_with($old_size_file, $current_basename)
+                        ? substr($old_size_file, strlen($current_basename))
+                        : '-' . $old_size_file;
+                    $new_size_file = $new_basename . $suffix;
+                    $old_size_path = trailingslashit($current_directory) . $old_size_file;
+                    $new_size_path = trailingslashit($current_directory) . $new_size_file;
+
+                    if (file_exists($old_size_path)) {
+                        @rename($old_size_path, $new_size_path);
+                    }
+
+                    $metadata['sizes'][$size_key]['file'] = $new_size_file;
+                }
+            }
+
+            if (!empty($metadata['original_image']) && is_string($metadata['original_image'])) {
+                $old_original_file = $metadata['original_image'];
+                $suffix = str_starts_with($old_original_file, $current_basename)
+                    ? substr($old_original_file, strlen($current_basename))
+                    : '-' . $old_original_file;
+                $new_original_file = $new_basename . $suffix;
+                $old_original_path = trailingslashit($current_directory) . $old_original_file;
+                $new_original_path = trailingslashit($current_directory) . $new_original_file;
+
+                if (file_exists($old_original_path)) {
+                    @rename($old_original_path, $new_original_path);
+                }
+
+                $metadata['original_image'] = $new_original_file;
+            }
+
+            $relative_target_path = _wp_relative_upload_path($target_path);
+            if (is_string($relative_target_path) && $relative_target_path !== '') {
+                $metadata['file'] = $relative_target_path;
+            }
+
+            wp_update_attachment_metadata($attachment_id, $metadata);
+        }
+
+        update_attached_file($attachment_id, $target_path);
+
+        return true;
     }
 
     private function get_synced_articles(int $per_page, int $page, string $updated_after = ''): array

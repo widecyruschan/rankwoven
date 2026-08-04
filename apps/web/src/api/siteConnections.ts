@@ -470,6 +470,18 @@ export async function approveOptimizationSuggestion(siteId: string, suggestionId
   );
 }
 
+export async function updateOptimizationSuggestion(siteId: string, suggestionId: string, suggestedValue: string) {
+  return requestApi<{
+    suggestion: OptimizationSuggestion;
+  }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions/${encodeURIComponent(suggestionId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ suggestedValue })
+    }
+  );
+}
+
 export async function applyOptimizationSuggestion(siteId: string, suggestionId: string) {
   return requestApi<{
     suggestion: OptimizationSuggestion;

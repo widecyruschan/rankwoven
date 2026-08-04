@@ -10,6 +10,7 @@ import {
   getSiteConnections,
   getSyncedMedia,
   scanSiteMedia,
+  updateOptimizationSuggestion,
   type MediaListParams,
   type OptimizationSuggestion,
   type PaginationMeta,
@@ -49,6 +50,7 @@ const actionSuggestionId = ref('');
 const errorMessage = ref('');
 const successMessage = ref('');
 const selectedMedia = ref<SyncedMedia | null>(null);
+const suggestionDrafts = ref<Record<string, string>>({});
 
 const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
 const canScanSelectedSite = computed(() =>
@@ -235,6 +237,9 @@ async function loadSuggestions() {
   try {
     const result = await getOptimizationSuggestions(selectedSiteId.value);
     mediaSuggestions.value = result.suggestions.filter((suggestion) => suggestion.targetType === 'media');
+    if (selectedMedia.value) {
+      refreshSuggestionDrafts(selectedMedia.value.cmsId);
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('media.loadSuggestionsFailed');
   }
@@ -270,6 +275,7 @@ async function scanAndAnalyzeMedia() {
       suggestions: mediaIssueCount
     });
     await refreshPageData(1, pagination.value.pageSize);
+    refreshSuggestionDrafts();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('media.scanFailed');
   } finally {
@@ -290,8 +296,35 @@ async function approveSuggestion(suggestionId: string) {
     await approveOptimizationSuggestion(selectedSiteId.value, suggestionId);
     successMessage.value = t('media.approveSuccess');
     await loadSuggestions();
+    refreshSuggestionDrafts();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('media.approveFailed');
+  } finally {
+    actionSuggestionId.value = '';
+  }
+}
+
+async function saveSuggestionDraft(suggestion: OptimizationSuggestion) {
+  if (!selectedSiteId.value) {
+    return;
+  }
+
+  const nextValue = suggestionDrafts.value[suggestion.id]?.trim() ?? '';
+  if (nextValue === '' || nextValue === suggestion.suggestedValue) {
+    return;
+  }
+
+  actionSuggestionId.value = suggestion.id;
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  try {
+    await updateOptimizationSuggestion(selectedSiteId.value, suggestion.id, nextValue);
+    successMessage.value = t('media.saveDraftSuccess');
+    await loadSuggestions();
+    refreshSuggestionDrafts();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : t('media.saveDraftFailed');
   } finally {
     actionSuggestionId.value = '';
   }
@@ -310,6 +343,7 @@ async function applySuggestion(suggestionId: string) {
     await applyOptimizationSuggestion(selectedSiteId.value, suggestionId);
     successMessage.value = t('media.applyQueued');
     await loadSuggestions();
+    refreshSuggestionDrafts();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('media.applyFailed');
   } finally {
@@ -328,10 +362,22 @@ function handleSearch(value: string) {
 
 function openMedia(record: SyncedMedia) {
   selectedMedia.value = record;
+  refreshSuggestionDrafts(record.cmsId);
 }
 
 function getSuggestionsForMedia(cmsId: string) {
   return mediaSuggestions.value.filter((suggestion) => suggestion.targetCmsId === cmsId);
+}
+
+function refreshSuggestionDrafts(targetCmsId = selectedMedia.value?.cmsId) {
+  if (!targetCmsId) {
+    suggestionDrafts.value = {};
+    return;
+  }
+
+  suggestionDrafts.value = Object.fromEntries(
+    getSuggestionsForMedia(targetCmsId).map((suggestion) => [suggestion.id, suggestion.suggestedValue])
+  );
 }
 
 function countSuggestionsByField(fieldName: MediaFieldName) {
@@ -427,6 +473,26 @@ function getMediaCurrentValue(record: SyncedMedia, fieldName: MediaFieldName) {
   return record.title ?? '';
 }
 
+function getSuggestionDraftValue(suggestion?: OptimizationSuggestion) {
+  if (!suggestion) {
+    return '';
+  }
+
+  return suggestionDrafts.value[suggestion.id] ?? suggestion.suggestedValue;
+}
+
+function isSuggestionDirty(suggestion?: OptimizationSuggestion) {
+  if (!suggestion) {
+    return false;
+  }
+
+  return getSuggestionDraftValue(suggestion).trim() !== suggestion.suggestedValue;
+}
+
+function isLongTextField(fieldName: MediaFieldName) {
+  return fieldName === 'caption' || fieldName === 'description';
+}
+
 onMounted(async () => {
   try {
     await loadSites();
@@ -438,6 +504,7 @@ onMounted(async () => {
 
 watch(selectedSiteId, () => {
   selectedMedia.value = null;
+  suggestionDrafts.value = {};
   successMessage.value = '';
   errorMessage.value = '';
   void refreshPageData(1, pagination.value.pageSize);
@@ -575,7 +642,15 @@ watch(activeTab, () => {
           </template>
           <template v-else-if="column.key === 'suggestion'">
             <div v-if="record.suggestion">
-              <div>{{ record.suggestion.suggestedValue }}</div>
+              <a-textarea
+                v-if="isLongTextField(record.key)"
+                v-model:value="suggestionDrafts[record.suggestion.id]"
+                :auto-size="{ minRows: 2, maxRows: 5 }"
+              />
+              <a-input
+                v-else
+                v-model:value="suggestionDrafts[record.suggestion.id]"
+              />
               <div v-if="record.suggestion.errorMessage" class="table-subtext">{{ record.suggestion.errorMessage }}</div>
             </div>
             <span v-else>-</span>
@@ -587,6 +662,14 @@ watch(activeTab, () => {
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space v-if="record.suggestion">
+              <a-button
+                v-if="isSuggestionDirty(record.suggestion)"
+                size="small"
+                :loading="actionSuggestionId === record.suggestion.id"
+                @click="saveSuggestionDraft(record.suggestion)"
+              >
+                {{ t('media.saveDraft') }}
+              </a-button>
               <a-button
                 v-if="record.suggestion.status === 'pending'"
                 size="small"
