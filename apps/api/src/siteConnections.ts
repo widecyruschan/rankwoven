@@ -2584,7 +2584,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     const pagination = getPagination(options);
     const offset = (pagination.page - 1) * pagination.pageSize;
     const values: Array<string | number> = [siteId];
-    const conditions = ['sm.site_id = $1'];
+    const conditions = ['site_id = $1'];
 
     if (options?.search) {
       values.push(`%${options.search}%`);
@@ -2641,7 +2641,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     const pagination = getPagination(options);
     const offset = (pagination.page - 1) * pagination.pageSize;
     const values: Array<string | number> = [siteId];
-    const conditions = ['site_id = $1'];
+    const conditions = ['sm.site_id = $1'];
 
     if (options?.search) {
       values.push(`%${options.search}%`);
