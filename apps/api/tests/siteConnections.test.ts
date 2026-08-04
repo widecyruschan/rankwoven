@@ -643,12 +643,12 @@ describe('site connection routes', () => {
           JSON.stringify({
             id: 404,
             type: 'post',
-            title: { rendered: 'Parent Article' },
-            slug: 'parent-article',
+            title: { rendered: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門' },
+            slug: 'what-is-seo',
             status: 'publish',
-            link: 'http://localhost:8088/parent-article/',
-            excerpt: { rendered: '<p>Parent article excerpt for media context.</p>' },
-            content: { rendered: '<p>Parent article body for media context.</p>' },
+            link: 'http://localhost:8088/what-is-seo/',
+            excerpt: { rendered: '<p>SEO 入門文章摘要。</p>' },
+            content: { rendered: '<p>SEO 是搜尋引擎優化的完整入門內容。</p>' },
             author: 1,
             categories: [],
             tags: [],
@@ -728,7 +728,8 @@ describe('site connection routes', () => {
               caption: 'Hero image caption from WordPress.',
               description: 'Hero image description from WordPress.',
               altText: '',
-              attachedToCmsId: '404'
+              attachedToCmsId: '404',
+              attachedToTitle: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門'
             }
           ]
         }
@@ -742,19 +743,19 @@ describe('site connection routes', () => {
               targetType: 'media',
               fieldName: 'title',
               suggestionType: 'media_title',
-              suggestedValue: 'Parent Article - Hero Image'
+              suggestedValue: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門'
             }),
             expect.objectContaining({
               targetType: 'media',
               fieldName: 'altText',
               suggestionType: 'media_alt_text',
-              suggestedValue: 'Parent Article - Hero Image'
+              suggestedValue: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門'
             }),
             expect.objectContaining({
               targetType: 'media',
               fieldName: 'fileName',
               suggestionType: 'media_file_name',
-              suggestedValue: 'parent-article.jpg'
+              suggestedValue: 'what-is-seo-1.jpg'
             })
           ])
         }
@@ -779,7 +780,7 @@ describe('site connection routes', () => {
           authorization: `Bearer ${authToken}`
         },
         payload: {
-          suggestedValue: 'what-is-seo.jpg'
+          suggestedValue: 'what-is-seo-custom.jpg'
         }
       });
 
@@ -789,13 +790,76 @@ describe('site connection routes', () => {
           suggestion: {
             id: fileNameSuggestion?.id,
             fieldName: 'fileName',
-            suggestedValue: 'what-is-seo.jpg'
+            suggestedValue: 'what-is-seo-custom.jpg'
           }
         }
       });
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('extracts plain text meta descriptions without shortcode markup', async () => {
+    const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
+
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '909',
+            type: 'post',
+            title: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門與實戰技巧',
+            slug: 'what-is-seo',
+            status: 'publish',
+            url: 'http://localhost:8088/what-is-seo/',
+            excerpt: '[vc_row css=".vc_custom_1785083156694{background-color:#fff;}"]SEO 是搜尋引擎優化的入門說明與實戰重點。[/vc_row]',
+            contentHtml: '<p>[vc_row css=".vc_custom_1785083156694{background-color:#fff;}"]SEO 是搜尋引擎優化的入門說明與實戰重點。[/vc_row]</p>',
+            updatedAt: '2026-08-04T08:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+
+    expect(syncResponse.statusCode).toBe(200);
+
+    const auditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(auditResponse.statusCode).toBe(201);
+    expect(suggestionsResponse.statusCode).toBe(200);
+
+    const metaDescriptionSuggestion = suggestionsResponse
+      .json<{
+        data: {
+          suggestions: Array<{
+            fieldName: string;
+            suggestedValue: string;
+          }>;
+        };
+      }>()
+      .data.suggestions.find((suggestion) => suggestion.fieldName === 'metaDescription');
+
+    expect(metaDescriptionSuggestion?.suggestedValue).toContain('SEO 是搜尋引擎優化的入門說明與實戰重點。');
+    expect(metaDescriptionSuggestion?.suggestedValue).not.toContain('[vc_row');
   });
 
   it('creates a sync task and stores incremental batches until the final batch completes', async () => {
@@ -1190,7 +1254,7 @@ describe('site connection routes', () => {
       status: 'pending',
       suggestionType: 'media_title',
       targetCmsId: '904',
-      suggestedValue: 'Tiny - Hero Image 2026'
+      suggestedValue: 'Tiny'
     });
     expect(mediaCaptionSuggestion).toMatchObject({
       status: 'pending',
@@ -1208,7 +1272,7 @@ describe('site connection routes', () => {
       status: 'pending',
       suggestionType: 'media_alt_text',
       targetCmsId: '904',
-      suggestedValue: 'Tiny - Hero Image 2026'
+      suggestedValue: 'Tiny'
     });
 
     const approveResponse = await server.inject({

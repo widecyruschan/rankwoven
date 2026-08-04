@@ -69,6 +69,7 @@ const syncedMediaSchema = z.object({
   description: z.string().trim().max(20_000).optional(),
   altText: z.string().trim().max(500).optional(),
   attachedToCmsId: z.string().trim().max(80).optional(),
+  attachedToTitle: z.string().trim().max(300).optional(),
   updatedAt: z.string().trim().max(80)
 });
 
@@ -699,6 +700,7 @@ function mapMediaRow(row: QueryResultRow): SyncedMedia {
     description: row.description ?? undefined,
     altText: row.alt_text ?? undefined,
     attachedToCmsId: row.attached_to_cms_id ?? undefined,
+    attachedToTitle: row.attached_to_title ?? undefined,
     updatedAt: row.cms_updated_at
   };
 }
@@ -800,7 +802,16 @@ function filterMedia(mediaItems: SyncedMedia[], options?: MediaListOptions) {
   return mediaItems.filter((media) => {
     if (
       !matchesSearch(
-        [media.title, media.url, media.fileName, media.caption, media.description, media.altText, media.mimeType],
+        [
+          media.title,
+          media.url,
+          media.fileName,
+          media.caption,
+          media.description,
+          media.altText,
+          media.mimeType,
+          media.attachedToTitle
+        ],
         options?.search
       )
     ) {
@@ -941,6 +952,7 @@ function mapWordPressMedia(item: WordPressMediaResponseItem): SyncedMedia {
     description: extractRenderedText(item.description) || undefined,
     altText: typeof item.alt_text === 'string' ? item.alt_text.trim() : undefined,
     attachedToCmsId: attachedToCmsId || undefined,
+    attachedToTitle: undefined,
     updatedAt: modifiedAt
   };
 }
@@ -1054,10 +1066,18 @@ async function scanWordPressMediaLibrary(
   }
 
   const articles: SyncedArticle[] = [];
+  const articleById = new Map<string, SyncedArticle>();
   for (const contentId of parentIds) {
     const article = await fetchWordPressContentById(fetchImpl, siteUrl, credentials, contentId);
     if (article) {
       articles.push(article);
+      articleById.set(article.cmsId, article);
+    }
+  }
+
+  for (const mediaItem of media) {
+    if (mediaItem.attachedToCmsId) {
+      mediaItem.attachedToTitle = articleById.get(mediaItem.attachedToCmsId)?.title;
     }
   }
 
@@ -1542,7 +1562,16 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       return paginateItems(articles, options);
     },
     async listMedia(siteId, options) {
-      const media = filterMedia(Array.from(mediaBySite.get(siteId)?.values() ?? []), options).sort(
+      const siteArticles = articlesBySite.get(siteId) ?? new Map<string, SyncedArticle>();
+      const media = filterMedia(
+        Array.from(mediaBySite.get(siteId)?.values() ?? []).map((item) => ({
+          ...item,
+          attachedToTitle: item.attachedToCmsId
+            ? siteArticles.get(item.attachedToCmsId)?.title ?? item.attachedToTitle
+            : item.attachedToTitle
+        })),
+        options
+      ).sort(
         (left, right) => {
           const updatedComparison = right.updatedAt.localeCompare(left.updatedAt);
           return updatedComparison === 0 ? left.cmsId.localeCompare(right.cmsId) : updatedComparison;
@@ -2623,6 +2652,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         OR caption ILIKE $${values.length}
         OR description ILIKE $${values.length}
         OR alt_text ILIKE $${values.length}
+        OR sa.title ILIKE $${values.length}
         OR mime_type ILIKE $${values.length}
       )`);
     }
@@ -2638,10 +2668,16 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     values.push(pagination.pageSize, offset);
     const result = await this.pool.query(
       `
-        SELECT *, COUNT(*) OVER()::int AS total_count
-        FROM synced_media
+        SELECT
+          sm.*,
+          sa.title AS attached_to_title,
+          COUNT(*) OVER()::int AS total_count
+        FROM synced_media sm
+        LEFT JOIN synced_articles sa
+          ON sa.site_id = sm.site_id
+         AND sa.cms_id = sm.attached_to_cms_id
         WHERE ${conditions.join('\n          AND ')}
-        ORDER BY cms_updated_at DESC, cms_id ASC
+        ORDER BY sm.cms_updated_at DESC, sm.cms_id ASC
         LIMIT $${values.length - 1} OFFSET $${values.length}
       `,
       values

@@ -327,6 +327,7 @@ function mapApplySnapshotRow(row: QueryResultRow): ApplySnapshot {
 function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
   const issues: Array<Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>> = [];
   const articleById = new Map(articles.map((article) => [article.cmsId, article]));
+  const mediaSequenceByCmsId = buildMediaSequenceMap(media);
 
   for (const article of articles) {
     const titleLength = article.title.trim().length;
@@ -387,7 +388,11 @@ function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
   }
 
   for (const mediaItem of media) {
-    const mediaContext = buildMediaContext(mediaItem, articleById);
+    const mediaContext = buildMediaContext(
+      mediaItem,
+      articleById,
+      mediaSequenceByCmsId.get(mediaItem.cmsId) ?? 1
+    );
 
     if (shouldSuggestMediaTitle(mediaItem, mediaContext)) {
       issues.push({
@@ -473,8 +478,8 @@ function normalizeTitleSuggestion(title: string) {
 }
 
 function normalizeMetaDescriptionSuggestion(article: SyncedArticle) {
-  const sourceText = article.excerpt?.trim() || article.title.trim();
-  const normalized = sourceText.replace(/\s+/g, ' ');
+  const sourceText = normalizePlainText(article.excerpt || article.contentHtml || article.title);
+  const normalized = sourceText || normalizePlainText(article.title);
 
   if (normalized.length > 155) {
     return `${normalized.slice(0, 152).trim()}...`;
@@ -502,17 +507,19 @@ interface MediaContext {
   contextDetail: string;
   imageDescriptor: string;
   extension: string;
+  sequenceNumber: number;
 }
 
 function buildMediaContext(
   mediaItem: SyncedMedia,
-  articleById: Map<string, SyncedArticle>
+  articleById: Map<string, SyncedArticle>,
+  sequenceNumber: number
 ): MediaContext {
   const attachedArticle = mediaItem.attachedToCmsId ? articleById.get(mediaItem.attachedToCmsId) : undefined;
-  const contextTitle = attachedArticle?.title.trim() ?? '';
+  const contextTitle = mediaItem.attachedToTitle?.trim() || attachedArticle?.title.trim() || '';
   const contextSlug = attachedArticle?.slug.trim() ?? '';
-  const contextSummary = normalizeSeoText(attachedArticle?.excerpt ?? stripHtml(attachedArticle?.contentHtml ?? ''));
-  const contextDetail = normalizeSeoText(stripHtml(attachedArticle?.contentHtml ?? '') || contextSummary);
+  const contextSummary = normalizePlainText(attachedArticle?.excerpt || attachedArticle?.contentHtml || '');
+  const contextDetail = normalizePlainText(attachedArticle?.contentHtml || attachedArticle?.excerpt || '');
   const imageDescriptor = normalizeImageText(mediaItem.title || mediaItem.fileName || '');
   const extension = mediaItem.fileName?.includes('.')
     ? mediaItem.fileName.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -524,7 +531,8 @@ function buildMediaContext(
     contextSummary,
     contextDetail,
     imageDescriptor,
-    extension
+    extension,
+    sequenceNumber
   };
 }
 
@@ -555,12 +563,14 @@ function shouldSuggestMediaTitle(mediaItem: SyncedMedia, mediaContext: MediaCont
 }
 
 function buildMediaTitleSuggestion(mediaContext: MediaContext) {
-  const parts = [mediaContext.contextTitle, mediaContext.imageDescriptor].filter(Boolean);
-  const suggestion = parts.length >= 2 && normalizeComparableText(parts[0] ?? '') !== normalizeComparableText(parts[1] ?? '')
-    ? `${parts[0]} - ${parts[1]}`
-    : parts[0] || parts[1] || '圖片標題';
+  if (mediaContext.contextTitle) {
+    const suggestion = mediaContext.sequenceNumber > 1
+      ? `${mediaContext.contextTitle} ${mediaContext.sequenceNumber}`
+      : mediaContext.contextTitle;
+    return trimSeoText(suggestion, 140);
+  }
 
-  return trimSeoText(suggestion, 140);
+  return trimSeoText(mediaContext.imageDescriptor || '圖片標題', 140);
 }
 
 function buildMediaCaptionSuggestion(mediaContext: MediaContext) {
@@ -574,19 +584,21 @@ function buildMediaDescriptionSuggestion(mediaContext: MediaContext) {
 }
 
 function buildMediaAltTextSuggestion(mediaContext: MediaContext) {
-  const parts = [mediaContext.contextTitle, mediaContext.imageDescriptor].filter(Boolean);
-  const suggestion = parts.length >= 2 && normalizeComparableText(parts[0] ?? '') !== normalizeComparableText(parts[1] ?? '')
-    ? `${parts[0]} - ${parts[1]}`
-    : parts[0] || parts[1] || '相關圖片';
+  if (mediaContext.contextTitle) {
+    const suggestion = mediaContext.sequenceNumber > 1
+      ? `${mediaContext.contextTitle} ${mediaContext.sequenceNumber}`
+      : mediaContext.contextTitle;
+    return trimSeoText(suggestion, 125);
+  }
 
-  return trimSeoText(suggestion, 125);
+  return trimSeoText(mediaContext.imageDescriptor || '相關圖片', 125);
 }
 
 function buildMediaFileNameSuggestion(mediaItem: SyncedMedia, mediaContext: MediaContext) {
   if (mediaContext.contextSlug) {
     const normalizedSlug = normalizeSlugForFileName(mediaContext.contextSlug);
     if (normalizedSlug) {
-      return `${normalizedSlug}.${mediaContext.extension || 'jpg'}`;
+      return `${normalizedSlug}-${mediaContext.sequenceNumber}.${mediaContext.extension || 'jpg'}`;
     }
   }
 
@@ -610,8 +622,41 @@ function trimSeoText(value: string, maxLength: number) {
   return normalized.slice(0, maxLength).trim();
 }
 
-function stripHtml(value: string) {
-  return value.replace(/<[^>]*>/g, ' ');
+function normalizePlainText(value: string) {
+  return value
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMediaSequenceMap(media: SyncedMedia[]) {
+  const sequenceMap = new Map<string, number>();
+  const groupedMedia = new Map<string, SyncedMedia[]>();
+
+  for (const mediaItem of media) {
+    const groupKey = mediaItem.attachedToCmsId || mediaItem.cmsId;
+    groupedMedia.set(groupKey, [...(groupedMedia.get(groupKey) ?? []), mediaItem]);
+  }
+
+  for (const items of groupedMedia.values()) {
+    items
+      .slice()
+      .sort((left, right) => {
+        const updatedComparison = left.updatedAt.localeCompare(right.updatedAt);
+        if (updatedComparison !== 0) {
+          return updatedComparison;
+        }
+
+        return left.cmsId.localeCompare(right.cmsId);
+      })
+      .forEach((item, index) => {
+        sequenceMap.set(item.cmsId, index + 1);
+      });
+  }
+
+  return sequenceMap;
 }
 
 function normalizeFileName(value: string) {

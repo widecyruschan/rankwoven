@@ -1286,9 +1286,12 @@ final class RankWoven_SEO_Plugin
         $categories = wp_get_post_terms($post->ID, 'category', ['fields' => 'names']);
         $tags = wp_get_post_terms($post->ID, 'post_tag', ['fields' => 'names']);
         $featured_image_id = get_post_thumbnail_id($post->ID);
-        $excerpt = $post->post_excerpt !== ''
+        $excerpt_source = $post->post_excerpt !== ''
             ? $post->post_excerpt
-            : wp_trim_words(wp_strip_all_tags($post->post_content), 40, '');
+            : $this->extract_plain_text_content($post->post_content);
+        $excerpt = $excerpt_source !== ''
+            ? wp_trim_words($excerpt_source, 40, '')
+            : '';
         $meta_description = $this->get_post_meta_description($post, $excerpt);
 
         return [
@@ -1323,11 +1326,11 @@ final class RankWoven_SEO_Plugin
         foreach ($meta_keys as $meta_key) {
             $value = trim((string) get_post_meta($post->ID, $meta_key, true));
             if ($value !== '') {
-                return wp_strip_all_tags($value);
+                return $this->extract_plain_text_content($value);
             }
         }
 
-        return wp_strip_all_tags($excerpt);
+        return $this->extract_plain_text_content($excerpt);
     }
 
     private function map_attachment_to_synced_media(WP_Post $attachment): array
@@ -1346,6 +1349,17 @@ final class RankWoven_SEO_Plugin
             'attachedToCmsId' => $attachment->post_parent > 0 ? (string) $attachment->post_parent : '',
             'updatedAt' => $this->get_post_date_value($attachment, true)
         ];
+    }
+
+    private function extract_plain_text_content(string $content): string
+    {
+        $content = strip_shortcodes($content);
+        $content = wp_strip_all_tags($content);
+        $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, get_bloginfo('charset'));
+        $content = preg_replace('/\[[^\]]*\]/', ' ', $content) ?? $content;
+        $content = preg_replace('/\s+/', ' ', $content) ?? $content;
+
+        return trim($content);
     }
 
     private function get_post_date_value(WP_Post $post, bool $modified): string

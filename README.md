@@ -1409,3 +1409,65 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 若要對你截圖中的特定媒體直接落資料，需先確認該文章 / 媒體存在於目前本地 WordPress 測試站資料庫；我剛核對時，本地 `post=1670` 與截圖所示內容不一致，所以未直接改站點資料。
   2. 若你要我繼續，我可以下一步直接對本地測試站或你指定的線上站點，把這張圖的標題、Alt、Caption、Description 和檔名實際更新。
+
+### 2026-08-04（星期二）— 媒體詳情改顯示關聯內容標題並優化標題 / 檔名規則
+
+- 會話的主要目的：修正媒體詳情彈窗中的「所屬內容」顯示，並讓圖片標題與檔名建議更貼近內容 SEO 使用方式。
+- 完成的主要任務：
+  1. `apps/api/src/siteConnections.ts`
+     - `SyncedMedia` 補上 `attachedToTitle`。
+     - `GET /api/v1/site-connections/:siteId/media` 現在會帶回關聯文章 / 頁面標題。
+     - in-memory 與 PostgreSQL 兩個 `listMedia()` 都會把關聯內容標題回傳到前端。
+     - 搜尋媒體時也會匹配關聯文章標題。
+  2. `apps/web/src/views/MediaOptimizationView.vue`
+     - 媒體詳情彈窗的「所屬內容」由 `#CMS ID` 改為優先顯示文章 / 頁面標題。
+  3. `apps/api/src/seoOptimization.ts`
+     - 媒體上下文新增 `sequenceNumber`，讓同一篇內容下的圖片能產生穩定序號。
+     - 圖片標題建議改為優先使用關聯文章標題；若同一篇內容有多張圖，第二張起可附帶序號。
+     - `fileName` 建議改為 `slug-序號.ext`，例如 `what-is-seo-1.jpg`。
+     - `altText` 建議同步優先對齊關聯內容標題。
+  4. `apps/api/tests/siteConnections.test.ts`
+     - 更新媒體掃描與審計測試，驗證：
+       - 關聯內容標題會回傳。
+       - 標題建議會對齊文章標題。
+       - 檔名建議會使用 `slug-1.jpg` 類型格式。
+- 關鍵決策和解決方案：這次不再只把「所屬內容」當成一個 CMS ID 關聯，而是讓 API 直接把關聯內容標題送到前端，減少使用者在審核時來回查文章；同時圖片標題建議不再混入原始檔名語義，而是優先對齊文章標題，檔名則使用更利於 SEO 的 `slug-序號` 格式。
+- 使用的技術棧：Fastify、TypeScript、Vue 3、Ant Design Vue、Vitest。
+- 新增或修改文件：
+  - 修改：`apps/api/src/siteConnections.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run build -w @aieo/web`
+  - 已通過：`npm run test -w @aieo/api`
+  - 已通過：`docker exec cyruschan-wp /bin/bash -lc 'php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php'`
+- 下一步行動清單：
+  1. 若你要我把這一輪修改提交並推送，我可以直接整理成一個 commit。
+  2. 若你要我直接更新某一張真實媒體，請給我最終站點上的正確文章 ID / 媒體 ID，我可直接落資料驗證效果。
+
+### 2026-08-04（星期二）— Meta 描述改為純文字提取
+
+- 會話的主要目的：修正文章 Meta 描述 fallback 與摘要截取，避免把 `[vc_row ...]`、shortcode、HTML 代碼直接帶進 Meta 描述與建議內容。
+- 完成的主要任務：
+  1. `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+     - 文章同步摘要 fallback 改成純文字抽取。
+     - `get_post_meta_description()` 不再回傳 shortcode / HTML 代碼，改為先清理 shortcode 再提取文字。
+     - 新增 `extract_plain_text_content()`。
+  2. `apps/api/src/seoOptimization.ts`
+     - `normalizeMetaDescriptionSuggestion()` 改為純文字提取，會剔除 shortcode 與 HTML 再生成建議。
+     - 媒體上下文摘要也統一使用純文字提取，讓 AI 建議與摘要規則一致。
+  3. `apps/api/tests/siteConnections.test.ts`
+     - 新增測試：確保 meta description 從 shortcode / code 內容中只抽取純文字，不會把 `[vc_row...]` 帶入。
+- 關鍵決策和解決方案：這次不再直接用 `wp_strip_all_tags()` 作為唯一處理方式，因為它無法清掉 shortcode；改為先 `strip_shortcodes()` 再做純文字化，才能處理你截圖裡那種 Visual Composer / shortcode 內容。
+- 使用的技術棧：WordPress PHP、Fastify + TypeScript、Vitest。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run build -w @aieo/web`
+  - 已通過：`npm run test -w @aieo/api`
+  - 已通過：`docker exec cyruschan-wp /bin/bash -lc 'php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php'`
+- 下一步行動清單：
+  1. 若要讓現有站點資料立即反映新的 meta description，需要重新掃描/同步相關文章。
+  2. 如有需要，我也可以下一步把「文章標題 + slug-序號」的規則同步到更多模板或批量重命名流程。

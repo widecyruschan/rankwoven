@@ -625,7 +625,12 @@ watch(activeTab, () => {
     >
       <div v-if="selectedMedia" class="page-alert">
         <a-tag>{{ t('articleSync.cmsId') }}: {{ selectedMedia.cmsId }}</a-tag>
-        <a-tag v-if="selectedMedia.attachedToCmsId">{{ t('media.attachedTo') }} #{{ selectedMedia.attachedToCmsId }}</a-tag>
+        <a-tag v-if="selectedMedia.attachedToTitle">
+          {{ t('media.attachedTo') }}: {{ selectedMedia.attachedToTitle }}
+        </a-tag>
+        <a-tag v-else-if="selectedMedia.attachedToCmsId">
+          {{ t('media.attachedTo') }} #{{ selectedMedia.attachedToCmsId }}
+        </a-tag>
       </div>
 
       <a-table

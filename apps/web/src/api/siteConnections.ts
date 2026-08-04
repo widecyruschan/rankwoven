@@ -165,6 +165,7 @@ export interface SyncedMedia {
   description?: string;
   altText?: string;
   attachedToCmsId?: string;
+  attachedToTitle?: string;
   updatedAt: string;
 }
 
