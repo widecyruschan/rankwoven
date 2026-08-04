@@ -1471,3 +1471,25 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 若要讓現有站點資料立即反映新的 meta description，需要重新掃描/同步相關文章。
   2. 如有需要，我也可以下一步把「文章標題 + slug-序號」的規則同步到更多模板或批量重命名流程。
+
+### 2026-08-04（星期二）— 媒體頁 SQL 歧義修復與部署重跑
+
+- 會話的主要目的：修正 `/app/media` 掃描頁面報錯 `column reference "site_id" is ambiguous`，並處理部署 Verify 階段的 `security:audit` 阻塞。
+- 完成的主要任務：
+  1. `apps/api/src/siteConnections.ts`
+     - `listMedia()` 的 SQL 條件全部改用 `sm.` 別名。
+     - 搜尋條件中的 `title / url / file_name / caption / description / alt_text / mime_type` 都明確指向 `synced_media`。
+     - `issue` 條件也改成 `sm.alt_text` / `sm.file_name`，避免與 `synced_articles` 聯表後產生欄位歧義。
+  2. 本地依官方 npm registry 重新執行 `npm audit fix`，清掉 `brace-expansion` 與 `fast-uri` 導致的 CI 高危警報。
+- 關鍵決策和解決方案：這次不動查詢結構，只做最小必要修補，把所有歧義欄位補上表別名；部署阻塞則沿用既有依賴樹，只透過 `npm audit fix` 與官方 registry 修正鎖檔，避免無關升級擴大風險。
+- 使用的技術棧：PostgreSQL、Fastify、npm audit、GitHub Actions Verify。
+- 新增或修改文件：
+  - 修改：`apps/api/src/siteConnections.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run test -w @aieo/api`
+  - 已通過：`npm run security:audit`
+- 下一步行動清單：
+  1. 若部署後頁面仍報錯，下一步應直接查 production / staging 的最新 build 是否已完成。
+  2. 若要避免未來 audit 再次受本機 `npmmirror` 影響，建議本地也固定使用官方 registry 跑 `security:audit`。

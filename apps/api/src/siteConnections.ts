@@ -2584,7 +2584,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     const pagination = getPagination(options);
     const offset = (pagination.page - 1) * pagination.pageSize;
     const values: Array<string | number> = [siteId];
-    const conditions = ['site_id = $1'];
+    const conditions = ['sm.site_id = $1'];
 
     if (options?.search) {
       values.push(`%${options.search}%`);
@@ -2646,23 +2646,23 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     if (options?.search) {
       values.push(`%${options.search}%`);
       conditions.push(`(
-        title ILIKE $${values.length}
-        OR url ILIKE $${values.length}
-        OR file_name ILIKE $${values.length}
-        OR caption ILIKE $${values.length}
-        OR description ILIKE $${values.length}
-        OR alt_text ILIKE $${values.length}
+        sm.title ILIKE $${values.length}
+        OR sm.url ILIKE $${values.length}
+        OR sm.file_name ILIKE $${values.length}
+        OR sm.caption ILIKE $${values.length}
+        OR sm.description ILIKE $${values.length}
+        OR sm.alt_text ILIKE $${values.length}
         OR sa.title ILIKE $${values.length}
-        OR mime_type ILIKE $${values.length}
+        OR sm.mime_type ILIKE $${values.length}
       )`);
     }
 
     if (options?.issue === 'missing_alt') {
-      conditions.push("(alt_text IS NULL OR btrim(alt_text) = '')");
+      conditions.push("(sm.alt_text IS NULL OR btrim(sm.alt_text) = '')");
     }
 
     if (options?.issue === 'missing_file_name') {
-      conditions.push("(file_name IS NULL OR btrim(file_name) = '')");
+      conditions.push("(sm.file_name IS NULL OR btrim(sm.file_name) = '')");
     }
 
     values.push(pagination.pageSize, offset);
