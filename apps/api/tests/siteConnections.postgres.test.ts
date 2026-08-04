@@ -119,6 +119,8 @@ describePostgres('PostgreSQL site connection repository', () => {
             url: 'http://localhost:8088/wp-content/uploads/postgresql-sync-image.jpg',
             mimeType: 'image/jpeg',
             fileName: 'postgresql-sync-image.jpg',
+            caption: 'Stored PostgreSQL media caption.',
+            description: 'Stored PostgreSQL media description for contextual SEO tests.',
             altText: 'Image synced into PostgreSQL',
             attachedToCmsId: '101',
             updatedAt: '2026-07-25T08:00:00+00:00'
@@ -181,7 +183,9 @@ describePostgres('PostgreSQL site connection repository', () => {
           media: [
             {
               cmsId: '501',
-              title: 'PostgreSQL Sync Image'
+              title: 'PostgreSQL Sync Image',
+              caption: 'Stored PostgreSQL media caption.',
+              description: 'Stored PostgreSQL media description for contextual SEO tests.'
             }
           ],
           pagination: {

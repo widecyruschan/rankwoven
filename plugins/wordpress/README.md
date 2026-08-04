@@ -191,6 +191,8 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 - `url`
 - `mimeType`
 - `fileName`
+- `caption`
+- `description`
 - `altText`
 - `attachedToCmsId`
 - `updatedAt`

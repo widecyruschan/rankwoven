@@ -65,6 +65,8 @@ const syncedMediaSchema = z.object({
   url: z.url().or(z.literal('')),
   mimeType: z.string().trim().max(120).optional(),
   fileName: z.string().trim().max(240).optional(),
+  caption: z.string().trim().max(5000).optional(),
+  description: z.string().trim().max(20_000).optional(),
   altText: z.string().trim().max(500).optional(),
   attachedToCmsId: z.string().trim().max(80).optional(),
   updatedAt: z.string().trim().max(80)
@@ -480,6 +482,8 @@ CREATE TABLE IF NOT EXISTS synced_media (
   url text NOT NULL DEFAULT '',
   mime_type varchar(120),
   file_name varchar(240),
+  caption text,
+  description text,
   alt_text varchar(500),
   attached_to_cms_id varchar(80),
   cms_updated_at varchar(80) NOT NULL,
@@ -490,6 +494,12 @@ CREATE TABLE IF NOT EXISTS synced_media (
 
 CREATE INDEX IF NOT EXISTS idx_synced_media_site_updated
   ON synced_media(site_id, cms_updated_at DESC);
+
+ALTER TABLE synced_media
+  ADD COLUMN IF NOT EXISTS caption text;
+
+ALTER TABLE synced_media
+  ADD COLUMN IF NOT EXISTS description text;
 `;
 
 function generateSiteToken() {
@@ -679,6 +689,8 @@ function mapMediaRow(row: QueryResultRow): SyncedMedia {
     url: row.url,
     mimeType: row.mime_type ?? undefined,
     fileName: row.file_name ?? undefined,
+    caption: row.caption ?? undefined,
+    description: row.description ?? undefined,
     altText: row.alt_text ?? undefined,
     attachedToCmsId: row.attached_to_cms_id ?? undefined,
     updatedAt: row.cms_updated_at
@@ -782,7 +794,7 @@ function filterMedia(mediaItems: SyncedMedia[], options?: MediaListOptions) {
   return mediaItems.filter((media) => {
     if (
       !matchesSearch(
-        [media.title, media.url, media.fileName, media.altText, media.mimeType],
+        [media.title, media.url, media.fileName, media.caption, media.description, media.altText, media.mimeType],
         options?.search
       )
     ) {
@@ -2229,6 +2241,8 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         title ILIKE $${values.length}
         OR url ILIKE $${values.length}
         OR file_name ILIKE $${values.length}
+        OR caption ILIKE $${values.length}
+        OR description ILIKE $${values.length}
         OR alt_text ILIKE $${values.length}
         OR mime_type ILIKE $${values.length}
       )`);
@@ -2384,18 +2398,22 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           url,
           mime_type,
           file_name,
+          caption,
+          description,
           alt_text,
           attached_to_cms_id,
           cms_updated_at,
           synced_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (site_id, cms_id)
         DO UPDATE SET
           title = EXCLUDED.title,
           url = EXCLUDED.url,
           mime_type = EXCLUDED.mime_type,
           file_name = EXCLUDED.file_name,
+          caption = EXCLUDED.caption,
+          description = EXCLUDED.description,
           alt_text = EXCLUDED.alt_text,
           attached_to_cms_id = EXCLUDED.attached_to_cms_id,
           cms_updated_at = EXCLUDED.cms_updated_at,
@@ -2408,6 +2426,8 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         media.url,
         media.mimeType ?? null,
         media.fileName ?? null,
+        media.caption ?? null,
+        media.description ?? null,
         media.altText ?? null,
         media.attachedToCmsId ?? null,
         media.updatedAt,

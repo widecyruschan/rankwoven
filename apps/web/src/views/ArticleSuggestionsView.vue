@@ -129,12 +129,24 @@ const changeColumns = computed<TableColumnsType<ArticleChangeRow>>(() => [
 ]);
 
 function getAreaLabel(suggestion: OptimizationSuggestion) {
+  if (suggestion.targetType === 'media' && suggestion.fieldName === 'title') {
+    return t('media.titleField');
+  }
+
   if (suggestion.fieldName === 'title') {
     return t('review.titleField');
   }
 
   if (suggestion.fieldName === 'metaDescription') {
     return t('review.metaField');
+  }
+
+  if (suggestion.fieldName === 'caption') {
+    return t('media.caption');
+  }
+
+  if (suggestion.fieldName === 'description') {
+    return t('media.description');
   }
 
   if (suggestion.fieldName === 'altText') {

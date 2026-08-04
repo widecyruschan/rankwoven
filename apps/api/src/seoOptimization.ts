@@ -10,7 +10,16 @@ import type {
 
 type TargetType = 'article' | 'media';
 type SuggestionStatus = 'pending' | 'approved' | 'applied' | 'failed' | 'rejected';
-type SuggestionType = 'title' | 'meta_description' | 'content' | 'media_alt_text' | 'media_file_name' | 'internal_link';
+type SuggestionType =
+  | 'title'
+  | 'meta_description'
+  | 'content'
+  | 'media_title'
+  | 'media_caption'
+  | 'media_description'
+  | 'media_alt_text'
+  | 'media_file_name'
+  | 'internal_link';
 type IssueSeverity = 'low' | 'medium' | 'high';
 
 export interface SeoAudit {
@@ -140,6 +149,9 @@ const createSuggestionSchema = z.object({
     'title',
     'meta_description',
     'content',
+    'media_title',
+    'media_caption',
+    'media_description',
     'media_alt_text',
     'media_file_name',
     'internal_link'
@@ -149,7 +161,7 @@ const createSuggestionSchema = z.object({
   suggestedValue: z.string().trim().min(1).max(20_000)
 });
 
-const defaultRulesVersion = '2026-07-26.mvp-1';
+const defaultRulesVersion = '2026-08-04.image-context-1';
 const auditBatchSize = 100;
 
 const seoOptimizationMigrationSql = `
@@ -189,8 +201,8 @@ CREATE TABLE IF NOT EXISTS optimization_suggestions (
   audit_issue_id uuid REFERENCES seo_audit_issues(id) ON DELETE SET NULL,
   target_type text NOT NULL CHECK (target_type IN ('article', 'media')),
   target_cms_id varchar(80) NOT NULL,
-  suggestion_type text NOT NULL CHECK (
-    suggestion_type IN ('title', 'meta_description', 'content', 'media_alt_text', 'media_file_name', 'internal_link')
+    suggestion_type text NOT NULL CHECK (
+    suggestion_type IN ('title', 'meta_description', 'content', 'media_title', 'media_caption', 'media_description', 'media_alt_text', 'media_file_name', 'internal_link')
   ),
   field_name varchar(80) NOT NULL,
   status text NOT NULL CHECK (status IN ('pending', 'approved', 'applied', 'failed', 'rejected')),
@@ -309,6 +321,7 @@ function mapApplySnapshotRow(row: QueryResultRow): ApplySnapshot {
 
 function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
   const issues: Array<Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>> = [];
+  const articleById = new Map(articles.map((article) => [article.cmsId, article]));
 
   for (const article of articles) {
     const titleLength = article.title.trim().length;
@@ -369,6 +382,47 @@ function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
   }
 
   for (const mediaItem of media) {
+    const mediaContext = buildMediaContext(mediaItem, articleById);
+
+    if (shouldSuggestMediaTitle(mediaItem, mediaContext)) {
+      issues.push({
+        targetType: 'media',
+        targetCmsId: mediaItem.cmsId,
+        ruleCode: 'MEDIA_TITLE_CONTEXT',
+        severity: 'medium',
+        message: '圖片標題應結合所屬內容上下文',
+        currentValue: mediaItem.title,
+        suggestedValue: buildMediaTitleSuggestion(mediaContext),
+        fieldName: 'title'
+      });
+    }
+
+    if (!mediaItem.caption?.trim() && mediaContext.contextSummary) {
+      issues.push({
+        targetType: 'media',
+        targetCmsId: mediaItem.cmsId,
+        ruleCode: 'MEDIA_CAPTION_MISSING',
+        severity: 'medium',
+        message: '圖片簡介應根據文章或頁面上下文補齊',
+        currentValue: mediaItem.caption ?? '',
+        suggestedValue: buildMediaCaptionSuggestion(mediaContext),
+        fieldName: 'caption'
+      });
+    }
+
+    if (!mediaItem.description?.trim() && mediaContext.contextDetail) {
+      issues.push({
+        targetType: 'media',
+        targetCmsId: mediaItem.cmsId,
+        ruleCode: 'MEDIA_DESCRIPTION_MISSING',
+        severity: 'low',
+        message: '圖片說明應根據文章或頁面上下文補齊',
+        currentValue: mediaItem.description ?? '',
+        suggestedValue: buildMediaDescriptionSuggestion(mediaContext),
+        fieldName: 'description'
+      });
+    }
+
     if (!mediaItem.altText?.trim()) {
       issues.push({
         targetType: 'media',
@@ -377,7 +431,7 @@ function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
         severity: 'high',
         message: '圖片缺少 Alt Text',
         currentValue: '',
-        suggestedValue: normalizeImageText(mediaItem.title || mediaItem.fileName || '圖片說明'),
+        suggestedValue: buildMediaAltTextSuggestion(mediaContext),
         fieldName: 'altText'
       });
     }
@@ -431,6 +485,106 @@ function normalizeImageText(value: string) {
     .trim();
 }
 
+interface MediaContext {
+  contextTitle: string;
+  contextSummary: string;
+  contextDetail: string;
+  imageDescriptor: string;
+}
+
+function buildMediaContext(
+  mediaItem: SyncedMedia,
+  articleById: Map<string, SyncedArticle>
+): MediaContext {
+  const attachedArticle = mediaItem.attachedToCmsId ? articleById.get(mediaItem.attachedToCmsId) : undefined;
+  const contextTitle = attachedArticle?.title.trim() ?? '';
+  const contextSummary = normalizeSeoText(attachedArticle?.excerpt ?? stripHtml(attachedArticle?.contentHtml ?? ''));
+  const contextDetail = normalizeSeoText(stripHtml(attachedArticle?.contentHtml ?? '') || contextSummary);
+  const imageDescriptor = normalizeImageText(mediaItem.title || mediaItem.fileName || '');
+
+  return {
+    contextTitle,
+    contextSummary,
+    contextDetail,
+    imageDescriptor
+  };
+}
+
+function shouldSuggestMediaTitle(mediaItem: SyncedMedia, mediaContext: MediaContext) {
+  const currentTitle = normalizeSeoText(mediaItem.title);
+  if (!currentTitle) {
+    return true;
+  }
+
+  if (!mediaContext.contextTitle && !mediaContext.imageDescriptor) {
+    return false;
+  }
+
+  const normalizedTitle = normalizeComparableText(currentTitle);
+  const normalizedFileName = normalizeComparableText(normalizeImageText(mediaItem.fileName ?? ''));
+  const normalizedImageDescriptor = normalizeComparableText(mediaContext.imageDescriptor);
+
+  if (normalizedFileName && normalizedTitle === normalizedFileName) {
+    return true;
+  }
+
+  return Boolean(
+    mediaContext.contextTitle &&
+      normalizedImageDescriptor &&
+      normalizedTitle !== normalizeComparableText(mediaContext.contextTitle) &&
+      normalizedTitle !== normalizedImageDescriptor
+  );
+}
+
+function buildMediaTitleSuggestion(mediaContext: MediaContext) {
+  const parts = [mediaContext.contextTitle, mediaContext.imageDescriptor].filter(Boolean);
+  const suggestion = parts.length >= 2 && normalizeComparableText(parts[0] ?? '') !== normalizeComparableText(parts[1] ?? '')
+    ? `${parts[0]} - ${parts[1]}`
+    : parts[0] || parts[1] || '圖片標題';
+
+  return trimSeoText(suggestion, 140);
+}
+
+function buildMediaCaptionSuggestion(mediaContext: MediaContext) {
+  const suggestion = mediaContext.contextSummary || mediaContext.contextTitle || mediaContext.imageDescriptor || '圖片簡介';
+  return trimSeoText(suggestion, 180);
+}
+
+function buildMediaDescriptionSuggestion(mediaContext: MediaContext) {
+  const suggestion = mediaContext.contextDetail || mediaContext.contextSummary || mediaContext.contextTitle || mediaContext.imageDescriptor || '圖片說明';
+  return trimSeoText(suggestion, 280);
+}
+
+function buildMediaAltTextSuggestion(mediaContext: MediaContext) {
+  const parts = [mediaContext.contextTitle, mediaContext.imageDescriptor].filter(Boolean);
+  const suggestion = parts.length >= 2 && normalizeComparableText(parts[0] ?? '') !== normalizeComparableText(parts[1] ?? '')
+    ? `${parts[0]} - ${parts[1]}`
+    : parts[0] || parts[1] || '相關圖片';
+
+  return trimSeoText(suggestion, 125);
+}
+
+function normalizeSeoText(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeComparableText(value: string) {
+  return normalizeSeoText(value).toLowerCase();
+}
+
+function trimSeoText(value: string, maxLength: number) {
+  const normalized = normalizeSeoText(value);
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return normalized.slice(0, maxLength).trim();
+}
+
+function stripHtml(value: string) {
+  return value.replace(/<[^>]*>/g, ' ');
+}
+
 function normalizeFileName(value: string) {
   const extension = value.includes('.') ? value.split('.').pop()?.toLowerCase() : 'jpg';
   const basename = value.replace(/\.[^.]+$/, '');
@@ -444,6 +598,18 @@ function normalizeFileName(value: string) {
 }
 
 function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>): SuggestionType {
+  if (issue.ruleCode === 'MEDIA_TITLE_CONTEXT') {
+    return 'media_title';
+  }
+
+  if (issue.ruleCode === 'MEDIA_CAPTION_MISSING') {
+    return 'media_caption';
+  }
+
+  if (issue.ruleCode === 'MEDIA_DESCRIPTION_MISSING') {
+    return 'media_description';
+  }
+
   if (issue.ruleCode === 'MEDIA_ALT_TEXT_MISSING') {
     return 'media_alt_text';
   }

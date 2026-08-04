@@ -892,10 +892,12 @@ describe('site connection routes', () => {
         media: [
           {
             cmsId: '904',
-            title: 'Hero Image',
+            title: 'Hero Image 2026',
             url: 'http://localhost:8088/wp-content/uploads/Hero Image 2026.JPG',
             mimeType: 'image/jpeg',
             fileName: 'Hero Image 2026.JPG',
+            caption: '',
+            description: '',
             altText: '',
             attachedToCmsId: '404',
             updatedAt: '2026-07-26T08:00:00+00:00'
@@ -931,6 +933,9 @@ describe('site connection routes', () => {
       expect.arrayContaining([
         expect.objectContaining({ ruleCode: 'ARTICLE_TITLE_LENGTH' }),
         expect.objectContaining({ ruleCode: 'ARTICLE_META_DESCRIPTION_LENGTH' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_TITLE_CONTEXT' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_CAPTION_MISSING' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_DESCRIPTION_MISSING' }),
         expect.objectContaining({ ruleCode: 'MEDIA_ALT_TEXT_MISSING' })
       ])
     );
@@ -947,9 +952,11 @@ describe('site connection routes', () => {
         suggestions: Array<{
           id: string;
           status: string;
+          targetType: string;
           fieldName: string;
           suggestionType: string;
           targetCmsId: string;
+          suggestedValue: string;
         }>;
       };
     }>();
@@ -958,6 +965,18 @@ describe('site connection routes', () => {
     );
     const metaDescriptionSuggestion = suggestionsBody.data.suggestions.find(
       (suggestion) => suggestion.fieldName === 'metaDescription'
+    );
+    const mediaTitleSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'title'
+    );
+    const mediaCaptionSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'caption'
+    );
+    const mediaDescriptionSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'description'
+    );
+    const mediaAltTextSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'altText'
     );
 
     expect(suggestionsResponse.statusCode).toBe(200);
@@ -969,6 +988,30 @@ describe('site connection routes', () => {
       status: 'pending',
       suggestionType: 'meta_description',
       targetCmsId: '404'
+    });
+    expect(mediaTitleSuggestion).toMatchObject({
+      status: 'pending',
+      suggestionType: 'media_title',
+      targetCmsId: '904',
+      suggestedValue: 'Tiny - Hero Image 2026'
+    });
+    expect(mediaCaptionSuggestion).toMatchObject({
+      status: 'pending',
+      suggestionType: 'media_caption',
+      targetCmsId: '904',
+      suggestedValue: 'Tiny article fallback summary.'
+    });
+    expect(mediaDescriptionSuggestion).toMatchObject({
+      status: 'pending',
+      suggestionType: 'media_description',
+      targetCmsId: '904',
+      suggestedValue: 'No headings or internal links yet.'
+    });
+    expect(mediaAltTextSuggestion).toMatchObject({
+      status: 'pending',
+      suggestionType: 'media_alt_text',
+      targetCmsId: '904',
+      suggestedValue: 'Tiny - Hero Image 2026'
     });
 
     const approveResponse = await server.inject({

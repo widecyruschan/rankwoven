@@ -1249,6 +1249,8 @@ final class RankWoven_SEO_Plugin
             'url' => wp_get_attachment_url($attachment->ID) ?: '',
             'mimeType' => get_post_mime_type($attachment) ?: '',
             'fileName' => is_string($attached_file) ? basename($attached_file) : '',
+            'caption' => wp_strip_all_tags((string) $attachment->post_excerpt),
+            'description' => wp_strip_all_tags((string) $attachment->post_content),
             'altText' => get_post_meta($attachment->ID, '_wp_attachment_image_alt', true),
             'attachedToCmsId' => $attachment->post_parent > 0 ? (string) $attachment->post_parent : '',
             'updatedAt' => $this->get_post_date_value($attachment, true)

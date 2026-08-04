@@ -16,6 +16,9 @@ export type SuggestionType =
   | 'title'
   | 'meta_description'
   | 'content'
+  | 'media_title'
+  | 'media_caption'
+  | 'media_description'
   | 'media_alt_text'
   | 'media_file_name'
   | 'internal_link';
@@ -158,6 +161,8 @@ export interface SyncedMedia {
   url: string;
   mimeType?: string;
   fileName?: string;
+  caption?: string;
+  description?: string;
   altText?: string;
   attachedToCmsId?: string;
   updatedAt: string;

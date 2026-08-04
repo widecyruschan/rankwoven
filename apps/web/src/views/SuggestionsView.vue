@@ -66,7 +66,15 @@ const queues = computed(() => [
   },
   {
     label: t('suggestions.imageTitleMetaQueue'),
-    value: String(countByType(['media_alt_text', 'media_file_name']))
+    value: String(
+      countByType([
+        'media_title',
+        'media_caption',
+        'media_description',
+        'media_alt_text',
+        'media_file_name'
+      ])
+    )
   },
   {
     label: t('suggestions.contentQueue'),
@@ -201,6 +209,9 @@ function getSuggestionTypeLabel(type: SuggestionType) {
     title: t('review.titleField'),
     meta_description: t('review.metaField'),
     content: t('suggestions.typeContent'),
+    media_title: t('media.titleField'),
+    media_caption: t('media.caption'),
+    media_description: t('media.description'),
     media_alt_text: t('media.altText'),
     media_file_name: t('media.filename'),
     internal_link: t('suggestions.typeLinks')

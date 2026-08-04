@@ -571,16 +571,18 @@ async function upsertMedia(client: PoolClient, siteId: string, media: Record<str
   await client.query(
     `
       INSERT INTO synced_media (
-        site_id, cms_id, title, url, mime_type, file_name, alt_text,
-        attached_to_cms_id, cms_updated_at, synced_at
+        site_id, cms_id, title, url, mime_type, file_name, caption, description,
+        alt_text, attached_to_cms_id, cms_updated_at, synced_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       ON CONFLICT (site_id, cms_id)
       DO UPDATE SET
         title = EXCLUDED.title,
         url = EXCLUDED.url,
         mime_type = EXCLUDED.mime_type,
         file_name = EXCLUDED.file_name,
+        caption = EXCLUDED.caption,
+        description = EXCLUDED.description,
         alt_text = EXCLUDED.alt_text,
         attached_to_cms_id = EXCLUDED.attached_to_cms_id,
         cms_updated_at = EXCLUDED.cms_updated_at,
@@ -593,6 +595,8 @@ async function upsertMedia(client: PoolClient, siteId: string, media: Record<str
       String(media.url ?? ''),
       media.mimeType ? String(media.mimeType) : null,
       media.fileName ? String(media.fileName) : null,
+      media.caption ? String(media.caption) : null,
+      media.description ? String(media.description) : null,
       media.altText ? String(media.altText) : null,
       media.attachedToCmsId ? String(media.attachedToCmsId) : null,
       String(media.updatedAt ?? new Date(0).toISOString()),

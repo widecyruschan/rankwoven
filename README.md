@@ -1287,3 +1287,36 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 驗證結果：`npm run lint` 0e/0w、`npm run test` 1 passed、`npm run build` 全 workspace 通過、`npm run security:audit` 0 vulnerabilities。
 - 下一步行動清單：P1-3（Apply 差異對比）與 P1-6（死信隊列）已於先前實現，P1-7（快照回寫 WordPress）亦已完成；P1-5（端對端測試）為非代碼任務；P1 批次全部完結，可進入 P2 或準備提交推送。
 
+### 2026-08-04（星期二）— 媒體處理頁接入上下文圖片 SEO 建議
+
+- 會話的主要目的：按圖片 SEO 規則升級後台 `/app/media` 媒體處理頁，讓文章或頁面配圖可基於上下文生成圖片標題、簡介、說明、Alt Text 與檔名相關建議，並接入審核與套用流程。
+- 完成的主要任務：
+  1. **媒體同步字段補齊**：
+     - `apps/api/src/siteConnections.ts` 與 `apps/worker/src/index.ts` 為 `synced_media` 補上 `caption`、`description` 欄位，支援 in-memory、Postgres、Worker 落庫與查詢。
+     - `plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 的媒體同步輸出補回 `caption`、`description`，讓 WordPress 寫回前快照與審計上下文更完整。
+  2. **圖片 SEO 規則落地**：
+     - `apps/api/src/seoOptimization.ts` 新增媒體 `media_title`、`media_caption`、`media_description` 建議型別，根據所屬文章/頁面上下文生成 `title / caption / description / altText` 建議。
+     - 現有 `fileName` 規則保留，並將規則版本提升為 `2026-08-04.image-context-1`。
+  3. **後台媒體處理頁升級**：
+     - `apps/web/src/views/MediaOptimizationView.vue` 從純列表頁升級為媒體 SEO 工作台。
+     - 新增「生成媒體建議」按鈕，直接觸發審計並刷新媒體建議。
+     - 列表新增 SEO 狀態欄，顯示每張圖片目前的審核狀態與建議數量。
+     - 詳情彈窗新增欄位級視圖，可查看 `title / caption / description / altText / fileName` 的當前值與建議值，並支持逐條批准與加入套用流程。
+  4. **前端型別與文案對齊**：
+     - `apps/web/src/api/siteConnections.ts`、`apps/web/src/views/SuggestionsView.vue`、`apps/web/src/views/ArticleSuggestionsView.vue`、`apps/web/src/i18n.ts` 同步支持新媒體建議型別與文案映射。
+  5. **測試覆蓋更新**：
+     - `apps/api/tests/siteConnections.test.ts` 補上文章上下文媒體建議的期望值。
+     - `apps/api/tests/siteConnections.postgres.test.ts` 補上媒體 `caption / description` 持久化斷言。
+- 關鍵決策和解決方案：優先沿用現有 `SEO Audit -> Suggestion -> Approve -> Apply` 流程，不新增獨立媒體建議 API；這樣能以最少改動把上下文圖片 SEO 規則直接接入現有後台。媒體處理頁只補最必要但可用的操作，包括生成建議、查看欄位差異、逐條批准與建立套用任務，避免為單次需求擴出一套平行流程。
+- 使用的技術棧：Vue 3 Composition API、TypeScript、Ant Design Vue、Fastify、Zod、PostgreSQL、WordPress Plugin PHP。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/ArticleSuggestionsView.vue`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/views/SuggestionsView.vue`、`apps/worker/src/index.ts`、`plugins/wordpress/README.md`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`README.md`
+- 驗證結果或未驗證原因：
+  - 已通過：`npm run lint`、`npm run build -w @aieo/api`、`npm run build -w @aieo/worker`
+  - 已通過：以內置 `Node 24.14.0` 執行 `npm run build -w @aieo/web`
+  - 已通過：以內置 `Node 24.14.0` 執行 `npm run test -w @aieo/api`，結果為 `2 passed | 1 skipped`、`23 passed | 1 skipped`
+  - 未完成：WordPress 插件 `php -l` 嘗試改用 Docker 容器驗證，但容器內 `php` 執行路徑返回異常，未能完成語法檢查
+- 下一步行動清單：
+  1. 補做 WordPress 容器內的插件 `php -l` 驗證。
+  2. 若要把頁面再往前推進，可補上媒體建議的批量批准與批量加入套用。
+  3. 若要提升套用前可讀性，可在媒體詳情彈窗補上「內容上下文來源」預覽。
