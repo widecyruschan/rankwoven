@@ -1320,3 +1320,25 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   1. 補做 WordPress 容器內的插件 `php -l` 驗證。
   2. 若要把頁面再往前推進，可補上媒體建議的批量批准與批量加入套用。
   3. 若要提升套用前可讀性，可在媒體詳情彈窗補上「內容上下文來源」預覽。
+
+### 2026-08-04（星期二）— WordPress 本地測試站插件驗證補記
+
+- 會話的主要目的：使用 `cyruschan.com` 本地 WordPress Docker 測試站補做 `rankwoven-seo` 插件驗證，確認最新插件文件已同步且可被 WordPress 正常載入。
+- 完成的主要任務：
+  1. 將 `AIEO/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 同步到 `/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`。
+  2. 確認 AIEO 倉庫插件文件與測試站插件文件 `diff` 一致。
+  3. 在運行中的 `cyruschan-wp` 容器內確認 PHP CLI 路徑為 `/usr/local/bin/php`，版本為 `PHP 8.2.28`。
+  4. 在 `cyruschan-wp` 容器內執行 `php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`，語法檢查通過。
+  5. 透過 WordPress `active_plugins` 確認 `rankwoven-seo/rankwoven-seo.php` 仍為啟用狀態。
+  6. 直接請求 `http://localhost:8088/wp-json/rankwoven/v1/site`，回應狀態為 `401`，證明插件 REST 路由已被載入，而非 404。
+- 關鍵決策和解決方案：不再依賴 `docker compose run wpcli`，因為當前 Docker Desktop 本地 `mariadb:11.4` blob 存在 I/O 錯誤；改為直接使用已運行的 `cyruschan-wp` 容器與絕對路徑 `/bin/bash`、`/usr/local/bin/php` 進行驗證，避免被工具鏈問題阻塞。
+- 使用的技術棧：Docker Desktop、WordPress 6.7.2、PHP 8.2 CLI、WordPress option / REST route 驗證。
+- 新增或修改文件：
+  - 修改：`README.md`
+  - 外部測試站同步：`/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`
+- 驗證結果或未驗證原因：
+  - 已通過：測試站插件文件同步、一致性檢查、容器內 `php -l`、插件啟用狀態檢查、REST 路由載入檢查。
+  - 未完成：`docker restart cyruschan-wp` 與 `docker compose run wpcli ...` 仍受 Docker 本地 I/O 錯誤影響，但因測試站為 bind mount，文件同步後已能直接在現行容器中完成語法與載入驗證。
+- 下一步行動清單：
+  1. 若要做完整人工回歸，可登入 `http://localhost:8088/cyrus/` 後檢查 `Settings -> RankWoven SEO` 頁面渲染與媒體同步行為。
+  2. 若 Docker I/O 問題持續，建議先修復本機 Desktop 映像層，再恢復 `wpcli` 路徑的自動化驗證。
