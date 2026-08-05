@@ -20,6 +20,22 @@ describe('api health route', () => {
       }
     });
   });
+
+  it('allows PUT requests through CORS preflight', async () => {
+    const server = createServer();
+    const response = await server.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/site-connections/site-1/suggestions/suggestion-1',
+      headers: {
+        origin: 'https://rankwoven.com',
+        'access-control-request-method': 'PUT',
+        'access-control-request-headers': 'authorization,content-type'
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-methods']).toContain('PUT');
+  });
 });
 
 describe('api provider route', () => {

@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n';
 import {
   Activity,
   BarChart3,
-  CheckCheck,
   CreditCard,
   FileSearch,
   Gauge,
@@ -48,7 +47,6 @@ const appNavigationItems = [
   { to: '/app/article-sync', labelKey: 'nav.articleSync', icon: RefreshCw },
   { to: '/app/suggestions', labelKey: 'nav.suggestions', icon: Sparkles },
   { to: '/app/media', labelKey: 'nav.media', icon: Image },
-  { to: '/app/apply', labelKey: 'nav.apply', icon: CheckCheck },
   { to: '/app/article-suggestions', labelKey: 'nav.articleSuggestions', icon: ListChecks },
   { to: '/app/review', labelKey: 'nav.review', icon: Sparkles },
   { to: '/app/links', labelKey: 'nav.links', icon: Link2 },

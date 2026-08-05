@@ -864,6 +864,13 @@ interface WordPressContentResponseItem {
   modified_gmt?: unknown;
 }
 
+interface WooCommerceStoreProductResponseItem {
+  id: number;
+  images?: Array<{
+    id?: unknown;
+  }>;
+}
+
 function createBasicAuthHeader(credentials: WordPressCredentials) {
   return `Basic ${Buffer.from(`${credentials.username}:${credentials.applicationPassword}`).toString('base64')}`;
 }
@@ -1016,6 +1023,272 @@ async function fetchWordPressContentById(
   return undefined;
 }
 
+async function fetchWooCommerceProductMediaParents(
+  fetchImpl: typeof fetch,
+  siteUrl: string,
+  credentials: WordPressCredentials,
+  mediaIds: Set<string>
+) {
+  const productIdByMediaId = new Map<string, string>();
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages && productIdByMediaId.size < mediaIds.size) {
+    const query = new URLSearchParams({
+      per_page: String(pageSize),
+      page: String(page),
+      _fields: 'id,images'
+    });
+
+    let result: Awaited<ReturnType<typeof fetchWordPressJson<WooCommerceStoreProductResponseItem[]>>>;
+    try {
+      result = await fetchWordPressJson<WooCommerceStoreProductResponseItem[]>(
+        fetchImpl,
+        buildWordPressUrl(siteUrl, `wp-json/wc/store/v1/products?${query.toString()}`),
+        credentials
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'WORDPRESS_REST_404') {
+        return productIdByMediaId;
+      }
+      throw error;
+    }
+
+    const products = Array.isArray(result.body) ? result.body : [];
+    totalPages = Math.max(1, Number(result.response.headers.get('X-WP-TotalPages') ?? totalPages ?? 1));
+
+    for (const product of products) {
+      if (!Number.isInteger(product.id) || product.id <= 0 || !Array.isArray(product.images)) {
+        continue;
+      }
+
+      for (const image of product.images) {
+        const mediaId = typeof image.id === 'number' && image.id > 0 ? String(image.id) : '';
+        if (mediaId !== '' && mediaIds.has(mediaId) && !productIdByMediaId.has(mediaId)) {
+          productIdByMediaId.set(mediaId, String(product.id));
+        }
+      }
+    }
+
+    if (products.length < pageSize) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return productIdByMediaId;
+}
+
+function normalizeWordPressMediaUrl(value: string) {
+  const decodedValue = value.replace(/&amp;/g, '&').trim();
+
+  try {
+    const url = new URL(decodedValue);
+    const normalizedPath = decodeURIComponent(url.pathname).replace(/-\d+x\d+(?=\.[^./]+$)/i, '');
+    return `${url.hostname.toLowerCase()}${normalizedPath}`;
+  } catch {
+    return decodedValue
+      .split(/[?#]/)[0]
+      .replace(/-\d+x\d+(?=\.[^./]+$)/i, '');
+  }
+}
+
+function extractWordPressContentImageUrls(contentHtml: string) {
+  const imageUrls = new Set<string>();
+  const imageSourcePattern = /<img\b[^>]*\b(?:src|data-src|data-lazy-src)=["']([^"']+)["']/gi;
+
+  for (const match of contentHtml.matchAll(imageSourcePattern)) {
+    if (match[1]) {
+      imageUrls.add(match[1]);
+    }
+  }
+
+  return imageUrls;
+}
+
+interface WordPressPortfolioCard {
+  blockHtml: string;
+  detailUrl: string;
+  imageUrls: Set<string>;
+  title: string;
+}
+
+function extractWordPressPortfolioCards(contentHtml: string, siteUrl: string) {
+  const cards: WordPressPortfolioCard[] = [];
+  const cardPattern = /<!--\s*gallery item\s*-->([\s\S]*?)<!--\s*close gallery item\s*-->/gi;
+  const siteHostname = new URL(siteUrl).hostname.toLowerCase();
+
+  for (const match of contentHtml.matchAll(cardPattern)) {
+    const blockHtml = match[0];
+    const linkMatch = blockHtml.match(/<a\b[^>]*href=["']([^"']*\/portfolio\/[^"']*)["']/i);
+    const titleMatch = blockHtml.match(
+      /<span\b[^>]*class=["'][^"']*\bproject-name\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i
+    );
+    const title = extractRenderedText(titleMatch?.[1] ?? '');
+    if (!linkMatch?.[1] || title === '') {
+      continue;
+    }
+
+    const detailUrl = new URL(linkMatch[1].replace(/&amp;/g, '&'), siteUrl);
+    if (detailUrl.hostname.toLowerCase() !== siteHostname) {
+      continue;
+    }
+
+    cards.push({
+      blockHtml,
+      detailUrl: detailUrl.toString(),
+      imageUrls: extractWordPressContentImageUrls(blockHtml),
+      title
+    });
+  }
+
+  return cards;
+}
+
+async function fetchWordPressHtml(
+  fetchImpl: typeof fetch,
+  url: string,
+  credentials: WordPressCredentials
+) {
+  try {
+    const response = await fetchImpl(url, {
+      headers: {
+        Accept: 'text/html',
+        Authorization: createBasicAuthHeader(credentials)
+      }
+    });
+
+    return response.ok ? await response.text() : '';
+  } catch {
+    return '';
+  }
+}
+
+interface WordPressPageMediaParentsResult {
+  articleById: Map<string, SyncedArticle>;
+  pageIdByMediaId: Map<string, string>;
+  titleByMediaId: Map<string, string>;
+}
+
+async function fetchWordPressPageMediaParents(
+  fetchImpl: typeof fetch,
+  siteUrl: string,
+  credentials: WordPressCredentials,
+  media: SyncedMedia[]
+) {
+  const mediaIdByUrl = new Map<string, string>();
+  const mediaIds = new Set<string>();
+  for (const mediaItem of media) {
+    mediaIds.add(mediaItem.cmsId);
+    if (mediaItem.url !== '') {
+      mediaIdByUrl.set(normalizeWordPressMediaUrl(mediaItem.url), mediaItem.cmsId);
+    }
+  }
+
+  const pageIdByMediaId = new Map<string, string>();
+  const titleByMediaId = new Map<string, string>();
+  const articleById = new Map<string, SyncedArticle>();
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages && pageIdByMediaId.size < media.length) {
+    const query = new URLSearchParams({
+      per_page: String(pageSize),
+      page: String(page),
+      _fields: 'id,type,title,slug,status,link,excerpt,content,author,categories,tags,featured_media,date_gmt,modified_gmt'
+    });
+    const result = await fetchWordPressJson<WordPressContentResponseItem[]>(
+      fetchImpl,
+      buildWordPressUrl(siteUrl, `wp-json/wp/v2/pages?${query.toString()}`),
+      credentials
+    );
+    const pages = Array.isArray(result.body) ? result.body : [];
+    totalPages = Math.max(1, Number(result.response.headers.get('X-WP-TotalPages') ?? totalPages ?? 1));
+
+    for (const pageItem of pages) {
+      if (!Number.isInteger(pageItem.id) || pageItem.id <= 0) {
+        continue;
+      }
+
+      const pageId = String(pageItem.id);
+      if (typeof pageItem.featured_media === 'number' && pageItem.featured_media > 0) {
+        const featuredMediaId = String(pageItem.featured_media);
+        if (mediaIds.has(featuredMediaId)) {
+          pageIdByMediaId.set(featuredMediaId, pageId);
+        }
+      }
+
+      const contentHtml = extractRenderedHtml(pageItem.content);
+      let enhancedContentHtml = contentHtml;
+      let hasMatchedMedia = false;
+      const matchedPortfolioCards = extractWordPressPortfolioCards(contentHtml, siteUrl)
+        .map((card) => ({
+          card,
+          mediaIds: Array.from(card.imageUrls)
+            .map((imageUrl) => mediaIdByUrl.get(normalizeWordPressMediaUrl(imageUrl)))
+            .filter((mediaId): mediaId is string => Boolean(mediaId))
+        }))
+        .filter(({ mediaIds: matchedMediaIds }) => matchedMediaIds.length > 0);
+
+      const portfolioDetails = await Promise.all(
+        matchedPortfolioCards.map(async ({ card, mediaIds: matchedMediaIds }) => ({
+          card,
+          detailHtml: await fetchWordPressHtml(fetchImpl, card.detailUrl, credentials),
+          mediaIds: matchedMediaIds
+        }))
+      );
+
+      for (const { card, detailHtml, mediaIds: matchedMediaIds } of portfolioDetails) {
+        hasMatchedMedia = true;
+        for (const mediaId of matchedMediaIds) {
+          pageIdByMediaId.set(mediaId, pageId);
+          titleByMediaId.set(mediaId, card.title);
+        }
+
+        if (detailHtml !== '') {
+          enhancedContentHtml = enhancedContentHtml.replace(
+            card.blockHtml,
+            `${card.blockHtml}<section data-rankwoven-portfolio-context="true">${detailHtml}</section>`
+          );
+        }
+      }
+
+      for (const imageUrl of extractWordPressContentImageUrls(contentHtml)) {
+        const mediaId = mediaIdByUrl.get(normalizeWordPressMediaUrl(imageUrl));
+        if (mediaId && !pageIdByMediaId.has(mediaId)) {
+          pageIdByMediaId.set(mediaId, pageId);
+          hasMatchedMedia = true;
+        }
+      }
+
+      if (hasMatchedMedia) {
+        const article = mapWordPressContent({
+          ...pageItem,
+          content: {
+            rendered: enhancedContentHtml
+          }
+        });
+        articleById.set(article.cmsId, article);
+      }
+    }
+
+    if (pages.length < pageSize) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return {
+    articleById,
+    pageIdByMediaId,
+    titleByMediaId
+  } satisfies WordPressPageMediaParentsResult;
+}
+
 async function scanWordPressMediaLibrary(
   fetchImpl: typeof fetch,
   siteUrl: string,
@@ -1066,10 +1339,59 @@ async function scanWordPressMediaLibrary(
     page += 1;
   }
 
+  const unattachedMediaIds = new Set(
+    media.filter((mediaItem) => !mediaItem.attachedToCmsId).map((mediaItem) => mediaItem.cmsId)
+  );
+  if (unattachedMediaIds.size > 0) {
+    const productIdByMediaId = await fetchWooCommerceProductMediaParents(
+      fetchImpl,
+      siteUrl,
+      credentials,
+      unattachedMediaIds
+    );
+
+    for (const mediaItem of media) {
+      if (mediaItem.attachedToCmsId) {
+        continue;
+      }
+
+      const productId = productIdByMediaId.get(mediaItem.cmsId);
+      if (productId) {
+        mediaItem.attachedToCmsId = productId;
+        parentIds.add(productId);
+      }
+    }
+  }
+
+  const pageMedia = media.filter((mediaItem) => !mediaItem.attachedToCmsId);
+  const contextualArticleById = new Map<string, SyncedArticle>();
+  if (pageMedia.length > 0) {
+    const pageMediaParents = await fetchWordPressPageMediaParents(
+      fetchImpl,
+      siteUrl,
+      credentials,
+      pageMedia
+    );
+
+    for (const [articleId, article] of pageMediaParents.articleById) {
+      contextualArticleById.set(articleId, article);
+    }
+
+    for (const mediaItem of pageMedia) {
+      const pageId = pageMediaParents.pageIdByMediaId.get(mediaItem.cmsId);
+      if (pageId) {
+        mediaItem.attachedToCmsId = pageId;
+        mediaItem.attachedToTitle = pageMediaParents.titleByMediaId.get(mediaItem.cmsId);
+        parentIds.add(pageId);
+      }
+    }
+  }
+
   const articles: SyncedArticle[] = [];
   const articleById = new Map<string, SyncedArticle>();
   for (const contentId of parentIds) {
-    const article = await fetchWordPressContentById(fetchImpl, siteUrl, credentials, contentId);
+    const article = contextualArticleById.get(contentId)
+      ?? await fetchWordPressContentById(fetchImpl, siteUrl, credentials, contentId);
     if (article) {
       articles.push(article);
       articleById.set(article.cmsId, article);
@@ -1077,7 +1399,7 @@ async function scanWordPressMediaLibrary(
   }
 
   for (const mediaItem of media) {
-    if (mediaItem.attachedToCmsId) {
+    if (mediaItem.attachedToCmsId && !mediaItem.attachedToTitle) {
       mediaItem.attachedToTitle = articleById.get(mediaItem.attachedToCmsId)?.title;
     }
   }
@@ -1568,7 +1890,7 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         Array.from(mediaBySite.get(siteId)?.values() ?? []).map((item) => ({
           ...item,
           attachedToTitle: item.attachedToCmsId
-            ? siteArticles.get(item.attachedToCmsId)?.title ?? item.attachedToTitle
+            ? item.attachedToTitle ?? siteArticles.get(item.attachedToCmsId)?.title
             : item.attachedToTitle
         })),
         options
@@ -2671,7 +2993,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
       `
         SELECT
           sm.*,
-          sa.title AS attached_to_title,
+          COALESCE(sm.attached_to_title, sa.title) AS attached_to_title,
           COUNT(*) OVER()::int AS total_count
         FROM synced_media sm
         LEFT JOIN synced_articles sa
@@ -3884,7 +4206,7 @@ export function registerSiteConnectionRoutes(
       });
     }
 
-    const updatedAfter = parsed.data.updatedAfter ?? site.lastSyncAt ?? '';
+    const updatedAfter = parsed.data.updatedAfter ?? '';
 
     try {
       const scanResult = await scanWordPressMediaLibrary(

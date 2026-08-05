@@ -77,7 +77,8 @@ export function createServer(options: CreateServerOptions = {}) {
     options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL);
 
   app.register(cors, {
-    origin: true
+    origin: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
   // ── Global Rate Limiting ──

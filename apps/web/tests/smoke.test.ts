@@ -10,6 +10,7 @@ describe('web smoke test', () => {
 
   it('resolves media review action labels', async () => {
     const originalLocale = i18n.global.locale.value;
+    const appSource = await readFile(resolve('src/App.vue'), 'utf8');
     const mediaViewSource = await readFile(resolve('src/views/MediaOptimizationView.vue'), 'utf8');
 
     try {
@@ -34,6 +35,7 @@ describe('web smoke test', () => {
       expect(mediaViewSource).toContain('batchApplyOptimizationSuggestions');
       expect(mediaViewSource).toContain('@click="applySelectedMediaSuggestions"');
       expect(mediaViewSource).toContain('selectedIds.has(suggestion.targetCmsId)');
+      expect(appSource).not.toContain("{ to: '/app/apply', labelKey: 'nav.apply'");
     } finally {
       i18n.global.locale.value = originalLocale;
     }

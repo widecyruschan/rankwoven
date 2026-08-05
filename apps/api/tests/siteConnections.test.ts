@@ -963,7 +963,7 @@ describe('site connection routes', () => {
               alt_text: '',
               caption: { rendered: '' },
               description: { rendered: '' },
-              post: 506,
+              post: null,
               modified_gmt: '2026-08-05T08:00:00'
             }
           ]),
@@ -979,6 +979,24 @@ describe('site connection routes', () => {
 
       if (url.includes('/wp-json/wp/v2/posts/506') || url.includes('/wp-json/wp/v2/pages/506')) {
         return new Response('', { status: 404 });
+      }
+
+      if (url.includes('/wp-json/wc/store/v1/products')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 506,
+              images: [{ id: 906 }]
+            }
+          ]),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-TotalPages': '1'
+            }
+          }
+        );
       }
 
       if (url.includes('/wp-json/wp/v2/product/506')) {
@@ -1061,15 +1079,251 @@ describe('site connection routes', () => {
       });
       expect(auditResponse.statusCode).toBe(201);
       expect(suggestionsResponse.statusCode).toBe(200);
-      expect(
-        suggestionsResponse
-          .json<{ data: { suggestions: Array<{ fieldName: string }> } }>()
-          .data.suggestions.map((suggestion) => suggestion.fieldName)
-          .sort()
-      ).toEqual(['altText', 'caption', 'description', 'fileName', 'title']);
+      const productSuggestions = suggestionsResponse
+        .json<{ data: { suggestions: Array<{ fieldName: string; suggestedValue: string }> } }>()
+        .data.suggestions;
+      expect(productSuggestions.map((suggestion) => suggestion.fieldName).sort()).toEqual([
+        'altText',
+        'caption',
+        'description',
+        'fileName',
+        'title'
+      ]);
+      expect(productSuggestions.find((suggestion) => suggestion.fieldName === 'title')?.suggestedValue).toBe(
+        'RankWoven SEO 分析方案'
+      );
+      expect(productSuggestions.find((suggestion) => suggestion.fieldName === 'description')?.suggestedValue).toContain(
+        '內容審核、圖片優化及搜尋可見度建議'
+      );
       expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/posts/506'))).toBe(true);
       expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/pages/506'))).toBe(true);
       expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/product/506'))).toBe(true);
+      expect(requestedUrls.some((url) => url.includes('/wp-json/wc/store/v1/products'))).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('recognizes Portfolio and page images from rendered page content URLs', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+    const authToken = await loginDemoUser(server);
+    const seedSyncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [],
+        media: []
+      }
+    });
+    expect(seedSyncResponse.statusCode).toBe(200);
+    const originalFetch = globalThis.fetch;
+    const requestedUrls: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requestedUrls.push(url);
+
+      if (url.includes('/wp-json/wp/v2/media')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 907,
+              title: { rendered: 'pf (1)' },
+              source_url: 'http://localhost:8088/wp-content/uploads/2015/07/pf-1.jpg',
+              media_type: 'image',
+              mime_type: 'image/jpeg',
+              alt_text: '',
+              caption: { rendered: '' },
+              description: { rendered: '' },
+              post: null,
+              modified_gmt: '2026-08-05T08:00:00'
+            }
+          ]),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-TotalPages': '1'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wc/store/v1/products')) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-TotalPages': '1'
+          }
+        });
+      }
+
+      if (url.includes('/wp-json/wp/v2/pages?')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 1680,
+              type: 'page',
+              title: { rendered: '作品案例' },
+              slug: 'projects',
+              status: 'publish',
+              link: 'http://localhost:8088/projects/',
+              excerpt: { rendered: '<p>品牌網站設計及開發案例。</p>' },
+              featured_media: 0,
+              content: {
+                rendered:
+                  '<h1>作品案例</h1><p>品牌網站設計及開發案例。</p>' +
+                  '<!-- gallery item -->' +
+                  '<div class="project-item category-38"><div class="projects-box">' +
+                  '<div class="projects-thumbnail"><img src="http://localhost:8088/wp-content/uploads/2015/07/pf-1-300x300.jpg" alt=""></div>' +
+                  '<a href="http://localhost:8088/portfolio/eco-green-interior/">' +
+                  '<span class="project-name id-color">Eco Green Interior</span></a>' +
+                  '</div></div>' +
+                  '<!-- close gallery item -->'
+              },
+              author: 1,
+              date_gmt: '2026-08-05T07:30:00',
+              modified_gmt: '2026-08-05T08:00:00'
+            }
+          ]),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-TotalPages': '1'
+            }
+          }
+        );
+      }
+
+      if (url === 'http://localhost:8088/portfolio/eco-green-interior/') {
+        return new Response(
+          '<div class="container project-view"><h2>Eco Green Interior</h2>' +
+            '<p>Eco Green Interior is a sustainable residential interior design project.</p>' +
+            '<h4>Our Solutions</h4><p>Natural materials and energy-efficient planning create a comfortable green home.</p></div>',
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wp/v2/posts/1680')) {
+        return new Response('', { status: 404 });
+      }
+
+      if (url.includes('/wp-json/wp/v2/pages/1680')) {
+        return new Response(
+          JSON.stringify({
+            id: 1680,
+            type: 'page',
+            title: { rendered: '作品案例' },
+            slug: 'projects',
+            status: 'publish',
+            link: 'http://localhost:8088/projects/',
+            excerpt: { rendered: '<p>品牌網站設計及開發案例。</p>' },
+            content: {
+              rendered:
+                '<h1>作品案例</h1><p>展示品牌網站設計、開發與 SEO 優化成果。</p>' +
+                '<img src="http://localhost:8088/wp-content/uploads/2015/07/pf-1-300x300.jpg" alt="">'
+            },
+            author: 1,
+            featured_media: 0,
+            date_gmt: '2026-08-05T07:30:00',
+            modified_gmt: '2026-08-05T08:00:00'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const scanResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/media-scan`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {}
+      });
+      const mediaResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/media`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const auditResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const suggestionsResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=media&targetCmsIds=907&limit=20`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(scanResponse.statusCode).toBe(200);
+      expect(scanResponse.json()).toMatchObject({
+        data: {
+          articlesReceived: 1,
+          mediaReceived: 1
+        }
+      });
+      expect(mediaResponse.statusCode).toBe(200);
+      expect(mediaResponse.json()).toMatchObject({
+        data: {
+          media: [
+            {
+              cmsId: '907',
+              attachedToCmsId: '1680',
+              attachedToTitle: 'Eco Green Interior'
+            }
+          ]
+        }
+      });
+      expect(auditResponse.statusCode).toBe(201);
+      expect(suggestionsResponse.statusCode).toBe(200);
+      const portfolioSuggestions = suggestionsResponse
+        .json<{ data: { suggestions: Array<{ fieldName: string; suggestedValue: string }> } }>()
+        .data.suggestions;
+      expect(portfolioSuggestions.map((suggestion) => suggestion.fieldName).sort()).toEqual([
+        'altText',
+        'caption',
+        'description',
+        'fileName',
+        'title'
+      ]);
+      expect(portfolioSuggestions.find((suggestion) => suggestion.fieldName === 'title')?.suggestedValue).toBe(
+        'Eco Green Interior'
+      );
+      expect(portfolioSuggestions.find((suggestion) => suggestion.fieldName === 'description')?.suggestedValue).toContain(
+        'sustainable residential interior design project'
+      );
+      expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/pages?'))).toBe(true);
+      expect(requestedUrls).toContain('http://localhost:8088/portfolio/eco-green-interior/');
+      expect(requestedUrls.find((url) => url.includes('/wp-json/wp/v2/media'))).not.toContain('modified_after=');
     } finally {
       globalThis.fetch = originalFetch;
     }

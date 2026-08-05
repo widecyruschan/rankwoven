@@ -1860,3 +1860,85 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - 已通過：`npm run security:audit`，0 個漏洞。
   - Vite 僅有既有大型 chunk 警告。
 - 下一步行動清單：部署後重新掃描商品圖片，確認媒體列表顯示所屬商品名稱；若個別商品圖在 WordPress 媒體資料中的 `post` 為 `0`，再針對 WooCommerce 商品圖庫關聯補充同步策略。
+
+### 2026-08-05（星期三）— 修復手動保存 Failed to fetch 與商品圖片關聯
+
+- 會話的主要目的：修復媒體建議手動修改保存時出現 `Failed to fetch`，以及 WooCommerce 商品圖片重新掃描後仍無法識別所屬商品的問題。
+- 完成的主要任務：
+  1. `apps/api/src/server.ts`
+     - 明確設定 CORS 允許 `GET`、`HEAD`、`POST`、`PUT`、`PATCH`、`DELETE`、`OPTIONS`。
+     - 修復瀏覽器對建議更新 `PUT` 請求的預檢被阻擋，導致前端只顯示 `Failed to fetch`。
+  2. `apps/api/src/siteConnections.ts`
+     - 對沒有 WordPress 父內容 ID 的媒體，分頁讀取 WooCommerce Store API `wc/store/v1/products`。
+     - 使用 `products[].images[].id` 建立圖片媒體與商品 ID 的關聯，支援商品主圖及圖庫圖片。
+     - 關聯完成後沿用既有 `wp/v2/product/{id}` 查詢商品標題、摘要及內容，作為圖片建議上下文。
+  3. `apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`
+     - 新增 CORS `PUT` 預檢回歸測試。
+     - 將商品圖片 fixture 改為真實資料形態 `post: null`，驗證 Store API 反查後可產生五項媒體建議。
+- 關鍵決策和解決方案：生產實測確認 API 與部署健康，但 CORS 回應只有 `GET,HEAD,POST`；同時確認 `cyruschan.com` 的 12 個商品主圖媒體 `post` 全部為 `null`。因此不再依賴附件父文章欄位，改用 WooCommerce 公開 Store API 的圖片關聯作為可靠資料來源。
+- 使用的技術棧：Fastify、`@fastify/cors`、TypeScript、WordPress REST API、WooCommerce Store API、Vitest、ESLint、Vite、GitHub Actions。
+- 新增或修改文件：
+  - 修改：`apps/api/src/server.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/health.test.ts`、`apps/api/tests/siteConnections.test.ts`、`README.md`
+- 驗證結果：
+  - 生產診斷：GitHub Actions 已成功部署 `fe67b3d`；`https://api.rankwoven.com/health` 與 `https://rankwoven.com` 返回 200。
+  - 修復前回歸測試穩定失敗：CORS 缺少 `PUT`；`post: null` 商品圖片同步結果為 `articlesReceived: 0`。
+  - 修復後定向測試通過：28 tests。
+  - 已通過：全 workspace 測試、全 workspace build、ESLint、`git diff --check`。
+  - 已通過：`npm run security:audit`，0 個漏洞。
+  - Vite 僅有既有大型 chunk 警告。
+- 下一步行動清單：提交並推送本輪五個文件；部署後確認 OPTIONS 回應包含 `PUT`，再重新執行「掃描並分析」以更新商品圖片與商品的關聯。
+
+### 2026-08-05（星期三）— 移除側邊欄一鍵套用及支援 Portfolio／頁面圖片
+
+- 會話的主要目的：移除側邊欄「一鍵套用」menu，並讓 Portfolio 與一般 WordPress 頁面的圖片可像文章、商品圖片一樣自動取得內容上下文及生成 SEO 建議。
+- 完成的主要任務：
+  1. `apps/web/src/App.vue`
+     - 從側邊欄導航移除 `/app/apply` 的「一鍵套用」入口及未再使用的圖示 import。
+     - 保留媒體頁的勾選批量套用功能及原有 route，避免破壞既有流程與直接連結。
+  2. `apps/api/src/siteConnections.ts`
+     - 對商品關聯後仍沒有父內容的媒體，分頁讀取 WordPress 頁面內容。
+     - 從頁面 HTML 的 `src`、`data-src`、`data-lazy-src` 提取圖片 URL，與媒體 `source_url` 對照。
+     - URL 對照會忽略協議、查詢字串及 WordPress 縮圖尺寸尾碼，例如將 `pf-1-300x300.jpg` 對應至原圖 `pf-1.jpg`。
+     - 同時支援頁面 `featured_media`；關聯成功後沿用既有頁面標題、摘要及正文生成五項圖片 SEO 建議。
+     - 「掃描並分析」在沒有明確傳入 `updatedAfter` 時改為完整掃描，不再自行套用站點 `lastSyncAt`，確保舊有商品、Portfolio 與頁面圖片可以重新分析。
+  3. `apps/api/tests/siteConnections.test.ts`、`apps/web/tests/smoke.test.ts`
+     - 新增 `post: null` Portfolio／頁面圖片 URL 關聯測試。
+     - 驗證已有 `lastSyncAt` 時完整掃描不會加入 `modified_after`。
+     - 新增側邊欄不再包含 `/app/apply` menu item 的來源回歸檢查。
+- 關鍵決策和解決方案：生產站沒有獨立公開的 Portfolio REST post type；Portfolio 實際為「作品案例」頁面（ID `1680`），12 張圖片只存在於頁面 HTML 且附件 `post` 為 `null`。因此使用頁面 HTML 圖片 URL 與媒體原圖 URL 建立關聯，比猜測自訂文章類型 route 更簡單可靠。
+- 使用的技術棧：Vue 3、TypeScript、Ant Design Vue、Fastify、WordPress REST API、WooCommerce Store API、Vitest、ESLint、Vite。
+- 新增或修改文件：
+  - 修改：`apps/web/src/App.vue`、`apps/web/tests/smoke.test.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`README.md`
+- 驗證結果：
+  - 定向測試：API 29 tests、Web 2 tests 全部通過。
+  - 已通過：全 workspace 測試、全 workspace build、ESLint、`git diff --check`。
+  - 已通過：`npm run security:audit`，0 個漏洞。
+  - Vite 僅有既有大型 chunk 警告。
+- 下一步行動清單：提交並推送目前修改；部署後重新按「掃描並分析」，確認「作品案例」及其他頁面圖片顯示所屬頁面名稱並產生五項 SEO 建議。
+
+### 2026-08-05（星期三）— 精確識別 Portfolio 項目及商品圖片內容
+
+- 會話的主要目的：讓圖片 SEO 建議不只關聯 Portfolio 總頁或商品類型，而是使用圖片實際所屬的單一 Portfolio 案例或商品名稱與描述；指定驗證 `pf-1.jpg → Eco Green Interior`、`12.jpg → Rattan Triple Seat Sofa`。
+- 完成的主要任務：
+  1. `apps/api/src/siteConnections.ts`
+     - 解析 Portfolio 列表頁每個 `gallery item` 的圖片 URL、`project-name` 與 `/portfolio/.../` 詳情連結。
+     - 只允許讀取與連接站點相同 hostname 的 Portfolio 詳情 URL，避免由 WordPress 內容觸發外部伺服器請求。
+     - 對匹配的圖片保留單一案例標題，例如 `pf-1.jpg` 的 `attachedToTitle` 為 `Eco Green Interior`，不再被總頁標題「作品案例」覆蓋。
+     - 讀取 Portfolio 詳情頁正文，嵌入該圖片附近的分析上下文，讓圖片簡介與說明使用案例本身的內容。
+     - In-memory 與 PostgreSQL 媒體列表均改為優先使用媒體的精確關聯標題，缺少時才回退父文章或頁面標題。
+     - 商品圖片繼續使用 WooCommerce Store API `images[].id` 找到商品 ID，再從 `wp/v2/product/{id}` 取得商品名稱、摘要及描述。
+  2. `apps/api/tests/siteConnections.test.ts`
+     - 強化商品圖片測試，驗證建議標題等於商品名稱，描述包含商品正文。
+     - 強化 Portfolio 測試，驗證 `pf-1.jpg` 顯示 `Eco Green Interior`，建議描述包含詳情頁的 sustainable interior design 正文。
+- 關鍵決策和解決方案：不建立不可寫回的虛擬 Portfolio 文章，也不新增資料庫欄位；媒體仍關聯到 WordPress Portfolio 總頁 ID，但保存精確案例標題，並將詳情正文放到對應圖片附近供既有媒體上下文提取器使用。
+- 使用的技術棧：Fastify、TypeScript、WordPress REST API、WooCommerce Store API、HTML 結構解析、PostgreSQL、Vitest、ESLint、Vite。
+- 新增或修改文件：
+  - 修改：`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`README.md`
+- 驗證結果：
+  - 生產資料驗證：`pf-1.jpg` 卡片連結到 `Eco Green Interior`；詳情頁包含案例資料與 `Our Solutions` 正文。
+  - 生產商品驗證：`12.jpg`（媒體 ID `750`）屬於商品 ID `744`，名稱為 `Rattan Triple Seat Sofa`，Store API 與 WordPress Product API 均返回完整商品描述。
+  - 精確定向測試通過：商品與 Portfolio 2 tests。
+  - 已通過：全 workspace 測試、全 workspace build、ESLint、`git diff --check`。
+  - 已通過：`npm run security:audit`，0 個漏洞。
+  - Vite 僅有既有大型 chunk 警告。
+- 下一步行動清單：提交並推送目前修改；部署後執行完整「掃描並分析」，確認 `pf-1.jpg` 與 `12.jpg` 分別使用 `Eco Green Interior` 與 `Rattan Triple Seat Sofa` 的內容生成建議。
