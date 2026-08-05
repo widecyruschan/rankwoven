@@ -493,6 +493,7 @@ CREATE TABLE IF NOT EXISTS synced_media (
   description text,
   alt_text varchar(500),
   attached_to_cms_id varchar(80),
+  attached_to_title varchar(300),
   cms_updated_at varchar(80) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   synced_at timestamptz NOT NULL DEFAULT now(),
@@ -507,6 +508,9 @@ ALTER TABLE synced_media
 
 ALTER TABLE synced_media
   ADD COLUMN IF NOT EXISTS description text;
+
+ALTER TABLE synced_media
+  ADD COLUMN IF NOT EXISTS attached_to_title varchar(300);
 `;
 
 function generateSiteToken() {
@@ -3140,10 +3144,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           description,
           alt_text,
           attached_to_cms_id,
+          attached_to_title,
           cms_updated_at,
           synced_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (site_id, cms_id)
         DO UPDATE SET
           title = EXCLUDED.title,
@@ -3154,6 +3159,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           description = EXCLUDED.description,
           alt_text = EXCLUDED.alt_text,
           attached_to_cms_id = EXCLUDED.attached_to_cms_id,
+          attached_to_title = EXCLUDED.attached_to_title,
           cms_updated_at = EXCLUDED.cms_updated_at,
           synced_at = EXCLUDED.synced_at
       `,
@@ -3168,6 +3174,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         media.description ?? null,
         media.altText ?? null,
         media.attachedToCmsId ?? null,
+        media.attachedToTitle ?? null,
         media.updatedAt,
         syncedAt
       ]

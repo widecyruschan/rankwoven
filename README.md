@@ -1942,3 +1942,23 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - 已通過：`npm run security:audit`，0 個漏洞。
   - Vite 僅有既有大型 chunk 警告。
 - 下一步行動清單：提交並推送目前修改；部署後執行完整「掃描並分析」，確認 `pf-1.jpg` 與 `12.jpg` 分別使用 `Eco Green Interior` 與 `Rattan Triple Seat Sofa` 的內容生成建議。
+
+### 2026-08-05（星期三）— 修復媒體掃描缺少關聯標題欄位
+
+- 會話的主要目的：修復生產環境完成媒體掃描分析後，媒體列表因 PostgreSQL 缺少 `synced_media.attached_to_title` 欄位而返回 `column sm.attached_to_title does not exist`。
+- 完成的主要任務：
+  1. 新增可重複執行的 `0008` migration，為 `synced_media` 加入長度 300 的 `attached_to_title` 欄位。
+  2. 同步更新非生產自動 schema，避免本地與生產資料表定義再次分歧。
+  3. 更新 PostgreSQL 媒體 upsert，在新增及更新媒體時保存精確 `attachedToTitle`，並保留列表查詢缺少精確標題時回退父文章標題的行為。
+  4. 補充 PostgreSQL 回歸測試，直接驗證 migration 可重複執行，以及精確媒體關聯標題能保存並由列表 API 返回。
+- 關鍵決策和解決方案：保留既有 `COALESCE(sm.attached_to_title, sa.title)` 查詢，只補齊缺失的 schema 與寫入路徑；部署腳本會在重建服務前執行 migration，因此不需要加入查詢層臨時兼容或手動修改生產資料庫。
+- 使用的技術棧：Fastify、TypeScript、PostgreSQL 16、SQL migration、Vitest、Docker Compose、GitHub Actions。
+- 新增或修改文件：
+  - 新增：`db/migrations/0008_add_synced_media_attached_to_title.sql`
+  - 修改：`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`README.md`
+- 驗證結果：
+  - PostgreSQL migration 與 repository 整合測試通過：3 tests。
+  - 全 workspace 測試通過；PostgreSQL 測試在一般測試命令中按既有設定跳過，另已使用本機 PostgreSQL 單獨完整執行。
+  - 全 workspace build、ESLint、`git diff --check` 全部通過；Vite 僅有既有大型 chunk 警告。
+  - `npm run security:audit` 通過，0 個漏洞。
+- 下一步行動清單：提交並推送 hotfix 至 `main`，等待 Production Deploy 套用 `0008` migration，然後驗證公開 health endpoint 與媒體掃描列表。

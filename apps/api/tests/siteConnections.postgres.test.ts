@@ -10,6 +10,48 @@ const shouldRunPostgresTests = process.env.RUN_POSTGRES_TESTS === '1' && postgre
 const describePostgres = shouldRunPostgresTests ? describe : describe.skip;
 
 describePostgres('database migrations', () => {
+  it('adds the synced media attached title column idempotently', async () => {
+    const pool = new Pool({ connectionString: postgresTestDatabaseUrl as string });
+    const client = await pool.connect();
+    const schemaName = `migration_test_${crypto.randomUUID().replaceAll('-', '')}`;
+    const migrationSql = await readFile(
+      new URL('../../../db/migrations/0008_add_synced_media_attached_to_title.sql', import.meta.url),
+      'utf8'
+    );
+
+    try {
+      await client.query(`CREATE SCHEMA "${schemaName}"`);
+      await client.query(`SET search_path TO "${schemaName}"`);
+      await client.query('CREATE TABLE synced_media (id bigserial PRIMARY KEY)');
+
+      await client.query(migrationSql);
+      await client.query(migrationSql);
+
+      const result = await client.query<{ data_type: string; character_maximum_length: number }>(
+        `
+          SELECT data_type, character_maximum_length
+          FROM information_schema.columns
+          WHERE table_schema = $1
+            AND table_name = 'synced_media'
+            AND column_name = 'attached_to_title'
+        `,
+        [schemaName]
+      );
+
+      expect(result.rows).toEqual([
+        {
+          data_type: 'character varying',
+          character_maximum_length: 300
+        }
+      ]);
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      client.release();
+      await pool.end();
+    }
+  });
+
   it('allows all media suggestion types after expanding the constraint', async () => {
     const pool = new Pool({ connectionString: postgresTestDatabaseUrl as string });
     const client = await pool.connect();
@@ -171,6 +213,7 @@ describePostgres('PostgreSQL site connection repository', () => {
             description: 'Stored PostgreSQL media description for contextual SEO tests.',
             altText: 'Image synced into PostgreSQL',
             attachedToCmsId: '101',
+            attachedToTitle: 'Precise PostgreSQL Image Context',
             updatedAt: '2026-07-25T08:00:00+00:00'
           }
         ]
@@ -233,7 +276,8 @@ describePostgres('PostgreSQL site connection repository', () => {
               cmsId: '501',
               title: 'PostgreSQL Sync Image',
               caption: 'Stored PostgreSQL media caption.',
-              description: 'Stored PostgreSQL media description for contextual SEO tests.'
+              description: 'Stored PostgreSQL media description for contextual SEO tests.',
+              attachedToTitle: 'Precise PostgreSQL Image Context'
             }
           ],
           pagination: {
