@@ -1,3 +1,4 @@
+import type { TextGenerationProvider, TextGenerationResult } from '@aieo/ai-providers';
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
@@ -72,10 +73,12 @@ async function createWordPressConnection(
   payload: Partial<{
     wordpressAdminUsername: string;
     wordpressApplicationPassword: string;
-  }> = {}
+  }> = {},
+  serverOptions: Parameters<typeof createServer>[0] = {}
 ) {
   const server = createServer({
-    siteConnectionRepository: createInMemorySiteConnectionRepository()
+    siteConnectionRepository: createInMemorySiteConnectionRepository(),
+    ...serverOptions
   });
   const response = await server.inject({
     method: 'POST',
@@ -94,6 +97,34 @@ async function createWordPressConnection(
     server,
     response,
     body: response.json<CreateSiteConnectionResponse>()
+  };
+}
+
+function createTextResult(text: string): TextGenerationResult {
+  return {
+    text,
+    model: 'test-model',
+    usage: {
+      inputTokens: 10,
+      outputTokens: 10
+    }
+  };
+}
+
+function rejectTextCall(): Promise<TextGenerationResult> {
+  return Promise.reject(new Error('UNEXPECTED_TEXT_PROVIDER_CALL'));
+}
+
+function createStubTextProvider(rewriteHandler: (request: { title?: string; html?: string }) => string): TextGenerationProvider {
+  return {
+    provider: 'wenwen',
+    model: 'test-model',
+    generateTitle: rejectTextCall,
+    generateMetaDescription: rejectTextCall,
+    generateOutline: rejectTextCall,
+    generateArticleDraft: rejectTextCall,
+    scoreContentQuality: rejectTextCall,
+    rewriteContent: async (request) => createTextResult(rewriteHandler(request))
   };
 }
 
@@ -747,6 +778,18 @@ describe('site connection routes', () => {
             }),
             expect.objectContaining({
               targetType: 'media',
+              fieldName: 'caption',
+              suggestionType: 'media_caption',
+              suggestedValue: 'SEO 入門文章摘要。'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              fieldName: 'description',
+              suggestionType: 'media_description',
+              suggestedValue: 'SEO 是搜尋引擎優化的完整入門內容。'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
               fieldName: 'altText',
               suggestionType: 'media_alt_text',
               suggestedValue: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門'
@@ -760,6 +803,31 @@ describe('site connection routes', () => {
           ])
         }
       });
+
+      const filteredSuggestionsResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=media&targetCmsIds=904&limit=20`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(filteredSuggestionsResponse.statusCode).toBe(200);
+      expect(
+        filteredSuggestionsResponse
+          .json<{
+            data: {
+              suggestions: Array<{
+                targetType: string;
+                targetCmsId: string;
+                fieldName: string;
+              }>;
+            };
+          }>()
+          .data.suggestions
+          .map((suggestion) => suggestion.fieldName)
+          .sort()
+      ).toEqual(['altText', 'caption', 'description', 'fileName', 'title']);
 
       const fileNameSuggestion = suggestionsResponse
         .json<{
@@ -792,6 +860,166 @@ describe('site connection routes', () => {
             fieldName: 'fileName',
             suggestedValue: 'what-is-seo-custom.jpg'
           }
+        }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('uses AI to generate media suggestions from related WordPress article context when a text provider is configured', async () => {
+    const textProvider = createStubTextProvider(() =>
+      JSON.stringify({
+        title: 'SEO 搜尋引擎運作流程圖解',
+        caption: '圖解搜尋引擎爬取、索引與排名流程，對應 SEO 入門文章重點。',
+        description: '這張圖片說明搜尋引擎從 Crawling、Indexing 到 Ranking 的基本流程，適合作為 SEO 是什麼這篇入門文章的主視覺說明。',
+        altText: '搜尋引擎爬取索引與排名流程圖',
+        fileName: 'seo-crawling-indexing-ranking.png'
+      })
+    );
+    const { server, body } = await createWordPressConnection(
+      {
+        wordpressAdminUsername: 'site-admin',
+        wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+      },
+      {
+        textGenerationProvider: textProvider
+      }
+    );
+    const authToken = await loginDemoUser(server);
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/wp-json/wp/v2/media')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 905,
+              title: { rendered: 'seo chapter hero' },
+              source_url: 'http://localhost:8088/wp-content/uploads/seo-chapter1.png',
+              media_type: 'image',
+              mime_type: 'image/png',
+              alt_text: '',
+              caption: { rendered: '' },
+              description: { rendered: '' },
+              post: 405,
+              modified_gmt: '2026-08-04T08:00:00'
+            }
+          ]),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-TotalPages': '1'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wp/v2/posts/405')) {
+        return new Response(
+          JSON.stringify({
+            id: 405,
+            type: 'post',
+            title: { rendered: '第 1 章：SEO 是什麼？搜尋引擎優化完整入門' },
+            slug: 'what-is-seo',
+            status: 'publish',
+            link: 'http://localhost:8088/what-is-seo/',
+            excerpt: { rendered: '<p>SEO 入門文章摘要。</p>' },
+            content: {
+              rendered:
+                '<h1>第 1 章：SEO 是什麼？搜尋引擎優化完整入門</h1>' +
+                '<p>這篇文章介紹 SEO 的定義、基本概念與搜尋引擎如何運作。</p>' +
+                '<figure><img class="wp-image-905" src="http://localhost:8088/wp-content/uploads/seo-chapter1.png" alt="" /></figure>' +
+                '<h2>1.1 SEO 的定義</h2>' +
+                '<p>圖中展示搜尋引擎由爬取、索引到排名的主要流程。</p>'
+            },
+            author: 1,
+            categories: [],
+            tags: [],
+            featured_media: 905,
+            date_gmt: '2026-08-04T07:30:00',
+            modified_gmt: '2026-08-04T08:00:00'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wp/v2/pages/405')) {
+        return new Response('', { status: 404 });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const scanResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/media-scan`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {}
+      });
+      const auditResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const suggestionsResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=media&targetCmsIds=905&limit=20`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(scanResponse.statusCode).toBe(200);
+      expect(auditResponse.statusCode).toBe(201);
+      expect(suggestionsResponse.statusCode).toBe(200);
+      expect(suggestionsResponse.json()).toMatchObject({
+        data: {
+          suggestions: expect.arrayContaining([
+            expect.objectContaining({
+              targetType: 'media',
+              targetCmsId: '905',
+              fieldName: 'title',
+              suggestedValue: 'SEO 搜尋引擎運作流程圖解'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              targetCmsId: '905',
+              fieldName: 'caption',
+              suggestedValue: '圖解搜尋引擎爬取、索引與排名流程，對應 SEO 入門文章重點。'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              targetCmsId: '905',
+              fieldName: 'description',
+              suggestedValue: '這張圖片說明搜尋引擎從 Crawling、Indexing 到 Ranking 的基本流程，適合作為 SEO 是什麼這篇入門文章的主視覺說明。'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              targetCmsId: '905',
+              fieldName: 'altText',
+              suggestedValue: '搜尋引擎爬取索引與排名流程圖'
+            }),
+            expect.objectContaining({
+              targetType: 'media',
+              targetCmsId: '905',
+              fieldName: 'fileName',
+              suggestedValue: 'seo-crawling-indexing-ranking.png'
+            })
+          ])
         }
       });
     } finally {
@@ -1195,9 +1423,10 @@ describe('site connection routes', () => {
         expect.objectContaining({ ruleCode: 'ARTICLE_TITLE_LENGTH' }),
         expect.objectContaining({ ruleCode: 'ARTICLE_META_DESCRIPTION_LENGTH' }),
         expect.objectContaining({ ruleCode: 'MEDIA_TITLE_CONTEXT' }),
-        expect.objectContaining({ ruleCode: 'MEDIA_CAPTION_MISSING' }),
-        expect.objectContaining({ ruleCode: 'MEDIA_DESCRIPTION_MISSING' }),
-        expect.objectContaining({ ruleCode: 'MEDIA_ALT_TEXT_MISSING' })
+        expect.objectContaining({ ruleCode: 'MEDIA_CAPTION_CONTEXT' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_DESCRIPTION_CONTEXT' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_ALT_TEXT_CONTEXT' }),
+        expect.objectContaining({ ruleCode: 'MEDIA_FILE_NAME_CONTEXT' })
       ])
     );
 
@@ -1239,6 +1468,9 @@ describe('site connection routes', () => {
     const mediaAltTextSuggestion = suggestionsBody.data.suggestions.find(
       (suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'altText'
     );
+    const mediaFileNameSuggestion = suggestionsBody.data.suggestions.find(
+      (suggestion) => suggestion.targetType === 'media' && suggestion.fieldName === 'fileName'
+    );
 
     expect(suggestionsResponse.statusCode).toBe(200);
     expect(titleSuggestion).toMatchObject({
@@ -1273,6 +1505,12 @@ describe('site connection routes', () => {
       suggestionType: 'media_alt_text',
       targetCmsId: '904',
       suggestedValue: 'Tiny'
+    });
+    expect(mediaFileNameSuggestion).toMatchObject({
+      status: 'pending',
+      suggestionType: 'media_file_name',
+      targetCmsId: '904',
+      suggestedValue: 'tiny-1.jpg'
     });
 
     const approveResponse = await server.inject({

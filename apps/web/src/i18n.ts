@@ -772,7 +772,7 @@ const messages = {
     },
     media: {
       title: 'Media Processing',
-      body: 'Scan site media, analyze related content, and generate image title, meta, Alt Text, and filename recommendations.',
+      body: 'Scan site media, read related WordPress article context, and use AI to generate editable image title, meta, Alt Text, and filename recommendations.',
       scanAction: 'Scan and analyze',
       file: 'File',
       field: 'Field',
@@ -808,6 +808,12 @@ const messages = {
       suggestionCount: '{count} suggestions',
       noSuggestions: 'No suggestion',
       attachedTo: 'Attached to',
+      openReviewColumn: 'Open review',
+      openReview: 'Open review',
+      aiSuggestion: 'AI suggestion',
+      reviewTitle: 'Media review',
+      reviewSuggestionLabel: 'Editable suggestion',
+      reviewHint: 'Review the AI suggestion, edit it if needed, then approve or queue writeback.',
       statusReady: 'Ready',
       statusReview: 'Needs review'
     },
@@ -1744,7 +1750,7 @@ const messages = {
     },
     media: {
       title: '媒體處理',
-      body: '掃描網站媒體、分析關聯內容，並生成圖片標題、圖片 Meta、Alt Text 與檔案名稱建議。',
+      body: '掃描網站媒體、讀取關聯 WordPress 文章上下文，並使用 AI 生成可編輯的圖片標題、圖片 Meta、Alt Text 與檔案名稱建議。',
       scanAction: '掃描並分析',
       file: '檔案',
       field: '欄位',
@@ -1780,6 +1786,12 @@ const messages = {
       suggestionCount: '{count} 項建議',
       noSuggestions: '暫無建議',
       attachedTo: '所屬內容',
+      openReviewColumn: '打開審核',
+      openReview: '打開審核',
+      aiSuggestion: 'AI 建議',
+      reviewTitle: '媒體審核',
+      reviewSuggestionLabel: '可編輯建議',
+      reviewHint: '請先檢查 AI 建議，如有需要可直接修改，再批准或加入寫回。',
       statusReady: '已就緒',
       statusReview: '需審核'
     },

@@ -51,6 +51,7 @@ const errorMessage = ref('');
 const successMessage = ref('');
 const selectedMedia = ref<SyncedMedia | null>(null);
 const suggestionDrafts = ref<Record<string, string>>({});
+const activeReviewField = ref<MediaFieldName | null>(null);
 
 const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
 const canScanSelectedSite = computed(() =>
@@ -132,9 +133,9 @@ const detailColumns = computed<TableColumnsType<MediaSuggestionRow>>(() => [
     width: 130
   },
   {
-    title: t('articles.action'),
+    title: t('media.openReviewColumn'),
     key: 'action',
-    width: 180
+    width: 160
   }
 ]);
 
@@ -191,6 +192,14 @@ const selectedMediaSuggestionRows = computed<MediaSuggestionRow[]>(() => {
   }));
 });
 
+const activeReviewRow = computed<MediaSuggestionRow | undefined>(() => {
+  if (!activeReviewField.value) {
+    return undefined;
+  }
+
+  return selectedMediaSuggestionRows.value.find((row) => row.key === activeReviewField.value);
+});
+
 async function loadSites() {
   const result = await getSiteConnections();
   sites.value = result.sites.filter((site) => site.status === 'connected');
@@ -235,7 +244,17 @@ async function loadSuggestions() {
   }
 
   try {
-    const result = await getOptimizationSuggestions(selectedSiteId.value);
+    const targetCmsIds = media.value.map((item) => item.cmsId);
+    if (targetCmsIds.length === 0) {
+      mediaSuggestions.value = [];
+      return;
+    }
+
+    const result = await getOptimizationSuggestions(selectedSiteId.value, {
+      targetType: 'media',
+      targetCmsIds,
+      limit: Math.max(targetCmsIds.length * mediaFieldOrder.length, 50)
+    });
     mediaSuggestions.value = result.suggestions.filter((suggestion) => suggestion.targetType === 'media');
     if (selectedMedia.value) {
       refreshSuggestionDrafts(selectedMedia.value.cmsId);
@@ -246,7 +265,8 @@ async function loadSuggestions() {
 }
 
 async function refreshPageData(nextPage = pagination.value.page, nextPageSize = pagination.value.pageSize) {
-  await Promise.all([loadMedia(nextPage, nextPageSize), loadSuggestions()]);
+  await loadMedia(nextPage, nextPageSize);
+  await loadSuggestions();
 }
 
 async function scanAndAnalyzeMedia() {
@@ -352,17 +372,31 @@ async function applySuggestion(suggestionId: string) {
 }
 
 function handleTableChange(nextPagination: TablePaginationConfig) {
-  void loadMedia(nextPagination.current ?? 1, nextPagination.pageSize ?? pagination.value.pageSize);
+  void refreshPageData(nextPagination.current ?? 1, nextPagination.pageSize ?? pagination.value.pageSize);
 }
 
 function handleSearch(value: string) {
   searchKeyword.value = value;
-  void loadMedia(1, pagination.value.pageSize);
+  void refreshPageData(1, pagination.value.pageSize);
 }
 
 function openMedia(record: SyncedMedia) {
   selectedMedia.value = record;
+  activeReviewField.value = null;
   refreshSuggestionDrafts(record.cmsId);
+}
+
+function closeMediaModal() {
+  selectedMedia.value = null;
+  activeReviewField.value = null;
+}
+
+function openSuggestionReview(row: MediaSuggestionRow) {
+  if (!row.suggestion) {
+    return;
+  }
+
+  activeReviewField.value = row.key;
 }
 
 function getSuggestionsForMedia(cmsId: string) {
@@ -481,6 +515,15 @@ function getSuggestionDraftValue(suggestion?: OptimizationSuggestion) {
   return suggestionDrafts.value[suggestion.id] ?? suggestion.suggestedValue;
 }
 
+function getSuggestionPreview(suggestion?: OptimizationSuggestion) {
+  const value = getSuggestionDraftValue(suggestion).trim();
+  if (value === '') {
+    return '';
+  }
+
+  return value.length > 88 ? `${value.slice(0, 88).trim()}...` : value;
+}
+
 function isSuggestionDirty(suggestion?: OptimizationSuggestion) {
   if (!suggestion) {
     return false;
@@ -504,6 +547,7 @@ onMounted(async () => {
 
 watch(selectedSiteId, () => {
   selectedMedia.value = null;
+  activeReviewField.value = null;
   suggestionDrafts.value = {};
   successMessage.value = '';
   errorMessage.value = '';
@@ -511,7 +555,7 @@ watch(selectedSiteId, () => {
 });
 
 watch(activeTab, () => {
-  void loadMedia(1, pagination.value.pageSize);
+  void refreshPageData(1, pagination.value.pageSize);
 });
 </script>
 
@@ -621,7 +665,7 @@ watch(activeTab, () => {
       :title="selectedMedia?.fileName || selectedMedia?.title || t('common.untitled')"
       :footer="null"
       :width="960"
-      @cancel="selectedMedia = null"
+      @cancel="closeMediaModal"
     >
       <div v-if="selectedMedia" class="page-alert">
         <a-tag>{{ t('articleSync.cmsId') }}: {{ selectedMedia.cmsId }}</a-tag>
@@ -647,15 +691,8 @@ watch(activeTab, () => {
           </template>
           <template v-else-if="column.key === 'suggestion'">
             <div v-if="record.suggestion">
-              <a-textarea
-                v-if="isLongTextField(record.key)"
-                v-model:value="suggestionDrafts[record.suggestion.id]"
-                :auto-size="{ minRows: 2, maxRows: 5 }"
-              />
-              <a-input
-                v-else
-                v-model:value="suggestionDrafts[record.suggestion.id]"
-              />
+              <div>{{ getSuggestionPreview(record.suggestion) || '-' }}</div>
+              <div class="table-subtext">{{ t('media.aiSuggestion') }}</div>
               <div v-if="record.suggestion.errorMessage" class="table-subtext">{{ record.suggestion.errorMessage }}</div>
             </div>
             <span v-else>-</span>
@@ -666,37 +703,80 @@ watch(activeTab, () => {
             </a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-space v-if="record.suggestion">
-              <a-button
-                v-if="isSuggestionDirty(record.suggestion)"
-                size="small"
-                :loading="actionSuggestionId === record.suggestion.id"
-                @click="saveSuggestionDraft(record.suggestion)"
-              >
-                {{ t('media.saveDraft') }}
-              </a-button>
-              <a-button
-                v-if="record.suggestion.status === 'pending'"
-                size="small"
-                :loading="actionSuggestionId === record.suggestion.id"
-                @click="approveSuggestion(record.suggestion.id)"
-              >
-                {{ t('suggestions.approve') }}
-              </a-button>
-              <a-button
-                v-if="record.suggestion.status === 'approved'"
-                type="primary"
-                size="small"
-                :loading="actionSuggestionId === record.suggestion.id"
-                @click="applySuggestion(record.suggestion.id)"
-              >
-                {{ t('media.queueApply') }}
-              </a-button>
-            </a-space>
+            <a-button
+              v-if="record.suggestion"
+              type="link"
+              size="small"
+              @click="openSuggestionReview(record)"
+            >
+              {{ t('media.openReview') }}
+            </a-button>
             <span v-else>-</span>
           </template>
         </template>
       </a-table>
+    </a-modal>
+
+    <a-modal
+      :open="Boolean(activeReviewRow?.suggestion)"
+      :title="activeReviewRow ? `${activeReviewRow.fieldLabel} · ${selectedMedia?.fileName || selectedMedia?.title || t('common.untitled')}` : t('media.reviewTitle')"
+      :footer="null"
+      :width="720"
+      @cancel="activeReviewField = null"
+    >
+      <template v-if="activeReviewRow?.suggestion">
+        <div class="page-alert">
+          <a-tag color="blue">{{ t('media.aiSuggestion') }}</a-tag>
+          <a-tag>{{ getSuggestionStatusLabel(activeReviewRow.suggestion.status) }}</a-tag>
+        </div>
+
+        <a-descriptions :column="1" bordered size="small">
+          <a-descriptions-item :label="t('articleSuggestions.current')">
+            {{ activeReviewRow.currentValue || '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item :label="t('media.reviewSuggestionLabel')">
+            <a-textarea
+              v-if="isLongTextField(activeReviewRow.key)"
+              v-model:value="suggestionDrafts[activeReviewRow.suggestion.id]"
+              :auto-size="{ minRows: 4, maxRows: 8 }"
+            />
+            <a-input
+              v-else
+              v-model:value="suggestionDrafts[activeReviewRow.suggestion.id]"
+            />
+            <div class="table-subtext">{{ t('media.reviewHint') }}</div>
+            <div v-if="activeReviewRow.suggestion.errorMessage" class="table-subtext">{{ activeReviewRow.suggestion.errorMessage }}</div>
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <div class="filter-toolbar">
+          <a-button @click="activeReviewField = null">
+            {{ t('common.cancel') }}
+          </a-button>
+          <a-button
+            v-if="isSuggestionDirty(activeReviewRow.suggestion)"
+            :loading="actionSuggestionId === activeReviewRow.suggestion.id"
+            @click="saveSuggestionDraft(activeReviewRow.suggestion)"
+          >
+            {{ t('media.saveDraft') }}
+          </a-button>
+          <a-button
+            v-if="activeReviewRow.suggestion.status === 'pending'"
+            :loading="actionSuggestionId === activeReviewRow.suggestion.id"
+            @click="approveSuggestion(activeReviewRow.suggestion.id)"
+          >
+            {{ t('suggestions.approve') }}
+          </a-button>
+          <a-button
+            v-if="activeReviewRow.suggestion.status === 'approved'"
+            type="primary"
+            :loading="actionSuggestionId === activeReviewRow.suggestion.id"
+            @click="applySuggestion(activeReviewRow.suggestion.id)"
+          >
+            {{ t('media.queueApply') }}
+          </a-button>
+        </div>
+      </template>
     </a-modal>
   </section>
 </template>

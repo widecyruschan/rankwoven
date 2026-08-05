@@ -199,6 +199,12 @@ export interface MediaScanResult {
   updatedAfter?: string;
 }
 
+export interface SuggestionListParams {
+  targetType?: SuggestionTargetType;
+  targetCmsIds?: string[];
+  limit?: number;
+}
+
 export interface ManualRefreshTaskPayload {
   type: 'article' | 'media';
   cmsId: string;
@@ -435,11 +441,30 @@ export async function scanSiteMedia(siteId: string, updatedAfter?: string) {
   });
 }
 
-export async function getOptimizationSuggestions(siteId: string) {
+function createSuggestionQuery(params?: SuggestionListParams) {
+  const searchParams = new URLSearchParams();
+
+  if (params?.targetType) {
+    searchParams.set('targetType', params.targetType);
+  }
+
+  if (params?.targetCmsIds?.length) {
+    searchParams.set('targetCmsIds', params.targetCmsIds.join(','));
+  }
+
+  if (params?.limit) {
+    searchParams.set('limit', String(params.limit));
+  }
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
+export async function getOptimizationSuggestions(siteId: string, params?: SuggestionListParams) {
   return requestApi<{
     suggestions: OptimizationSuggestion[];
     latestAudit?: LatestAuditSummary;
-  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions`);
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions${createSuggestionQuery(params)}`);
 }
 
 export async function getApplyQueue(siteId: string) {

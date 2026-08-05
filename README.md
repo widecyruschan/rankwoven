@@ -1544,3 +1544,113 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 推送 `main` 讓 GitHub Actions 重新使用新的 `Configure SSH` 流程。
   2. 若仍失敗，優先檢查 `HOSTINGER_VPS_SSH_KEY` 是否仍對應 VPS 上目前的 `authorized_keys`。
+
+### 2026-08-04（星期二）— 媒體頁五欄位上下文建議與當前頁 suggestion 載入修復
+
+- 會話的主要目的：讓媒體處理頁能根據圖片關聯文章上下文，為圖片標題、圖片簡介、圖片說明、Alt Text、檔案名稱五個欄位都生成可修改、可確認、可提交到 WordPress 後台的建議，並修正媒體建議在站點資料較多時可能顯示為空的問題。
+- 完成的主要任務：
+  1. `apps/api/src/seoOptimization.ts`
+     - 媒體審計改為對五個欄位都主動生成上下文建議，不再只在缺失時才建立 suggestion。
+     - 只要目前值與建議值不一致，就會建立媒體 suggestion，包含 `title`、`caption`、`description`、`altText`、`fileName`。
+     - `caption`、`description`、`altText` 規則改為上下文優化導向；`fileName` 缺失時也可生成建議。
+     - 新增 suggestion 查詢過濾能力，支援按 `targetType`、`targetCmsIds`、`limit` 取回需要的建議。
+     - 審計重跑時會清理同一站點 / 目標 / 欄位尚未套用的舊 suggestion，避免重覆堆積。
+  2. `apps/web/src/api/siteConnections.ts`
+     - `getOptimizationSuggestions()` 新增查詢參數，支援指定媒體範圍。
+  3. `apps/web/src/views/MediaOptimizationView.vue`
+     - 媒體頁改為只拉當前頁面媒體對應的 suggestion，避免全站 suggestion 被 API 限制截斷後，彈窗欄位顯示 `-`。
+     - 搜尋、分頁、Tab 切換後會同步刷新媒體資料與對應建議。
+  4. `apps/api/tests/siteConnections.test.ts`
+     - 補強媒體掃描 / 審計測試，驗證五個欄位都會產生 suggestion。
+     - 新增 suggestion 篩選測試，確保可按指定媒體載入對應建議。
+- 關鍵決策和解決方案：這次不額外插入一層前端假資料或臨時本地計算，而是直接把後端 suggestion 生成規則擴展成五欄位完整輸出，並讓前端按當前媒體範圍精準取數。這樣保留既有「編輯 -> 批准 -> 套用 -> Worker 寫回 WordPress」流程，不需要重做提交流程。
+- 使用的技術棧：Fastify、TypeScript、Vue 3、Ant Design Vue、Vitest。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run test -w @aieo/api -- siteConnections.test.ts`
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run build -w @aieo/web`
+- 下一步行動清單：
+  1. 若要把「AI」從目前的上下文規則提升為真實模型生成，可下一步把 Wenwen / OpenAI provider 接入媒體 suggestion prompt。
+  2. 若要直接上線這輪修改，我可以下一步幫你提交並推送到 `main`。
+
+### 2026-08-04（星期二）— 媒體建議升級為 WordPress 上下文 + AI 生成
+
+- 會話的主要目的：將媒體處理頁從規則式建議升級為優先讀取 WordPress 後台文章上下文，再使用 AI 生成圖片標題、圖片簡介、圖片說明、Alt Text、檔案名稱建議，並保持可修改、可確認、可提交到 WordPress 的流程。
+- 完成的主要任務：
+  1. `apps/api/src/server.ts`
+     - `createServer()` 新增 `textGenerationProvider` 注入能力，方便正式環境使用 Wenwen provider，也方便測試用 stub 驗證 AI 流程。
+  2. `apps/api/src/seoOptimization.ts`
+     - `registerSeoOptimizationRoutes()` 現在會接收文字生成 provider，並在建立 SEO audit 時傳入。
+     - 媒體 suggestion 改為 async 生成流程。
+     - 新增從文章 HTML 定位圖片附近內容的 `placementContext` 抽取邏輯，會優先根據 `wp-image-{cmsId}`、圖片 URL、檔名定位圖片在文章中的附近上下文。
+     - 新增 AI prompt 與 JSON 解析邏輯：有配置文字模型時，會根據文章標題、slug、圖片附近段落、文章摘要、內容與現有圖片欄位，生成五欄位建議。
+     - AI 回應會經過長度、純文字與檔名規範清洗；AI 不可用或輸出無效時，自動回退到既有規則式 suggestion。
+  3. `apps/api/tests/siteConnections.test.ts`
+     - 新增 AI 回歸測試，驗證有 provider 時，媒體 suggestion 會採用 AI 生成結果。
+  4. `apps/web/src/i18n.ts`
+     - 媒體頁說明文案改為明確表達「讀取 WordPress 文章上下文並使用 AI 生成建議」。
+- 關鍵決策和解決方案：這次沒有另外新增一條全新的媒體 AI API，而是把既有 `/audits` -> `/suggestions` 流程升級成「AI 優先、規則回退」。這樣保留現有資料表、審核 UI、批准、寫回、回滾機制，同時令功能真正符合「從 WordPress 後台讀取文章上下文，使用 AI 生成建議」的需求。
+- 使用的技術棧：Fastify、TypeScript、Vue 3、Vue I18n、Vitest、Wenwen / OpenAI 相容文字生成介面。
+- 新增或修改文件：
+  - 修改：`apps/api/src/server.ts`、`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/i18n.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run test -w @aieo/api -- siteConnections.test.ts`
+  - 已通過：`npm run build -w @aieo/api`
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/web`
+- 下一步行動清單：
+  1. 生產或測試環境需要配置 `WENWEN_API_KEY`，否則系統會自動回退到規則式 suggestion。
+  2. 若你要，我可以下一步把這一輪修改提交並推送到 `main`。
+
+### 2026-08-05（星期三）— 媒體彈窗新增 AI 建議預覽與打開審核編輯
+
+- 會話的主要目的：讓媒體詳情彈窗中的「建議內容」欄顯示 AI 建議預覽，並在「打開審核」欄提供可點擊編輯入口，而不是只顯示 `-`。
+- 完成的主要任務：
+  1. `apps/web/src/views/MediaOptimizationView.vue`
+     - 媒體欄位詳情表中的「建議內容」改為顯示 AI 建議預覽與錯誤提示，不再直接內嵌編輯框。
+     - 「打開審核」欄改為可點擊按鈕，只有存在 suggestion 時才顯示。
+     - 新增獨立審核彈窗，打開後可查看目前內容、編輯 AI 建議、保存修改、批准建議、加入寫回 WordPress 隊列。
+     - 主媒體彈窗關閉或切換站點時，會同步清理審核狀態。
+  2. `apps/web/src/i18n.ts`
+     - 補上 `AI 建議`、`打開審核`、`可編輯建議`、`媒體審核` 等中英文文案。
+- 關鍵決策和解決方案：這次保留既有 suggestion / approve / apply API，不改寫回流程，只把媒體詳情 UI 改成「列表預覽 + 單欄位審核編輯」模式，對齊你截圖中希望看到的 `建議內容` 和 `打開審核` 行為。
+- 使用的技術棧：Vue 3、Ant Design Vue、Vue I18n。
+- 新增或修改文件：
+  - 修改：`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/i18n.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run lint`
+  - 已通過：`npm run build -w @aieo/web`
+- 下一步行動清單：
+  1. 若你要上線，我可以下一步將目前所有未提交的媒體 AI / 審核相關修改一併 commit 並 push。
+  2. 若你要我再進一步優化審核體驗，我可以把「打開審核」擴展成 Drawer，加入前後內容差異比對。
+
+### 2026-08-05（星期三）— 修復媒體掃描建議類型資料庫約束錯誤
+
+- 會話的主要目的：修復媒體處理頁選擇網站後執行「掃描並分析」時，新增媒體標題、簡介或說明建議會觸發 `optimization_suggestions_suggestion_type_check` 的問題。
+- 完成的主要任務：
+  1. `db/migrations/0007_expand_media_suggestion_types.sql`
+     - 新增原子 migration，重建 `optimization_suggestions.suggestion_type` 檢查約束。
+     - 在既有類型基礎上加入 `media_title`、`media_caption`、`media_description`。
+  2. `apps/api/src/seoOptimization.ts`
+     - 非生產環境執行 `ensureSchema()` 時同步重建相同約束，讓舊本地資料庫不需重建資料表即可恢復掃描。
+  3. `apps/api/tests/siteConnections.postgres.test.ts`
+     - 新增 PostgreSQL 回歸測試，在隔離 schema 中建立舊版約束、執行 migration，並驗證三種新增媒體建議類型可正常寫入。
+- 關鍵決策和解決方案：錯誤不是建議生成內容本身，而是應用層新增了三種媒體 suggestion type，既有資料庫仍保留舊 CHECK constraint；採用 migration 更新既有生產資料庫，並保留非生產 schema 自修復，避免只修改 TypeScript 型別或 `CREATE TABLE IF NOT EXISTS` 而無法修正既有資料表。
+- 使用的技術棧：PostgreSQL、SQL migration、Fastify、TypeScript、Vitest。
+- 新增或修改文件：
+  - 新增：`db/migrations/0007_expand_media_suggestion_types.sql`
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.postgres.test.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`git diff --check`
+  - 已通過：`npm run test --workspace @aieo/api -- tests/siteConnections.test.ts`（19 tests）
+  - 已通過：`npm run build --workspace @aieo/api`
+  - 已通過：`npm run lint -- --quiet`
+  - 已通過：PostgreSQL migration 回歸用例 `allows all media suggestion types after expanding the constraint`
+  - 已通過：本地 `npm run db:migrate`，已套用 `0007_expand_media_suggestion_types.sql` 並確認資料庫約束包含三種新增媒體類型
+  - 已知既有測試環境問題：完整 `siteConnections.postgres.test.ts` 中原有站點連接用例在復用本地資料庫時未返回新 API Token；本次新增 migration 用例獨立執行已通過。
+- 下一步行動清單：
+  1. 部署時執行 `npm run db:migrate`，讓生產資料庫套用 `0007_expand_media_suggestion_types.sql`。
+  2. 部署後重新執行媒體「掃描並分析」，確認五個媒體欄位建議均能建立。

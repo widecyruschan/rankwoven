@@ -1,7 +1,11 @@
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
-import { createNoopAiProviderRegistry, createWenwenAiProviderRegistry } from '@aieo/ai-providers';
+import {
+  createNoopAiProviderRegistry,
+  createWenwenAiProviderRegistry,
+  type TextGenerationProvider
+} from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import {
   createAuthService,
@@ -36,6 +40,7 @@ interface CreateServerOptions {
   authRepository?: AuthRepository;
   seoOptimizationRepository?: SeoOptimizationRepository;
   siteAuditRepository?: SiteAuditRepository;
+  textGenerationProvider?: TextGenerationProvider;
 }
 
 export function createServer(options: CreateServerOptions = {}) {
@@ -189,7 +194,8 @@ export function createServer(options: CreateServerOptions = {}) {
     app,
     siteConnectionRepository,
     options.seoOptimizationRepository ?? createDefaultSeoOptimizationRepository(apiConfig.DATABASE_URL),
-    authService
+    authService,
+    options.textGenerationProvider ?? aiProviders.text
   );
 
   registerSiteAuditRoutes(

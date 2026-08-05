@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
@@ -7,6 +8,53 @@ import { createPostgresSiteConnectionRepository } from '../src/siteConnections';
 const postgresTestDatabaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const shouldRunPostgresTests = process.env.RUN_POSTGRES_TESTS === '1' && postgresTestDatabaseUrl;
 const describePostgres = shouldRunPostgresTests ? describe : describe.skip;
+
+describePostgres('database migrations', () => {
+  it('allows all media suggestion types after expanding the constraint', async () => {
+    const pool = new Pool({ connectionString: postgresTestDatabaseUrl as string });
+    const client = await pool.connect();
+    const schemaName = `migration_test_${crypto.randomUUID().replaceAll('-', '')}`;
+    const migrationSql = await readFile(
+      new URL('../../../db/migrations/0007_expand_media_suggestion_types.sql', import.meta.url),
+      'utf8'
+    );
+
+    try {
+      await client.query(`CREATE SCHEMA "${schemaName}"`);
+      await client.query(`SET search_path TO "${schemaName}"`);
+      await client.query(`
+        CREATE TABLE optimization_suggestions (
+          suggestion_type text NOT NULL CONSTRAINT optimization_suggestions_suggestion_type_check CHECK (
+            suggestion_type IN ('title', 'meta_description', 'content', 'media_alt_text', 'media_file_name', 'internal_link')
+          )
+        )
+      `);
+
+      await client.query(migrationSql);
+      await client.query(`
+        INSERT INTO optimization_suggestions (suggestion_type)
+        VALUES ('media_title'), ('media_caption'), ('media_description')
+      `);
+
+      const result = await client.query<{ suggestion_type: string }>(`
+        SELECT suggestion_type
+        FROM optimization_suggestions
+        ORDER BY suggestion_type
+      `);
+
+      expect(result.rows.map((row) => row.suggestion_type)).toEqual([
+        'media_caption',
+        'media_description',
+        'media_title'
+      ]);
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      client.release();
+      await pool.end();
+    }
+  });
+});
 
 interface CreateSiteConnectionResponse {
   data: {

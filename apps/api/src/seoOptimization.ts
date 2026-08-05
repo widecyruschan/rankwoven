@@ -1,3 +1,4 @@
+import type { TextGenerationProvider } from '@aieo/ai-providers';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
@@ -21,6 +22,7 @@ type SuggestionType =
   | 'media_file_name'
   | 'internal_link';
 type IssueSeverity = 'low' | 'medium' | 'high';
+type MediaSuggestionField = 'title' | 'caption' | 'description' | 'altText' | 'fileName';
 
 export interface SeoAudit {
   id: string;
@@ -93,6 +95,12 @@ export interface CreateSuggestionInput {
   suggestedValue: string;
 }
 
+export interface ListSuggestionOptions {
+  targetType?: TargetType;
+  targetCmsIds?: string[];
+  limit?: number;
+}
+
 export interface SeoOptimizationRepository {
   saveAudit(
     siteId: string,
@@ -102,7 +110,7 @@ export interface SeoOptimizationRepository {
   listAudits(siteId: string): Promise<SeoAudit[]>;
   listIssues(auditId: string): Promise<SeoAuditIssue[]>;
   createSuggestion(siteId: string, input: CreateSuggestionInput, auditIssueId?: string): Promise<OptimizationSuggestion>;
-  listSuggestions(siteId: string): Promise<OptimizationSuggestion[]>;
+  listSuggestions(siteId: string, options?: ListSuggestionOptions): Promise<OptimizationSuggestion[]>;
   findSuggestion(siteId: string, suggestionId: string): Promise<OptimizationSuggestion | undefined>;
   updateSuggestion(siteId: string, suggestionId: string, suggestedValue: string): Promise<OptimizationSuggestion | undefined>;
   approveSuggestion(siteId: string, suggestionId: string): Promise<OptimizationSuggestion | undefined>;
@@ -166,6 +174,33 @@ const updateSuggestionSchema = z.object({
   suggestedValue: z.string().trim().min(1).max(20_000)
 });
 
+const listSuggestionsQuerySchema = z.object({
+  targetType: z.enum(['article', 'media']).optional(),
+  targetCmsIds: z
+    .union([
+      z.string().trim(),
+      z.array(z.string().trim())
+    ])
+    .optional()
+    .transform((value) => {
+      if (!value) {
+        return undefined;
+      }
+
+      const rawValues = Array.isArray(value) ? value : value.split(',');
+      const normalized = Array.from(
+        new Set(
+          rawValues
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0)
+        )
+      );
+
+      return normalized.length > 0 ? normalized.slice(0, auditBatchSize) : undefined;
+    }),
+  limit: z.coerce.number().int().min(1).max(2_000).default(200)
+});
+
 const defaultRulesVersion = '2026-08-04.image-context-1';
 const auditBatchSize = 100;
 
@@ -219,6 +254,14 @@ CREATE TABLE IF NOT EXISTS optimization_suggestions (
   approved_at timestamptz,
   applied_at timestamptz
 );
+
+ALTER TABLE optimization_suggestions
+  DROP CONSTRAINT IF EXISTS optimization_suggestions_suggestion_type_check;
+
+ALTER TABLE optimization_suggestions
+  ADD CONSTRAINT optimization_suggestions_suggestion_type_check CHECK (
+    suggestion_type IN ('title', 'meta_description', 'content', 'media_title', 'media_caption', 'media_description', 'media_alt_text', 'media_file_name', 'internal_link')
+  );
 
 CREATE INDEX IF NOT EXISTS idx_optimization_suggestions_site_status
   ON optimization_suggestions(site_id, status, created_at DESC);
@@ -324,7 +367,11 @@ function mapApplySnapshotRow(row: QueryResultRow): ApplySnapshot {
   };
 }
 
-function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
+async function buildSeoIssues(
+  articles: SyncedArticle[],
+  media: SyncedMedia[],
+  options: BuildSeoIssueOptions
+) {
   const issues: Array<Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>> = [];
   const articleById = new Map(articles.map((article) => [article.cmsId, article]));
   const mediaSequenceByCmsId = buildMediaSequenceMap(media);
@@ -387,82 +434,95 @@ function buildSeoIssues(articles: SyncedArticle[], media: SyncedMedia[]) {
     }
   }
 
-  for (const mediaItem of media) {
+  const mediaIssueGroups = await mapWithConcurrency(media, 3, async (mediaItem) => {
     const mediaContext = buildMediaContext(
       mediaItem,
       articleById,
       mediaSequenceByCmsId.get(mediaItem.cmsId) ?? 1
     );
+    const aiSuggestions = await generateAiMediaSuggestions(
+      options.textProvider,
+      options,
+      mediaItem,
+      mediaContext
+    );
 
-    if (shouldSuggestMediaTitle(mediaItem, mediaContext)) {
-      issues.push({
+    const mediaIssues: Array<Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>> = [];
+    const suggestedTitle = pickMediaSuggestionValue('title', aiSuggestions, mediaContext, mediaItem);
+    if (shouldSuggestMediaField(mediaItem.title, suggestedTitle)) {
+      mediaIssues.push({
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: 'MEDIA_TITLE_CONTEXT',
         severity: 'medium',
         message: '圖片標題應結合所屬內容上下文',
         currentValue: mediaItem.title,
-        suggestedValue: buildMediaTitleSuggestion(mediaContext),
+        suggestedValue: suggestedTitle,
         fieldName: 'title'
       });
     }
 
-    if (!mediaItem.caption?.trim() && mediaContext.contextSummary) {
-      issues.push({
+    const suggestedCaption = pickMediaSuggestionValue('caption', aiSuggestions, mediaContext, mediaItem);
+    if (shouldSuggestMediaField(mediaItem.caption, suggestedCaption)) {
+      mediaIssues.push({
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
-        ruleCode: 'MEDIA_CAPTION_MISSING',
+        ruleCode: 'MEDIA_CAPTION_CONTEXT',
         severity: 'medium',
-        message: '圖片簡介應根據文章或頁面上下文補齊',
+        message: '圖片簡介應根據文章或頁面上下文優化',
         currentValue: mediaItem.caption ?? '',
-        suggestedValue: buildMediaCaptionSuggestion(mediaContext),
+        suggestedValue: suggestedCaption,
         fieldName: 'caption'
       });
     }
 
-    if (!mediaItem.description?.trim() && mediaContext.contextDetail) {
-      issues.push({
+    const suggestedDescription = pickMediaSuggestionValue('description', aiSuggestions, mediaContext, mediaItem);
+    if (shouldSuggestMediaField(mediaItem.description, suggestedDescription)) {
+      mediaIssues.push({
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
-        ruleCode: 'MEDIA_DESCRIPTION_MISSING',
+        ruleCode: 'MEDIA_DESCRIPTION_CONTEXT',
         severity: 'low',
-        message: '圖片說明應根據文章或頁面上下文補齊',
+        message: '圖片說明應根據文章或頁面上下文優化',
         currentValue: mediaItem.description ?? '',
-        suggestedValue: buildMediaDescriptionSuggestion(mediaContext),
+        suggestedValue: suggestedDescription,
         fieldName: 'description'
       });
     }
 
-    if (!mediaItem.altText?.trim()) {
-      issues.push({
+    const suggestedAltText = pickMediaSuggestionValue('altText', aiSuggestions, mediaContext, mediaItem);
+    if (shouldSuggestMediaField(mediaItem.altText, suggestedAltText)) {
+      mediaIssues.push({
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
-        ruleCode: 'MEDIA_ALT_TEXT_MISSING',
+        ruleCode: 'MEDIA_ALT_TEXT_CONTEXT',
         severity: 'high',
-        message: '圖片缺少 Alt Text',
-        currentValue: '',
-        suggestedValue: buildMediaAltTextSuggestion(mediaContext),
+        message: '圖片 Alt Text 應結合所屬內容上下文',
+        currentValue: mediaItem.altText ?? '',
+        suggestedValue: suggestedAltText,
         fieldName: 'altText'
       });
     }
 
-    const suggestedFileName = buildMediaFileNameSuggestion(mediaItem, mediaContext);
-    if (
-      mediaItem.fileName &&
-      suggestedFileName &&
-      normalizeComparableText(mediaItem.fileName) !== normalizeComparableText(suggestedFileName)
-    ) {
-      issues.push({
+    const suggestedFileName = pickMediaSuggestionValue('fileName', aiSuggestions, mediaContext, mediaItem);
+    if (shouldSuggestMediaField(mediaItem.fileName, suggestedFileName, 'fileName')) {
+      mediaIssues.push({
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: mediaContext.contextSlug ? 'MEDIA_FILE_NAME_CONTEXT' : 'MEDIA_FILE_NAME_FORMAT',
         severity: 'medium',
         message: mediaContext.contextSlug ? '圖片檔名應根據關聯內容 slug 命名' : '圖片檔名不利於搜尋引擎理解',
-        currentValue: mediaItem.fileName,
+        currentValue: mediaItem.fileName ?? '',
         suggestedValue: suggestedFileName,
         fieldName: 'fileName'
       });
     }
+
+    return mediaIssues;
+  });
+
+  for (const mediaIssues of mediaIssueGroups) {
+    issues.push(...mediaIssues);
   }
 
   return issues;
@@ -505,9 +565,25 @@ interface MediaContext {
   contextSlug: string;
   contextSummary: string;
   contextDetail: string;
+  placementContext: string;
   imageDescriptor: string;
   extension: string;
   sequenceNumber: number;
+}
+
+interface BuildSeoIssueOptions {
+  siteId: string;
+  userId: string;
+  locale?: string;
+  textProvider?: TextGenerationProvider;
+}
+
+interface AiMediaSuggestionResult {
+  title?: string;
+  caption?: string;
+  description?: string;
+  altText?: string;
+  fileName?: string;
 }
 
 function buildMediaContext(
@@ -518,8 +594,11 @@ function buildMediaContext(
   const attachedArticle = mediaItem.attachedToCmsId ? articleById.get(mediaItem.attachedToCmsId) : undefined;
   const contextTitle = mediaItem.attachedToTitle?.trim() || attachedArticle?.title.trim() || '';
   const contextSlug = attachedArticle?.slug.trim() ?? '';
-  const contextSummary = normalizePlainText(attachedArticle?.excerpt || attachedArticle?.contentHtml || '');
-  const contextDetail = normalizePlainText(attachedArticle?.contentHtml || attachedArticle?.excerpt || '');
+  const placementContext = extractMediaPlacementContext(attachedArticle, mediaItem);
+  const excerptText = normalizePlainText(attachedArticle?.excerpt || '');
+  const contentText = normalizePlainText(attachedArticle?.contentHtml || '');
+  const contextSummary = placementContext || excerptText || contentText;
+  const contextDetail = placementContext || contentText || excerptText;
   const imageDescriptor = normalizeImageText(mediaItem.title || mediaItem.fileName || '');
   const extension = mediaItem.fileName?.includes('.')
     ? mediaItem.fileName.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -530,36 +609,197 @@ function buildMediaContext(
     contextSlug,
     contextSummary,
     contextDetail,
+    placementContext,
     imageDescriptor,
     extension,
     sequenceNumber
   };
 }
 
-function shouldSuggestMediaTitle(mediaItem: SyncedMedia, mediaContext: MediaContext) {
-  const currentTitle = normalizeSeoText(mediaItem.title);
-  if (!currentTitle) {
-    return true;
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractMediaPlacementContext(article: SyncedArticle | undefined, mediaItem: SyncedMedia) {
+  const html = article?.contentHtml ?? '';
+  if (!html) {
+    return '';
   }
 
-  if (!mediaContext.contextTitle && !mediaContext.imageDescriptor) {
+  const lookupValues = [
+    `wp-image-${mediaItem.cmsId}`,
+    mediaItem.url,
+    mediaItem.fileName,
+    mediaItem.url ? mediaItem.url.split('/').pop()?.split('?')[0] ?? '' : ''
+  ].filter((value): value is string => Boolean(value && value.trim()));
+
+  const matchedValue = lookupValues.find((value) => new RegExp(escapeRegExp(value), 'i').test(html));
+  if (!matchedValue) {
+    return '';
+  }
+
+  const matchIndex = html.toLowerCase().indexOf(matchedValue.toLowerCase());
+  if (matchIndex === -1) {
+    return '';
+  }
+
+  const snippetStart = Math.max(0, matchIndex - 600);
+  const snippetEnd = Math.min(html.length, matchIndex + 1200);
+  return normalizePlainText(html.slice(snippetStart, snippetEnd));
+}
+
+function truncateContext(value: string, maxLength: number) {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength).trim()}...`;
+}
+
+function extractJsonObject(value: string) {
+  const fencedMatch = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const objectMatch = value.match(/\{[\s\S]*\}/);
+  return objectMatch?.[0]?.trim() ?? value.trim();
+}
+
+function normalizeAiTextValue(value: unknown, maxLength: number) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return trimSeoText(normalizePlainText(value), maxLength);
+}
+
+function normalizeAiFileNameValue(value: unknown, fallbackExtension: string) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return '';
+  }
+
+  const rawFileName = value.trim().split('/').pop() ?? value.trim();
+  const fileNameWithExtension = rawFileName.includes('.')
+    ? rawFileName
+    : `${rawFileName}.${fallbackExtension || 'jpg'}`;
+
+  return normalizeFileName(fileNameWithExtension);
+}
+
+async function mapWithConcurrency<T, TResult>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<TResult>
+) {
+  const results = new Array<TResult>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, () => worker())
+  );
+
+  return results;
+}
+
+async function generateAiMediaSuggestions(
+  textProvider: TextGenerationProvider | undefined,
+  options: BuildSeoIssueOptions,
+  mediaItem: SyncedMedia,
+  mediaContext: MediaContext
+): Promise<AiMediaSuggestionResult | undefined> {
+  if (!textProvider) {
+    return undefined;
+  }
+
+  const meaningfulContext = [
+    mediaContext.contextTitle,
+    mediaContext.placementContext,
+    mediaContext.contextSummary,
+    mediaContext.contextDetail
+  ].some((value) => value.trim() !== '');
+
+  if (!meaningfulContext) {
+    return undefined;
+  }
+
+  try {
+    const response = await textProvider.rewriteContent({
+      siteId: options.siteId,
+      userId: options.userId,
+      locale: options.locale ?? 'zh-Hant',
+      promptVersion: '2026-08-04.media-context-ai-1',
+      title:
+        'Return JSON only with keys title, caption, description, altText, fileName. ' +
+        'Use Traditional Chinese for text fields, keep them concise and SEO-friendly, and make the filename lowercase ASCII with hyphens plus extension.',
+      html: [
+        `Article title: ${mediaContext.contextTitle || '(none)'}`,
+        mediaContext.contextSlug ? `Article slug: ${mediaContext.contextSlug}` : '',
+        mediaContext.placementContext ? `Image placement context: ${truncateContext(mediaContext.placementContext, 1200)}` : '',
+        mediaContext.contextSummary ? `Article summary: ${truncateContext(mediaContext.contextSummary, 600)}` : '',
+        mediaContext.contextDetail ? `Article detail: ${truncateContext(mediaContext.contextDetail, 1800)}` : '',
+        `Current image title: ${mediaItem.title || '(empty)'}`,
+        `Current image caption: ${mediaItem.caption || '(empty)'}`,
+        `Current image description: ${mediaItem.description || '(empty)'}`,
+        `Current image alt text: ${mediaItem.altText || '(empty)'}`,
+        `Current filename: ${mediaItem.fileName || '(empty)'}`,
+        `Preferred filename base slug: ${mediaContext.contextSlug || '(none)'}`,
+        `Image descriptor from current metadata: ${mediaContext.imageDescriptor || '(none)'}`
+      ]
+        .filter(Boolean)
+        .join('\n')
+    });
+
+    const parsed = JSON.parse(extractJsonObject(response.text)) as Record<string, unknown>;
+
+    return {
+      title: normalizeAiTextValue(parsed.title, 140),
+      caption: normalizeAiTextValue(parsed.caption, 180),
+      description: normalizeAiTextValue(parsed.description, 280),
+      altText: normalizeAiTextValue(parsed.altText, 125),
+      fileName: normalizeAiFileNameValue(parsed.fileName, mediaContext.extension)
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function pickMediaSuggestionValue(
+  fieldName: MediaSuggestionField,
+  aiSuggestions: AiMediaSuggestionResult | undefined,
+  mediaContext: MediaContext,
+  mediaItem: SyncedMedia
+) {
+  const fallbackBuilders: Record<MediaSuggestionField, () => string> = {
+    title: () => buildMediaTitleSuggestion(mediaContext),
+    caption: () => buildMediaCaptionSuggestion(mediaContext),
+    description: () => buildMediaDescriptionSuggestion(mediaContext),
+    altText: () => buildMediaAltTextSuggestion(mediaContext),
+    fileName: () => buildMediaFileNameSuggestion(mediaItem, mediaContext)
+  };
+
+  const aiValue = aiSuggestions?.[fieldName]?.trim() ?? '';
+  return aiValue || fallbackBuilders[fieldName]();
+}
+
+function shouldSuggestMediaField(
+  currentValue: string | undefined,
+  suggestedValue: string,
+  fieldName?: 'fileName'
+) {
+  if (!suggestedValue.trim()) {
     return false;
   }
 
-  const normalizedTitle = normalizeComparableText(currentTitle);
-  const normalizedFileName = normalizeComparableText(normalizeImageText(mediaItem.fileName ?? ''));
-  const normalizedImageDescriptor = normalizeComparableText(mediaContext.imageDescriptor);
-
-  if (normalizedFileName && normalizedTitle === normalizedFileName) {
-    return true;
+  if (fieldName === 'fileName') {
+    return normalizeComparableText(currentValue ?? '') !== normalizeComparableText(suggestedValue);
   }
 
-  return Boolean(
-    mediaContext.contextTitle &&
-      normalizedImageDescriptor &&
-      normalizedTitle !== normalizeComparableText(mediaContext.contextTitle) &&
-      normalizedTitle !== normalizedImageDescriptor
-  );
+  return normalizeSuggestionText(currentValue ?? '') !== normalizeSuggestionText(suggestedValue);
 }
 
 function buildMediaTitleSuggestion(mediaContext: MediaContext) {
@@ -570,17 +810,17 @@ function buildMediaTitleSuggestion(mediaContext: MediaContext) {
     return trimSeoText(suggestion, 140);
   }
 
-  return trimSeoText(mediaContext.imageDescriptor || '圖片標題', 140);
+  return mediaContext.imageDescriptor ? trimSeoText(mediaContext.imageDescriptor, 140) : '';
 }
 
 function buildMediaCaptionSuggestion(mediaContext: MediaContext) {
-  const suggestion = mediaContext.contextSummary || mediaContext.contextTitle || mediaContext.imageDescriptor || '圖片簡介';
-  return trimSeoText(suggestion, 180);
+  const suggestion = mediaContext.contextSummary || mediaContext.contextTitle || mediaContext.imageDescriptor;
+  return suggestion ? trimSeoText(suggestion, 180) : '';
 }
 
 function buildMediaDescriptionSuggestion(mediaContext: MediaContext) {
-  const suggestion = mediaContext.contextDetail || mediaContext.contextSummary || mediaContext.contextTitle || mediaContext.imageDescriptor || '圖片說明';
-  return trimSeoText(suggestion, 280);
+  const suggestion = mediaContext.contextDetail || mediaContext.contextSummary || mediaContext.contextTitle || mediaContext.imageDescriptor;
+  return suggestion ? trimSeoText(suggestion, 280) : '';
 }
 
 function buildMediaAltTextSuggestion(mediaContext: MediaContext) {
@@ -591,7 +831,7 @@ function buildMediaAltTextSuggestion(mediaContext: MediaContext) {
     return trimSeoText(suggestion, 125);
   }
 
-  return trimSeoText(mediaContext.imageDescriptor || '相關圖片', 125);
+  return mediaContext.imageDescriptor ? trimSeoText(mediaContext.imageDescriptor, 125) : '';
 }
 
 function buildMediaFileNameSuggestion(mediaItem: SyncedMedia, mediaContext: MediaContext) {
@@ -611,6 +851,10 @@ function normalizeSeoText(value: string) {
 
 function normalizeComparableText(value: string) {
   return normalizeSeoText(value).toLowerCase();
+}
+
+function normalizeSuggestionText(value: string) {
+  return normalizeComparableText(normalizePlainText(value));
 }
 
 function trimSeoText(value: string, maxLength: number) {
@@ -684,15 +928,15 @@ function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId'
     return 'media_title';
   }
 
-  if (issue.ruleCode === 'MEDIA_CAPTION_MISSING') {
+  if (issue.ruleCode === 'MEDIA_CAPTION_MISSING' || issue.ruleCode === 'MEDIA_CAPTION_CONTEXT') {
     return 'media_caption';
   }
 
-  if (issue.ruleCode === 'MEDIA_DESCRIPTION_MISSING') {
+  if (issue.ruleCode === 'MEDIA_DESCRIPTION_MISSING' || issue.ruleCode === 'MEDIA_DESCRIPTION_CONTEXT') {
     return 'media_description';
   }
 
-  if (issue.ruleCode === 'MEDIA_ALT_TEXT_MISSING') {
+  if (issue.ruleCode === 'MEDIA_ALT_TEXT_MISSING' || issue.ruleCode === 'MEDIA_ALT_TEXT_CONTEXT') {
     return 'media_alt_text';
   }
 
@@ -709,6 +953,41 @@ function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId'
   }
 
   return issue.fieldName === 'title' ? 'title' : 'content';
+}
+
+function matchesSuggestionFilters(
+  suggestion: OptimizationSuggestion,
+  options?: ListSuggestionOptions
+) {
+  if (options?.targetType && suggestion.targetType !== options.targetType) {
+    return false;
+  }
+
+  if (options?.targetCmsIds?.length && !options.targetCmsIds.includes(suggestion.targetCmsId)) {
+    return false;
+  }
+
+  return true;
+}
+
+function removeExistingActionableSuggestions(
+  suggestions: Map<string, OptimizationSuggestion>,
+  siteId: string,
+  targetType: TargetType,
+  targetCmsId: string,
+  fieldName: string
+) {
+  for (const [suggestionId, suggestion] of suggestions.entries()) {
+    if (
+      suggestion.siteId === siteId &&
+      suggestion.targetType === targetType &&
+      suggestion.targetCmsId === targetCmsId &&
+      suggestion.fieldName === fieldName &&
+      suggestion.status !== 'applied'
+    ) {
+      suggestions.delete(suggestionId);
+    }
+  }
 }
 
 export function createInMemorySeoOptimizationRepository(): SeoOptimizationRepository {
@@ -737,6 +1016,13 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
       for (const issue of savedIssues) {
         issues.set(issue.id, issue);
         if (issue.suggestedValue) {
+          removeExistingActionableSuggestions(
+            suggestions,
+            siteId,
+            issue.targetType,
+            issue.targetCmsId,
+            issue.fieldName
+          );
           const suggestion = createSuggestionFromIssue(siteId, issue);
           suggestions.set(suggestion.id, suggestion);
         }
@@ -753,13 +1039,15 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
       return Array.from(issues.values()).filter((issue) => issue.auditId === auditId);
     },
     async createSuggestion(siteId, input, auditIssueId) {
+      removeExistingActionableSuggestions(suggestions, siteId, input.targetType, input.targetCmsId, input.fieldName);
       const suggestion = createSuggestion(siteId, input, auditIssueId);
       suggestions.set(suggestion.id, suggestion);
       return suggestion;
     },
-    async listSuggestions(siteId) {
+    async listSuggestions(siteId, options) {
       return Array.from(suggestions.values())
         .filter((suggestion) => suggestion.siteId === siteId)
+        .filter((suggestion) => matchesSuggestionFilters(suggestion, options))
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     },
     async findSuggestion(siteId, suggestionId) {
@@ -999,17 +1287,35 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
     return mapSuggestionRow(result.rows[0]);
   }
 
-  async listSuggestions(siteId: string) {
+  async listSuggestions(siteId: string, options?: ListSuggestionOptions) {
     await this.ensureSchema();
+    const filters = ['site_id = $1'];
+    const values: Array<string | string[] | number> = [siteId];
+    let parameterIndex = 2;
+
+    if (options?.targetType) {
+      filters.push(`target_type = $${parameterIndex}`);
+      values.push(options.targetType);
+      parameterIndex += 1;
+    }
+
+    if (options?.targetCmsIds?.length) {
+      filters.push(`target_cms_id = ANY($${parameterIndex}::varchar[])`);
+      values.push(options.targetCmsIds);
+      parameterIndex += 1;
+    }
+
+    values.push(options?.limit ?? 200);
+
     const result = await this.pool.query(
       `
         SELECT *
         FROM optimization_suggestions
-        WHERE site_id = $1
+        WHERE ${filters.join(' AND ')}
         ORDER BY created_at DESC
-        LIMIT 200
+        LIMIT $${parameterIndex}
       `,
-      [siteId]
+      values
     );
     return result.rows.map(mapSuggestionRow);
   }
@@ -1258,6 +1564,18 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
     input: CreateSuggestionInput,
     auditIssueId?: string
   ) {
+    await client.query(
+      `
+        DELETE FROM optimization_suggestions
+        WHERE site_id = $1
+          AND target_type = $2
+          AND target_cms_id = $3
+          AND field_name = $4
+          AND status != 'applied'
+      `,
+      [siteId, input.targetType, input.targetCmsId, input.fieldName]
+    );
+
     return client.query(
       `
         INSERT INTO optimization_suggestions (
@@ -1380,7 +1698,8 @@ export function registerSeoOptimizationRoutes(
   app: FastifyInstance,
   siteRepository: SiteConnectionRepository,
   seoRepository: SeoOptimizationRepository,
-  authService: AuthService
+  authService: AuthService,
+  textProvider?: TextGenerationProvider
 ) {
   app.addHook('onClose', async () => {
     await seoRepository.close?.();
@@ -1405,7 +1724,12 @@ export function registerSeoOptimizationRoutes(
 
       const articles = await listAllArticlesForAudit(siteRepository, site.id);
       const media = await listAllMediaForAudit(siteRepository, site.id);
-      const issues = buildSeoIssues(articles, media);
+      const issues = await buildSeoIssues(articles, media, {
+        siteId: site.id,
+        userId: user.id,
+        locale: 'zh-Hant',
+        textProvider
+      });
       const score = Math.max(0, 100 - issues.length * 8);
       const result = await seoRepository.saveAudit(
         site.id,
@@ -1456,7 +1780,14 @@ export function registerSeoOptimizationRoutes(
     }
   );
 
-  app.get<{ Params: { siteId: string } }>(
+  app.get<{
+    Params: { siteId: string };
+    Querystring: {
+      targetType?: TargetType;
+      targetCmsIds?: string | string[];
+      limit?: number;
+    };
+  }>(
     '/api/v1/site-connections/:siteId/suggestions',
     async (request, reply) => {
       const user = await requireAuth(authService, request, reply);
@@ -1473,6 +1804,11 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
+      const parsedQuery = listSuggestionsQuerySchema.safeParse(request.query);
+      if (!parsedQuery.success) {
+        return validationError(reply, parsedQuery.error);
+      }
+
       const audits = await seoRepository.listAudits(site.id);
       const latestAudit = audits[0];
       const latestIssues = latestAudit ? await seoRepository.listIssues(latestAudit.id) : [];
@@ -1481,7 +1817,7 @@ export function registerSeoOptimizationRoutes(
         success: true,
         message: '操作成功',
         data: {
-          suggestions: await seoRepository.listSuggestions(site.id),
+          suggestions: await seoRepository.listSuggestions(site.id, parsedQuery.data),
           latestAudit: summarizeAudit(latestAudit, latestIssues)
         }
       };
