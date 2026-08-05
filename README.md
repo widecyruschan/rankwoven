@@ -1664,16 +1664,18 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   3. 生產資料庫已套用 `0007_expand_media_suggestion_types.sql`，約束已包含 `media_title`、`media_caption`、`media_description`。
   4. 部署後發現 Web 容器雖可正常返回 HTTP 200，但 Docker healthcheck 因 `localhost` 解析到未監聽的回環地址而誤報 `unhealthy`。
   5. `Dockerfile.web` 將健康探針固定為 `http://127.0.0.1/`；已在生產容器內驗證舊 `localhost` 探針失敗、IPv4 探針成功。
+  6. GitHub Actions runner 連續兩次無法連接 VPS 22 端口後，改用 `scripts/deploy-production.sh` 手動部署已提交版本；並修正手動模式下預設 smoke 帳號未傳入 Python 子程序的問題。
 - 關鍵決策和解決方案：不以公開網站可訪問作為唯一成功標準；發現容器健康狀態異常後，直接驗證容器內探針行為並修正根因，不重啟或修改其他生產資源。
 - 使用的技術棧：Git、GitHub Actions、Docker、Docker Compose、Nginx、PostgreSQL、Fastify、Vue 3。
 - 新增或修改文件：
-  - 修改：`Dockerfile.web`、`README.md`
+  - 修改：`Dockerfile.web`、`scripts/deploy-production.sh`、`README.md`
 - 驗證結果：
   - 已通過：本地 `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit`
   - 已通過：GitHub Actions run `30992991011` 的 Verify 與 Deploy jobs
   - 已通過：`https://api.rankwoven.com/health` 與 `https://rankwoven.com` HTTP 200
   - 已通過：生產 migration 記錄與 suggestion type 約束檢查
   - 已通過：生產 Web 容器內 `wget http://127.0.0.1/`
+  - 已通過：`bash -n scripts/deploy-production.sh`
   - 本地 Docker 鏡像重建未完成：Docker Hub metadata 請求逾時；改由 GitHub Actions 執行正式鏡像建置與重新部署。
 - 下一步行動清單：
   1. 重新部署後確認 `rankwoven-web-1` 狀態變為 `healthy`。

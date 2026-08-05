@@ -32,7 +32,9 @@ wait_for_url() {
 }
 
 build_login_payload() {
-  python3 -c 'import json, os; print(json.dumps({"email": os.environ["DEPLOY_SMOKE_EMAIL"], "password": os.environ["DEPLOY_SMOKE_PASSWORD"]}))'
+  python3 -c 'import json, sys; print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))' \
+    "$DEPLOY_SMOKE_EMAIL" \
+    "$DEPLOY_SMOKE_PASSWORD"
 }
 
 extract_auth_token() {
