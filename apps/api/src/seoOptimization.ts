@@ -621,7 +621,7 @@ function escapeRegExp(value: string) {
 }
 
 function extractMediaPlacementContext(article: SyncedArticle | undefined, mediaItem: SyncedMedia) {
-  const html = article?.contentHtml ?? '';
+  const html = stripNonContentMarkup(article?.contentHtml ?? '');
   if (!html) {
     return '';
   }
@@ -867,12 +867,19 @@ function trimSeoText(value: string, maxLength: number) {
 }
 
 function normalizePlainText(value: string) {
-  return value
+  return stripNonContentMarkup(value)
     .replace(/\[[^\]]*\]/g, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;|&#160;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function stripNonContentMarkup(value: string) {
+  return value
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style|pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/\[(?:\/)?[a-z][^\]]*\]/gi, ' ');
 }
 
 function buildMediaSequenceMap(media: SyncedMedia[]) {

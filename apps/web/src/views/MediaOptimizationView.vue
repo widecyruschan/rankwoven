@@ -11,7 +11,6 @@ import {
   getSyncedMedia,
   scanSiteMedia,
   updateOptimizationSuggestion,
-  type MediaListParams,
   type OptimizationSuggestion,
   type PaginationMeta,
   type SiteConnection,
@@ -34,7 +33,6 @@ const mediaFieldOrder: MediaFieldName[] = ['title', 'caption', 'description', 'a
 
 const sites = ref<SiteConnection[]>([]);
 const selectedSiteId = ref('');
-const activeTab = ref('all');
 const searchKeyword = ref('');
 const media = ref<SyncedMedia[]>([]);
 const mediaSuggestions = ref<OptimizationSuggestion[]>([]);
@@ -64,18 +62,6 @@ const siteOptions = computed(() =>
     value: site.id
   }))
 );
-
-const activeIssue = computed<MediaListParams['issue']>(() => {
-  if (activeTab.value === 'missing-alt') {
-    return 'missing_alt';
-  }
-
-  if (activeTab.value === 'filename') {
-    return 'missing_file_name';
-  }
-
-  return undefined;
-});
 
 const columns = computed<TableColumnsType<SyncedMedia>>(() => [
   {
@@ -225,8 +211,7 @@ async function loadMedia(nextPage = pagination.value.page, nextPageSize = pagina
     const result = await getSyncedMedia(selectedSiteId.value, {
       page: nextPage,
       pageSize: nextPageSize,
-      search: searchKeyword.value,
-      issue: activeIssue.value
+      search: searchKeyword.value
     });
     media.value = result.media;
     pagination.value = result.pagination;
@@ -554,9 +539,6 @@ watch(selectedSiteId, () => {
   void refreshPageData(1, pagination.value.pageSize);
 });
 
-watch(activeTab, () => {
-  void refreshPageData(1, pagination.value.pageSize);
-});
 </script>
 
 <template>
@@ -600,12 +582,6 @@ watch(activeTab, () => {
           {{ item.label }}: {{ item.value }}
         </a-tag>
       </div>
-
-      <a-tabs v-model:active-key="activeTab">
-        <a-tab-pane key="all" :tab="t('articles.filterAll')" />
-        <a-tab-pane key="missing-alt" :tab="t('media.missingAlt')" />
-        <a-tab-pane key="filename" :tab="t('media.filenameTab')" />
-      </a-tabs>
 
       <a-empty
         v-if="!isLoading && media.length === 0"
@@ -692,7 +668,6 @@ watch(activeTab, () => {
           <template v-else-if="column.key === 'suggestion'">
             <div v-if="record.suggestion">
               <div>{{ getSuggestionPreview(record.suggestion) || '-' }}</div>
-              <div class="table-subtext">{{ t('media.aiSuggestion') }}</div>
               <div v-if="record.suggestion.errorMessage" class="table-subtext">{{ record.suggestion.errorMessage }}</div>
             </div>
             <span v-else>-</span>
@@ -726,7 +701,6 @@ watch(activeTab, () => {
     >
       <template v-if="activeReviewRow?.suggestion">
         <div class="page-alert">
-          <a-tag color="blue">{{ t('media.aiSuggestion') }}</a-tag>
           <a-tag>{{ getSuggestionStatusLabel(activeReviewRow.suggestion.status) }}</a-tag>
         </div>
 
@@ -765,7 +739,7 @@ watch(activeTab, () => {
             :loading="actionSuggestionId === activeReviewRow.suggestion.id"
             @click="approveSuggestion(activeReviewRow.suggestion.id)"
           >
-            {{ t('suggestions.approve') }}
+            {{ t('articleSuggestions.approve') }}
           </a-button>
           <a-button
             v-if="activeReviewRow.suggestion.status === 'approved'"

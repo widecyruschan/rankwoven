@@ -1098,7 +1098,7 @@ final class RankWoven_SEO_Plugin
             return null;
         }
 
-        if ((string) get_post_status($attachment) !== 'inherit') {
+        if ((string) $attachment->post_status !== 'inherit') {
             return null;
         }
 

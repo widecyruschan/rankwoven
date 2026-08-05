@@ -1680,3 +1680,136 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 重新部署後確認 `rankwoven-web-1` 狀態變為 `healthy`。
   2. 在生產媒體處理頁重新執行「掃描並分析」，驗證五欄位建議建立與審核流程。
+
+### 2026-08-05（星期三）— 核對 GitHub Actions 舊 SSH 失敗記錄
+
+- 會話的主要目的：確認使用者截圖中的 `Configure SSH` 失敗是否代表目前生產部署仍然異常。
+- 完成的主要任務：
+  1. 核對最近五次 `Production Deploy` 記錄，確認截圖對應 run `30993561765`，該次因 GitHub Actions runner 無法連接 VPS 22 端口而失敗。
+  2. 確認後續 run `30994060542` 已於 2026-08-05 成功完成 Verify 與 Deploy，部署提交為 `da05b5b`。
+  3. 重新檢查公開 API、主站、VPS release 與 Docker Compose 容器狀態。
+- 關鍵決策和解決方案：截圖是已被後續成功部署覆蓋的舊失敗記錄，不需要再次修改程式碼或重啟生產服務。
+- 使用的技術棧：GitHub CLI、SSH、Docker Compose、curl。
+- 新增或修改文件：
+  - 未修改應用程式文件；僅追加 `README.md` 會話核對記錄。
+- 驗證結果：
+  - 最新 `Production Deploy` run `30994060542`：成功
+  - 生產提交：`da05b5bc4eac29c7d9be4e75cc5c8169281fa969`
+  - `https://api.rankwoven.com/health`：HTTP 200
+  - `https://rankwoven.com`：HTTP 200
+  - `rankwoven-web-1`、PostgreSQL、Redis：`healthy`
+  - API、Worker：正常運行
+- 下一步行動清單：
+  1. GitHub Actions 中以最新成功 run `30994060542` 為準，舊失敗 run 可忽略。
+  2. 若未來再次出現相同 SSH 失敗，可先重跑 Deploy job；本機直連可用時代表多半是 GitHub runner 的暫時網路問題。
+
+### 2026-08-05（星期三）— 過濾媒體建議中的 Shortcode 與移除 AI 建議標籤
+
+- 會話的主要目的：修復媒體處理頁的圖片簡介與圖片說明截取到 `[vc_custom_heading ...]` 等程式碼內容，並移除建議列表與審核介面中的「AI 建議」字樣。
+- 完成的主要任務：
+  1. `apps/api/src/seoOptimization.ts`
+     - 新增非正文標記清洗，先從完整文章內容移除 WordPress shortcode、HTML 註解、`script`、`style`、`pre` 與 `code` 區塊，再定位圖片並截取上下文。
+     - `normalizePlainText()` 復用相同清洗流程，確保規則式建議與傳給文字模型的文章摘要均不含程式碼內容。
+  2. `apps/api/tests/siteConnections.test.ts`
+     - 在媒體掃描測試加入超長 `vc_custom_heading` shortcode，重現圖片簡介與說明被截取為程式碼的問題。
+     - 在文字模型測試加入 shortcode 與 `<code>` 區塊，驗證傳給 provider 的上下文已完成過濾。
+  3. `apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/i18n.ts`
+     - 移除建議內容下方與審核彈窗中的「AI 建議」標籤。
+     - 審核提示改為中性的「檢查建議」，保留原有編輯、批准與寫回流程。
+- 關鍵決策和解決方案：根因是先在原始 HTML 中找到媒體檔名再截取片段，長 shortcode 會在結尾 `]` 之前被截斷，導致後續正則無法辨識；改為先清洗完整 HTML 再定位，而不是只加一條針對畫面字串的替換。
+- 使用的技術棧：Fastify、TypeScript、Vue 3、Vue I18n、Vitest。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/i18n.ts`、`README.md`
+- 驗證結果：
+  - 修復前：定向測試可重現 `suggestedValue` 以 `[vc_custom_heading source="hero-image.jpg ...` 開頭。
+  - 已通過：`npm run test --workspace @aieo/api -- tests/siteConnections.test.ts`（19 tests）
+  - 已通過：`npm run build --workspace @aieo/api`
+  - 已通過：`npm run build --workspace @aieo/web`
+  - 已通過：`npm run lint -- --quiet`
+  - 已確認：媒體頁面不再引用 `media.aiSuggestion`，中英文媒體文案不再顯示「AI 建議」。
+- 下一步行動清單：
+  1. 在本地或部署後重新執行媒體「掃描並分析」，重新生成受影響圖片的建議內容。
+  2. 若要上線，本次修改可提交並推送到 `main` 觸發生產部署。
+
+### 2026-08-05（星期三）— 修復媒體審核彈窗按鈕顯示 i18n Key
+
+- 會話的主要目的：修復媒體審核彈窗底部兩個按鈕顯示 `common.cancel` 與 `suggestions.approve`，而不是正常中文文案的問題。
+- 完成的主要任務：
+  1. `apps/web/src/i18n.ts`
+     - 在中英文 `common` 命名空間新增通用 `cancel` 文案。
+  2. `apps/web/src/views/MediaOptimizationView.vue`
+     - 取消按鈕保留 `common.cancel`，現在可正確解析為 `Cancel` / `取消`。
+     - 批准按鈕改為復用已存在的 `articleSuggestions.approve`，正確解析為 `Approve` / `批准`。
+  3. `apps/web/tests/smoke.test.ts`
+     - 新增媒體審核操作文案回歸測試，同時檢查中英文翻譯結果與模板 key 引用。
+- 關鍵決策和解決方案：`suggestions` 命名空間沒有 `approve`，因此不新增重複 key，而是復用語意相同的 `articleSuggestions.approve`；取消操作屬於跨頁共用行為，補入 `common.cancel`。
+- 使用的技術棧：Vue 3、Vue I18n、Vitest、TypeScript。
+- 新增或修改文件：
+  - 修改：`apps/web/src/i18n.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/tests/smoke.test.ts`、`README.md`
+- 驗證結果：
+  - 修復前：回歸測試取得 `common.cancel` 字面值並失敗。
+  - 已通過：`npm run test --workspace @aieo/web`（2 tests）
+  - 已通過：`npm run build --workspace @aieo/web`
+  - 已通過：`npm run lint -- --quiet`
+  - 已確認：媒體審核模板不再引用不存在的 `suggestions.approve`。
+- 下一步行動清單：
+  1. 打開媒體審核彈窗確認按鈕顯示「取消」與「批准」。
+  2. 若要上線，可將本輪與上一輪 shortcode 過濾修改一起提交並部署。
+
+### 2026-08-05（星期三）— 修復媒體建議批准後 WORDPRESS_REST_404
+
+- 會話的主要目的：修復媒體建議批准並進入 WordPress 寫回流程後，Worker 在讀取媒體目前值時收到 `WORDPRESS_REST_404` 的問題。
+- 完成的主要任務：
+  1. `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+     - 修正單一媒體 REST 讀取的附件狀態判定，改為檢查附件資料列原始的 `$attachment->post_status`。
+     - 避免使用 `get_post_status()` 將附件的 `inherit` 狀態解析成父文章的 `publish`，令正常圖片附件被錯誤判定為不可同步。
+  2. 按 `plugins/wordpress/TESTING.md` 將插件同步到本地 `cyruschan.com` WordPress 測試站，完成 PHP 語法與 REST fixture 回歸驗證。
+- 關鍵決策和解決方案：保留現有批量同步、圖片 MIME 判定及寫回邏輯，只修正單一媒體讀取與批量同步不一致的附件狀態檢查；這是能直接消除 404 的最小修改。
+- 使用的技術棧：WordPress REST API、PHP、Docker、Vue 3、Fastify、TypeScript、Vitest、ESLint、Vite。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`README.md`
+- 驗證結果：
+  - 修復前 fixture：附件原始狀態為 `inherit`、解析狀態為 `publish`、`wp_attachment_is_image()` 為 true，`GET /rankwoven/v1/media/{id}` 返回 404。
+  - 修復後 fixture：相同條件下 `GET /rankwoven/v1/media/{id}` 返回 200，並返回正確媒體 ID。
+  - 已通過：WordPress 容器 PHP 語法檢查，插件來源與本地測試站文件一致。
+  - 已通過：`npm run lint`。
+  - 已通過：`npm run test`（所有非跳過測試通過）。
+  - 已通過：`npm run build`；Vite 僅有既有的大型 chunk 警告。
+  - 未執行：生產 WordPress 插件部署及 dead-letter 任務重試，避免在未再次確認部署範圍前修改生產狀態。
+- 下一步行動清單：
+  1. 將本輪插件修復與目前已驗證的媒體頁修改提交並部署到生產環境。
+  2. 部署後以媒體 ID `1671` 驗證單一媒體 REST 返回 200，再重試三筆 `dead_letter` 寫回任務。
+
+### 2026-08-05（星期三）— 媒體列表移除三個分類分頁
+
+- 會話的主要目的：取消媒體頁「全部」、「缺少 Alt Text」、「檔案名稱」三個分頁，改為在同一個列表統一顯示全部媒體。
+- 完成的主要任務：
+  1. `apps/web/src/views/MediaOptimizationView.vue`
+     - 移除三個媒體分類 tabs。
+     - 移除 `activeTab`、`activeIssue` 與分頁切換監聽。
+     - 載入媒體時不再傳送 `missing_alt` 或 `missing_file_name` 條件，固定取得全部媒體。
+     - 保留搜尋、分頁、建議統計標籤、媒體詳情與審核功能。
+  2. `apps/web/src/i18n.ts`
+     - 移除已不再使用的「缺少 Alt Text」與「檔案名稱」分頁文案。
+  3. `apps/web/tests/smoke.test.ts`
+     - 新增來源回歸檢查，防止媒體 tabs 與條件篩選狀態再次被加入。
+- 關鍵決策和解決方案：不改 API 或資料結構，只移除前端分類入口及其查詢參數，使用既有無 `issue` 條件的媒體列表取得全部資料。
+- 使用的技術棧：Vue 3、TypeScript、Ant Design Vue、Vue I18n、Vitest、ESLint、Vite。
+- 新增或修改文件：
+  - 修改：`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/i18n.ts`、`apps/web/tests/smoke.test.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run test -w @aieo/web`（2 tests）。
+  - 已通過：`npm run lint`。
+  - 已通過：`npm run build -w @aieo/web`；Vite 僅有既有的大型 chunk 警告。
+- 下一步行動清單：
+  1. 部署後打開媒體處理頁，確認三個分頁不再顯示且表格直接列出全部媒體。
+
+### 2026-08-05（星期三）— 推送媒體分析與 WordPress 寫回修復
+
+- 會話的主要目的：將已完成的媒體正文過濾、審核介面、統一列表及 WordPress 單媒體 404 修復整理為同一批更新並推送。
+- 完成的主要任務：核對工作區差異，排除 `.codebuddy` 與本地圖片等無關未追蹤文件，重新執行完整發布前驗證並準備推送 `main`。
+- 關鍵決策和解決方案：只提交本輪七個相關文件，不使用 `git add .`，避免夾帶無關工作區內容；推送 `main` 後由既有 GitHub Actions 接續生產部署。
+- 使用的技術棧：Git、GitHub Actions、ESLint、Vitest、TypeScript、Vite、npm audit、WordPress PHP。
+- 新增或修改文件：本次沒有新增功能文件；提交目前已驗證的 `README.md`、API、Web 與 WordPress 插件修改。
+- 驗證結果：`npm run lint`、`npm run test`、`npm run build` 全部通過；`npm run security:audit` 顯示 0 個漏洞；Vite 僅有既有的大型 chunk 警告。
+- 下一步行動清單：推送後確認遠端提交與 Production Deploy workflow 狀態，再驗證公開 health endpoint。

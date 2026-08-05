@@ -679,7 +679,11 @@ describe('site connection routes', () => {
             status: 'publish',
             link: 'http://localhost:8088/what-is-seo/',
             excerpt: { rendered: '<p>SEO 入門文章摘要。</p>' },
-            content: { rendered: '<p>SEO 是搜尋引擎優化的完整入門內容。</p>' },
+            content: {
+              rendered:
+                `[vc_custom_heading source="hero-image.jpg ${'x'.repeat(1400)}"]` +
+                '<p>SEO 是搜尋引擎優化的完整入門內容。</p>'
+            },
             author: 1,
             categories: [],
             tags: [],
@@ -868,15 +872,18 @@ describe('site connection routes', () => {
   });
 
   it('uses AI to generate media suggestions from related WordPress article context when a text provider is configured', async () => {
-    const textProvider = createStubTextProvider(() =>
-      JSON.stringify({
+    const textProvider = createStubTextProvider((request) => {
+      expect(request.html).not.toContain('[vc_custom_heading');
+      expect(request.html).not.toContain('const seoDebug');
+
+      return JSON.stringify({
         title: 'SEO 搜尋引擎運作流程圖解',
         caption: '圖解搜尋引擎爬取、索引與排名流程，對應 SEO 入門文章重點。',
         description: '這張圖片說明搜尋引擎從 Crawling、Indexing 到 Ranking 的基本流程，適合作為 SEO 是什麼這篇入門文章的主視覺說明。',
         altText: '搜尋引擎爬取索引與排名流程圖',
         fileName: 'seo-crawling-indexing-ranking.png'
-      })
-    );
+      });
+    });
     const { server, body } = await createWordPressConnection(
       {
         wordpressAdminUsername: 'site-admin',
@@ -930,6 +937,8 @@ describe('site connection routes', () => {
             excerpt: { rendered: '<p>SEO 入門文章摘要。</p>' },
             content: {
               rendered:
+                `[vc_custom_heading source="seo-chapter1.png ${'x'.repeat(1400)}"]` +
+                '<pre><code>const seoDebug = true;</code></pre>' +
                 '<h1>第 1 章：SEO 是什麼？搜尋引擎優化完整入門</h1>' +
                 '<p>這篇文章介紹 SEO 的定義、基本概念與搜尋引擎如何運作。</p>' +
                 '<figure><img class="wp-image-905" src="http://localhost:8088/wp-content/uploads/seo-chapter1.png" alt="" /></figure>' +

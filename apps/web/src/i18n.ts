@@ -51,7 +51,8 @@ const messages = {
       totalItems: '{total} items',
       untitled: 'Untitled',
       viewDetails: 'Details',
-      selectAll: 'Select All'
+      selectAll: 'Select All',
+      cancel: 'Cancel'
     },
     marketing: {
       homeTitle: 'AI SEO Platform',
@@ -787,8 +788,6 @@ const messages = {
       seoStatus: 'SEO status',
       selectSite: 'Select site',
       searchPlaceholder: 'Search title, URL, filename, Alt Text, or MIME type',
-      missingAlt: 'Missing Alt Text',
-      filenameTab: 'Filename',
       mimeType: 'MIME type',
       inspect: 'Inspect',
       loadFailed: 'Unable to load media',
@@ -810,10 +809,9 @@ const messages = {
       attachedTo: 'Attached to',
       openReviewColumn: 'Open review',
       openReview: 'Open review',
-      aiSuggestion: 'AI suggestion',
       reviewTitle: 'Media review',
       reviewSuggestionLabel: 'Editable suggestion',
-      reviewHint: 'Review the AI suggestion, edit it if needed, then approve or queue writeback.',
+      reviewHint: 'Review the suggestion, edit it if needed, then approve or queue writeback.',
       statusReady: 'Ready',
       statusReview: 'Needs review'
     },
@@ -1030,7 +1028,8 @@ const messages = {
       totalItems: '共 {total} 項',
       untitled: '未命名',
       viewDetails: '查看詳情',
-      selectAll: '全選'
+      selectAll: '全選',
+      cancel: '取消'
     },
     marketing: {
       homeTitle: 'AI SEO 平台',
@@ -1765,8 +1764,6 @@ const messages = {
       seoStatus: 'SEO 狀態',
       selectSite: '選擇站點',
       searchPlaceholder: '搜尋標題、URL、檔名、Alt Text 或 MIME 類型',
-      missingAlt: '缺少 Alt Text',
-      filenameTab: '檔案名稱',
       mimeType: 'MIME 類型',
       inspect: '查看',
       loadFailed: '無法載入媒體',
@@ -1788,10 +1785,9 @@ const messages = {
       attachedTo: '所屬內容',
       openReviewColumn: '打開審核',
       openReview: '打開審核',
-      aiSuggestion: 'AI 建議',
       reviewTitle: '媒體審核',
       reviewSuggestionLabel: '可編輯建議',
-      reviewHint: '請先檢查 AI 建議，如有需要可直接修改，再批准或加入寫回。',
+      reviewHint: '請先檢查建議，如有需要可直接修改，再批准或加入寫回。',
       statusReady: '已就緒',
       statusReview: '需審核'
     },
