@@ -1654,3 +1654,27 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 下一步行動清單：
   1. 部署時執行 `npm run db:migrate`，讓生產資料庫套用 `0007_expand_media_suggestion_types.sql`。
   2. 部署後重新執行媒體「掃描並分析」，確認五個媒體欄位建議均能建立。
+
+### 2026-08-05（星期三）— 媒體 AI 功能生產部署與 Web 健康探針修復
+
+- 會話的主要目的：將媒體 AI 建議、審核介面與 suggestion type 資料庫修復推送到 `main` 並部署至生產環境，同時確保公開入口與 Docker 容器健康狀態正常。
+- 完成的主要任務：
+  1. 提交並推送 `294da47 feat(media): add AI-assisted optimization review`，觸發 GitHub Actions `Production Deploy`。
+  2. GitHub Actions 完成 lint、test、build、security audit、SSH 部署、資料庫 migration、公開 health check 與受保護 API smoke check。
+  3. 生產資料庫已套用 `0007_expand_media_suggestion_types.sql`，約束已包含 `media_title`、`media_caption`、`media_description`。
+  4. 部署後發現 Web 容器雖可正常返回 HTTP 200，但 Docker healthcheck 因 `localhost` 解析到未監聽的回環地址而誤報 `unhealthy`。
+  5. `Dockerfile.web` 將健康探針固定為 `http://127.0.0.1/`；已在生產容器內驗證舊 `localhost` 探針失敗、IPv4 探針成功。
+- 關鍵決策和解決方案：不以公開網站可訪問作為唯一成功標準；發現容器健康狀態異常後，直接驗證容器內探針行為並修正根因，不重啟或修改其他生產資源。
+- 使用的技術棧：Git、GitHub Actions、Docker、Docker Compose、Nginx、PostgreSQL、Fastify、Vue 3。
+- 新增或修改文件：
+  - 修改：`Dockerfile.web`、`README.md`
+- 驗證結果：
+  - 已通過：本地 `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit`
+  - 已通過：GitHub Actions run `30992991011` 的 Verify 與 Deploy jobs
+  - 已通過：`https://api.rankwoven.com/health` 與 `https://rankwoven.com` HTTP 200
+  - 已通過：生產 migration 記錄與 suggestion type 約束檢查
+  - 已通過：生產 Web 容器內 `wget http://127.0.0.1/`
+  - 本地 Docker 鏡像重建未完成：Docker Hub metadata 請求逾時；改由 GitHub Actions 執行正式鏡像建置與重新部署。
+- 下一步行動清單：
+  1. 重新部署後確認 `rankwoven-web-1` 狀態變為 `healthy`。
+  2. 在生產媒體處理頁重新執行「掃描並分析」，驗證五欄位建議建立與審核流程。
