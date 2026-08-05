@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n';
 import {
   applyOptimizationSuggestion,
   approveOptimizationSuggestion,
+  batchApplyOptimizationSuggestions,
+  batchApproveOptimizationSuggestions,
   createSeoAudit,
   getOptimizationSuggestions,
   getSiteConnections,
@@ -50,6 +52,8 @@ const successMessage = ref('');
 const selectedMedia = ref<SyncedMedia | null>(null);
 const suggestionDrafts = ref<Record<string, string>>({});
 const activeReviewField = ref<MediaFieldName | null>(null);
+const selectedMediaIds = ref<string[]>([]);
+const isBatchApplying = ref(false);
 
 const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
 const canScanSelectedSite = computed(() =>
@@ -186,6 +190,24 @@ const activeReviewRow = computed<MediaSuggestionRow | undefined>(() => {
   return selectedMediaSuggestionRows.value.find((row) => row.key === activeReviewField.value);
 });
 
+const selectedActionableSuggestions = computed(() => {
+  const selectedIds = new Set(selectedMediaIds.value);
+  return mediaSuggestions.value.filter(
+    (suggestion) => selectedIds.has(suggestion.targetCmsId) && isActionableSuggestion(suggestion)
+  );
+});
+
+const mediaRowSelection = computed(() => ({
+  selectedRowKeys: selectedMediaIds.value,
+  onChange: (keys: Array<string | number>) => {
+    selectedMediaIds.value = keys.map(String);
+  },
+  getCheckboxProps: (record: SyncedMedia) => ({
+    disabled: !hasActionableMediaSuggestions(record.cmsId),
+    name: record.cmsId
+  })
+}));
+
 async function loadSites() {
   const result = await getSiteConnections();
   sites.value = result.sites.filter((site) => site.status === 'connected');
@@ -214,6 +236,8 @@ async function loadMedia(nextPage = pagination.value.page, nextPageSize = pagina
       search: searchKeyword.value
     });
     media.value = result.media;
+    const visibleMediaIds = new Set(result.media.map((item) => item.cmsId));
+    selectedMediaIds.value = selectedMediaIds.value.filter((cmsId) => visibleMediaIds.has(cmsId));
     pagination.value = result.pagination;
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('media.loadFailed');
@@ -356,6 +380,50 @@ async function applySuggestion(suggestionId: string) {
   }
 }
 
+async function applySelectedMediaSuggestions() {
+  if (!selectedSiteId.value || selectedActionableSuggestions.value.length === 0) {
+    return;
+  }
+
+  isBatchApplying.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  try {
+    const selectedCount = selectedMediaIds.value.length;
+    const suggestionIds = selectedActionableSuggestions.value.map((suggestion) => suggestion.id);
+    const approveResult = await batchApproveOptimizationSuggestions(selectedSiteId.value, suggestionIds);
+    const approvedSuggestionIds = approveResult.results
+      .filter((result) => result.success)
+      .map((result) => result.suggestionId);
+
+    if (approvedSuggestionIds.length === 0) {
+      errorMessage.value = t('media.batchApplyFailed');
+      return;
+    }
+
+    const applyResult = await batchApplyOptimizationSuggestions(selectedSiteId.value, approvedSuggestionIds);
+    const failedCount = approveResult.failed + applyResult.failed;
+
+    if (applyResult.succeeded > 0) {
+      successMessage.value = t('media.batchApplySuccess', {
+        media: selectedCount,
+        succeeded: applyResult.succeeded,
+        failed: failedCount
+      });
+    } else {
+      errorMessage.value = t('media.batchApplyFailed');
+    }
+
+    selectedMediaIds.value = [];
+    await loadSuggestions();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : t('media.batchApplyFailed');
+  } finally {
+    isBatchApplying.value = false;
+  }
+}
+
 function handleTableChange(nextPagination: TablePaginationConfig) {
   void refreshPageData(nextPagination.current ?? 1, nextPagination.pageSize ?? pagination.value.pageSize);
 }
@@ -388,6 +456,14 @@ function getSuggestionsForMedia(cmsId: string) {
   return mediaSuggestions.value.filter((suggestion) => suggestion.targetCmsId === cmsId);
 }
 
+function hasActionableMediaSuggestions(cmsId: string) {
+  return getSuggestionsForMedia(cmsId).some(isActionableSuggestion);
+}
+
+function isActionableSuggestion(suggestion: OptimizationSuggestion) {
+  return ['pending', 'approved', 'failed'].includes(suggestion.status) && suggestion.suggestedValue.trim() !== '';
+}
+
 function refreshSuggestionDrafts(targetCmsId = selectedMedia.value?.cmsId) {
   if (!targetCmsId) {
     suggestionDrafts.value = {};
@@ -401,7 +477,7 @@ function refreshSuggestionDrafts(targetCmsId = selectedMedia.value?.cmsId) {
 
 function countSuggestionsByField(fieldName: MediaFieldName) {
   return mediaSuggestions.value.filter(
-    (suggestion) => suggestion.fieldName === fieldName && ['pending', 'approved', 'failed'].includes(suggestion.status)
+    (suggestion) => suggestion.fieldName === fieldName && isActionableSuggestion(suggestion)
   ).length;
 }
 
@@ -411,7 +487,7 @@ function countSuggestionsByType(fieldName: MediaFieldName) {
 
 function getMediaStatus(record: SyncedMedia) {
   const suggestions = getSuggestionsForMedia(record.cmsId);
-  const actionableCount = suggestions.filter((suggestion) => ['pending', 'approved', 'failed'].includes(suggestion.status)).length;
+  const actionableCount = suggestions.filter(isActionableSuggestion).length;
 
   if (suggestions.some((suggestion) => suggestion.status === 'failed')) {
     return {
@@ -533,6 +609,7 @@ onMounted(async () => {
 watch(selectedSiteId, () => {
   selectedMedia.value = null;
   activeReviewField.value = null;
+  selectedMediaIds.value = [];
   suggestionDrafts.value = {};
   successMessage.value = '';
   errorMessage.value = '';
@@ -581,6 +658,14 @@ watch(selectedSiteId, () => {
         <a-tag v-for="item in mediaSuggestionSummary" :key="item.label" color="blue">
           {{ item.label }}: {{ item.value }}
         </a-tag>
+        <a-button
+          type="primary"
+          :disabled="selectedActionableSuggestions.length === 0"
+          :loading="isBatchApplying"
+          @click="applySelectedMediaSuggestions"
+        >
+          {{ t('media.applySelected', { count: selectedMediaIds.length }) }}
+        </a-button>
       </div>
 
       <a-empty
@@ -604,6 +689,7 @@ watch(selectedSiteId, () => {
         :data-source="media"
         :loading="isLoading"
         :pagination="tablePagination"
+        :row-selection="mediaRowSelection"
         @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">

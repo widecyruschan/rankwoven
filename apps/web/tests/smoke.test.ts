@@ -16,10 +16,12 @@ describe('web smoke test', () => {
       i18n.global.locale.value = 'en';
       expect(i18n.global.t('common.cancel')).toBe('Cancel');
       expect(i18n.global.t('articleSuggestions.approve')).toBe('Approve');
+      expect(i18n.global.t('media.applySelected', { count: 2 })).toBe('Apply selected changes (2)');
 
       i18n.global.locale.value = 'zh-Hant';
       expect(i18n.global.t('common.cancel')).toBe('取消');
       expect(i18n.global.t('articleSuggestions.approve')).toBe('批准');
+      expect(i18n.global.t('media.applySelected', { count: 2 })).toBe('一鍵套用修改（2）');
 
       expect(mediaViewSource).not.toContain("t('suggestions.approve')");
       expect(mediaViewSource).toContain("t('articleSuggestions.approve')");
@@ -27,6 +29,11 @@ describe('web smoke test', () => {
       expect(mediaViewSource).not.toContain('activeTab');
       expect(mediaViewSource).not.toContain('activeIssue');
       expect(mediaViewSource).not.toContain("issue: activeIssue.value");
+      expect(mediaViewSource).toContain(':row-selection="mediaRowSelection"');
+      expect(mediaViewSource).toContain('batchApproveOptimizationSuggestions');
+      expect(mediaViewSource).toContain('batchApplyOptimizationSuggestions');
+      expect(mediaViewSource).toContain('@click="applySelectedMediaSuggestions"');
+      expect(mediaViewSource).toContain('selectedIds.has(suggestion.targetCmsId)');
     } finally {
       i18n.global.locale.value = originalLocale;
     }

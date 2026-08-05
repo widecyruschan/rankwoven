@@ -1813,3 +1813,50 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 - 新增或修改文件：本次沒有新增功能文件；提交目前已驗證的 `README.md`、API、Web 與 WordPress 插件修改。
 - 驗證結果：`npm run lint`、`npm run test`、`npm run build` 全部通過；`npm run security:audit` 顯示 0 個漏洞；Vite 僅有既有的大型 chunk 警告。
 - 下一步行動清單：推送後確認遠端提交與 Production Deploy workflow 狀態，再驗證公開 health endpoint。
+
+### 2026-08-05（星期三）— 媒體建議全欄位代碼過濾與勾選批量套用
+
+- 會話的主要目的：修復圖片簡介仍可能出現截斷 shortcode 或 code fence 的問題，並在媒體列表加入「只套用已勾選項目」的一鍵批量套用功能。
+- 完成的主要任務：
+  1. `apps/api/src/seoOptimization.ts`
+     - 清洗圖片標題、簡介、說明、Alt Text、檔案名稱五個建議欄位。
+     - 支援移除缺少結尾括號的截斷 shortcode、HTML code 區塊、Markdown code fence、HTML 註解及一般標記。
+     - AI 回應先確認完整 JSON，再清洗每個欄位，避免欄位內的 ``` 觸發錯誤 JSON 提取。
+     - 舊媒體建議在讀取、手動更新、批准及寫回前再次清洗，避免代碼顯示或寫回 WordPress。
+  2. `apps/web/src/views/MediaOptimizationView.vue`
+     - 媒體列表新增 checkbox 多選。
+     - 「一鍵套用修改」只收集已勾選媒體的建議 ID；未勾選媒體不會批准、不會建立寫回任務。
+     - 一鍵操作會先批量批准，再批量建立寫回任務；沒有可操作建議的媒體不可勾選。
+  3. `apps/web/src/i18n.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/tests/smoke.test.ts`
+     - 補上批量套用文案與 API/UI 回歸測試。
+- 關鍵決策和解決方案：保留既有 `batch-approve` 與 `batch-apply` API，不新增重複接口；前端只以已勾選的媒體 ID 過濾建議，並由後端在批准與寫回前做最後安全清洗。
+- 使用的技術棧：Fastify、TypeScript、Vue 3、Ant Design Vue、Vue I18n、Vitest、Vite、PostgreSQL Repository。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/views/MediaOptimizationView.vue`、`apps/web/src/i18n.ts`、`apps/web/tests/smoke.test.ts`、`README.md`
+- 驗證結果：
+  - 已通過：API 定向測試 19 項、Web 定向測試 2 項。
+  - 已通過：全 workspace 測試、全 workspace build、ESLint、`git diff --check`。
+  - 已通過：`npm run security:audit`，0 個漏洞。
+  - Vite 僅有既有大型 chunk 警告。
+- 下一步行動清單：重新掃描媒體以產生清洗後建議；如需上線，再提交並推送本輪修改。
+
+### 2026-08-05（星期三）— 支援識別 WooCommerce 商品圖片
+
+- 會話的主要目的：修復文章配圖可取得內容上下文，但 WooCommerce 商品圖片無法識別所屬商品的問題。
+- 完成的主要任務：
+  1. `apps/api/src/siteConnections.ts`
+     - WordPress 媒體父內容查詢在文章與頁面均返回 404 後，新增回退查詢 `wp-json/wp/v2/product/{id}`。
+     - 保留既有媒體同步與建議生成流程，成功讀取商品標題、摘要及內容後，用作商品圖片的分析上下文。
+  2. `apps/api/tests/siteConnections.test.ts`
+     - 新增 WooCommerce 商品圖片回歸測試，模擬媒體 `post` 指向商品 ID。
+     - 驗證商品圖片可取得 `attachedToTitle`，並產生標題、簡介、說明、Alt Text、檔案名稱五項建議。
+- 關鍵決策和解決方案：採用最小 REST 路徑回退修復，不新增 WooCommerce Consumer Key、資料表或獨立商品同步機制；未知內容類型仍沿用現有同步內容型別，避免擴大 API 變更範圍。
+- 使用的技術棧：Fastify、TypeScript、WordPress REST API、WooCommerce Product REST Route、Vitest、ESLint、Vite。
+- 新增或修改文件：
+  - 修改：`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run test -w @aieo/api -- tests/siteConnections.test.ts`（20 tests）。
+  - 已通過：全 workspace 測試、全 workspace build、ESLint、`git diff --check`。
+  - 已通過：`npm run security:audit`，0 個漏洞。
+  - Vite 僅有既有大型 chunk 警告。
+- 下一步行動清單：部署後重新掃描商品圖片，確認媒體列表顯示所屬商品名稱；若個別商品圖在 WordPress 媒體資料中的 `post` 為 `0`，再針對 WooCommerce 商品圖庫關聯補充同步策略。

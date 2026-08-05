@@ -328,6 +328,14 @@ function mapIssueRow(row: QueryResultRow): SeoAuditIssue {
 }
 
 function mapSuggestionRow(row: QueryResultRow): OptimizationSuggestion {
+  const rawSuggestedValue = String(row.suggested_value ?? '');
+  const extension = rawSuggestedValue.includes('.')
+    ? rawSuggestedValue.split('.').pop()?.toLowerCase() ?? 'jpg'
+    : 'jpg';
+  const suggestedValue = row.target_type === 'media'
+    ? normalizeMediaSuggestionValue(row.field_name, rawSuggestedValue, extension)
+    : rawSuggestedValue;
+
   return {
     id: row.id,
     siteId: row.site_id,
@@ -338,7 +346,7 @@ function mapSuggestionRow(row: QueryResultRow): OptimizationSuggestion {
     fieldName: row.field_name,
     status: row.status,
     currentValue: row.current_value ?? undefined,
-    suggestedValue: row.suggested_value,
+    suggestedValue,
     createdAt: toIsoString(row.created_at) ?? '',
     approvedAt: toIsoString(row.approved_at),
     appliedAt: toIsoString(row.applied_at),
@@ -553,7 +561,7 @@ function normalizeMetaDescriptionSuggestion(article: SyncedArticle) {
 }
 
 function normalizeImageText(value: string) {
-  return value
+  return normalizePlainText(value)
     .replace(/\.[a-z0-9]+$/i, '')
     .replace(/[-_]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -653,6 +661,11 @@ function truncateContext(value: string, maxLength: number) {
 }
 
 function extractJsonObject(value: string) {
+  const trimmedValue = value.trim();
+  if (trimmedValue.startsWith('{') && trimmedValue.endsWith('}')) {
+    return trimmedValue;
+  }
+
   const fencedMatch = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fencedMatch?.[1]) {
     return fencedMatch[1].trim();
@@ -675,7 +688,12 @@ function normalizeAiFileNameValue(value: unknown, fallbackExtension: string) {
     return '';
   }
 
-  const rawFileName = value.trim().split('/').pop() ?? value.trim();
+  const normalizedValue = normalizePlainText(value);
+  if (normalizedValue === '') {
+    return '';
+  }
+
+  const rawFileName = normalizedValue.split('/').pop() ?? normalizedValue;
   const fileNameWithExtension = rawFileName.includes('.')
     ? rawFileName
     : `${rawFileName}.${fallbackExtension || 'jpg'}`;
@@ -742,10 +760,10 @@ async function generateAiMediaSuggestions(
         mediaContext.placementContext ? `Image placement context: ${truncateContext(mediaContext.placementContext, 1200)}` : '',
         mediaContext.contextSummary ? `Article summary: ${truncateContext(mediaContext.contextSummary, 600)}` : '',
         mediaContext.contextDetail ? `Article detail: ${truncateContext(mediaContext.contextDetail, 1800)}` : '',
-        `Current image title: ${mediaItem.title || '(empty)'}`,
-        `Current image caption: ${mediaItem.caption || '(empty)'}`,
-        `Current image description: ${mediaItem.description || '(empty)'}`,
-        `Current image alt text: ${mediaItem.altText || '(empty)'}`,
+        `Current image title: ${normalizePlainText(mediaItem.title) || '(empty)'}`,
+        `Current image caption: ${normalizePlainText(mediaItem.caption || '') || '(empty)'}`,
+        `Current image description: ${normalizePlainText(mediaItem.description || '') || '(empty)'}`,
+        `Current image alt text: ${normalizePlainText(mediaItem.altText || '') || '(empty)'}`,
         `Current filename: ${mediaItem.fileName || '(empty)'}`,
         `Preferred filename base slug: ${mediaContext.contextSlug || '(none)'}`,
         `Image descriptor from current metadata: ${mediaContext.imageDescriptor || '(none)'}`
@@ -782,8 +800,24 @@ function pickMediaSuggestionValue(
     fileName: () => buildMediaFileNameSuggestion(mediaItem, mediaContext)
   };
 
-  const aiValue = aiSuggestions?.[fieldName]?.trim() ?? '';
-  return aiValue || fallbackBuilders[fieldName]();
+  const rawValue = aiSuggestions?.[fieldName]?.trim() || fallbackBuilders[fieldName]();
+  return normalizeMediaSuggestionValue(fieldName, rawValue, mediaContext.extension);
+}
+
+function normalizeMediaSuggestionValue(fieldName: string, value: string, fallbackExtension = 'jpg') {
+  if (fieldName === 'fileName') {
+    return normalizeAiFileNameValue(value, fallbackExtension);
+  }
+
+  const maxLength = fieldName === 'title'
+    ? 140
+    : fieldName === 'caption'
+      ? 180
+      : fieldName === 'altText'
+        ? 125
+        : 280;
+
+  return normalizeAiTextValue(value, maxLength);
 }
 
 function shouldSuggestMediaField(
@@ -868,8 +902,8 @@ function trimSeoText(value: string, maxLength: number) {
 
 function normalizePlainText(value: string) {
   return stripNonContentMarkup(value)
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/<[^>]*>/g, ' ')
+    .replace(/\[[^\]]*(?:\]|$)/g, ' ')
+    .replace(/<[^>]*(?:>|$)/g, ' ')
     .replace(/&nbsp;|&#160;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -877,9 +911,10 @@ function normalizePlainText(value: string) {
 
 function stripNonContentMarkup(value: string) {
   return value
+    .replace(/```[\s\S]*?(?:```|$)/g, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<(script|style|pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/\[(?:\/)?[a-z][^\]]*\]/gi, ' ');
+    .replace(/<(script|style|pre|code)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi, ' ')
+    .replace(/\[(?:\/)?[a-z][^\]]*(?:\]|$)/gi, ' ');
 }
 
 function buildMediaSequenceMap(media: SyncedMedia[]) {
@@ -920,6 +955,31 @@ function normalizeFileName(value: string) {
     .slice(0, 80);
 
   return `${normalized || 'rankwoven-image'}.${extension || 'jpg'}`;
+}
+
+async function normalizeStoredMediaSuggestion(
+  repository: SeoOptimizationRepository,
+  siteId: string,
+  suggestion: OptimizationSuggestion
+) {
+  if (suggestion.targetType !== 'media') {
+    return suggestion;
+  }
+
+  const extension = suggestion.suggestedValue.includes('.')
+    ? suggestion.suggestedValue.split('.').pop()?.toLowerCase() ?? 'jpg'
+    : 'jpg';
+  const normalizedValue = normalizeMediaSuggestionValue(
+    suggestion.fieldName,
+    suggestion.suggestedValue,
+    extension
+  );
+
+  if (normalizedValue === '') {
+    return undefined;
+  }
+
+  return repository.updateSuggestion(siteId, suggestion.id, normalizedValue);
 }
 
 function normalizeSlugForFileName(value: string) {
@@ -1893,7 +1953,21 @@ export function registerSeoOptimizationRoutes(
         return validationError(reply, parsed.error);
       }
 
-      const suggestion = await seoRepository.createSuggestion(site.id, parsed.data);
+      const suggestedValue = parsed.data.targetType === 'media'
+        ? normalizeMediaSuggestionValue(parsed.data.fieldName, parsed.data.suggestedValue)
+        : parsed.data.suggestedValue;
+      if (suggestedValue === '') {
+        return reply.status(422).send({
+          success: false,
+          message: '媒體建議內容不能只包含代碼',
+          error: { code: 'MEDIA_SUGGESTION_EMPTY_AFTER_FILTER' }
+        });
+      }
+
+      const suggestion = await seoRepository.createSuggestion(site.id, {
+        ...parsed.data,
+        suggestedValue
+      });
 
       return reply.status(201).send({
         success: true,
@@ -1925,18 +1999,31 @@ export function registerSeoOptimizationRoutes(
         return validationError(reply, parsed.error);
       }
 
-      const suggestion = await seoRepository.updateSuggestion(
-        site.id,
-        request.params.suggestionId,
-        parsed.data.suggestedValue
-      );
-      if (!suggestion) {
+      const existingSuggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
+      if (!existingSuggestion) {
         return reply.status(404).send({
           success: false,
           message: '找不到優化建議',
           error: { code: 'SUGGESTION_NOT_FOUND' }
         });
       }
+
+      const suggestedValue = existingSuggestion.targetType === 'media'
+        ? normalizeMediaSuggestionValue(existingSuggestion.fieldName, parsed.data.suggestedValue)
+        : parsed.data.suggestedValue;
+      if (suggestedValue === '') {
+        return reply.status(422).send({
+          success: false,
+          message: '媒體建議內容不能只包含代碼',
+          error: { code: 'MEDIA_SUGGESTION_EMPTY_AFTER_FILTER' }
+        });
+      }
+
+      const suggestion = await seoRepository.updateSuggestion(
+        site.id,
+        request.params.suggestionId,
+        suggestedValue
+      );
 
       return {
         success: true,
@@ -1963,7 +2050,29 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
-      const suggestion = await seoRepository.approveSuggestion(site.id, request.params.suggestionId);
+      const existingSuggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
+      if (!existingSuggestion) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到優化建議',
+          error: { code: 'SUGGESTION_NOT_FOUND' }
+        });
+      }
+
+      const normalizedSuggestion = await normalizeStoredMediaSuggestion(
+        seoRepository,
+        site.id,
+        existingSuggestion
+      );
+      if (!normalizedSuggestion) {
+        return reply.status(422).send({
+          success: false,
+          message: '媒體建議內容不能只包含代碼',
+          error: { code: 'MEDIA_SUGGESTION_EMPTY_AFTER_FILTER' }
+        });
+      }
+
+      const suggestion = await seoRepository.approveSuggestion(site.id, normalizedSuggestion.id);
       if (!suggestion) {
         return reply.status(404).send({
           success: false,
@@ -2015,12 +2124,28 @@ export function registerSeoOptimizationRoutes(
 
       for (const suggestionId of suggestionIds) {
         try {
-          const suggestion = await seoRepository.approveSuggestion(site.id, suggestionId);
-          if (!suggestion) {
+          const existingSuggestion = await seoRepository.findSuggestion(site.id, suggestionId);
+          if (!existingSuggestion) {
             results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_FOUND' });
-          } else {
-            results.push({ suggestionId, success: true });
+            continue;
           }
+
+          const normalizedSuggestion = await normalizeStoredMediaSuggestion(
+            seoRepository,
+            site.id,
+            existingSuggestion
+          );
+          if (!normalizedSuggestion) {
+            results.push({ suggestionId, success: false, error: 'MEDIA_SUGGESTION_EMPTY_AFTER_FILTER' });
+            continue;
+          }
+
+          const suggestion = await seoRepository.approveSuggestion(site.id, normalizedSuggestion.id);
+          results.push({
+            suggestionId,
+            success: Boolean(suggestion),
+            error: suggestion ? undefined : 'SUGGESTION_NOT_FOUND'
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : 'UNKNOWN_ERROR';
           results.push({ suggestionId, success: false, error: message });
@@ -2060,7 +2185,7 @@ export function registerSeoOptimizationRoutes(
         });
       }
 
-      const suggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
+      let suggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
       if (!suggestion) {
         return reply.status(404).send({
           success: false,
@@ -2074,6 +2199,15 @@ export function registerSeoOptimizationRoutes(
           success: false,
           message: '只有已批准的建議可以寫回 WordPress',
           error: { code: 'SUGGESTION_NOT_APPROVED' }
+        });
+      }
+
+      suggestion = await normalizeStoredMediaSuggestion(seoRepository, site.id, suggestion);
+      if (!suggestion) {
+        return reply.status(422).send({
+          success: false,
+          message: '媒體建議內容不能只包含代碼',
+          error: { code: 'MEDIA_SUGGESTION_EMPTY_AFTER_FILTER' }
         });
       }
 
@@ -2145,7 +2279,7 @@ export function registerSeoOptimizationRoutes(
 
       for (const suggestionId of suggestionIds) {
         try {
-          const suggestion = await seoRepository.findSuggestion(site.id, suggestionId);
+          let suggestion = await seoRepository.findSuggestion(site.id, suggestionId);
           if (!suggestion) {
             results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_FOUND' });
             continue;
@@ -2153,6 +2287,12 @@ export function registerSeoOptimizationRoutes(
 
           if (suggestion.status !== 'approved') {
             results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_APPROVED' });
+            continue;
+          }
+
+          suggestion = await normalizeStoredMediaSuggestion(seoRepository, site.id, suggestion);
+          if (!suggestion) {
+            results.push({ suggestionId, success: false, error: 'MEDIA_SUGGESTION_EMPTY_AFTER_FILTER' });
             continue;
           }
 

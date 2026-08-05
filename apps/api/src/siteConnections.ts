@@ -998,7 +998,8 @@ async function fetchWordPressContentById(
   const fields = 'id,type,title,slug,status,link,excerpt,content,author,categories,tags,featured_media,date_gmt,modified_gmt';
   const paths = [
     `wp-json/wp/v2/posts/${encodeURIComponent(contentId)}?_fields=${fields}`,
-    `wp-json/wp/v2/pages/${encodeURIComponent(contentId)}?_fields=${fields}`
+    `wp-json/wp/v2/pages/${encodeURIComponent(contentId)}?_fields=${fields}`,
+    `wp-json/wp/v2/product/${encodeURIComponent(contentId)}?_fields=${fields}`
   ];
 
   for (const path of paths) {

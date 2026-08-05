@@ -817,21 +817,23 @@ describe('site connection routes', () => {
       });
 
       expect(filteredSuggestionsResponse.statusCode).toBe(200);
-      expect(
-        filteredSuggestionsResponse
-          .json<{
-            data: {
-              suggestions: Array<{
-                targetType: string;
-                targetCmsId: string;
-                fieldName: string;
-              }>;
-            };
-          }>()
-          .data.suggestions
-          .map((suggestion) => suggestion.fieldName)
-          .sort()
-      ).toEqual(['altText', 'caption', 'description', 'fileName', 'title']);
+      const filteredSuggestionsBody = filteredSuggestionsResponse.json<{
+        data: {
+          suggestions: Array<{
+            id: string;
+            targetType: string;
+            targetCmsId: string;
+            fieldName: string;
+          }>;
+        };
+      }>();
+      expect(filteredSuggestionsBody.data.suggestions.map((suggestion) => suggestion.fieldName).sort()).toEqual([
+        'altText',
+        'caption',
+        'description',
+        'fileName',
+        'title'
+      ]);
 
       const fileNameSuggestion = suggestionsResponse
         .json<{
@@ -866,6 +868,208 @@ describe('site connection routes', () => {
           }
         }
       });
+
+      const captionSuggestion = filteredSuggestionsBody.data.suggestions.find(
+        (suggestion) => suggestion.fieldName === 'caption'
+      );
+      const updateCaptionResponse = await server.inject({
+        method: 'PUT',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${captionSuggestion?.id}`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {
+          suggestedValue: '乾淨的圖片簡介。[vc_custom_heading so'
+        }
+      });
+
+      expect(updateCaptionResponse.statusCode).toBe(200);
+      expect(updateCaptionResponse.json()).toMatchObject({
+        data: {
+          suggestion: {
+            id: captionSuggestion?.id,
+            suggestedValue: '乾淨的圖片簡介。'
+          }
+        }
+      });
+
+      const mediaSuggestionIds = filteredSuggestionsBody.data.suggestions.map((suggestion) => suggestion.id);
+      const batchApproveResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions/batch-approve`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {
+          suggestionIds: mediaSuggestionIds
+        }
+      });
+
+      expect(batchApproveResponse.statusCode).toBe(200);
+      expect(batchApproveResponse.json()).toMatchObject({
+        data: {
+          total: 5,
+          succeeded: 5,
+          failed: 0
+        }
+      });
+
+      const batchApplyResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions/batch-apply`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {
+          suggestionIds: mediaSuggestionIds
+        }
+      });
+
+      expect(batchApplyResponse.statusCode).toBe(201);
+      expect(batchApplyResponse.json()).toMatchObject({
+        data: {
+          total: 5,
+          succeeded: 5,
+          failed: 0
+        }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('recognizes WooCommerce product images through product REST parent context', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+    const authToken = await loginDemoUser(server);
+    const originalFetch = globalThis.fetch;
+    const requestedUrls: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requestedUrls.push(url);
+
+      if (url.includes('/wp-json/wp/v2/media')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 906,
+              title: { rendered: 'RankWoven Product Image' },
+              source_url: 'http://localhost:8088/wp-content/uploads/rankwoven-product.jpg',
+              media_type: 'image',
+              mime_type: 'image/jpeg',
+              alt_text: '',
+              caption: { rendered: '' },
+              description: { rendered: '' },
+              post: 506,
+              modified_gmt: '2026-08-05T08:00:00'
+            }
+          ]),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-TotalPages': '1'
+            }
+          }
+        );
+      }
+
+      if (url.includes('/wp-json/wp/v2/posts/506') || url.includes('/wp-json/wp/v2/pages/506')) {
+        return new Response('', { status: 404 });
+      }
+
+      if (url.includes('/wp-json/wp/v2/product/506')) {
+        return new Response(
+          JSON.stringify({
+            id: 506,
+            type: 'product',
+            title: { rendered: 'RankWoven SEO 分析方案' },
+            slug: 'rankwoven-seo-plan',
+            status: 'publish',
+            link: 'http://localhost:8088/product/rankwoven-seo-plan/',
+            excerpt: { rendered: '<p>為網站提供 SEO 與 AI 搜尋優化分析。</p>' },
+            content: { rendered: '<p>包含內容審核、圖片優化及搜尋可見度建議。</p>' },
+            author: 1,
+            featured_media: 906,
+            date_gmt: '2026-08-05T07:30:00',
+            modified_gmt: '2026-08-05T08:00:00'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const scanResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/media-scan`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {}
+      });
+      const mediaResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/media`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const auditResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const suggestionsResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=media&targetCmsIds=906&limit=20`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(scanResponse.statusCode).toBe(200);
+      expect(scanResponse.json()).toMatchObject({
+        data: {
+          articlesReceived: 1,
+          mediaReceived: 1
+        }
+      });
+      expect(mediaResponse.statusCode).toBe(200);
+      expect(mediaResponse.json()).toMatchObject({
+        data: {
+          media: [
+            {
+              cmsId: '906',
+              attachedToCmsId: '506',
+              attachedToTitle: 'RankWoven SEO 分析方案'
+            }
+          ]
+        }
+      });
+      expect(auditResponse.statusCode).toBe(201);
+      expect(suggestionsResponse.statusCode).toBe(200);
+      expect(
+        suggestionsResponse
+          .json<{ data: { suggestions: Array<{ fieldName: string }> } }>()
+          .data.suggestions.map((suggestion) => suggestion.fieldName)
+          .sort()
+      ).toEqual(['altText', 'caption', 'description', 'fileName', 'title']);
+      expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/posts/506'))).toBe(true);
+      expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/pages/506'))).toBe(true);
+      expect(requestedUrls.some((url) => url.includes('/wp-json/wp/v2/product/506'))).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -877,11 +1081,11 @@ describe('site connection routes', () => {
       expect(request.html).not.toContain('const seoDebug');
 
       return JSON.stringify({
-        title: 'SEO 搜尋引擎運作流程圖解',
-        caption: '圖解搜尋引擎爬取、索引與排名流程，對應 SEO 入門文章重點。',
-        description: '這張圖片說明搜尋引擎從 Crawling、Indexing 到 Ranking 的基本流程，適合作為 SEO 是什麼這篇入門文章的主視覺說明。',
-        altText: '搜尋引擎爬取索引與排名流程圖',
-        fileName: 'seo-crawling-indexing-ranking.png'
+        title: '[vc_custom_heading]SEO 搜尋引擎運作流程圖解[/vc_custom_heading]',
+        caption: '圖解搜尋引擎爬取、索引與排名流程，對應 SEO 入門文章重點。[vc_custom_heading so',
+        description: '<code>const seoOutput = true;</code>這張圖片說明搜尋引擎從 Crawling、Indexing 到 Ranking 的基本流程，適合作為 SEO 是什麼這篇入門文章的主視覺說明。',
+        altText: '```js\nconst seoAlt = true;\n```搜尋引擎爬取索引與排名流程圖',
+        fileName: '[vc_custom_heading]seo-crawling-indexing-ranking.png'
       });
     });
     const { server, body } = await createWordPressConnection(
@@ -995,7 +1199,15 @@ describe('site connection routes', () => {
       expect(scanResponse.statusCode).toBe(200);
       expect(auditResponse.statusCode).toBe(201);
       expect(suggestionsResponse.statusCode).toBe(200);
-      expect(suggestionsResponse.json()).toMatchObject({
+      const suggestionsBody = suggestionsResponse.json<{
+        data: {
+          suggestions: Array<{
+            fieldName: string;
+            suggestedValue: string;
+          }>;
+        };
+      }>();
+      expect(suggestionsBody).toMatchObject({
         data: {
           suggestions: expect.arrayContaining([
             expect.objectContaining({
@@ -1031,6 +1243,9 @@ describe('site connection routes', () => {
           ])
         }
       });
+      for (const suggestion of suggestionsBody.data.suggestions) {
+        expect(suggestion.suggestedValue).not.toMatch(/\[vc_|<code|```|const seo/i);
+      }
     } finally {
       globalThis.fetch = originalFetch;
     }
