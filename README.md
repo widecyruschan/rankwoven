@@ -1962,3 +1962,24 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - 全 workspace build、ESLint、`git diff --check` 全部通過；Vite 僅有既有大型 chunk 警告。
   - `npm run security:audit` 通過，0 個漏洞。
 - 下一步行動清單：提交並推送 hotfix 至 `main`，等待 Production Deploy 套用 `0008` migration，然後驗證公開 health endpoint 與媒體掃描列表。
+
+### 2026-08-08（星期六）— 修正 Search Console 後台路由索引與 sitemap/robots 基礎配置
+
+- 會話的主要目的：排查 Google Search Console 的「頁面會重新導向」問題，並確保 `/app`、`/admin` 後台路由不對搜索機器人開放。
+- 完成的主要任務：
+  1. 檢查線上站點索引入口，確認 `https://rankwoven.com/robots.txt` 當時返回 `404`，`https://rankwoven.com/sitemap.xml` 當時錯誤回傳 SPA HTML，而不是 XML sitemap。
+  2. 在 `apps/web/nginx.conf` 新增 `sitemap.xml` 精確匹配，避免缺檔時落回 SPA `index.html`；同時對 `/app` 與 `/admin` 路由加上 `X-Robots-Tag: noindex, nofollow, noarchive`。
+  3. 新增 `apps/web/public/robots.txt`，明確 `Disallow: /app` 與 `Disallow: /admin`，並指向正式 `https://rankwoven.com/sitemap.xml`。
+  4. 新增 `apps/web/public/sitemap.xml`，只提交公開可索引頁面 `/` 與 `/pricing`。
+  5. 修改 `apps/web/src/App.vue`，將公開頁頭部入口在未登入時由 `/app` 改為 `/login`，避免把搜索機器人直接引到受保護後台路由。
+- 關鍵決策和解決方案：既然 `/app`、`/admin` 是後台程序，就不應再被 sitemap 提交，也不應由公開頁面直接鏈向它們；因此採用「移除公開入口 + robots.txt 封鎖 + Nginx `X-Robots-Tag` 防禦」這個最小且直接的方案，而不是擴大改動整套路由結構。
+- 使用的技術棧：Vue 3、TypeScript、Vite、Nginx、SEO 基礎檔（`robots.txt`、`sitemap.xml`）。
+- 新增或修改文件：
+  - 新增：`apps/web/public/robots.txt`、`apps/web/public/sitemap.xml`
+  - 修改：`apps/web/nginx.conf`、`apps/web/src/App.vue`、`README.md`
+- 驗證結果：
+  - `npm run build -w @aieo/web` 通過。
+  - `npm run lint` 通過。
+  - 已確認 `apps/web/dist/robots.txt` 與 `apps/web/dist/sitemap.xml` 正確產出。
+  - 線上 `rankwoven.com` 尚未重新部署，因此 Search Console 狀態仍需待部署後重新驗證。
+- 下一步行動清單：部署 Web 更新到生產；部署後檢查 `https://rankwoven.com/robots.txt` 與 `https://rankwoven.com/sitemap.xml`；再回 Google Search Console 對「頁面會重新導向」項目按「驗證修正」。
