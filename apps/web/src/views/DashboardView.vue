@@ -19,6 +19,9 @@ const router = useRouter();
 
 // ── Dynamic metrics ──────────────────────────────────────────
 const sites = ref<SiteConnection[]>([]);
+const totalSyncedMedia = computed(() =>
+  sites.value.reduce((total, site) => total + (site.lastSyncStats?.mediaReceived ?? 0), 0)
+);
 const metrics = computed(() => [
   {
     label: t('dashboard.connectedSites'),
@@ -26,18 +29,18 @@ const metrics = computed(() => [
     tone: 'primary' as const
   },
   {
-    label: t('dashboard.indexedArticles'),
-    value: t('dashboard.syncProgress'),
+    label: t('dashboard.syncedMedia'),
+    value: String(totalSyncedMedia.value),
     tone: 'neutral' as const
   },
   {
     label: t('dashboard.pendingSuggestions'),
-    value: t('dashboard.title'),
+    value: '--',
     tone: 'accent' as const
   },
   {
     label: t('dashboard.runningTasks'),
-    value: t('dashboard.pipelineTitle'),
+    value: '--',
     tone: 'neutral' as const
   },
   {
@@ -71,9 +74,9 @@ const pipelineSteps = computed(() => [
 ]);
 
 const priorities = computed(() => [
-  t('dashboard.priorityArticle'),
   t('dashboard.priorityImage'),
-  t('dashboard.priorityLinks')
+  t('dashboard.priorityLinks'),
+  t('dashboard.prioritySiteAudit')
 ]);
 
 // ── Site selection ───────────────────────────────────────────

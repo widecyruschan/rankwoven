@@ -54,7 +54,6 @@ const siteRows = computed(() =>
     name: site.name,
     platform: platformLabels[site.platform],
     health: site.status === 'connected' ? t('sites.healthReady') : t('sites.healthRevoked'),
-    articles: site.lastSyncStats?.articlesReceived ?? 0,
     lastTokenUsed: formatDateTime(site.lastTokenUsedAt),
     lastSync: formatDateTime(site.lastSyncAt),
     status: site.status,
@@ -85,12 +84,6 @@ const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() =
     width: 130
   },
   {
-    title: t('sites.articles'),
-    dataIndex: 'articles',
-    key: 'articles',
-    width: 100
-  },
-  {
     title: t('sites.lastTokenUsed'),
     dataIndex: 'lastTokenUsed',
     key: 'lastTokenUsed',
@@ -109,7 +102,7 @@ const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() =
     width: 120
   },
   {
-    title: t('articles.action'),
+    title: t('sites.action'),
     key: 'action',
     width: 180
   }
@@ -240,8 +233,6 @@ onMounted(() => {
         <dd>{{ formatDateTime(selectedSite.lastTokenUsedAt) }}</dd>
         <dt>{{ t('sites.lastSync') }}</dt>
         <dd>{{ formatDateTime(selectedSite.lastSyncAt) }}</dd>
-        <dt>{{ t('sites.articles') }}</dt>
-        <dd>{{ selectedSite.lastSyncStats?.articlesReceived ?? 0 }}</dd>
         <dt>{{ t('media.title') }}</dt>
         <dd>{{ selectedSite.lastSyncStats?.mediaReceived ?? 0 }}</dd>
       </dl>

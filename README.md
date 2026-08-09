@@ -1962,3 +1962,27 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - 全 workspace build、ESLint、`git diff --check` 全部通過；Vite 僅有既有大型 chunk 警告。
   - `npm run security:audit` 通過，0 個漏洞。
 - 下一步行動清單：提交並推送 hotfix 至 `main`，等待 Production Deploy 套用 `0008` migration，然後驗證公開 health endpoint 與媒體掃描列表。
+
+### 2026-08-09（星期日）— 補上正式站未部署的 SaaS 後台菜單調整
+
+- 會話的主要目的：修正正式站 SaaS 後台仍顯示舊文章相關菜單的問題，將已在本地規劃好的側欄與路由收斂改動真正落到 `main` 並部署。
+- 完成的主要任務：
+  1. 在 `apps/web/src/App.vue` 移除客戶後台側欄中的文章審計、文章同步、處理建議、文章修改建議與內容審核入口。
+  2. 在 `apps/web/src/router/index.ts` 將舊文章路由改為安全 redirect，避免既有連結進入失效頁面：
+     - `/app/articles` -> `/app/sites`
+     - `/app/article-sync` -> `/app/tasks`
+     - `/app/suggestions`、`/app/article-suggestions`、`/app/review` -> `/app/media`
+  3. 在 `apps/web/src/views/DashboardView.vue` 移除文章導向摘要，改為顯示已同步媒體與較中性的優先項。
+  4. 在 `apps/web/src/views/SitesView.vue` 移除站點列表與詳情中的文章數欄位。
+  5. 在 `apps/web/src/i18n.ts` 補上對應的新文案 key，並移除這次 UI 不再使用的文章統計文案。
+- 關鍵決策和解決方案：這次不刪舊頁面檔與其他內容模組，只做導航與入口收斂，令正式站先反映「文章操作改回 WordPress 後台」這個產品決策，同時保留舊 route 的平滑導向能力。
+- 使用的技術棧：Vue 3、TypeScript、Vue Router、Ant Design Vue、Vue I18n、Vite。
+- 新增或修改文件：
+  - 修改：`apps/web/src/App.vue`、`apps/web/src/router/index.ts`、`apps/web/src/views/DashboardView.vue`、`apps/web/src/views/SitesView.vue`、`apps/web/src/i18n.ts`、`README.md`
+- 驗證結果：
+  - `git diff --check` 通過。
+  - `npm run build -w @aieo/web` 通過。
+  - `npm run test -w @aieo/web` 通過，2 tests passed。
+  - `npm run lint` 通過。
+  - Vite 只有既有大型 chunk 警告，無新增 build 錯誤。
+- 下一步行動清單：提交並推送至 `main` 觸發部署；部署後登入正式站確認側欄不再顯示舊文章入口，並抽查舊 URL redirect 是否正常。
