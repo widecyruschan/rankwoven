@@ -1505,6 +1505,92 @@ describe('site connection routes', () => {
     }
   });
 
+  it('generates editor SEO recommendations from the current content and focus keyphrase', async () => {
+    const textProvider = createStubTextProvider((request) => {
+      expect(request.title).toContain('Return JSON only with keys seoTitle, slug, metaDescription, analysis');
+      expect(request.html).toContain('Post type: post');
+      expect(request.html).toContain('Focus keyphrase: AI SEO settings');
+      expect(request.html).toContain('Current title: WordPress AI SEO Settings');
+      expect(request.html).toContain('Current SEO title: AI SEO Settings for WordPress');
+      expect(request.html).toContain('Current slug: wordpress-ai-seo-settings');
+      expect(request.html).toContain('Current meta description: Old meta description');
+      expect(request.html).toContain('Content HTML: <h1>WordPress AI SEO Settings</h1>');
+
+      return JSON.stringify({
+        seoTitle: 'WordPress AI SEO Settings | RankWoven',
+        slug: 'wordpress-ai-seo-settings',
+        metaDescription: 'AI SEO settings for WordPress editors who want better titles, slugs, and meta descriptions.',
+        analysis: 'This article focuses on editor workflow and should keep the keyphrase near the start.'
+      });
+    });
+    const { server, body } = await createWordPressConnection(
+      {
+        wordpressAdminUsername: 'site-admin',
+        wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+      },
+      {
+        textGenerationProvider: textProvider
+      }
+    );
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/editor-seo`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        postType: 'post',
+        currentTitle: 'WordPress AI SEO Settings',
+        currentSeoTitle: 'AI SEO Settings for WordPress',
+        currentSlug: 'wordpress-ai-seo-settings',
+        focusKeyphrase: 'AI SEO settings',
+        excerpt: 'This article explains how to add SEO controls to WordPress editors.',
+        contentHtml: '<h1>WordPress AI SEO Settings</h1><p>Use RankWoven to optimize titles and meta descriptions.</p>',
+        currentMetaDescription: 'Old meta description',
+        locale: 'zh-Hant'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const responseBody = response.json<{
+      success: boolean;
+      data: {
+        postType: string;
+        focusKeyphrase: string;
+        seoTitle: string;
+        slug: string;
+        metaDescription: string;
+        analysis: string;
+        seoScore: number;
+        scoreSummary: string;
+        scoreChecks: Array<{ key: string; status: string }>;
+        mode: string;
+      };
+    }>();
+    expect(responseBody).toMatchObject({
+      success: true,
+      data: {
+        mode: 'generate',
+        postType: 'post',
+        focusKeyphrase: 'AI SEO settings',
+        seoTitle: 'WordPress AI SEO Settings | RankWoven',
+        slug: 'wordpress-ai-seo-settings',
+        metaDescription: 'AI SEO settings for WordPress editors who want better titles, slugs, and meta descriptions.',
+        scoreSummary: expect.stringContaining('目前內容 SEO 分數'),
+        analysis: expect.stringContaining('This article focuses on editor workflow and should keep the keyphrase near the start.')
+      }
+    });
+    expect(responseBody.data.seoScore).toBeGreaterThan(0);
+    expect(responseBody.data.scoreChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'title-length' }),
+        expect.objectContaining({ key: 'meta-length' }),
+        expect.objectContaining({ key: 'content-length' })
+      ])
+    );
+  });
+
   it('extracts plain text meta descriptions without shortcode markup', async () => {
     const { server, body } = await createWordPressConnection();
     const authToken = await loginDemoUser(server);
