@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: RankWoven SEO
- * Description: Connects a WordPress site to RankWoven and syncs posts, pages, and image media for SEO optimization.
+ * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization.
  * Version: 0.1.0
  * Author: RankWoven
  * Text Domain: rankwoven-seo
@@ -825,7 +825,7 @@ final class RankWoven_SEO_Plugin
         $post_id = (int) $request->get_param('id');
         $post = get_post($post_id);
 
-        if (!($post instanceof WP_Post) || !in_array($post->post_type, ['post', 'page'], true)) {
+        if (!($post instanceof WP_Post) || !in_array($post->post_type, $this->get_supported_content_post_types(), true)) {
             return new WP_REST_Response([
                 'success' => false,
                 'message' => __('Article not found or cannot be updated.', 'rankwoven-seo')
@@ -1029,7 +1029,7 @@ final class RankWoven_SEO_Plugin
     private function get_synced_articles(int $per_page, int $page, string $updated_after = ''): array
     {
         $query_args = [
-            'post_type' => ['post', 'page'],
+            'post_type' => $this->get_supported_content_post_types(),
             'post_status' => ['publish', 'draft', 'pending', 'future'],
             'posts_per_page' => $this->normalize_per_page($per_page),
             'paged' => max(1, $page),
@@ -1056,7 +1056,7 @@ final class RankWoven_SEO_Plugin
             return null;
         }
 
-        if (!in_array($post->post_type, ['post', 'page'], true)) {
+        if (!in_array($post->post_type, $this->get_supported_content_post_types(), true)) {
             return null;
         }
 
@@ -1281,6 +1281,16 @@ final class RankWoven_SEO_Plugin
         ];
     }
 
+    private function get_supported_content_post_types(): array
+    {
+        return array_values(array_filter(['post', 'page', 'portfolio', 'product'], 'post_type_exists'));
+    }
+
+    private function normalize_synced_post_type(string $post_type): string
+    {
+        return in_array($post_type, ['post', 'page', 'portfolio', 'product'], true) ? $post_type : 'post';
+    }
+
     private function map_post_to_synced_article(WP_Post $post): array
     {
         $categories = wp_get_post_terms($post->ID, 'category', ['fields' => 'names']);
@@ -1296,7 +1306,7 @@ final class RankWoven_SEO_Plugin
 
         return [
             'cmsId' => (string) $post->ID,
-            'type' => $post->post_type === 'page' ? 'page' : 'post',
+            'type' => $this->normalize_synced_post_type($post->post_type),
             'title' => get_the_title($post),
             'slug' => $post->post_name,
             'status' => get_post_status($post),

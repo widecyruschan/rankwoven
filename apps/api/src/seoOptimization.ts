@@ -59,6 +59,7 @@ export interface OptimizationSuggestion {
   status: SuggestionStatus;
   currentValue?: string;
   suggestedValue: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   approvedAt?: string;
   appliedAt?: string;
@@ -93,6 +94,7 @@ export interface CreateSuggestionInput {
   fieldName: string;
   currentValue?: string;
   suggestedValue: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ListSuggestionOptions {
@@ -167,11 +169,12 @@ const createSuggestionSchema = z.object({
   ]),
   fieldName: z.string().trim().min(1).max(80),
   currentValue: z.string().max(20_000).optional(),
-  suggestedValue: z.string().trim().min(1).max(20_000)
+  suggestedValue: z.string().trim().min(1).max(500_000),
+  metadata: z.record(z.string(), z.unknown()).optional()
 });
 
 const updateSuggestionSchema = z.object({
-  suggestedValue: z.string().trim().min(1).max(20_000)
+  suggestedValue: z.string().trim().min(1).max(500_000)
 });
 
 const listSuggestionsQuerySchema = z.object({
@@ -212,6 +215,10 @@ const editorSeoGenerationSchema = z.object({
   contentHtml: z.string().max(500_000).optional().default(''),
   currentMetaDescription: z.string().max(500).optional().default(''),
   locale: z.string().trim().min(2).max(20).default('zh-Hant')
+});
+
+const internalLinkGenerationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50)
 });
 
 const defaultRulesVersion = '2026-08-04.image-context-1';
@@ -261,12 +268,16 @@ CREATE TABLE IF NOT EXISTS optimization_suggestions (
   status text NOT NULL CHECK (status IN ('pending', 'approved', 'applied', 'failed', 'rejected')),
   current_value text,
   suggested_value text NOT NULL,
+  metadata jsonb,
   error_message text,
   apply_task_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   approved_at timestamptz,
   applied_at timestamptz
 );
+
+ALTER TABLE optimization_suggestions
+  ADD COLUMN IF NOT EXISTS metadata jsonb;
 
 ALTER TABLE optimization_suggestions
   DROP CONSTRAINT IF EXISTS optimization_suggestions_suggestion_type_check;
@@ -360,6 +371,9 @@ function mapSuggestionRow(row: QueryResultRow): OptimizationSuggestion {
     status: row.status,
     currentValue: row.current_value ?? undefined,
     suggestedValue,
+    metadata: row.metadata && typeof row.metadata === 'object'
+      ? row.metadata as Record<string, unknown>
+      : undefined,
     createdAt: toIsoString(row.created_at) ?? '',
     approvedAt: toIsoString(row.approved_at),
     appliedAt: toIsoString(row.applied_at),
@@ -1390,6 +1404,7 @@ function removeExistingActionableSuggestions(
   siteId: string,
   targetType: TargetType,
   targetCmsId: string,
+  suggestionType: SuggestionType,
   fieldName: string
 ) {
   for (const [suggestionId, suggestion] of suggestions.entries()) {
@@ -1397,6 +1412,7 @@ function removeExistingActionableSuggestions(
       suggestion.siteId === siteId &&
       suggestion.targetType === targetType &&
       suggestion.targetCmsId === targetCmsId &&
+      suggestion.suggestionType === suggestionType &&
       suggestion.fieldName === fieldName &&
       suggestion.status !== 'applied'
     ) {
@@ -1436,6 +1452,7 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
             siteId,
             issue.targetType,
             issue.targetCmsId,
+            toSuggestionType(issue),
             issue.fieldName
           );
           const suggestion = createSuggestionFromIssue(siteId, issue);
@@ -1454,7 +1471,14 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
       return Array.from(issues.values()).filter((issue) => issue.auditId === auditId);
     },
     async createSuggestion(siteId, input, auditIssueId) {
-      removeExistingActionableSuggestions(suggestions, siteId, input.targetType, input.targetCmsId, input.fieldName);
+      removeExistingActionableSuggestions(
+        suggestions,
+        siteId,
+        input.targetType,
+        input.targetCmsId,
+        input.suggestionType,
+        input.fieldName
+      );
       const suggestion = createSuggestion(siteId, input, auditIssueId);
       suggestions.set(suggestion.id, suggestion);
       return suggestion;
@@ -1986,18 +2010,19 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
           AND target_type = $2
           AND target_cms_id = $3
           AND field_name = $4
+          AND suggestion_type = $5
           AND status != 'applied'
       `,
-      [siteId, input.targetType, input.targetCmsId, input.fieldName]
+      [siteId, input.targetType, input.targetCmsId, input.fieldName, input.suggestionType]
     );
 
     return client.query(
       `
         INSERT INTO optimization_suggestions (
           id, site_id, audit_issue_id, target_type, target_cms_id, suggestion_type,
-          field_name, status, current_value, suggested_value
+          field_name, status, current_value, suggested_value, metadata
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)
         RETURNING *
       `,
       [
@@ -2009,7 +2034,8 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
         input.suggestionType,
         input.fieldName,
         input.currentValue ?? null,
-        input.suggestedValue
+        input.suggestedValue,
+        input.metadata ? JSON.stringify(input.metadata) : null
       ]
     );
   }
@@ -2046,6 +2072,7 @@ function createSuggestion(
     status: 'pending',
     currentValue: input.currentValue,
     suggestedValue: input.suggestedValue,
+    metadata: input.metadata,
     createdAt: new Date().toISOString()
   };
 }
@@ -2139,6 +2166,185 @@ async function listAllMediaForAudit(siteRepository: SiteConnectionRepository, si
   }
 
   return media;
+}
+
+function stripHtml(value: string) {
+  return value
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeContent(value: string) {
+  const normalized = stripHtml(value)
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ');
+  const latinTokens = normalized.match(/[a-z0-9][a-z0-9-]{2,}/g) ?? [];
+  const cjkTokens = normalized.match(/[\u3400-\u9fff]{2,}/g) ?? [];
+
+  return new Set([...latinTokens, ...cjkTokens].filter((token) => token.length >= 2));
+}
+
+function getArticleSearchText(article: SyncedArticle) {
+  return [
+    article.title,
+    article.excerpt ?? '',
+    article.metaDescription ?? '',
+    article.categories.join(' '),
+    article.tags.join(' '),
+    article.contentHtml ?? ''
+  ].join(' ');
+}
+
+function normalizeUrlForInternalLink(value: string, baseUrl?: string) {
+  try {
+    const url = new URL(value, baseUrl);
+    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, '') || '/'}`;
+  } catch {
+    return value.trim().replace(/\/+$/, '');
+  }
+}
+
+function sourceAlreadyLinksToTarget(sourceHtml: string, targetUrl: string, sourceUrl: string) {
+  const target = normalizeUrlForInternalLink(targetUrl);
+  const hrefPattern = /<a\b[^>]*\bhref=["']([^"']+)["']/gi;
+
+  for (const match of sourceHtml.matchAll(hrefPattern)) {
+    const href = match[1] ?? '';
+    if (normalizeUrlForInternalLink(href, sourceUrl) === target) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getInternalLinkRelevance(source: SyncedArticle, target: SyncedArticle) {
+  const sourceTokens = tokenizeContent(getArticleSearchText(source));
+  const targetTokens = tokenizeContent(getArticleSearchText(target));
+  if (sourceTokens.size === 0 || targetTokens.size === 0) {
+    return 0;
+  }
+
+  let overlap = 0;
+  for (const token of targetTokens) {
+    if (sourceTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  const denominator = Math.max(4, Math.min(sourceTokens.size, targetTokens.size));
+  const typeBoost = source.type !== target.type ? 8 : 4;
+  const titleBoost = source.title.toLowerCase().includes(target.title.toLowerCase().slice(0, 12)) ? 8 : 0;
+
+  return Math.min(98, Math.round((overlap / denominator) * 75 + typeBoost + titleBoost));
+}
+
+function escapeHtmlAttribute(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHtmlText(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildAnchorText(target: SyncedArticle) {
+  const title = stripHtml(target.title).replace(/\s+/g, ' ').trim();
+  return title.length > 90 ? title.slice(0, 90).trim() : title;
+}
+
+function appendInternalLink(contentHtml: string, targetUrl: string, anchorText: string) {
+  const safeUrl = escapeHtmlAttribute(targetUrl);
+  const safeAnchor = escapeHtmlText(anchorText);
+  const linkBlock = `<p data-rankwoven-internal-link="true">延伸閱讀：<a href="${safeUrl}">${safeAnchor}</a></p>`;
+  const trimmedContent = contentHtml.trim();
+
+  return trimmedContent === '' ? linkBlock : `${trimmedContent}\n${linkBlock}`;
+}
+
+function getInternalLinkReason(source: SyncedArticle, target: SyncedArticle, relevance: number) {
+  if (target.type === 'product') {
+    return `目標商品與「${source.title}」內容語義相關，可把讀者導向可轉化頁面。`;
+  }
+
+  if (target.type === 'portfolio') {
+    return `目標作品案例可補充「${source.title}」的實例證明，相關性 ${relevance}%。`;
+  }
+
+  return `兩個頁面有重疊主題與關鍵詞，可補強站內主題集群，相關性 ${relevance}%。`;
+}
+
+function buildInternalLinkSuggestions(articles: SyncedArticle[], limit: number) {
+  const candidates: CreateSuggestionInput[] = [];
+  const linkableArticles = articles.filter((article) =>
+    article.cmsId.trim() !== '' &&
+    article.title.trim() !== '' &&
+    article.url.trim() !== ''
+  );
+
+  for (const source of linkableArticles) {
+    const sourceHtml = source.contentHtml ?? '';
+    const bestTarget = linkableArticles
+      .filter((target) => target.cmsId !== source.cmsId)
+      .filter((target) => !sourceAlreadyLinksToTarget(sourceHtml, target.url, source.url))
+      .map((target) => ({
+        target,
+        relevance: getInternalLinkRelevance(source, target)
+      }))
+      .filter((candidate) => candidate.relevance >= 18)
+      .sort((left, right) => right.relevance - left.relevance)[0];
+
+    if (!bestTarget) {
+      continue;
+    }
+
+    const anchorText = buildAnchorText(bestTarget.target);
+    if (anchorText === '') {
+      continue;
+    }
+
+    const suggestedValue = appendInternalLink(sourceHtml, bestTarget.target.url, anchorText);
+    candidates.push({
+      targetType: 'article',
+      targetCmsId: source.cmsId,
+      suggestionType: 'internal_link',
+      fieldName: 'contentHtml',
+      currentValue: sourceHtml,
+      suggestedValue,
+      metadata: {
+        sourceCmsId: source.cmsId,
+        sourceTitle: source.title,
+        sourceType: source.type,
+        sourceUrl: source.url,
+        targetCmsId: bestTarget.target.cmsId,
+        targetTitle: bestTarget.target.title,
+        targetType: bestTarget.target.type,
+        targetUrl: bestTarget.target.url,
+        anchorText,
+        relevance: bestTarget.relevance,
+        reason: getInternalLinkReason(source, bestTarget.target, bestTarget.relevance)
+      }
+    });
+  }
+
+  return candidates
+    .sort((left, right) => {
+      const leftScore = Number(left.metadata?.relevance ?? 0);
+      const rightScore = Number(right.metadata?.relevance ?? 0);
+      return rightScore - leftScore;
+    })
+    .slice(0, limit);
 }
 
 export function registerSeoOptimizationRoutes(
@@ -2258,6 +2464,48 @@ export function registerSeoOptimizationRoutes(
           focusKeyphrase: parsed.data.focusKeyphrase
         }
       };
+    }
+  );
+
+  app.post<{ Params: { siteId: string } }>(
+    '/api/v1/site-connections/:siteId/internal-links/generate',
+    async (request, reply) => {
+      const user = await requireAuth(authService, request, reply);
+      if (!user) {
+        return reply;
+      }
+
+      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      if (!site) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: { code: 'SITE_NOT_FOUND' }
+        });
+      }
+
+      const parsed = internalLinkGenerationSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return validationError(reply, parsed.error);
+      }
+
+      const articles = await listAllArticlesForAudit(siteRepository, site.id);
+      const inputs = buildInternalLinkSuggestions(articles, parsed.data.limit);
+      const suggestions: OptimizationSuggestion[] = [];
+
+      for (const input of inputs) {
+        suggestions.push(await seoRepository.createSuggestion(site.id, input));
+      }
+
+      return reply.status(201).send({
+        success: true,
+        message: `已生成 ${suggestions.length} 個內部連結建議`,
+        data: {
+          suggestions,
+          generated: suggestions.length,
+          articlesScanned: articles.length
+        }
+      });
     }
   );
 

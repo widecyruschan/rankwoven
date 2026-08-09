@@ -88,10 +88,11 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwove
 
 ### 3. 同步任務
 
-- [ ] 點擊手動同步，插件建立同步任務並分頁推送 Posts、Pages 和媒體批次。
+- [ ] 點擊手動同步，插件建立同步任務並分頁推送文章、頁面、Portfolio、商品和媒體批次。
 - [ ] 同步完成後顯示最近同步時間、文章數、媒體數、頁數、同步模式和任務 ID。
 - [ ] 再次同步時使用 `updatedAfter` 增量模式（首次為全量）。
 - [ ] RankWoven Web `/app/tasks` 任務列表能看到對應任務且狀態為完成。
+- [ ] RankWoven Web 的同步內容中能保留 `post`、`page`、`portfolio`、`product` 類型，未啟用的 post type 不應造成同步失敗。
 
 ### 4. 圖片屬性與批量更新
 
@@ -128,6 +129,14 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] WordPress 端修改記錄的作者為配置的管理員帳號。
 - [ ] 寫回前快照 `before_value` 為 WordPress 當前真實值（可用回滾驗證）。
 
+### 8. 內部連結建議
+
+- [ ] 在插件端完成文章、頁面、Portfolio、商品同步後，進入 RankWoven Web `/app/links`。
+- [ ] 選擇目標站點並點擊「生成內部連結建議」，列表顯示來源內容、目標內容、錨文本、相關性和推薦理由。
+- [ ] 勾選多條待處理建議後批量套用，來源內容應插入 `data-rankwoven-internal-link="true"` 的延伸閱讀段落。
+- [ ] 已經連到同一目標 URL 的來源內容不應重複產生相同內部連結建議。
+- [ ] 寫回後在 WordPress 編輯頁或前台檢查連結指向正確目標，並確認可通過既有快照流程回滾。
+
 ## 回歸重點
 
 改動以下區域時必測對應項目：
@@ -139,6 +148,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | 圖片屬性 / Bulk Updater | 清單 4 |
 | REST API 路由 | 清單 6 |
 | 寫回 / Application Password | 清單 7 |
+| 內部連結生成 / 多選套用 | 清單 3、7、8 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯

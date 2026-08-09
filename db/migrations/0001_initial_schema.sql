@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS synced_articles (
   id bigserial PRIMARY KEY,
   site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
   cms_id varchar(80) NOT NULL,
-  type text NOT NULL CHECK (type IN ('post', 'page')),
+  type text NOT NULL CHECK (type IN ('post', 'page', 'portfolio', 'product')),
   title varchar(300) NOT NULL,
   slug varchar(240) NOT NULL,
   status varchar(40) NOT NULL,

@@ -1986,3 +1986,56 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - `npm run lint` 通過。
   - Vite 只有既有大型 chunk 警告，無新增 build 錯誤。
 - 下一步行動清單：提交並推送至 `main` 觸發部署；部署後登入正式站確認側欄不再顯示舊文章入口，並抽查舊 URL redirect 是否正常。
+
+### 2026-08-09（星期日）— 新增內部連結建議與 WordPress 多選套用流程
+
+- 會話的主要目的：在 SaaS 後台建立可操作的內部連結建議流程，根據已同步文章、頁面、Portfolio 和商品內容推薦來源內容、目標內容、錨文本、相關性和理由，並支援多選後寫回 WordPress。
+- 完成的主要任務：
+  1. `apps/api/src/seoOptimization.ts`
+     - 新增 `POST /api/v1/site-connections/:siteId/internal-links/generate`，從已同步內容中計算相關性、避開自連和已存在目標連結，生成 `internal_link` 類型建議。
+     - 建議保存新的 `contentHtml`，並在 metadata 中保存來源、目標、錨文本、相關性與推薦理由，供前端列表展示。
+     - 擴展建議 metadata 與長內容欄位上限，避免內部連結寫回內容被既有字數限制截斷。
+  2. `apps/api/src/siteConnections.ts`、`apps/worker/src/index.ts`、`db/migrations/0001_initial_schema.sql`、`db/migrations/0009_internal_link_suggestions.sql`
+     - 同步內容類型擴展為 `post`、`page`、`portfolio`、`product`。
+     - 新增 migration，更新 `synced_articles.type` constraint，並為 `optimization_suggestions` 加入 `metadata jsonb`。
+     - Worker 寫入同步內容時保留 Portfolio 與商品類型，方便後續內部連結分析。
+  3. `apps/web/src/views/LinksView.vue`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`
+     - 將內部連結頁從靜態示例改為真實 SaaS API 資料。
+     - 支援選擇站點、刷新、生成建議、多選、批量批准並套用，以及單條插入。
+     - 補齊英文與繁體中文文案，展示來源、目標、錨文本、相關性、原因、狀態和操作。
+  4. `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`
+     - 插件同步與站點側 REST API 支援文章、頁面、Portfolio 和商品。
+     - 補充 WordPress 插件文檔與手動測試清單，明確內部連結需先審核、多選後才寫回。
+  5. `apps/api/tests/siteConnections.test.ts`
+     - 新增內部連結生成回歸測試，覆蓋文章、頁面、Portfolio 和商品同步後的建議 metadata、HTML marker 和目標 URL。
+- 關鍵決策和解決方案：內部連結仍沿用既有建議審核與寫回任務，不新增直接修改 WordPress 的快捷接口；每個來源內容先生成一條最佳目標建議，讓多選批量套用、快照與回滾流程保持簡單可控。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL migration、Vue 3、Ant Design Vue、Vue I18n、WordPress PHP REST API、Vitest、ESLint、Vite。
+- 新增或修改文件：
+  - 新增：`db/migrations/0009_internal_link_suggestions.sql`
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/src/siteConnections.ts`、`apps/api/tests/siteConnections.test.ts`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`、`apps/web/src/views/LinksView.vue`、`apps/worker/src/index.ts`、`db/migrations/0001_initial_schema.sql`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - 已通過：`npm run test -w @aieo/api -- siteConnections.test.ts`（23 tests）。
+  - 已通過：`npm run build -w @aieo/api`、`npm run build -w @aieo/web`、`npm run build -w @aieo/worker`。
+  - 已通過：`npm run lint`、`npm run test`、`npm run build`、`npm run security:audit`。
+  - 已通過：`docker exec -i cyruschan-wp php -l < plugins/wordpress/rankwoven-seo/rankwoven-seo.php`。
+  - Vite 僅有既有大型 chunk 警告。
+- 下一步行動清單：若要上線，先提交並推送 `codex/internal-link-suggestions` 或合併到 `main`，部署後在正式站同步內容並於 `/app/links` 生成、勾選、套用一輪內部連結建議。
+
+### 2026-08-09（星期日）— 修正本地 Docker SerpApi 環境變數未載入
+
+- 會話的主要目的：排查本地 Docker Desktop 測試環境中 SEO 網站檢測顯示 SerpApi 未設置的問題。
+- 完成的主要任務：
+  1. 確認主工作區 `.env` 已配置 `SERPAPI_KEY`，但目前測試容器從臨時 worktree `/tmp/aieo-internal-links.xUZeyD` 啟動，該目錄原本沒有 `.env`。
+  2. 將主工作區 `.env` 安全複製到臨時 worktree，該文件仍受 `.gitignore` 與 `.dockerignore` 保護，不會提交到 Git 或打入 Docker image。
+  3. 使用 Docker Compose 重建 `aieo-api-1`、`aieo-worker-1` 和 `aieo-web-1`，讓本地環境變數重新注入容器。
+- 關鍵決策和解決方案：不在代碼或文檔中輸出任何 SerpApi 金鑰內容，只以是否存在和字元長度確認容器環境；不觸發實際 SEO 檢測，避免未經確認消耗 SerpApi credits。
+- 使用的技術棧：Docker Compose、Fastify API、Worker、Vite Web、PostgreSQL、WordPress Docker 測試站。
+- 新增或修改文件：
+  - 修改：`README.md`（追加本次會話總結）
+  - 未提交：`.env` 僅複製到本地臨時 worktree，受 Git 忽略，不屬於倉庫變更。
+- 驗證結果：
+  - 已確認：`aieo-api-1` 與 `aieo-worker-1` 均已讀到 `SERPAPI_KEY`，且未輸出密鑰內容。
+  - 已通過：`curl -fsS http://localhost:3011/health`。
+  - 已確認：`http://localhost:8080/`、`http://localhost:8088/` 在本地返回 200。
+  - 補充發現：本地 demo 帳號角色為 `owner`，而 SerpApi usage admin API 目前只接受 `admin`，因此 usage 統計查詢會 403；這不影響 SEO 檢測本身讀取 `SERPAPI_KEY`。
+- 下一步行動清單：刷新本地 SaaS 頁面後重新嘗試 SEO 網站檢測；如仍看到 SerpApi 未設置，再檢查瀏覽器是否連到舊 API 或容器是否被其他 compose 專案覆蓋。

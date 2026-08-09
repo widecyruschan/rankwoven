@@ -549,7 +549,9 @@ async function upsertArticle(client: PoolClient, siteId: string, article: Record
     [
       siteId,
       String(article.cmsId),
-      article.type === 'page' ? 'page' : 'post',
+      ['post', 'page', 'portfolio', 'product'].includes(String(article.type))
+        ? String(article.type)
+        : 'post',
       String(article.title ?? ''),
       String(article.slug ?? ''),
       String(article.status ?? ''),

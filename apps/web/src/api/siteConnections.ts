@@ -78,6 +78,7 @@ export interface OptimizationSuggestion {
   status: SuggestionStatus;
   currentValue?: string;
   suggestedValue: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   approvedAt?: string;
   appliedAt?: string;
@@ -139,7 +140,7 @@ export interface SeoAuditIssue {
 
 export interface SyncedArticle {
   cmsId: string;
-  type: 'post' | 'page';
+  type: 'post' | 'page' | 'portfolio' | 'product';
   title: string;
   slug: string;
   status: string;
@@ -465,6 +466,17 @@ export async function getOptimizationSuggestions(siteId: string, params?: Sugges
     suggestions: OptimizationSuggestion[];
     latestAudit?: LatestAuditSummary;
   }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions${createSuggestionQuery(params)}`);
+}
+
+export async function generateInternalLinkSuggestions(siteId: string, limit = 50) {
+  return requestApi<{
+    suggestions: OptimizationSuggestion[];
+    generated: number;
+    articlesScanned: number;
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/internal-links/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ limit })
+  });
 }
 
 export async function getApplyQueue(siteId: string) {

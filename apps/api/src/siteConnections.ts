@@ -41,9 +41,11 @@ const updateSiteAnalyticsSchema = z.object({
   googleAnalyticsPropertyId: optionalAnalyticsPropertyIdSchema
 });
 
+const syncedArticleTypeSchema = z.enum(['post', 'page', 'portfolio', 'product']);
+
 const syncedArticleSchema = z.object({
   cmsId: z.string().trim().min(1).max(80),
-  type: z.enum(['post', 'page']),
+  type: syncedArticleTypeSchema,
   title: z.string().trim().max(300),
   slug: z.string().trim().max(240),
   status: z.string().trim().max(40),
@@ -116,6 +118,7 @@ const mediaListQuerySchema = paginationQuerySchema.extend({
 });
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
+export type SyncedArticleType = z.infer<typeof syncedArticleTypeSchema>;
 export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
@@ -456,7 +459,7 @@ CREATE TABLE IF NOT EXISTS synced_articles (
   id bigserial PRIMARY KEY,
   site_id uuid NOT NULL REFERENCES site_connections(id) ON DELETE CASCADE,
   cms_id varchar(80) NOT NULL,
-  type text NOT NULL CHECK (type IN ('post', 'page')),
+  type text NOT NULL CHECK (type IN ('post', 'page', 'portfolio', 'product')),
   title varchar(300) NOT NULL,
   slug varchar(240) NOT NULL,
   status varchar(40) NOT NULL,
@@ -480,6 +483,13 @@ CREATE INDEX IF NOT EXISTS idx_synced_articles_site_updated
 
 ALTER TABLE synced_articles
   ADD COLUMN IF NOT EXISTS meta_description varchar(500);
+
+ALTER TABLE synced_articles
+  DROP CONSTRAINT IF EXISTS synced_articles_type_check;
+
+ALTER TABLE synced_articles
+  ADD CONSTRAINT synced_articles_type_check
+  CHECK (type IN ('post', 'page', 'portfolio', 'product'));
 
 CREATE TABLE IF NOT EXISTS synced_media (
   id bigserial PRIMARY KEY,
@@ -968,8 +978,12 @@ function mapWordPressMedia(item: WordPressMediaResponseItem): SyncedMedia {
   };
 }
 
+function normalizeSyncedArticleType(value: unknown): SyncedArticleType {
+  return value === 'page' || value === 'portfolio' || value === 'product' ? value : 'post';
+}
+
 function mapWordPressContent(item: WordPressContentResponseItem): SyncedArticle {
-  const contentType = item.type === 'page' ? 'page' : 'post';
+  const contentType = normalizeSyncedArticleType(item.type);
   const updatedAt = typeof item.modified_gmt === 'string' && item.modified_gmt !== ''
     ? new Date(item.modified_gmt).toISOString()
     : new Date().toISOString();
@@ -1010,6 +1024,7 @@ async function fetchWordPressContentById(
   const paths = [
     `wp-json/wp/v2/posts/${encodeURIComponent(contentId)}?_fields=${fields}`,
     `wp-json/wp/v2/pages/${encodeURIComponent(contentId)}?_fields=${fields}`,
+    `wp-json/wp/v2/portfolio/${encodeURIComponent(contentId)}?_fields=${fields}`,
     `wp-json/wp/v2/product/${encodeURIComponent(contentId)}?_fields=${fields}`
   ];
 

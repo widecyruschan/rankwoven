@@ -977,7 +977,11 @@ describe('site connection routes', () => {
         );
       }
 
-      if (url.includes('/wp-json/wp/v2/posts/506') || url.includes('/wp-json/wp/v2/pages/506')) {
+      if (
+        url.includes('/wp-json/wp/v2/posts/506') ||
+        url.includes('/wp-json/wp/v2/pages/506') ||
+        url.includes('/wp-json/wp/v2/portfolio/506')
+      ) {
         return new Response('', { status: 404 });
       }
 
@@ -2190,6 +2194,150 @@ describe('site connection routes', () => {
     });
 
     expect(rollbackTooEarlyResponse.statusCode).toBe(409);
+  });
+
+  it('generates internal link suggestions for synced posts, pages, portfolio items, and products', async () => {
+    const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '501',
+            type: 'post',
+            title: 'Sustainable Interior Design Guide',
+            slug: 'sustainable-interior-design-guide',
+            status: 'publish',
+            url: 'http://localhost:8088/sustainable-interior-design-guide/',
+            excerpt: 'Sustainable interior design ideas for natural materials and furniture planning.',
+            metaDescription: 'A guide to sustainable interior design with furniture and case study examples.',
+            contentHtml: '<h1>Sustainable Interior Design Guide</h1><p>Plan natural materials and furniture for a greener home. <a href="/product/rattan-triple-seat-sofa/">See the sofa</a>.</p>',
+            categories: ['Interior Design'],
+            tags: ['sustainable', 'furniture'],
+            updatedAt: '2026-08-09T08:00:00+00:00'
+          },
+          {
+            cmsId: '502',
+            type: 'product',
+            title: 'Rattan Triple Seat Sofa',
+            slug: 'rattan-triple-seat-sofa',
+            status: 'publish',
+            url: 'http://localhost:8088/product/rattan-triple-seat-sofa/',
+            excerpt: 'Natural rattan sofa for sustainable interior furniture projects.',
+            metaDescription: 'Shop a rattan triple seat sofa for sustainable interiors.',
+            contentHtml: '<h1>Rattan Triple Seat Sofa</h1><p>Natural rattan seating for sustainable living rooms.</p>',
+            categories: ['Furniture'],
+            tags: ['rattan', 'sustainable'],
+            updatedAt: '2026-08-09T08:00:00+00:00'
+          },
+          {
+            cmsId: '503',
+            type: 'portfolio',
+            title: 'Eco Green Interior',
+            slug: 'eco-green-interior',
+            status: 'publish',
+            url: 'http://localhost:8088/portfolio/eco-green-interior/',
+            excerpt: 'Portfolio case study for sustainable interior design and natural materials.',
+            metaDescription: 'Eco Green Interior portfolio case study.',
+            contentHtml: '<h1>Eco Green Interior</h1><p>A sustainable interior design portfolio using natural furniture.</p>',
+            categories: ['Portfolio'],
+            tags: ['sustainable', 'interior'],
+            updatedAt: '2026-08-09T08:00:00+00:00'
+          },
+          {
+            cmsId: '504',
+            type: 'page',
+            title: 'Interior Design Services',
+            slug: 'interior-design-services',
+            status: 'publish',
+            url: 'http://localhost:8088/interior-design-services/',
+            excerpt: 'Interior design services for homes and commercial spaces.',
+            metaDescription: 'Interior design services page.',
+            contentHtml: '<h1>Interior Design Services</h1><p>Services for sustainable homes and furniture planning.</p>',
+            categories: [],
+            tags: ['interior'],
+            updatedAt: '2026-08-09T08:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+
+    expect(syncResponse.statusCode).toBe(200);
+
+    const generateResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/internal-links/generate`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {
+        limit: 10
+      }
+    });
+    const generateBody = generateResponse.json<{
+      data: {
+        generated: number;
+        articlesScanned: number;
+        suggestions: Array<{
+          targetType: string;
+          targetCmsId: string;
+          suggestionType: string;
+          fieldName: string;
+          suggestedValue: string;
+          metadata?: Record<string, unknown>;
+        }>;
+      };
+    }>();
+
+    expect(generateResponse.statusCode).toBe(201);
+    expect(generateBody.data.articlesScanned).toBe(4);
+    expect(generateBody.data.generated).toBeGreaterThan(0);
+    expect(generateBody.data.suggestions[0]).toMatchObject({
+      targetType: 'article',
+      suggestionType: 'internal_link',
+      fieldName: 'contentHtml'
+    });
+    expect(generateBody.data.suggestions[0]?.metadata).toMatchObject({
+      sourceCmsId: expect.any(String),
+      sourceTitle: expect.any(String),
+      targetCmsId: expect.any(String),
+      targetTitle: expect.any(String),
+      anchorText: expect.any(String),
+      targetUrl: expect.stringContaining('http://localhost:8088/'),
+      relevance: expect.any(Number),
+      reason: expect.any(String)
+    });
+    expect(generateBody.data.suggestions[0]?.suggestedValue).toContain('data-rankwoven-internal-link="true"');
+    expect(generateBody.data.suggestions[0]?.suggestedValue).toContain('<a href="http://localhost:8088/');
+    expect(generateBody.data.suggestions.find((suggestion) =>
+      suggestion.metadata?.sourceCmsId === '501' && suggestion.metadata?.targetCmsId === '502'
+    )).toBeUndefined();
+
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=article`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+
+    expect(suggestionsResponse.statusCode).toBe(200);
+    expect(suggestionsResponse.json().data.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          suggestionType: 'internal_link',
+          metadata: expect.objectContaining({
+            anchorText: expect.any(String)
+          })
+        })
+      ])
+    );
   });
 
   it('rejects invalid manual refresh task input', async () => {

@@ -32,7 +32,7 @@ Settings -> RankWoven SEO
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 查看只讀診斷頁，檢查 API 連接、Token、本地同步、圖片屬性和 Application Password 配置狀態。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
-- 一鍵建立後端同步任務，分頁批量同步 Posts、Pages 和圖片媒體。
+- 一鍵建立後端同步任務，分頁批量同步文章、頁面、Portfolio、商品和圖片媒體。
 - 顯示最近一次同步時間、文章數、媒體數、同步頁數、同步模式、`updatedAfter` 和同步任務 ID。
 - 當 SaaS 返回 `SITE_TOKEN_INVALID` 時，提示用戶重新生成 Token 並重新保存或重新連接站點。
 
@@ -144,6 +144,8 @@ Content-Type: application/json
 
 手動同步會先在 SaaS 後端建立同步任務，再以每頁 100 筆分頁讀取 WordPress Posts、Pages 和圖片媒體，逐批推送到同步任務。插件會使用上一次成功同步的 `syncStartedAt` 作為下一次同步的 `updatedAfter`，首次同步沒有記錄時自動全量同步。最後一批完成後，後端會累計任務批次、文章數和媒體數，並更新站點最近同步統計。
 
+若站點存在公開的 `portfolio` 或 WooCommerce `product` post type，插件會一併同步這些內容。SaaS 後台的內部連結頁會根據已同步的文章、頁面、Portfolio 與商品內容生成內部連結建議；用戶可多選建議後批量批准並套用，Worker 會通過 Application Password 將連結段落寫回來源內容的 `contentHtml`。建議寫回仍保留審核與快照流程，不會在未批准時自動修改 WordPress 內容。
+
 GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。RankWoven 平台仍需要配置 Google 服務帳號憑據，且該服務帳號必須被加入客戶 GA4 Property 的可讀權限，否則客戶後台分析頁會返回示範數據。
 
 ## 站點側 REST API
@@ -153,9 +155,9 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 | Method | URL | 用途 |
 |---|---|---|
 | `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
-| `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取 Posts 和 Pages，可按修改時間增量過濾 |
-| `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇 Post 或 Page |
-| `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 使用 WordPress Application Password 身份寫回已批准文章建議 |
+| `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取文章、頁面、Portfolio 和商品，可按修改時間增量過濾 |
+| `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇文章、頁面、Portfolio 或商品 |
+| `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 使用 WordPress Application Password 身份寫回已批准內容建議 |
 | `GET` | `/wp-json/rankwoven/v1/media?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取圖片媒體，可按修改時間增量過濾 |
 | `GET` | `/wp-json/rankwoven/v1/media/:id` | 讀取單個圖片媒體 |
 | `POST` | `/wp-json/rankwoven/v1/media/:id/apply` | 使用 WordPress Application Password 身份寫回已批准媒體建議 |
@@ -182,6 +184,8 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 - `publishedAt`
 - `updatedAt`
 
+`type` 會保存為 `post`、`page`、`portfolio` 或 `product`。未知或站點未啟用的 post type 不會被同步。
+
 `metaDescription` 會優先讀取 Yoast `_yoast_wpseo_metadesc`、Rank Math `rank_math_description`、AIOSEO `_aioseo_description` / `_aioseop_description`，沒有 SEO 插件欄位時回退 WordPress 摘要。
 
 媒體同步欄位：
@@ -203,5 +207,5 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 - 不保存 WordPress 主登入密碼，只錄入用戶自行建立的 Application Password。
 - 不直接無審核批量發布內容。
 - 不提交任何 `.env` 或真實 API Key。
-- MVP 先使用插件端手動觸發同步任務，由插件分頁推送批次；圖片屬性批量更新每次最多處理 50 張既有圖片。
+- MVP 先使用插件端手動觸發同步任務，由插件分頁推送批次；圖片屬性批量更新每次最多處理 50 張既有圖片；內部連結套用前必須由用戶在 SaaS 後台多選並批准。
 - 站點連接、Token Hash、同步資料和加密後 WordPress Application Password 已由 API 保存到 PostgreSQL；未配置資料庫時仍可使用內存 Repository 測試。
