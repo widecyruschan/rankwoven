@@ -1,8 +1,8 @@
 import type { TextGenerationProvider } from '@aieo/ai-providers';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
-import { requireAuth, type AuthService } from './auth';
+import { getBearerToken, requireAuth, type AuthService } from './auth';
 import type {
   SiteConnectionRepository,
   SyncedArticle,
@@ -199,6 +199,19 @@ const listSuggestionsQuerySchema = z.object({
       return normalized.length > 0 ? normalized.slice(0, auditBatchSize) : undefined;
     }),
   limit: z.coerce.number().int().min(1).max(2_000).default(200)
+});
+
+const editorSeoGenerationSchema = z.object({
+  mode: z.enum(['generate', 'analyze', 'save']).default('generate'),
+  postType: z.enum(['post', 'page', 'portfolio', 'product']),
+  currentTitle: z.string().trim().max(300).optional().default(''),
+  currentSeoTitle: z.string().trim().max(300).optional().default(''),
+  currentSlug: z.string().trim().max(240).optional().default(''),
+  focusKeyphrase: z.string().trim().max(120).optional().default(''),
+  excerpt: z.string().max(2000).optional().default(''),
+  contentHtml: z.string().max(500_000).optional().default(''),
+  currentMetaDescription: z.string().max(500).optional().default(''),
+  locale: z.string().trim().min(2).max(20).default('zh-Hant')
 });
 
 const defaultRulesVersion = '2026-08-04.image-context-1';
@@ -786,6 +799,100 @@ async function generateAiMediaSuggestions(
   }
 }
 
+async function generateEditorSeoSuggestion(
+  textProvider: TextGenerationProvider | undefined,
+  input: EditorSeoGenerationInput & { siteId: string; userId: string }
+): Promise<EditorSeoGenerationResult> {
+  const fallback = buildEditorSeoFallback(input);
+
+  if (!textProvider) {
+    return fallback;
+  }
+
+  const meaningfulContext = [
+    input.currentTitle,
+    input.focusKeyphrase,
+    input.excerpt,
+    input.contentHtml
+  ].some((value) => normalizePlainText(value).length > 0);
+
+  if (!meaningfulContext) {
+    return fallback;
+  }
+
+  try {
+    const response = await textProvider.rewriteContent({
+      siteId: input.siteId,
+      userId: input.userId,
+      locale: input.locale,
+      promptVersion: '2026-08-08.editor-seo-ai-1',
+      title:
+        'Return JSON only with keys seoTitle, slug, metaDescription, analysis. ' +
+        'Keep seoTitle and metaDescription concise. The slug must be lowercase, URL-safe, and suitable for WordPress. ' +
+        'Use the same language as the current content. If the content is Chinese, keep the title and description in Chinese, but still make the slug URL-safe.',
+      html: [
+        `Post type: ${input.postType}`,
+        input.focusKeyphrase ? `Focus keyphrase: ${input.focusKeyphrase}` : '',
+        input.currentTitle ? `Current title: ${input.currentTitle}` : '',
+        input.currentSeoTitle ? `Current SEO title: ${input.currentSeoTitle}` : '',
+        input.currentSlug ? `Current slug: ${input.currentSlug}` : '',
+        input.currentMetaDescription ? `Current meta description: ${input.currentMetaDescription}` : '',
+        input.excerpt ? `Excerpt: ${input.excerpt}` : '',
+        input.contentHtml ? `Content HTML: ${input.contentHtml}` : '',
+        'Analyze the current content and return SEO suggestions that improve search intent match, clarity, and click-through rate.'
+      ]
+        .filter(Boolean)
+        .join('\n')
+    });
+
+    const parsed = extractEditorSeoResult(response.text);
+    const scoreResult = buildEditorSeoScore(input, {
+      seoTitle: parsed.seoTitle || fallback.seoTitle,
+      slug: parsed.slug || fallback.slug,
+      metaDescription: parsed.metaDescription || fallback.metaDescription
+    });
+    return {
+      seoTitle: parsed.seoTitle || fallback.seoTitle,
+      slug: parsed.slug || fallback.slug,
+      metaDescription: parsed.metaDescription || fallback.metaDescription,
+      seoScore: scoreResult.score,
+      scoreSummary: scoreResult.summary,
+      scoreChecks: scoreResult.checks,
+      analysis: [parsed.analysis, scoreResult.summary].filter(Boolean).join('\n') || fallback.analysis
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function analyzeCurrentEditorSeo(input: EditorSeoGenerationInput): EditorSeoGenerationResult {
+  const seoTitle = trimSeoText(
+    normalizePlainText(input.currentSeoTitle || input.currentTitle || input.focusKeyphrase || input.postType),
+    65
+  );
+  const slug = normalizeEditorSeoSlug(input.currentSlug || input.currentTitle || input.focusKeyphrase || input.postType)
+    || input.postType;
+  const metaDescription = trimSeoText(
+    normalizePlainText(input.currentMetaDescription || input.excerpt || input.currentTitle || input.focusKeyphrase),
+    160
+  );
+  const scoreResult = buildEditorSeoScore(input, {
+    seoTitle,
+    slug,
+    metaDescription
+  });
+
+  return {
+    seoTitle,
+    slug,
+    metaDescription,
+    seoScore: scoreResult.score,
+    scoreSummary: scoreResult.summary,
+    scoreChecks: scoreResult.checks,
+    analysis: scoreResult.summary
+  };
+}
+
 function pickMediaSuggestionValue(
   fieldName: MediaSuggestionField,
   aiSuggestions: AiMediaSuggestionResult | undefined,
@@ -955,6 +1062,247 @@ function normalizeFileName(value: string) {
     .slice(0, 80);
 
   return `${normalized || 'rankwoven-image'}.${extension || 'jpg'}`;
+}
+
+interface EditorSeoGenerationInput {
+  postType: 'post' | 'page' | 'portfolio' | 'product';
+  currentTitle: string;
+  currentSeoTitle: string;
+  currentSlug: string;
+  focusKeyphrase: string;
+  excerpt: string;
+  contentHtml: string;
+  currentMetaDescription: string;
+  locale: string;
+}
+
+interface EditorSeoGenerationResult {
+  seoTitle: string;
+  slug: string;
+  metaDescription: string;
+  seoScore: number;
+  scoreSummary: string;
+  scoreChecks: EditorSeoScoreCheck[];
+  analysis: string;
+}
+
+type EditorSeoScoreStatus = 'pass' | 'warning' | 'fail';
+
+interface EditorSeoScoreCheck {
+  key: string;
+  label: string;
+  status: EditorSeoScoreStatus;
+  points: number;
+  maxPoints: number;
+  message: string;
+}
+
+interface EditorSeoScoreResult {
+  score: number;
+  maxScore: number;
+  summary: string;
+  checks: EditorSeoScoreCheck[];
+}
+
+function normalizeEditorSeoSlug(value: string) {
+  const normalized = normalizePlainText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized.slice(0, 240);
+}
+
+function normalizeEditorSeoKeywordSlug(value: string) {
+  return normalizePlainText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function buildEditorSeoScoreCheck(
+  key: string,
+  label: string,
+  status: EditorSeoScoreStatus,
+  points: number,
+  maxPoints: number,
+  message: string
+): EditorSeoScoreCheck {
+  return {
+    key,
+    label,
+    status,
+    points,
+    maxPoints,
+    message
+  };
+}
+
+function buildEditorSeoScore(
+  input: EditorSeoGenerationInput,
+  fields: Pick<EditorSeoGenerationResult, 'seoTitle' | 'slug' | 'metaDescription'>
+): EditorSeoScoreResult {
+  const keyphrase = normalizePlainText(input.focusKeyphrase).toLowerCase();
+  const keyphraseSlug = normalizeEditorSeoKeywordSlug(input.focusKeyphrase);
+  const seoTitle = normalizePlainText(fields.seoTitle);
+  const metaDescription = normalizePlainText(fields.metaDescription);
+  const slug = normalizeEditorSeoSlug(fields.slug);
+  const contentText = normalizePlainText(input.contentHtml).toLowerCase();
+  const h1Count = (input.contentHtml.match(/<h1\b/gi) ?? []).length;
+  const internalLinkCount = (input.contentHtml.match(/<a\s+[^>]*href=["'][^"']+["']/gi) ?? []).length;
+
+  const checks: EditorSeoScoreCheck[] = [];
+
+  checks.push(
+    seoTitle.length >= 25 && seoTitle.length <= 65
+      ? buildEditorSeoScoreCheck('title-length', 'SEO title 長度', 'pass', 15, 15, 'SEO title 長度落在建議範圍 25-65 字。')
+      : seoTitle.length >= 15 && seoTitle.length <= 80
+        ? buildEditorSeoScoreCheck('title-length', 'SEO title 長度', 'warning', 8, 15, 'SEO title 可再調整到 25-65 字之間。')
+        : buildEditorSeoScoreCheck('title-length', 'SEO title 長度', 'fail', 0, 15, 'SEO title 過短或過長，建議調整到 25-65 字。')
+  );
+
+  if (keyphrase === '') {
+    checks.push(buildEditorSeoScoreCheck('focus-in-title', '焦點關鍵詞在標題中', 'warning', 0, 15, '尚未設定 Focus keyphrase，無法檢查標題關鍵詞相關性。'));
+  } else if (seoTitle.toLowerCase().includes(keyphrase)) {
+    checks.push(buildEditorSeoScoreCheck('focus-in-title', '焦點關鍵詞在標題中', 'pass', 15, 15, 'SEO title 已包含 Focus keyphrase。'));
+  } else {
+    checks.push(buildEditorSeoScoreCheck('focus-in-title', '焦點關鍵詞在標題中', 'fail', 0, 15, 'SEO title 尚未包含 Focus keyphrase。'));
+  }
+
+  checks.push(
+    metaDescription.length >= 70 && metaDescription.length <= 160
+      ? buildEditorSeoScoreCheck('meta-length', 'Meta description 長度', 'pass', 15, 15, 'Meta description 長度落在建議範圍 70-160 字。')
+      : metaDescription.length >= 50 && metaDescription.length <= 180
+        ? buildEditorSeoScoreCheck('meta-length', 'Meta description 長度', 'warning', 8, 15, 'Meta description 可再調整到 70-160 字之間。')
+        : buildEditorSeoScoreCheck('meta-length', 'Meta description 長度', 'fail', 0, 15, 'Meta description 過短、缺失或過長。')
+  );
+
+  if (keyphrase === '') {
+    checks.push(buildEditorSeoScoreCheck('focus-in-meta', '焦點關鍵詞在描述中', 'warning', 0, 10, '尚未設定 Focus keyphrase，無法檢查描述關鍵詞相關性。'));
+  } else if (metaDescription.toLowerCase().includes(keyphrase)) {
+    checks.push(buildEditorSeoScoreCheck('focus-in-meta', '焦點關鍵詞在描述中', 'pass', 10, 10, 'Meta description 已包含 Focus keyphrase。'));
+  } else {
+    checks.push(buildEditorSeoScoreCheck('focus-in-meta', '焦點關鍵詞在描述中', 'fail', 0, 10, 'Meta description 尚未包含 Focus keyphrase。'));
+  }
+
+  if (slug !== '' && slug.length <= 75 && (keyphraseSlug === '' || slug.includes(keyphraseSlug))) {
+    checks.push(buildEditorSeoScoreCheck('slug-quality', 'Slug 品質', 'pass', 10, 10, 'Slug 簡潔且與主題相關。'));
+  } else if (slug !== '') {
+    checks.push(buildEditorSeoScoreCheck('slug-quality', 'Slug 品質', 'warning', 5, 10, 'Slug 已存在，但可再縮短或更貼近 Focus keyphrase。'));
+  } else {
+    checks.push(buildEditorSeoScoreCheck('slug-quality', 'Slug 品質', 'fail', 0, 10, 'Slug 為空或不利於 SEO。'));
+  }
+
+  checks.push(
+    contentText.length >= 300
+      ? buildEditorSeoScoreCheck('content-length', '內容長度', 'pass', 10, 10, '內容長度足夠，可支撐主題完整性。')
+      : contentText.length >= 150
+        ? buildEditorSeoScoreCheck('content-length', '內容長度', 'warning', 5, 10, '內容略短，建議補充更多主題細節。')
+        : buildEditorSeoScoreCheck('content-length', '內容長度', 'fail', 0, 10, '內容過短，難以支撐主要關鍵詞排名。')
+  );
+
+  checks.push(
+    h1Count === 1
+      ? buildEditorSeoScoreCheck('h1-count', 'H1 結構', 'pass', 10, 10, '內容保留單一 H1，結構清晰。')
+      : h1Count === 0
+        ? buildEditorSeoScoreCheck('h1-count', 'H1 結構', 'fail', 0, 10, '內容缺少 H1，建議保留一個主標題。')
+        : buildEditorSeoScoreCheck('h1-count', 'H1 結構', 'warning', 5, 10, '內容有多個 H1，建議只保留一個。')
+  );
+
+  checks.push(
+    internalLinkCount >= 2
+      ? buildEditorSeoScoreCheck('internal-links', '內部連結', 'pass', 5, 5, '內容已包含足夠的內部連結。')
+      : internalLinkCount === 1
+        ? buildEditorSeoScoreCheck('internal-links', '內部連結', 'warning', 3, 5, '建議再補至少一條內部連結。')
+        : buildEditorSeoScoreCheck('internal-links', '內部連結', 'fail', 0, 5, '內容尚未包含內部連結。')
+  );
+
+  if (keyphrase === '') {
+    checks.push(buildEditorSeoScoreCheck('focus-in-content', '焦點關鍵詞在內容中', 'warning', 0, 10, '尚未設定 Focus keyphrase，無法檢查正文相關性。'));
+  } else if (contentText.includes(keyphrase)) {
+    checks.push(buildEditorSeoScoreCheck('focus-in-content', '焦點關鍵詞在內容中', 'pass', 10, 10, '內容正文已包含 Focus keyphrase。'));
+  } else {
+    checks.push(buildEditorSeoScoreCheck('focus-in-content', '焦點關鍵詞在內容中', 'fail', 0, 10, '內容正文尚未包含 Focus keyphrase。'));
+  }
+
+  const score = checks.reduce((total, check) => total + check.points, 0);
+  const maxScore = checks.reduce((total, check) => total + check.maxPoints, 0);
+  const failingChecks = checks.filter((check) => check.status !== 'pass').map((check) => check.message);
+  const summary = failingChecks.length > 0
+    ? `目前內容 SEO 分數 ${score}/${maxScore}。待優化：${failingChecks.join('；')}`
+    : `目前內容 SEO 分數 ${score}/${maxScore}。主要 SEO 檢查項均已達標。`;
+
+  return {
+    score,
+    maxScore,
+    summary,
+    checks
+  };
+}
+
+function buildEditorSeoFallback(input: EditorSeoGenerationInput): EditorSeoGenerationResult {
+  const focusKeyphrase = normalizePlainText(input.focusKeyphrase);
+  const currentTitle = normalizePlainText(input.currentTitle);
+  const currentSeoTitle = normalizePlainText(input.currentSeoTitle);
+  const currentSlug = normalizeEditorSeoSlug(input.currentSlug);
+  const currentMetaDescription = normalizePlainText(input.currentMetaDescription);
+  const excerpt = normalizePlainText(input.excerpt);
+  const contentText = normalizePlainText(input.contentHtml);
+  const seedTitle = currentSeoTitle || currentTitle || focusKeyphrase || input.postType;
+  const seoTitleBase = focusKeyphrase
+    ? `${focusKeyphrase} - ${seedTitle}`.trim()
+    : seedTitle;
+  const seoTitle = trimSeoText(seoTitleBase, 65) || trimSeoText(seedTitle, 65);
+  const slugSeed = focusKeyphrase || currentTitle || currentSlug || input.postType;
+  const slug = normalizeEditorSeoSlug(slugSeed) || normalizeEditorSeoSlug(seedTitle) || input.postType;
+  const metaDescriptionSource = currentMetaDescription || excerpt || contentText || seedTitle;
+  const metaDescription = trimSeoText(
+    focusKeyphrase
+      ? `${metaDescriptionSource}。围绕 ${focusKeyphrase} 进一步优化页面结构、标题与可读性。`
+      : `${metaDescriptionSource}。`,
+    160
+  );
+  const analysis = focusKeyphrase
+    ? `已根据当前内容与焦点关键词「${focusKeyphrase}」生成建议。`
+    : '已根据当前内容生成建议。';
+  const scoreResult = buildEditorSeoScore(input, {
+    seoTitle,
+    slug,
+    metaDescription
+  });
+
+  return {
+    seoTitle,
+    slug,
+    metaDescription,
+    seoScore: scoreResult.score,
+    scoreSummary: scoreResult.summary,
+    scoreChecks: scoreResult.checks,
+    analysis: `${analysis}\n${scoreResult.summary}`
+  };
+}
+
+function extractEditorSeoResult(value: string) {
+  const parsed = JSON.parse(extractJsonObject(value)) as Partial<EditorSeoGenerationResult> & {
+    analysis?: string;
+  };
+
+  const seoTitle = trimSeoText(normalizePlainText(parsed.seoTitle ?? ''), 65);
+  const slug = normalizeEditorSeoSlug(normalizePlainText(parsed.slug ?? ''));
+  const metaDescription = trimSeoText(normalizePlainText(parsed.metaDescription ?? ''), 160);
+  const analysis = trimSeoText(normalizePlainText(parsed.analysis ?? ''), 500);
+
+  return {
+    seoTitle,
+    slug,
+    metaDescription,
+    seoScore: 0,
+    scoreSummary: '',
+    scoreChecks: [],
+    analysis
+  };
 }
 
 async function normalizeStoredMediaSuggestion(
@@ -1719,6 +2067,38 @@ function validationError(reply: FastifyReply, error: z.ZodError) {
   });
 }
 
+async function ensureSiteTokenAccess(
+  repository: SiteConnectionRepository,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  siteId: string
+) {
+  const site = await repository.find(siteId);
+  if (!site) {
+    reply.status(404).send({
+      success: false,
+      message: '找不到站點連接',
+      error: {
+        code: 'SITE_NOT_FOUND'
+      }
+    });
+    return undefined;
+  }
+
+  if (!(await repository.verifyToken(site.id, getBearerToken(request)))) {
+    reply.status(401).send({
+      success: false,
+      message: '站點 Token 無效',
+      error: {
+        code: 'SITE_TOKEN_INVALID'
+      }
+    });
+    return undefined;
+  }
+
+  return site;
+}
+
 async function listAllArticlesForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
   const articles: SyncedArticle[] = [];
   let page = 1;
@@ -1842,6 +2222,40 @@ export function registerSeoOptimizationRoutes(
         data: {
           audits,
           issues: latestAudit ? await seoRepository.listIssues(latestAudit.id) : []
+        }
+      };
+    }
+  );
+
+  app.post<{ Params: { siteId: string } }>(
+    '/api/v1/site-connections/:siteId/editor-seo',
+    async (request, reply) => {
+      const site = await ensureSiteTokenAccess(siteRepository, request, reply, request.params.siteId);
+      if (!site) {
+        return reply;
+      }
+
+      const parsed = editorSeoGenerationSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return validationError(reply, parsed.error);
+      }
+
+      const generated = parsed.data.mode === 'generate'
+        ? await generateEditorSeoSuggestion(textProvider, {
+            siteId: site.id,
+            userId: site.id,
+            ...parsed.data
+          })
+        : analyzeCurrentEditorSeo(parsed.data);
+
+      return {
+        success: true,
+        message: parsed.data.mode === 'generate' ? 'SEO 建議已生成' : 'SEO 分析已完成',
+        data: {
+          ...generated,
+          mode: parsed.data.mode,
+          postType: parsed.data.postType,
+          focusKeyphrase: parsed.data.focusKeyphrase
         }
       };
     }
