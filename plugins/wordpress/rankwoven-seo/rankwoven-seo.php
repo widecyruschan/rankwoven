@@ -20,6 +20,8 @@ final class RankWoven_SEO_Plugin
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
     private const OPTION_GA4_PROPERTY_ID = 'rankwoven_ga4_property_id';
+    private const OPTION_TWITTER_USERNAME = 'rankwoven_twitter_username';
+    private const OPTION_FACEBOOK_APP_ID = 'rankwoven_facebook_app_id';
     private const OPTION_WP_ADMIN_USERNAME = 'rankwoven_wp_admin_username';
     private const OPTION_WP_APPLICATION_PASSWORD = 'rankwoven_wp_application_password';
     private const OPTION_LAST_SYNC_RESULT = 'rankwoven_last_sync_result';
@@ -28,6 +30,12 @@ final class RankWoven_SEO_Plugin
     private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
     private const OPTION_IMAGE_BULK_LOG = 'rankwoven_image_bulk_log';
+    private const META_EDITOR_FOCUS_KEYPHRASE = '_rankwoven_focus_keyphrase';
+    private const META_EDITOR_SEO_TITLE = '_rankwoven_seo_title';
+    private const META_EDITOR_SEO_SCORE = '_rankwoven_seo_score';
+    private const META_EDITOR_META_DESCRIPTION = '_rankwoven_meta_description';
+    private const META_EDITOR_META_KEYWORDS = '_rankwoven_meta_keywords';
+    private const META_EDITOR_ANALYSIS = '_rankwoven_seo_analysis';
     private const IMAGE_BULK_BATCH_SIZE = 50;
     private const SYNC_PAGE_SIZE = 100;
     private const SYNC_MAX_BATCH_PAGES = 10000;
@@ -35,7 +43,10 @@ final class RankWoven_SEO_Plugin
 
     public function __construct()
     {
+        add_action('init', [$this, 'register_editor_seo_meta_fields']);
         add_action('admin_menu', [$this, 'register_admin_page']);
+        add_action('add_meta_boxes', [$this, 'register_editor_seo_meta_boxes']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_editor_seo_assets']);
         add_action('admin_post_rankwoven_save_settings', [$this, 'handle_save_settings']);
         add_action('admin_post_rankwoven_connect_site', [$this, 'handle_connect_site']);
         add_action('admin_post_rankwoven_sync_content', [$this, 'handle_sync_content']);
@@ -43,7 +54,9 @@ final class RankWoven_SEO_Plugin
         add_action('admin_post_rankwoven_test_image_attributes', [$this, 'handle_test_image_attributes']);
         add_action('admin_post_rankwoven_bulk_update_image_attributes', [$this, 'handle_bulk_update_image_attributes']);
         add_action('admin_post_rankwoven_reset_image_bulk_counter', [$this, 'handle_reset_image_bulk_counter']);
+        add_action('wp_ajax_rankwoven_editor_seo', [$this, 'handle_editor_seo_ajax']);
         add_action('add_attachment', [$this, 'handle_new_attachment']);
+        add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
         add_filter('the_content', [$this, 'add_image_title_attributes_to_content']);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
     }
@@ -59,6 +72,801 @@ final class RankWoven_SEO_Plugin
         );
     }
 
+    private function get_supported_editor_post_types(): array
+    {
+        return array_values(array_filter(['post', 'page', 'portfolio', 'product'], 'post_type_exists'));
+    }
+
+    public function register_editor_seo_meta_fields(): void
+    {
+        foreach ($this->get_supported_editor_post_types() as $post_type) {
+            register_post_meta($post_type, self::META_EDITOR_FOCUS_KEYPHRASE, [
+                'type' => 'string',
+                'single' => true,
+                'show_in_rest' => true,
+                'sanitize_callback' => 'sanitize_text_field',
+                'auth_callback' => static fn (): bool => current_user_can('edit_posts')
+            ]);
+            register_post_meta($post_type, self::META_EDITOR_SEO_TITLE, [
+                'type' => 'string',
+                'single' => true,
+                'show_in_rest' => true,
+                'sanitize_callback' => 'sanitize_text_field',
+                'auth_callback' => static fn (): bool => current_user_can('edit_posts')
+            ]);
+            register_post_meta($post_type, self::META_EDITOR_SEO_SCORE, [
+                'type' => 'integer',
+                'single' => true,
+                'show_in_rest' => true,
+                'sanitize_callback' => static fn ($value): int => max(0, min(100, (int) $value)),
+                'auth_callback' => static fn (): bool => current_user_can('edit_posts')
+            ]);
+            register_post_meta($post_type, self::META_EDITOR_META_DESCRIPTION, [
+                'type' => 'string',
+                'single' => true,
+                'show_in_rest' => true,
+                'sanitize_callback' => 'sanitize_textarea_field',
+                'auth_callback' => static fn (): bool => current_user_can('edit_posts')
+            ]);
+            register_post_meta($post_type, self::META_EDITOR_META_KEYWORDS, [
+                'type' => 'string',
+                'single' => true,
+                'show_in_rest' => true,
+                'sanitize_callback' => 'sanitize_text_field',
+                'auth_callback' => static fn (): bool => current_user_can('edit_posts')
+            ]);
+            register_post_meta($post_type, self::META_EDITOR_ANALYSIS, [
+                'type' => 'string',
+                'single' => true,
+                'show_in_rest' => true,
+                'sanitize_callback' => 'sanitize_textarea_field',
+                'auth_callback' => static fn (): bool => current_user_can('edit_posts')
+            ]);
+        }
+    }
+
+    public function register_editor_seo_meta_boxes(): void
+    {
+        foreach ($this->get_supported_editor_post_types() as $post_type) {
+            add_meta_box(
+                'rankwoven_editor_seo',
+                __('RankWoven SEO', 'rankwoven-seo'),
+                [$this, 'render_editor_seo_meta_box'],
+                $post_type,
+                'normal',
+                'high'
+            );
+        }
+    }
+
+    public function enqueue_editor_seo_assets(string $hook_suffix): void
+    {
+        if (!in_array($hook_suffix, ['post.php', 'post-new.php'], true)) {
+            return;
+        }
+
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || !in_array((string) ($screen->post_type ?? ''), $this->get_supported_editor_post_types(), true)) {
+            return;
+        }
+
+        wp_enqueue_script(
+            'rankwoven-editor-seo',
+            plugin_dir_url(__FILE__) . 'assets/editor-seo.js',
+            ['wp-data'],
+            self::VERSION,
+            true
+        );
+
+        wp_localize_script('rankwoven-editor-seo', 'rankwovenEditorSeoConfig', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('rankwoven_editor_seo'),
+            'postType' => (string) ($screen->post_type ?? ''),
+            'supportedPostTypes' => $this->get_supported_editor_post_types()
+        ]);
+    }
+
+    public function render_editor_seo_meta_box(WP_Post $post): void
+    {
+        $focus_keyphrase = sanitize_text_field((string) get_post_meta($post->ID, self::META_EDITOR_FOCUS_KEYPHRASE, true));
+        $seo_title = $this->get_post_seo_title($post);
+        $saved_seo_title = sanitize_text_field((string) get_post_meta($post->ID, self::META_EDITOR_SEO_TITLE, true));
+        if ($saved_seo_title !== '') {
+            $seo_title = $saved_seo_title;
+        }
+
+        $meta_description = sanitize_textarea_field($this->get_post_meta_description($post, wp_strip_all_tags((string) $post->post_excerpt)));
+        $meta_keywords = $this->get_post_meta_keywords($post);
+        $seo_score = max(0, min(100, (int) get_post_meta($post->ID, self::META_EDITOR_SEO_SCORE, true)));
+        $analysis = sanitize_textarea_field((string) get_post_meta($post->ID, self::META_EDITOR_ANALYSIS, true));
+        $slug = sanitize_title((string) $post->post_name);
+        $api_ready = $this->get_api_base_url() !== ''
+            && sanitize_text_field(get_option(self::OPTION_SITE_ID, '')) !== ''
+            && sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, '')) !== '';
+        ?>
+        <div id="rankwoven-editor-seo-metabox" class="rankwoven-editor-seo-metabox">
+            <p>
+                <?php echo esc_html__('Use the current title, content, and focus keyphrase to generate SEO title, slug, and meta description.', 'rankwoven-seo'); ?>
+            </p>
+            <?php if (!$api_ready) : ?>
+                <p class="description">
+                    <?php echo esc_html__('AI generation requires a configured RankWoven site connection. You can still save manual SEO fields.', 'rankwoven-seo'); ?>
+                </p>
+            <?php endif; ?>
+            <p>
+                <label for="rankwoven_focus_keyphrase" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('Focus keyphrase', 'rankwoven-seo'); ?>
+                </label>
+                <input type="text" id="rankwoven_focus_keyphrase" class="widefat" value="<?php echo esc_attr($focus_keyphrase); ?>" />
+            </p>
+            <p>
+                <label for="rankwoven_seo_title" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('SEO title', 'rankwoven-seo'); ?>
+                </label>
+                <input type="text" id="rankwoven_seo_title" class="widefat" value="<?php echo esc_attr($seo_title); ?>" />
+            </p>
+            <p>
+                <label for="rankwoven_seo_slug" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('Slug', 'rankwoven-seo'); ?>
+                </label>
+                <input type="text" id="rankwoven_seo_slug" class="widefat" value="<?php echo esc_attr($slug); ?>" />
+            </p>
+            <p>
+                <label for="rankwoven_meta_description" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('Meta description', 'rankwoven-seo'); ?>
+                </label>
+                <textarea id="rankwoven_meta_description" class="widefat" rows="4"><?php echo esc_textarea($meta_description); ?></textarea>
+            </p>
+            <p>
+                <label for="rankwoven_meta_keywords" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('Keywords', 'rankwoven-seo'); ?>
+                </label>
+                <input type="text" id="rankwoven_meta_keywords" class="widefat" value="<?php echo esc_attr($meta_keywords); ?>" />
+                <span class="description">
+                    <?php echo esc_html__('Separate keywords with commas.', 'rankwoven-seo'); ?>
+                </span>
+            </p>
+            <p>
+                <label for="rankwoven_seo_score" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('Content SEO score', 'rankwoven-seo'); ?>
+                </label>
+                <input
+                    type="text"
+                    id="rankwoven_seo_score"
+                    class="regular-text"
+                    value="<?php echo esc_attr($seo_score > 0 ? sprintf('%d/100', $seo_score) : '0/100'); ?>"
+                    readonly
+                />
+            </p>
+            <p>
+                <label for="rankwoven_seo_analysis" style="display:block;font-weight:600;margin-bottom:6px;">
+                    <?php echo esc_html__('Analysis', 'rankwoven-seo'); ?>
+                </label>
+                <textarea id="rankwoven_seo_analysis" class="widefat" rows="4" readonly><?php echo esc_textarea($analysis); ?></textarea>
+            </p>
+            <p class="rankwoven-editor-seo-actions">
+                <button type="button" class="button button-primary" data-rankwoven-editor-seo-action="generate"<?php echo $api_ready ? '' : ' disabled'; ?>>
+                    <?php echo esc_html__('Generate & Apply SEO', 'rankwoven-seo'); ?>
+                </button>
+                <button type="button" class="button" data-rankwoven-editor-seo-action="save">
+                    <?php echo esc_html__('Save SEO Fields', 'rankwoven-seo'); ?>
+                </button>
+            </p>
+            <p class="description" data-rankwoven-editor-seo-status>
+                <?php echo esc_html__('Saved values are stored with the current post and can be generated again at any time.', 'rankwoven-seo'); ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    private function get_post_seo_title(WP_Post $post): string
+    {
+        $meta_keys = $this->get_editor_seo_title_meta_keys();
+        foreach ($meta_keys as $meta_key) {
+            $value = sanitize_text_field((string) get_post_meta($post->ID, $meta_key, true));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $title = get_the_title($post);
+        return is_string($title) ? sanitize_text_field($title) : '';
+    }
+
+    private function get_editor_seo_title_meta_keys(): array
+    {
+        return [
+            self::META_EDITOR_SEO_TITLE,
+            '_yoast_wpseo_title',
+            'rank_math_title',
+            '_aioseo_title',
+            '_aioseop_title'
+        ];
+    }
+
+    private function get_editor_seo_meta_description_keys(): array
+    {
+        return [
+            self::META_EDITOR_META_DESCRIPTION,
+            '_yoast_wpseo_metadesc',
+            'rank_math_description',
+            '_aioseo_description',
+            '_aioseop_description'
+        ];
+    }
+
+    private function get_post_meta_keywords(WP_Post $post): string
+    {
+        $keywords = get_post_meta($post->ID, self::META_EDITOR_META_KEYWORDS, true);
+        return $this->sanitize_editor_meta_keywords($keywords);
+    }
+
+    private function sanitize_editor_meta_keywords($value): string
+    {
+        if (is_array($value)) {
+            $value = implode(',', array_map('strval', $value));
+        }
+
+        $raw_keywords = str_replace(["\r", "\n", ';', '，'], ',', wp_strip_all_tags((string) $value));
+        $parts = preg_split('/\s*,\s*/', sanitize_text_field($raw_keywords)) ?: [];
+        $keywords = [];
+
+        foreach ($parts as $part) {
+            $keyword = trim($part);
+            if ($keyword !== '' && !in_array($keyword, $keywords, true)) {
+                $keywords[] = $keyword;
+            }
+        }
+
+        return implode(', ', $keywords);
+    }
+
+    public function render_frontend_seo_meta_tags(): void
+    {
+        if (is_admin() || !is_singular($this->get_supported_editor_post_types())) {
+            return;
+        }
+
+        $post = get_queried_object();
+        if (!($post instanceof WP_Post)) {
+            return;
+        }
+
+        $description = $this->get_post_meta_description($post, wp_strip_all_tags((string) $post->post_excerpt));
+        $keywords = $this->get_post_meta_keywords($post);
+        $title = $this->get_post_seo_title($post);
+        $site_name = sanitize_text_field((string) get_bloginfo('name'));
+        $preview_image = $this->get_post_preview_image($post);
+        $image_url = (string) ($preview_image['url'] ?? '');
+        $image_alt = (string) ($preview_image['alt'] ?? '');
+        $twitter_username = $this->get_twitter_username($post);
+        $facebook_app_id = $this->get_facebook_app_id($post);
+        $canonical_url = get_permalink($post);
+        $url = is_string($canonical_url) ? esc_url_raw($canonical_url) : '';
+
+        echo "\n";
+        $this->render_head_meta_tag(['name' => 'description', 'content' => $description]);
+        $this->render_head_meta_tag(['name' => 'keywords', 'content' => $keywords]);
+
+        echo '<!-- Google+ -->' . "\n";
+        $this->render_head_meta_tag(['itemprop' => 'name', 'content' => $title]);
+        $this->render_head_meta_tag(['itemprop' => 'description', 'content' => $description]);
+        $this->render_head_meta_tag(['itemprop' => 'image', 'content' => $image_url]);
+
+        echo '<!-- Weibo -->' . "\n";
+        $this->render_head_meta_tag(['name' => 'weibo:type', 'content' => 'webpage']);
+        $this->render_head_meta_tag(['name' => 'weibo:webpage:title', 'content' => $title]);
+        $this->render_head_meta_tag(['name' => 'weibo:webpage:description', 'content' => $description]);
+        $this->render_head_meta_tag(['name' => 'weibo:webpage:image', 'content' => $image_url]);
+
+        echo '<!-- Twitter Card -->' . "\n";
+        $this->render_head_meta_tag(['name' => 'twitter:card', 'content' => 'summary']);
+        $this->render_head_meta_tag(['name' => 'twitter:site', 'content' => $twitter_username]);
+        $this->render_head_meta_tag(['name' => 'twitter:title', 'content' => $title]);
+        $this->render_head_meta_tag(['name' => 'twitter:description', 'content' => $description]);
+        $this->render_head_meta_tag(['name' => 'twitter:creator', 'content' => $twitter_username]);
+        $this->render_head_meta_tag(['name' => 'twitter:image', 'content' => $image_url]);
+        $this->render_head_meta_tag(['name' => 'twitter:image:alt', 'content' => $image_alt]);
+
+        echo '<!-- LinkedIn / Facebook -->' . "\n";
+        $this->render_head_meta_tag(['property' => 'fb:app_id', 'content' => $facebook_app_id]);
+        $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:type', 'content' => 'website']);
+        $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:title', 'content' => $title]);
+        $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:image', 'content' => $image_url]);
+        $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:site_name', 'content' => $site_name]);
+        $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:description', 'content' => $description]);
+        $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:url', 'content' => $url]);
+    }
+
+    private function get_post_preview_image(WP_Post $post): array
+    {
+        $image_id = (int) get_post_thumbnail_id($post->ID);
+        if ($image_id > 0) {
+            $image_url = wp_get_attachment_image_url($image_id, 'full');
+            if (is_string($image_url) && $image_url !== '') {
+                $image_alt = sanitize_text_field((string) get_post_meta($image_id, '_wp_attachment_image_alt', true));
+                if ($image_alt === '') {
+                    $image_alt = sanitize_text_field((string) get_the_title($image_id));
+                }
+
+                return [
+                    'url' => esc_url_raw($image_url),
+                    'alt' => $image_alt
+                ];
+            }
+        }
+
+        $site_icon_url = function_exists('get_site_icon_url') ? get_site_icon_url(512) : '';
+        if (is_string($site_icon_url) && $site_icon_url !== '') {
+            return [
+                'url' => esc_url_raw($site_icon_url),
+                'alt' => sanitize_text_field((string) get_bloginfo('name'))
+            ];
+        }
+
+        return [
+            'url' => '',
+            'alt' => ''
+        ];
+    }
+
+    private function get_twitter_username(WP_Post $post): string
+    {
+        $saved_username = sanitize_text_field((string) get_option(self::OPTION_TWITTER_USERNAME, ''));
+        $username = apply_filters('rankwoven_seo_twitter_username', $saved_username, $post);
+        if (!is_string($username)) {
+            return '';
+        }
+
+        $normalized_username = ltrim(sanitize_text_field($username), '@');
+        return $normalized_username !== '' ? '@' . $normalized_username : '';
+    }
+
+    private function get_facebook_app_id(WP_Post $post): string
+    {
+        $saved_app_id = sanitize_text_field((string) get_option(self::OPTION_FACEBOOK_APP_ID, ''));
+        $app_id = apply_filters('rankwoven_seo_facebook_app_id', $saved_app_id, $post);
+        return is_string($app_id) ? sanitize_text_field($app_id) : '';
+    }
+
+    private function render_head_meta_tag(array $attributes): void
+    {
+        $content = (string) ($attributes['content'] ?? '');
+        if ($content === '') {
+            return;
+        }
+
+        $html_attributes = [];
+        foreach ($attributes as $name => $value) {
+            $normalized_name = sanitize_key((string) $name);
+            if ($normalized_name === '') {
+                continue;
+            }
+
+            $html_attributes[] = sprintf('%s="%s"', $normalized_name, esc_attr((string) $value));
+        }
+
+        if ($html_attributes !== []) {
+            echo '<meta ' . implode(' ', $html_attributes) . '>' . "\n";
+        }
+    }
+
+    private function normalize_editor_seo_slug(string $value, string $fallback = ''): string
+    {
+        $slug = sanitize_title($value);
+        if ($slug === '' && $fallback !== '') {
+            $slug = sanitize_title($fallback);
+        }
+
+        return $slug !== '' ? $slug : 'rankwoven-seo';
+    }
+
+    private function truncate_editor_seo_text(string $value, int $max_length): string
+    {
+        $trimmed = trim(wp_strip_all_tags($value));
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            return mb_strlen($trimmed) <= $max_length ? $trimmed : trim((string) mb_substr($trimmed, 0, $max_length));
+        }
+
+        return strlen($trimmed) <= $max_length ? $trimmed : trim(substr($trimmed, 0, $max_length));
+    }
+
+    private function build_local_editor_seo_values(
+        string $focus_keyphrase,
+        string $current_title,
+        string $current_seo_title,
+        string $current_slug,
+        string $current_meta_description,
+        string $excerpt,
+        string $content_html,
+        string $fallback_reason = ''
+    ): array {
+        $normalized_keyphrase = trim(wp_strip_all_tags($focus_keyphrase));
+        $normalized_title = trim(wp_strip_all_tags($current_title));
+        $normalized_seo_title = trim(wp_strip_all_tags($current_seo_title));
+        $normalized_excerpt = trim(wp_strip_all_tags($excerpt));
+        $normalized_content = trim(wp_strip_all_tags($content_html));
+        $seed_title = $normalized_seo_title !== ''
+            ? $normalized_seo_title
+            : ($normalized_title !== '' ? $normalized_title : $normalized_keyphrase);
+        $seo_title_base = $normalized_keyphrase !== ''
+            ? sprintf('%s - %s', $normalized_keyphrase, $seed_title)
+            : $seed_title;
+        $seo_title = $this->truncate_editor_seo_text($seo_title_base, 65);
+
+        if ($seo_title === '') {
+            $seo_title = $this->truncate_editor_seo_text($seed_title !== '' ? $seed_title : __('RankWoven SEO 建議', 'rankwoven-seo'), 65);
+        }
+
+        $slug_seed = $normalized_keyphrase !== ''
+            ? $normalized_keyphrase
+            : ($current_slug !== '' ? $current_slug : $seed_title);
+        $slug = $this->normalize_editor_seo_slug($slug_seed, $seed_title);
+
+        $meta_source = trim(wp_strip_all_tags($current_meta_description));
+        if ($meta_source === '') {
+            $meta_source = $normalized_excerpt !== '' ? $normalized_excerpt : ($normalized_content !== '' ? $normalized_content : $seed_title);
+        }
+
+        $meta_description_base = $normalized_keyphrase !== ''
+            ? sprintf('%s。圍繞 %s 進一步優化頁面結構、標題與可讀性。', $meta_source, $normalized_keyphrase)
+            : sprintf('%s。', $meta_source);
+        $meta_description = $this->truncate_editor_seo_text($meta_description_base, 160);
+
+        $score_data = $this->calculate_local_editor_seo_score(
+            $normalized_keyphrase,
+            $seo_title,
+            $slug,
+            $meta_description,
+            $content_html
+        );
+
+        $analysis = (string) ($score_data['analysis'] ?? '');
+        if ($fallback_reason !== '') {
+            $friendly_reason = $fallback_reason;
+            if (str_contains($fallback_reason, '/editor-seo not found')) {
+                $friendly_reason = __('正式 API 尚未部署 AI SEO 生成路由。', 'rankwoven-seo');
+            } elseif (str_contains($fallback_reason, 'cURL error') || str_contains($fallback_reason, 'wp_remote_post')) {
+                $friendly_reason = __('外掛暫時無法連接遠端 AI 服務。', 'rankwoven-seo');
+            }
+
+            $analysis = sprintf(
+                /* translators: 1: fallback reason, 2: local analysis summary */
+                __('遠端 AI 服務暫時不可用，已改用本地 SEO 建議。原因：%1$s %2$s', 'rankwoven-seo'),
+                $friendly_reason,
+                $analysis
+            );
+        }
+
+        return [
+            'seoTitle' => $seo_title,
+            'slug' => $slug,
+            'seoScore' => max(0, min(100, (int) ($score_data['seoScore'] ?? 0))),
+            'scoreSummary' => (string) ($score_data['analysis'] ?? ''),
+            'metaDescription' => $meta_description,
+            'analysis' => trim($analysis)
+        ];
+    }
+
+    private function calculate_local_editor_seo_score(
+        string $focus_keyphrase,
+        string $seo_title,
+        string $slug,
+        string $meta_description,
+        string $content_html
+    ): array {
+        $normalized_keyphrase = function_exists('mb_strtolower')
+            ? mb_strtolower(trim(wp_strip_all_tags($focus_keyphrase)))
+            : strtolower(trim(wp_strip_all_tags($focus_keyphrase)));
+        $normalized_title = trim(wp_strip_all_tags($seo_title));
+        $normalized_meta_description = trim(wp_strip_all_tags($meta_description));
+        $normalized_content = trim(wp_strip_all_tags($content_html));
+        $lower_title = function_exists('mb_strtolower') ? mb_strtolower($normalized_title) : strtolower($normalized_title);
+        $lower_meta_description = function_exists('mb_strtolower') ? mb_strtolower($normalized_meta_description) : strtolower($normalized_meta_description);
+        $lower_content = function_exists('mb_strtolower') ? mb_strtolower($normalized_content) : strtolower($normalized_content);
+        $title_length = function_exists('mb_strlen') ? mb_strlen($normalized_title) : strlen($normalized_title);
+        $meta_length = function_exists('mb_strlen') ? mb_strlen($normalized_meta_description) : strlen($normalized_meta_description);
+        $content_length = function_exists('mb_strlen') ? mb_strlen($normalized_content) : strlen($normalized_content);
+        $h1_count = preg_match_all('/<h1\b/i', $content_html, $matches);
+        $internal_link_count = preg_match_all('/<a\s+[^>]*href=["\'][^"\']+["\']/i', $content_html, $matches);
+
+        $score = 0;
+        $messages = [];
+
+        if ($title_length >= 25 && $title_length <= 65) {
+            $score += 15;
+        } elseif ($title_length >= 15 && $title_length <= 80) {
+            $score += 8;
+            $messages[] = __('SEO title 可再調整到 25-65 字之間。', 'rankwoven-seo');
+        } else {
+            $messages[] = __('SEO title 過短或過長，建議調整到 25-65 字。', 'rankwoven-seo');
+        }
+
+        if ($normalized_keyphrase === '') {
+            $messages[] = __('尚未設定 Focus keyphrase，無法評估關鍵詞相關性。', 'rankwoven-seo');
+        } else {
+            if ($lower_title !== '' && str_contains($lower_title, $normalized_keyphrase)) {
+                $score += 15;
+            } else {
+                $messages[] = __('SEO title 尚未包含 Focus keyphrase。', 'rankwoven-seo');
+            }
+
+            if ($lower_meta_description !== '' && str_contains($lower_meta_description, $normalized_keyphrase)) {
+                $score += 10;
+            } else {
+                $messages[] = __('Meta description 尚未包含 Focus keyphrase。', 'rankwoven-seo');
+            }
+
+            if ($lower_content !== '' && str_contains($lower_content, $normalized_keyphrase)) {
+                $score += 10;
+            } else {
+                $messages[] = __('內容正文尚未包含 Focus keyphrase。', 'rankwoven-seo');
+            }
+        }
+
+        if ($meta_length >= 70 && $meta_length <= 160) {
+            $score += 15;
+        } elseif ($meta_length >= 50 && $meta_length <= 180) {
+            $score += 8;
+            $messages[] = __('Meta description 可再調整到 70-160 字之間。', 'rankwoven-seo');
+        } else {
+            $messages[] = __('Meta description 過短、缺失或過長。', 'rankwoven-seo');
+        }
+
+        if ($slug !== '') {
+            $score += 10;
+        } else {
+            $messages[] = __('Slug 為空或不利於 SEO。', 'rankwoven-seo');
+        }
+
+        if ($content_length >= 300) {
+            $score += 10;
+        } elseif ($content_length >= 150) {
+            $score += 5;
+            $messages[] = __('內容略短，建議補充更多主題細節。', 'rankwoven-seo');
+        } else {
+            $messages[] = __('內容過短，難以支撐主要關鍵詞排名。', 'rankwoven-seo');
+        }
+
+        if ($h1_count === 1) {
+            $score += 10;
+        } elseif ($h1_count === 0) {
+            $messages[] = __('內容缺少 H1，建議保留一個主標題。', 'rankwoven-seo');
+        } else {
+            $score += 5;
+            $messages[] = __('內容有多個 H1，建議只保留一個。', 'rankwoven-seo');
+        }
+
+        if ($internal_link_count >= 2) {
+            $score += 5;
+        } elseif ($internal_link_count === 1) {
+            $score += 3;
+            $messages[] = __('建議再補至少一條內部連結。', 'rankwoven-seo');
+        } else {
+            $messages[] = __('內容尚未包含內部連結。', 'rankwoven-seo');
+        }
+
+        $summary = empty($messages)
+            ? __('目前內容 SEO 分數 100/100。主要 SEO 檢查項均已達標。', 'rankwoven-seo')
+            : sprintf(
+                /* translators: 1: SEO score, 2: optimization hints */
+                __('目前內容 SEO 分數 %1$d/100。待優化：%2$s', 'rankwoven-seo'),
+                $score,
+                implode('；', $messages)
+            );
+
+        return [
+            'seoScore' => max(0, min(100, $score)),
+            'analysis' => $summary
+        ];
+    }
+
+    private function save_editor_seo_meta_value(int $post_id, string $meta_key, string $value): void
+    {
+        if ($value === '') {
+            delete_post_meta($post_id, $meta_key);
+            return;
+        }
+
+        update_post_meta($post_id, $meta_key, $value);
+    }
+
+    private function sync_editor_seo_meta_keys(int $post_id, string $seo_title, string $meta_description): void
+    {
+        foreach ($this->get_editor_seo_title_meta_keys() as $meta_key) {
+            $this->save_editor_seo_meta_value($post_id, $meta_key, $seo_title);
+        }
+
+        foreach ($this->get_editor_seo_meta_description_keys() as $meta_key) {
+            $this->save_editor_seo_meta_value($post_id, $meta_key, $meta_description);
+        }
+    }
+
+    private function generate_editor_seo_values_from_api(array $payload)
+    {
+        $api_base_url = $this->get_api_base_url();
+        $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
+        $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
+
+        if ($api_base_url === '' || $site_id === '' || $site_token === '') {
+            return new WP_Error('rankwoven_editor_seo_not_configured', __('RankWoven site connection is not configured.', 'rankwoven-seo'));
+        }
+
+        $response = wp_remote_post(
+            $this->build_api_url('/api/v1/site-connections/' . rawurlencode($site_id) . '/editor-seo'),
+            [
+                'timeout' => 45,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $site_token,
+                    'Content-Type' => 'application/json'
+                ],
+                'body' => wp_json_encode($payload)
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            return new WP_Error('rankwoven_editor_seo_generate_failed', $response->get_error_message());
+        }
+
+        $body = $this->decode_response_body($response);
+        if (!($body['success'] ?? false) || empty($body['data']) || !is_array($body['data'])) {
+            $message = is_string($body['message'] ?? null) ? $body['message'] : __('SEO generation failed.', 'rankwoven-seo');
+            return new WP_Error('rankwoven_editor_seo_generate_failed', $message);
+        }
+
+        $data = $body['data'];
+        $seo_title = sanitize_text_field((string) ($data['seoTitle'] ?? ''));
+        $slug = $this->normalize_editor_seo_slug((string) ($data['slug'] ?? ''), (string) ($payload['currentTitle'] ?? ''));
+        $meta_description = sanitize_textarea_field((string) ($data['metaDescription'] ?? ''));
+        $meta_keywords = $this->sanitize_editor_meta_keywords($data['metaKeywords'] ?? $data['keywords'] ?? $payload['currentMetaKeywords'] ?? '');
+        $seo_score = max(0, min(100, (int) ($data['seoScore'] ?? 0)));
+        $score_summary = sanitize_textarea_field((string) ($data['scoreSummary'] ?? ''));
+        $analysis = sanitize_textarea_field((string) ($data['analysis'] ?? ''));
+
+        if ($seo_title === '') {
+            $seo_title = sanitize_text_field((string) ($payload['currentSeoTitle'] ?? $payload['currentTitle'] ?? ''));
+        }
+
+        if ($meta_description === '') {
+            $meta_description = sanitize_textarea_field((string) ($payload['currentMetaDescription'] ?? ''));
+        }
+
+        if ($analysis === '') {
+            $analysis = $score_summary !== ''
+                ? $score_summary
+                : __('SEO suggestions generated successfully.', 'rankwoven-seo');
+        }
+
+        return [
+            'seoTitle' => $seo_title,
+            'slug' => $slug,
+            'seoScore' => $seo_score,
+            'scoreSummary' => $score_summary,
+            'metaDescription' => $meta_description,
+            'metaKeywords' => $meta_keywords,
+            'analysis' => $analysis
+        ];
+    }
+
+    public function handle_editor_seo_ajax(): void
+    {
+        check_ajax_referer('rankwoven_editor_seo', 'nonce');
+
+        $post_id = (int) ($_POST['postId'] ?? 0);
+        $post = get_post($post_id);
+
+        if (!($post instanceof WP_Post) || !in_array($post->post_type, $this->get_supported_editor_post_types(), true)) {
+            wp_send_json_error([
+                'message' => __('Post not found or not supported.', 'rankwoven-seo')
+            ], 404);
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error([
+                'message' => __('You do not have permission to edit this post.', 'rankwoven-seo')
+            ], 403);
+        }
+
+        $mode = sanitize_key(wp_unslash($_POST['mode'] ?? 'save'));
+        $focus_keyphrase = sanitize_text_field(wp_unslash($_POST['focusKeyphrase'] ?? ''));
+        $seo_title = sanitize_text_field(wp_unslash($_POST['seoTitle'] ?? ''));
+        $slug = sanitize_title(wp_unslash($_POST['slug'] ?? ''));
+        $meta_description = sanitize_textarea_field(wp_unslash($_POST['metaDescription'] ?? ''));
+        $meta_keywords = $this->sanitize_editor_meta_keywords(wp_unslash($_POST['metaKeywords'] ?? ''));
+        $seo_score = max(0, min(100, (int) ($_POST['seoScore'] ?? 0)));
+        $analysis = sanitize_textarea_field(wp_unslash($_POST['analysis'] ?? ''));
+        $current_title = sanitize_text_field(wp_unslash($_POST['currentTitle'] ?? $post->post_title));
+        $current_seo_title = sanitize_text_field(wp_unslash($_POST['currentSeoTitle'] ?? $seo_title));
+        $current_slug = sanitize_title(wp_unslash($_POST['currentSlug'] ?? $post->post_name));
+        $content_html = wp_kses_post(wp_unslash($_POST['contentHtml'] ?? $post->post_content));
+        $excerpt = wp_kses_post(wp_unslash($_POST['excerpt'] ?? $post->post_excerpt));
+        $locale = sanitize_text_field(wp_unslash($_POST['locale'] ?? get_locale()));
+
+        if ($mode === 'generate' && $this->get_api_base_url() !== '' && sanitize_text_field(get_option(self::OPTION_SITE_ID, '')) !== '' && sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, '')) !== '') {
+            $generated = $this->generate_editor_seo_values_from_api([
+                'mode' => $mode === 'generate' ? 'generate' : 'analyze',
+                'postType' => $post->post_type,
+                'currentTitle' => $current_title,
+                'currentSeoTitle' => $current_seo_title,
+                'currentSlug' => $current_slug,
+                'focusKeyphrase' => $focus_keyphrase,
+                'excerpt' => $excerpt,
+                'contentHtml' => $content_html,
+                'currentMetaDescription' => $meta_description,
+                'currentMetaKeywords' => $meta_keywords,
+                'locale' => $locale
+            ]);
+
+            if (is_wp_error($generated)) {
+                $generated = $this->build_local_editor_seo_values(
+                    $focus_keyphrase,
+                    $current_title,
+                    $current_seo_title,
+                    $current_slug,
+                    $meta_description,
+                    $excerpt,
+                    $content_html,
+                    $generated->get_error_message()
+                );
+            }
+
+            $seo_title = sanitize_text_field((string) ($generated['seoTitle'] ?? ''));
+            $slug = $this->normalize_editor_seo_slug((string) ($generated['slug'] ?? ''), $current_title);
+            $seo_score = max(0, min(100, (int) ($generated['seoScore'] ?? 0)));
+            $meta_description = sanitize_textarea_field((string) ($generated['metaDescription'] ?? ''));
+            $meta_keywords = $this->sanitize_editor_meta_keywords($generated['metaKeywords'] ?? $meta_keywords);
+            $analysis = sanitize_textarea_field((string) ($generated['analysis'] ?? ''));
+        }
+
+        if ($mode === 'save') {
+            $local_analysis = $this->calculate_local_editor_seo_score(
+                $focus_keyphrase,
+                $seo_title !== '' ? $seo_title : $current_seo_title,
+                $slug !== '' ? $slug : $current_slug,
+                $meta_description,
+                $content_html
+            );
+            $seo_score = max(0, min(100, (int) ($local_analysis['seoScore'] ?? 0)));
+            $analysis = sanitize_textarea_field((string) ($local_analysis['analysis'] ?? $analysis));
+        }
+
+        $save_result = wp_update_post(wp_slash([
+            'ID' => $post_id,
+            'post_name' => $slug !== '' ? $slug : $current_slug
+        ]), true);
+
+        if (is_wp_error($save_result)) {
+            wp_send_json_error([
+                'message' => $save_result->get_error_message()
+            ], 500);
+        }
+
+        $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_FOCUS_KEYPHRASE, $focus_keyphrase);
+        $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_SEO_TITLE, $seo_title);
+        update_post_meta($post_id, self::META_EDITOR_SEO_SCORE, $seo_score);
+        $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_META_DESCRIPTION, $meta_description);
+        $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_META_KEYWORDS, $meta_keywords);
+        $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_ANALYSIS, $analysis);
+        $this->sync_editor_seo_meta_keys($post_id, $seo_title, $meta_description);
+
+        wp_send_json_success([
+            'postId' => $post_id,
+            'postType' => $post->post_type,
+            'focusKeyphrase' => $focus_keyphrase,
+            'seoTitle' => $seo_title,
+            'slug' => $slug !== '' ? $slug : $current_slug,
+            'seoScore' => $seo_score,
+            'metaDescription' => $meta_description,
+            'metaKeywords' => $meta_keywords,
+            'analysis' => $analysis,
+            'mode' => $mode
+        ]);
+    }
+
     public function render_admin_page(): void
     {
         if (!current_user_can('manage_options')) {
@@ -68,6 +876,8 @@ final class RankWoven_SEO_Plugin
         $api_base_url = get_option(self::OPTION_API_BASE_URL, 'http://localhost:3011');
         $site_id = get_option(self::OPTION_SITE_ID, '');
         $ga4_property_id = get_option(self::OPTION_GA4_PROPERTY_ID, '');
+        $twitter_username = get_option(self::OPTION_TWITTER_USERNAME, '');
+        $facebook_app_id = get_option(self::OPTION_FACEBOOK_APP_ID, '');
         $wp_admin_username = get_option(self::OPTION_WP_ADMIN_USERNAME, '');
         $wp_application_password = get_option(self::OPTION_WP_APPLICATION_PASSWORD, '');
         $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
@@ -148,6 +958,49 @@ final class RankWoven_SEO_Plugin
                             />
                             <p class="description">
                                 <?php echo esc_html__('Enter this WordPress site GA4 Property ID. RankWoven uses it to read SEO analytics for this site after the platform service account has access to the property.', 'rankwoven-seo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <h2><?php echo esc_html__('Social Sharing Meta', 'rankwoven-seo'); ?></h2>
+                <p>
+                    <?php echo esc_html__('These public values are used for Twitter Card and Facebook Open Graph tags on supported frontend pages.', 'rankwoven-seo'); ?>
+                </p>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">
+                            <label for="rankwoven_twitter_username"><?php echo esc_html__('Twitter/X Username', 'rankwoven-seo'); ?></label>
+                        </th>
+                        <td>
+                            <input
+                                id="rankwoven_twitter_username"
+                                name="rankwoven_twitter_username"
+                                type="text"
+                                class="regular-text"
+                                value="<?php echo esc_attr($twitter_username); ?>"
+                                placeholder="@rankwoven"
+                            />
+                            <p class="description">
+                                <?php echo esc_html__('Used for twitter:site and twitter:creator. Leave blank to omit those tags.', 'rankwoven-seo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="rankwoven_facebook_app_id"><?php echo esc_html__('Facebook App ID', 'rankwoven-seo'); ?></label>
+                        </th>
+                        <td>
+                            <input
+                                id="rankwoven_facebook_app_id"
+                                name="rankwoven_facebook_app_id"
+                                type="text"
+                                class="regular-text"
+                                value="<?php echo esc_attr($facebook_app_id); ?>"
+                                placeholder="123456789012345"
+                            />
+                            <p class="description">
+                                <?php echo esc_html__('Used for fb:app_id. Leave blank to omit the tag.', 'rankwoven-seo'); ?>
                             </p>
                         </td>
                     </tr>
@@ -288,6 +1141,8 @@ final class RankWoven_SEO_Plugin
         $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
         $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
         $ga4_property_id = sanitize_text_field(get_option(self::OPTION_GA4_PROPERTY_ID, ''));
+        $twitter_username = sanitize_text_field(get_option(self::OPTION_TWITTER_USERNAME, ''));
+        $facebook_app_id = sanitize_text_field(get_option(self::OPTION_FACEBOOK_APP_ID, ''));
         $wp_credentials = $this->get_wordpress_admin_credentials();
         $last_sync_result = get_option(self::OPTION_LAST_SYNC_RESULT, []);
         $last_sync_result = is_array($last_sync_result) ? $last_sync_result : [];
@@ -305,6 +1160,8 @@ final class RankWoven_SEO_Plugin
                 <?php $this->render_diagnostic_row(__('Site ID', 'rankwoven-seo'), $site_id !== '' ? $site_id : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Token status', 'rankwoven-seo'), $site_token !== '' ? __('Configured locally', 'rankwoven-seo') : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('GA4 Property ID', 'rankwoven-seo'), $ga4_property_id !== '' ? $ga4_property_id : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('Twitter/X Username', 'rankwoven-seo'), $twitter_username !== '' ? '@' . $twitter_username : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('Facebook App ID', 'rankwoven-seo'), $facebook_app_id !== '' ? $facebook_app_id : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Token last local use', 'rankwoven-seo'), $this->get_last_token_used_label()); ?>
                 <?php $this->render_diagnostic_row(__('Last sync', 'rankwoven-seo'), $this->get_last_sync_label($last_sync_result)); ?>
                 <?php $this->render_diagnostic_row(__('Image attribute settings', 'rankwoven-seo'), $this->get_image_attribute_settings_label($image_settings)); ?>
@@ -414,6 +1271,10 @@ final class RankWoven_SEO_Plugin
         );
         $ga4_property_id = sanitize_text_field(wp_unslash($_POST['rankwoven_ga4_property_id'] ?? ''));
         update_option(self::OPTION_GA4_PROPERTY_ID, $ga4_property_id);
+        $twitter_username = ltrim(sanitize_text_field(wp_unslash($_POST['rankwoven_twitter_username'] ?? '')), '@');
+        $facebook_app_id = sanitize_text_field(wp_unslash($_POST['rankwoven_facebook_app_id'] ?? ''));
+        update_option(self::OPTION_TWITTER_USERNAME, $twitter_username);
+        update_option(self::OPTION_FACEBOOK_APP_ID, $facebook_app_id);
 
         $wp_admin_username = sanitize_text_field(wp_unslash($_POST['rankwoven_wp_admin_username'] ?? ''));
         $wp_application_password = sanitize_text_field(wp_unslash($_POST['rankwoven_wp_application_password'] ?? ''));
@@ -1315,15 +2176,7 @@ final class RankWoven_SEO_Plugin
 
     private function get_post_meta_description(WP_Post $post, string $excerpt): string
     {
-        $meta_keys = [
-            '_yoast_wpseo_metadesc',
-            'rank_math_description',
-            '_aioseo_description',
-            '_aioseop_description',
-            '_rankwoven_meta_description'
-        ];
-
-        foreach ($meta_keys as $meta_key) {
+        foreach ($this->get_editor_seo_meta_description_keys() as $meta_key) {
             $value = trim((string) get_post_meta($post->ID, $meta_key, true));
             if ($value !== '') {
                 return $this->extract_plain_text_content($value);

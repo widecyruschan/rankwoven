@@ -1983,3 +1983,105 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - 已確認 `apps/web/dist/robots.txt` 與 `apps/web/dist/sitemap.xml` 正確產出。
   - 線上 `rankwoven.com` 尚未重新部署，因此 Search Console 狀態仍需待部署後重新驗證。
 - 下一步行動清單：部署 Web 更新到生產；部署後檢查 `https://rankwoven.com/robots.txt` 與 `https://rankwoven.com/sitemap.xml`；再回 Google Search Console 對「頁面會重新導向」項目按「驗證修正」。
+
+### 2026-08-08（星期六）— 移除後台登入頁預填密碼
+
+- 會話的主要目的：避免後台登入頁直接顯示測試密碼。
+- 完成的主要任務：
+  1. 將 `apps/web/src/views/LoginView.vue` 的登入表單密碼預設值從 `rankwoven` 改為空字串，避免畫面預填可讀密碼。
+  2. 重新檢查前端相關檔案，確認沒有其他地方把登入密碼直接寫死在公開畫面。
+- 關鍵決策和解決方案：只移除密碼預填值，不改登入流程與驗證邏輯，保留最小修改範圍。
+- 使用的技術棧：Vue 3、TypeScript、Ant Design Vue、Vite。
+- 新增或修改文件：
+  - 修改：`apps/web/src/views/LoginView.vue`、`README.md`
+- 驗證結果：
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過。
+- 下一步行動清單：若之後要展示測試帳號，改放到說明文件或測試環境，不要預填在正式登入表單。
+
+### 2026-08-08（星期六）— 新增 WordPress 編輯頁 SEO 面板
+
+- 會話的主要目的：在文章、頁面、Portfolio 和商品的新增/編輯頁加入 SEO 面板，輸入 Focus keyphrase 後可用 AI 生成並套用 SEO title、Slug 與 Meta description。
+- 完成的主要任務：
+  1. 在 `apps/api/src/seoOptimization.ts` 新增站點 Token 驗證的 `POST /api/v1/site-connections/:siteId/editor-seo` 路由，使用既有 AI provider 生成 SEO title、slug、meta description 與內容分析。
+  2. 在 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 新增編輯頁 SEO metabox、REST/meta key 註冊、AJAX 生成與保存流程，並把 SEO title / meta description 寫入常見 SEO 外掛欄位與 RankWoven 自訂欄位。
+  3. 新增 `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`，讓 WordPress 編輯頁可直接從當前內容與面板欄位發起生成/保存請求。
+  4. 更新 `plugins/wordpress/README.md` 與 `plugins/wordpress/TESTING.md`，補上新面板與手動驗證步驟。
+  5. 新增 `apps/api/tests/siteConnections.test.ts` 回歸測試，覆蓋 editor SEO 生成接口。
+- 關鍵決策和解決方案：SEO title 與文章標題分開處理，不直接覆蓋正文標題；slug 仍寫回 WordPress 原生 `post_name`，而 meta description 與 SEO title 同時同步到常見 SEO 外掛 key 與 RankWoven 自訂欄位，避免與現有 SEO 流程打架。
+- 使用的技術棧：WordPress PHP、Admin Ajax、Vue/JS-less Admin UI、Fastify、TypeScript、Vitest。
+- 新增或修改文件：
+  - 新增：`plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/api` 通過。
+  - `npm run test -w @aieo/api` 通過。
+  - `node --check plugins/wordpress/rankwoven-seo/assets/editor-seo.js` 通過。
+  - 本機未安裝 `php` CLI，且 Docker API 權限受限，未能在本機完成 `php -l` 驗證。
+- 下一步行動清單：把插件同步到 WordPress 測試站，打開文章/頁面/Portfolio/商品編輯頁確認面板顯示、AI 生成與保存流程正常，並檢查常見 SEO 外掛欄位是否有正確回寫。
+
+### 2026-08-09（星期日）— 補上編輯頁內容 SEO 分數分析
+
+- 會話的主要目的：補上 WordPress 編輯頁中缺少的內容 SEO 分析，針對當前用戶輸入的內容即時計算 SEO 分數。
+- 完成的主要任務：
+  1. 在 `apps/api/src/seoOptimization.ts` 的 `editor-seo` 流程新增規則式內容 SEO 評分，根據 SEO title、Meta description、Slug、內容長度、H1、內部連結與 Focus keyphrase 覆蓋情況回傳 `seoScore`、`scoreSummary` 與 `scoreChecks`。
+  2. 讓 `editor-seo` 路由同時支援 `generate` 與 `save/analyze` 模式；生成建議時回傳新分數，單純保存 SEO 欄位時也會重新分析當前內容。
+  3. 在 `plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 新增 `Content SEO score` 欄位與對應儲存 meta，並讓 AJAX 保存流程同步回寫分數與分析。
+  4. 更新 `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`，讓面板即時顯示 `seoScore`，並把分數同步到 Gutenberg meta。
+  5. 更新 `plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`，補上內容 SEO 分數說明與測試步驟。
+  6. 把最新插件同步到本機 `cyruschan.com` WordPress 測試站，並修正測試站插件設定，讓 API Base URL 指向 `http://host.docker.internal:3011`，再重新建立本機 Site ID / Site Token。
+- 關鍵決策和解決方案：內容 SEO 分數使用穩定的規則式檢查，而不是依賴 AI 回答，這樣即使用戶只保存手動欄位、或 AI 暫時不可用，也能取得一致且可重現的分數結果。
+- 使用的技術棧：Fastify、TypeScript、Vitest、WordPress PHP、Admin Ajax、Gutenberg editor meta、Docker Desktop。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`、`apps/api/tests/siteConnections.test.ts`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/editor-seo.js`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/api` 通過。
+  - `npm run test -w @aieo/api` 通過。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 本機 WordPress 測試站 `http://localhost:8088` 已實測：文章編輯頁出現 `Content SEO score` 欄位，`Generate & Apply SEO` 與 `Save SEO Fields` 都會回傳並保存 `seoScore`。實測文章 `postId=1964` 目前回傳分數為 `68/100`。
+- 下一步行動清單：如要進一步提升分析可讀性，可把 `scoreChecks` 在 metabox 中顯示為逐條清單或顏色狀態，而不只顯示總分與摘要。
+
+### 2026-08-09（星期日）— 移除 SaaS 後台文章模組入口
+
+- 會話的主要目的：將 SaaS 客戶後台中與文章流程直接相關的入口下線，因為文章相關操作已改到 WordPress 後台處理。
+- 完成的主要任務：
+  1. 在 `apps/web/src/App.vue` 移除客戶後台側欄中的文章審計、文章同步、處理建議、文章修改建議與內容審核入口。
+  2. 在 `apps/web/src/router/index.ts` 將舊文章路由改為安全導向，避免既有書籤或舊連結打開後出現空白頁：
+     - `/app/articles` -> `/app/sites`
+     - `/app/article-sync` -> `/app/tasks`
+     - `/app/suggestions`、`/app/article-suggestions`、`/app/review` -> `/app/media`
+  3. 在 `apps/web/src/views/DashboardView.vue` 移除文章導向指標，改為顯示已同步媒體與較中性的優先項。
+  4. 在 `apps/web/src/views/SitesView.vue` 移除站點列表與詳情中的文章數顯示。
+  5. 在 `apps/web/src/i18n.ts` 補上必要的新文案 key，並把 dashboard / sites 中仍會直出「文章」的標籤改為中性描述。
+- 關鍵決策和解決方案：這一輪只下線 SaaS 後台中的文章入口與殘留顯示，不直接刪除舊頁面檔與 API，避免把範圍擴大到資料層或未來可能重用的模組；舊 URL 一律改做 redirect，確保使用者體驗平順。
+- 使用的技術棧：Vue 3、TypeScript、Vue Router、Ant Design Vue、Vue I18n。
+- 新增或修改文件：
+  - 修改：`apps/web/src/App.vue`、`apps/web/src/router/index.ts`、`apps/web/src/views/DashboardView.vue`、`apps/web/src/views/SitesView.vue`、`apps/web/src/i18n.ts`、`README.md`
+- 驗證結果：
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過。
+  - Vite 只有既有大型 chunk 警告，無新增 build 錯誤。
+- 下一步行動清單：如之後確認連關鍵詞、內部連結等內容策略功能也要全面移回 WordPress，可再做第二輪，把 `keywords`、`links` 等內容相關頁面一併收斂。
+
+### 2026-08-09（星期日）— 修復 WordPress 前台 SEO 與社交 meta 輸出
+
+- 會話的主要目的：修復在 WordPress 插件中保存 `Meta description` 和 `Keywords` 後，前台頁面 HTML 沒有對應 SEO meta 的問題，並補上 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 分享標籤。
+- 完成的主要任務：
+  1. 在 RankWoven SEO 編輯頁面新增 `Keywords` 欄位，加入 AJAX 保存、Gutenberg meta 同步和重新打開時回顯。
+  2. 新增 `_rankwoven_meta_keywords` 自訂欄位，對逗號、分號、換行輸入做清理並去重。
+  3. 在 WordPress `wp_head` 中為文章、頁面、Portfolio 和商品輸出已保存的 `meta name="description"` 和 `meta name="keywords"`。
+  4. 使用 SEO title、Meta description、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 輸出 Google+ itemprop、Weibo、Twitter Card 與 LinkedIn / Facebook Open Graph 標籤。
+  5. 在插件設定頁新增 Twitter/X Username 和 Facebook App ID，避免前台輸出 `@username` 或 `APP ID` placeholder。
+  6. 更新插件 README 與測試文件，補上前台 `<head>` 驗證步驟。
+- 關鍵決策和解決方案：先以本地 Docker WordPress 前台 HTML 建立紅燈回歸檢查，再用最小改動補上保存與輸出鏈路；社交圖片優先使用特色圖片，沒有特色圖片時回退站點圖示；Twitter username 和 Facebook App ID 留空時不輸出假值。不修改正文內容，也不提交任何 `.env`、密碼、Token 或 API Key。
+- 使用的技術棧：WordPress PHP、Admin Ajax、Gutenberg editor meta、原生 JavaScript、Docker Desktop。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/editor-seo.js`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - 修復前 smoke check 失敗，成功復現前台缺少 description/keywords 的問題。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 修復後本地前台 smoke check 通過，實際檢測到兩個對應 meta 標籤。
+  - 追加社交 meta smoke check 通過，檢測到 Google+、Weibo、Twitter Card、`fb:app_id`、`og:image` 和 `og:url`。
+- 下一步行動清單：在真實 WordPress 網站上同步最新版插件，清除頁面快取後查看頁面原始碼的 `<head>`；本次未執行 Git commit、push 或生產部署。

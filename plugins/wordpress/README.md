@@ -27,10 +27,13 @@ Settings -> RankWoven SEO
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
 - 輸入此 WordPress 站點的 GA4 Property ID，讓 SaaS 分析頁按站點讀取 SEO 流量資料。
+- 保存 Twitter/X Username 和 Facebook App ID，用於前台 Twitter Card 與 Facebook Open Graph 標籤。
 - 保存 WordPress 管理員用戶名和 Application Password，供 SaaS 後續以該管理員身份寫回已批准修改。
 - 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 查看只讀診斷頁，檢查 API 連接、Token、本地同步、圖片屬性和 Application Password 配置狀態。
+- 在文章、頁面、Portfolio 和商品編輯頁顯示 RankWoven SEO 面板，輸入 Focus keyphrase 後可用 AI 生成或優化 SEO title、Slug 和 Meta description。
+- 在文章、頁面、Portfolio 和商品編輯頁保存 Keywords，並在前台頁面的 `<head>` 輸出 Meta description、Meta keywords、Google+ itemprop、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
 - 一鍵建立後端同步任務，分頁批量同步 Posts、Pages 和圖片媒體。
 - 顯示最近一次同步時間、文章數、媒體數、同步頁數、同步模式、`updatedAfter` 和同步任務 ID。
@@ -59,6 +62,25 @@ SaaS 後端只保存加密後的 Application Password，不會在站點列表或
 ```text
 http://host.docker.internal:3011
 ```
+
+## 編輯頁 SEO 面板
+
+在文章、頁面、Portfolio 和商品的新增/編輯頁面，RankWoven SEO 會新增一個 SEO 面板。面板可輸入：
+
+- Focus keyphrase
+- SEO title
+- Slug
+- Meta description
+- Content SEO score（只讀）
+
+可用操作：
+
+- `Generate & Apply SEO`：把當前內容、摘要、SEO title 與 Focus keyphrase 一起送到 RankWoven API，生成並套用新的 SEO 建議。
+- `Save SEO Fields`：保存手動編輯的 SEO title、Slug、Meta description 和 Keywords，並重新分析當前內容的 SEO 分數。
+
+RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。內容分數會根據當前標題、Meta description、Slug、正文長度、H1、內部連結與 Focus keyphrase 覆蓋情況即時計算。
+
+Twitter/X Username 與 Facebook App ID 可在 `Settings -> RankWoven SEO` 保存；留空時不輸出 `@username` 或 `APP ID` 這類 placeholder。需要由主題或自訂代碼覆寫時，也可使用 `rankwoven_seo_twitter_username` 和 `rankwoven_seo_facebook_app_id` filter 返回正式值。
 
 ## 圖片屬性設定
 
@@ -131,6 +153,7 @@ Settings -> RankWoven SEO -> Diagnostics
 | `POST` | `/api/v1/site-connections` | 建立站點連接並取得 `siteId` 和 `apiToken` |
 | `PUT` | `/api/v1/site-connections/:siteId/analytics-settings` | 更新此站點 GA4 Property ID |
 | `PUT` | `/api/v1/site-connections/:siteId/wordpress-credentials` | 更新 WordPress 管理員用戶名和 Application Password |
+| `POST` | `/api/v1/site-connections/:siteId/editor-seo` | 依據當前內容和 Focus keyphrase 生成 SEO title、Slug 和 Meta description |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks` | 建立同步任務，可帶 `updatedAfter` |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 分頁推送文章與媒體同步批次 |
 | `POST` | `/api/v1/site-connections/:siteId/sync` | 舊版單次同步兼容接口 |

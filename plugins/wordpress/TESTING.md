@@ -128,6 +128,19 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] WordPress 端修改記錄的作者為配置的管理員帳號。
 - [ ] 寫回前快照 `before_value` 為 WordPress 當前真實值（可用回滾驗證）。
 
+### 8. 編輯頁 SEO 面板
+
+- [ ] 文章、頁面、Portfolio 和商品新增/編輯頁都能看到 `RankWoven SEO` 面板。
+- [ ] 輸入 `Focus keyphrase` 後，點擊 `Generate & Apply SEO` 能生成並套用 SEO title、Slug 和 Meta description。
+- [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
+- [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
+- [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。
+- [ ] 沒有 RankWoven 站點連接時，`Generate & Apply SEO` 會停用，但手動保存仍可正常使用。
+- [ ] 重新打開編輯頁後，已保存的 SEO title / Meta description / Keywords 能正確回顯。
+- [ ] 打開已保存的前台頁面原始碼，`<head>` 內包含對應的 `meta name="description"` 和 `meta name="keywords"`。
+- [ ] 若內容有特色圖片，前台 `<head>` 內包含 Google+ itemprop、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 圖片標籤。
+- [ ] 在插件設定保存 Twitter/X Username 或 Facebook App ID 後，前台 `<head>` 內包含 `twitter:site`、`twitter:creator` 或 `fb:app_id`，且不出現 `@username` / `APP ID` placeholder。
+
 ## 回歸重點
 
 改動以下區域時必測對應項目：
@@ -139,6 +152,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | 圖片屬性 / Bulk Updater | 清單 4 |
 | REST API 路由 | 清單 6 |
 | 寫回 / Application Password | 清單 7 |
+| 前台 SEO meta 輸出 | 清單 8 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯
