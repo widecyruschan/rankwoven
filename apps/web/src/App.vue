@@ -64,6 +64,8 @@ const navigationItems = computed(() => (isAdminLayout.value ? adminNavigationIte
 const shellSubtitle = computed(() => (isAdminLayout.value ? t('admin.subtitle') : t('app.brandSubtitle')));
 const topbarPhase = computed(() => (isAdminLayout.value ? t('admin.phase') : t('app.phase')));
 const selectedMenuKeys = computed(() => [route.path]);
+const marketingEntryLink = computed(() => (authStore.isLoggedIn ? '/app' : '/login'));
+const marketingEntryLabelKey = computed(() => (authStore.isLoggedIn ? 'marketing.nav.dashboard' : 'marketing.nav.login'));
 
 function toggleNavigation() {
   isNavigationOpen.value = !isNavigationOpen.value;
@@ -99,9 +101,9 @@ function logout() {
       </nav>
       <div class="marketing-actions">
         <LanguageSwitcher />
-        <RouterLink class="icon-link-button" to="/app">
+        <RouterLink class="icon-link-button" :to="marketingEntryLink">
           <LogIn :size="17" aria-hidden="true" />
-          <span>{{ t('marketing.nav.dashboard') }}</span>
+          <span>{{ t(marketingEntryLabelKey) }}</span>
         </RouterLink>
       </div>
     </header>

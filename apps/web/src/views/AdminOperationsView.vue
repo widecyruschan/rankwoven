@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
+import { BellRing, RadioTower } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -56,6 +57,15 @@ const checks = computed(() => [
   }
 ]);
 
+const passedCheckCount = computed(() =>
+  checks.value.filter((check) => check.status === t('admin.operations.passed')).length
+);
+const operationStats = computed(() => [
+  { label: t('admin.operations.openIncidents'), value: String(incidents.value.length), tone: 'accent' },
+  { label: t('admin.operations.passedChecks'), value: `${passedCheckCount.value}/${checks.value.length}`, tone: 'primary' },
+  { label: t('admin.operations.livePipelines'), value: '5', tone: 'neutral' }
+]);
+
 type OperationRow = (typeof incidents.value)[number] | (typeof checks.value)[number];
 
 const activeTab = ref('incidents');
@@ -94,16 +104,34 @@ const columns = computed<TableColumnsType<OperationRow>>(() => [
 
 <template>
   <section class="page-section">
-    <div class="page-heading">
-      <div>
+    <section class="admin-command-hero admin-command-hero--compact">
+      <div class="admin-hero-copy">
+        <span class="hero-eyebrow">{{ t('admin.operations.heroEyebrow') }}</span>
         <h2>{{ t('admin.operations.title') }}</h2>
         <p>{{ t('admin.operations.body') }}</p>
       </div>
+      <div class="admin-hero-card">
+        <div class="admin-hero-card-icon">
+          <RadioTower :size="22" aria-hidden="true" />
+        </div>
+        <strong>{{ t('admin.operations.liveCommand') }}</strong>
+        <span>{{ t('admin.operations.liveCommandBody') }}</span>
+      </div>
+    </section>
+
+    <div class="summary-grid compact-grid">
+      <article v-for="stat in operationStats" :key="stat.label" class="metric-card" :data-tone="stat.tone">
+        <span>{{ stat.label }}</span>
+        <strong>{{ stat.value }}</strong>
+      </article>
     </div>
 
-    <section class="content-panel">
+    <section class="content-panel admin-table-panel">
       <div class="panel-heading">
-        <h2>{{ t('admin.operations.incidentTitle') }}</h2>
+        <div class="panel-title-group">
+          <BellRing :size="18" aria-hidden="true" />
+          <h2>{{ t('admin.operations.incidentTitle') }}</h2>
+        </div>
         <a-tag color="processing">{{ t('admin.operations.live') }}</a-tag>
       </div>
 

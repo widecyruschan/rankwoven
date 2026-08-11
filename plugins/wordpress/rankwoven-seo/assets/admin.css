@@ -1,0 +1,287 @@
+.rankwoven-admin-wrap {
+  --rankwoven-primary: #1677ff;
+  --rankwoven-primary-dark: #0958d9;
+  --rankwoven-primary-soft: #e6f4ff;
+  --rankwoven-accent: #52c41a;
+  --rankwoven-ink: #1d2327;
+  --rankwoven-muted: #646970;
+  --rankwoven-border: #dcdcde;
+  --rankwoven-surface: #ffffff;
+  --rankwoven-canvas: #f6f8fb;
+  --rankwoven-radius: 16px;
+  --rankwoven-shadow: 0 14px 36px rgb(16 24 40 / 8%);
+
+  max-width: 1180px;
+}
+
+.rankwoven-admin-wrap h1,
+.rankwoven-admin-wrap h2,
+.rankwoven-admin-wrap h3,
+.rankwoven-admin-wrap p {
+  margin-top: 0;
+}
+
+.rankwoven-admin-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--rankwoven-primary) 24%, var(--rankwoven-border));
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 14% 10%, rgb(255 255 255 / 78%), transparent 18rem),
+    linear-gradient(135deg, #102a43 0%, #0f5fb7 52%, #0f766e 100%);
+  color: #ffffff;
+  margin: 18px 0 16px;
+  padding: 28px;
+  box-shadow: var(--rankwoven-shadow);
+}
+
+.rankwoven-admin-hero h1 {
+  color: #ffffff;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.12;
+  margin: 8px 0 10px;
+}
+
+.rankwoven-admin-hero p {
+  max-width: 760px;
+  color: rgb(255 255 255 / 78%);
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 0;
+}
+
+.rankwoven-eyebrow,
+.rankwoven-status-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 10px;
+}
+
+.rankwoven-eyebrow {
+  border: 1px solid rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 14%);
+  color: rgb(255 255 255 / 88%);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.rankwoven-status-pill {
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 14%);
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.rankwoven-status-pill.is-ready {
+  background: rgb(82 196 26 / 18%);
+}
+
+.rankwoven-status-pill.is-warning {
+  background: rgb(250 173 20 / 20%);
+}
+
+.rankwoven-admin-tabs.nav-tab-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 0;
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.rankwoven-admin-tabs .nav-tab {
+  border: 1px solid var(--rankwoven-border);
+  border-radius: 999px;
+  background: var(--rankwoven-surface);
+  color: var(--rankwoven-muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  padding: 9px 13px;
+}
+
+.rankwoven-admin-tabs .nav-tab-active {
+  border-color: color-mix(in srgb, var(--rankwoven-primary) 34%, var(--rankwoven-border));
+  background: var(--rankwoven-primary-soft);
+  color: var(--rankwoven-primary-dark);
+}
+
+.rankwoven-panel,
+.rankwoven-settings-card,
+.rankwoven-admin-wrap > form,
+.rankwoven-admin-wrap > .widefat {
+  border: 1px solid var(--rankwoven-border);
+  border-radius: var(--rankwoven-radius);
+  background: var(--rankwoven-surface);
+  box-shadow: 0 1px 0 rgb(16 24 40 / 3%);
+}
+
+.rankwoven-panel,
+.rankwoven-admin-wrap > form {
+  margin: 0 0 18px;
+  padding: 22px;
+}
+
+.rankwoven-section-heading {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.rankwoven-section-heading .rankwoven-eyebrow {
+  border-color: color-mix(in srgb, var(--rankwoven-primary) 22%, var(--rankwoven-border));
+  background: var(--rankwoven-primary-soft);
+  color: var(--rankwoven-primary-dark);
+}
+
+.rankwoven-section-heading h2 {
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.rankwoven-section-heading p {
+  max-width: 780px;
+  color: var(--rankwoven-muted);
+  line-height: 1.7;
+}
+
+.rankwoven-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rankwoven-metric-card {
+  display: grid;
+  gap: 10px;
+  min-height: 90px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--rankwoven-border);
+  border-radius: 14px;
+  background: var(--rankwoven-canvas);
+  padding: 16px;
+}
+
+.rankwoven-metric-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--rankwoven-primary);
+}
+
+.rankwoven-metric-card[data-tone='ready']::before {
+  background: var(--rankwoven-accent);
+}
+
+.rankwoven-metric-card[data-tone='warning']::before {
+  background: #faad14;
+}
+
+.rankwoven-metric-card span {
+  color: var(--rankwoven-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rankwoven-metric-card strong {
+  color: var(--rankwoven-ink);
+  font-size: 18px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.rankwoven-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rankwoven-inline-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.rankwoven-inline-form .button {
+  min-height: 36px;
+  border-radius: 8px;
+  font-weight: 700;
+  padding-inline: 14px;
+}
+
+.rankwoven-admin-wrap .widefat {
+  border-color: var(--rankwoven-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.rankwoven-admin-wrap .widefat thead th {
+  background: var(--rankwoven-primary-soft);
+  color: var(--rankwoven-primary-dark);
+  font-weight: 700;
+}
+
+.rankwoven-admin-wrap .widefat td,
+.rankwoven-admin-wrap .widefat th {
+  padding: 12px 14px;
+}
+
+.rankwoven-admin-wrap .form-table th {
+  color: var(--rankwoven-ink);
+  font-weight: 700;
+}
+
+.rankwoven-admin-wrap input.regular-text,
+.rankwoven-admin-wrap textarea.large-text {
+  border-color: var(--rankwoven-border);
+  border-radius: 8px;
+  min-height: 36px;
+}
+
+.rankwoven-admin-wrap input.regular-text:focus,
+.rankwoven-admin-wrap textarea.large-text:focus {
+  border-color: var(--rankwoven-primary);
+  box-shadow: 0 0 0 3px rgb(22 119 255 / 13%);
+}
+
+.rankwoven-settings-card {
+  margin: 0 0 16px;
+  padding: 16px 18px 8px;
+}
+
+.rankwoven-settings-card summary {
+  cursor: pointer;
+  color: var(--rankwoven-ink);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.rankwoven-settings-card .form-table {
+  margin-top: 12px;
+}
+
+@media (max-width: 782px) {
+  .rankwoven-admin-hero,
+  .rankwoven-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rankwoven-admin-hero {
+    padding: 22px;
+  }
+
+  .rankwoven-status-pill {
+    white-space: normal;
+  }
+}

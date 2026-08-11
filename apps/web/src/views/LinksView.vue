@@ -291,8 +291,9 @@ watch(selectedSiteId, () => {
 
 <template>
   <section class="page-section">
-    <div class="page-heading">
+    <div class="page-heading link-assistant-heading">
       <div>
+        <span class="hero-eyebrow">{{ t('links.heroEyebrow') }}</span>
         <h2>{{ t('links.title') }}</h2>
         <p>{{ t('links.body') }}</p>
       </div>
@@ -321,12 +322,22 @@ watch(selectedSiteId, () => {
           {{ t('links.generateAction') }}
         </a-button>
       </div>
+      <div class="link-safety-card">
+        <strong>{{ t('links.safeAppend') }}</strong>
+        <span>{{ t('links.applyHint') }}</span>
+      </div>
     </div>
 
     <a-alert v-if="successMessage" class="page-alert" type="success" show-icon :message="successMessage" />
     <a-alert v-if="errorMessage" class="page-alert" type="error" show-icon :message="errorMessage" />
 
-    <section class="content-panel">
+    <section class="content-panel link-opportunity-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>{{ t('links.reviewQueue') }}</h2>
+          <span>{{ t('links.heroBody') }}</span>
+        </div>
+      </div>
       <div class="filter-toolbar">
         <a-tag v-for="item in summaryItems" :key="item.label" color="blue">
           {{ item.label }}: {{ item.value }}

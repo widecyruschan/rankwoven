@@ -12,7 +12,7 @@ const { isLoggedIn } = authStore;
 
 const formState = reactive({
   email: 'demo@rankwoven.com',
-  password: 'rankwoven'
+  password: ''
 });
 const isSubmitting = ref(false);
 const loginError = ref('');

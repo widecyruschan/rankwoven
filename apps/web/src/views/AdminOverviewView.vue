@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { Activity, Banknote, ShieldCheck } from 'lucide-vue-next';
 
 const { t } = useI18n();
 
@@ -18,10 +19,36 @@ const queues = computed(() => [
   { label: t('admin.overview.auditQueue'), value: '58%' },
   { label: t('admin.overview.imageQueue'), value: '34%' }
 ]);
+
+const healthSignals = computed(() => [
+  { label: t('admin.overview.responseSla'), value: '99.9%' },
+  { label: t('admin.overview.apiUptime'), value: '99.98%' },
+  { label: t('admin.overview.workerQueue'), value: '142' }
+]);
 </script>
 
 <template>
   <section class="page-section">
+    <section class="admin-command-hero">
+      <div class="admin-hero-copy">
+        <span class="hero-eyebrow">{{ t('admin.overview.heroEyebrow') }}</span>
+        <h2>{{ t('admin.overview.heroTitle') }}</h2>
+        <p>{{ t('admin.overview.heroBody') }}</p>
+      </div>
+      <div class="admin-hero-card">
+        <div class="admin-hero-card-icon">
+          <ShieldCheck :size="22" aria-hidden="true" />
+        </div>
+        <strong>{{ t('admin.overview.healthTitle') }}</strong>
+        <div class="admin-signal-list">
+          <div v-for="signal in healthSignals" :key="signal.label">
+            <span>{{ signal.label }}</span>
+            <strong>{{ signal.value }}</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="summary-grid">
       <article v-for="metric in metrics" :key="metric.label" class="metric-card" :data-tone="metric.tone">
         <span>{{ metric.label }}</span>
@@ -32,8 +59,11 @@ const queues = computed(() => [
     <div class="prototype-grid">
       <section class="content-panel">
         <div class="panel-heading">
-          <h2>{{ t('admin.overview.queueTitle') }}</h2>
-          <span>{{ t('admin.overview.lastHour') }}</span>
+          <div class="panel-title-group">
+            <Activity :size="18" aria-hidden="true" />
+            <h2>{{ t('admin.overview.queueTitle') }}</h2>
+          </div>
+          <span class="status-pill">{{ t('admin.overview.lastHour') }}</span>
         </div>
         <div class="pipeline-list">
           <div v-for="queue in queues" :key="queue.label" class="pipeline-step">
@@ -48,8 +78,11 @@ const queues = computed(() => [
 
       <section class="content-panel">
         <div class="panel-heading">
-          <h2>{{ t('admin.overview.riskTitle') }}</h2>
-          <span>{{ t('tasks.statusWaiting') }}</span>
+          <div class="panel-title-group">
+            <Banknote :size="18" aria-hidden="true" />
+            <h2>{{ t('admin.overview.riskTitle') }}</h2>
+          </div>
+          <span class="status-pill">{{ t('tasks.statusWaiting') }}</span>
         </div>
         <ul class="priority-list">
           <li>{{ t('admin.overview.riskProvider') }}</li>

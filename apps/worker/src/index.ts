@@ -389,7 +389,7 @@ async function processSuggestionApplyTask(
     );
   }
 
-  const payload = buildSuggestionPayload(suggestion);
+  const payload = buildSuggestionPayload(suggestion, currentItem);
   const path =
     targetType === 'article'
       ? `posts/${task.targetCmsId}/apply`
@@ -473,9 +473,118 @@ async function processSuggestionRollbackTask(
   await completeTask(client, task, snapshot.target_type === 'article' ? 1 : 0, snapshot.target_type === 'media' ? 1 : 0);
 }
 
-function buildSuggestionPayload(suggestion: QueryResultRow) {
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return entities[char] ?? char;
+  });
+}
+
+function normalizeSafeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function parseInternalLinkSuggestionLinks(value: string) {
+  try {
+    const parsed = JSON.parse(value) as {
+      links?: Array<{
+        targetUrl?: unknown;
+        targetTitle?: unknown;
+        anchorText?: unknown;
+        relevance?: unknown;
+        reason?: unknown;
+      }>;
+    };
+
+    if (!Array.isArray(parsed.links)) {
+      return [];
+    }
+
+    return parsed.links
+      .map((link) => {
+        const href = normalizeSafeUrl(String(link.targetUrl ?? ''));
+        const anchorText = String(link.anchorText ?? link.targetTitle ?? '').trim();
+        if (!href || !anchorText) {
+          return undefined;
+        }
+
+        return {
+          href,
+          anchorText,
+          relevance: String(link.relevance ?? '').trim(),
+          reason: String(link.reason ?? '').trim()
+        };
+      })
+      .filter((link): link is { href: string; anchorText: string; relevance: string; reason: string } => Boolean(link));
+  } catch {
+    return [];
+  }
+}
+
+function stripExistingInternalLinkBlock(contentHtml: string) {
+  return contentHtml
+    .replace(/<div\b[^>]*class=["'][^"']*rankwoven-related-links[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '')
+    .trim();
+}
+
+function buildInternalLinkBlock(suggestedValue: string) {
+  const links = parseInternalLinkSuggestionLinks(suggestedValue);
+  if (links.length === 0) {
+    return [
+      '<div class="rankwoven-related-links">',
+      '<p><strong>相關閱讀：</strong></p>',
+      `<p>${escapeHtml(suggestedValue)}</p>`,
+      '</div>'
+    ].join('\n');
+  }
+
+  const items = links.map((link) => {
+    const meta = [link.relevance ? `關聯度：${link.relevance}` : '', link.reason]
+      .filter(Boolean)
+      .join('，');
+    const suffix = meta ? ` <span>${escapeHtml(meta)}</span>` : '';
+    return `<li><a href="${escapeHtml(link.href)}">${escapeHtml(link.anchorText)}</a>${suffix}</li>`;
+  });
+
+  return [
+    '<div class="rankwoven-related-links">',
+    '<p><strong>相關閱讀：</strong></p>',
+    '<ul>',
+    ...items,
+    '</ul>',
+    '</div>'
+  ].join('\n');
+}
+
+function appendInternalLinksToContent(contentHtml: string, suggestedValue: string) {
+  const baseContent = stripExistingInternalLinkBlock(contentHtml);
+  const internalLinkBlock = buildInternalLinkBlock(suggestedValue);
+
+  return `${baseContent}\n\n${internalLinkBlock}`.trim();
+}
+
+function buildSuggestionPayload(suggestion: QueryResultRow, currentItem?: Record<string, unknown>) {
   const fieldName = String(suggestion.field_name);
   const suggestedValue = String(suggestion.suggested_value);
+  const suggestionType = String(suggestion.suggestion_type ?? '');
+
+  if (suggestionType === 'internal_link' && fieldName === 'contentHtml') {
+    const currentContentHtml = String(currentItem?.contentHtml ?? currentItem?.content_html ?? '');
+    return {
+      contentHtml: appendInternalLinksToContent(currentContentHtml, suggestedValue)
+    };
+  }
 
   if (fieldName === 'contentHtml') {
     return { contentHtml: suggestedValue };

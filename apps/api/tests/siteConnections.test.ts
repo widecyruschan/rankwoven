@@ -1595,6 +1595,227 @@ describe('site connection routes', () => {
     );
   });
 
+  it('allows WordPress site tokens to read and apply internal link suggestions', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '101',
+            type: 'post',
+            title: 'AI SEO Automation for WordPress Editors',
+            slug: 'ai-seo-automation-wordpress',
+            status: 'publish',
+            url: 'http://localhost:8088/ai-seo-automation-wordpress/',
+            contentHtml: '<h1>AI SEO Automation</h1><p>Automation workflow for WordPress SEO editors.</p>',
+            categories: ['SEO'],
+            tags: ['AI SEO'],
+            updatedAt: '2026-08-04T08:00:00+00:00'
+          },
+          {
+            cmsId: '102',
+            type: 'post',
+            title: 'WordPress Internal Link Strategy',
+            slug: 'wordpress-internal-link-strategy',
+            status: 'publish',
+            url: 'http://localhost:8088/wordpress-internal-link-strategy/',
+            contentHtml: '<h1>Internal Link Strategy</h1><p>Internal link planning for SEO.</p>',
+            categories: ['SEO'],
+            tags: ['AI SEO'],
+            updatedAt: '2026-08-05T08:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+    expect(syncResponse.statusCode).toBe(200);
+
+    const auditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    expect(auditResponse.statusCode).toBe(201);
+
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=article&limit=20`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    expect(suggestionsResponse.statusCode).toBe(200);
+
+    const internalLinkSuggestion = suggestionsResponse
+      .json<{
+        data: {
+          suggestions: Array<{
+            id: string;
+            targetCmsId: string;
+            suggestionType: string;
+            suggestedValue: string;
+          }>;
+        };
+      }>()
+      .data.suggestions.find((suggestion) => suggestion.suggestionType === 'internal_link');
+
+    expect(internalLinkSuggestion).toBeDefined();
+    const parsedSuggestion = JSON.parse(internalLinkSuggestion?.suggestedValue ?? '{}') as {
+      format?: string;
+      links?: Array<{ targetCmsId: string; anchorText: string; relevance: string }>;
+    };
+    expect(parsedSuggestion).toMatchObject({
+      format: 'rankwoven-internal-links-v1',
+      links: expect.arrayContaining([
+        expect.objectContaining({
+          targetCmsId: expect.any(String),
+          anchorText: expect.any(String),
+          relevance: expect.stringMatching(/high|medium|low/)
+        })
+      ])
+    });
+
+    const approveResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${internalLinkSuggestion?.id}/approve`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    expect(approveResponse.statusCode).toBe(200);
+
+    const applyResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${internalLinkSuggestion?.id}/apply`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    expect(applyResponse.statusCode).toBe(201);
+    expect(applyResponse.json()).toMatchObject({
+      data: {
+        task: {
+          scope: 'suggestion_apply',
+          targetCmsId: internalLinkSuggestion?.targetCmsId
+        }
+      }
+    });
+  });
+
+  it('syncs Portfolio and WooCommerce product content for SEO audits and link suggestions', async () => {
+    const { server, body } = await createWordPressConnection();
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '301',
+            type: 'product',
+            title: 'RankWoven SEO 商品方案',
+            slug: 'rankwoven-seo-product-plan',
+            status: 'publish',
+            url: 'http://localhost:8088/product/rankwoven-seo-product-plan/',
+            contentHtml: '<h1>RankWoven SEO 商品方案</h1><p>AI SEO 商品頁優化。</p>',
+            categories: ['SEO'],
+            tags: ['RankWoven'],
+            updatedAt: '2026-08-08T08:00:00+00:00'
+          },
+          {
+            cmsId: '302',
+            type: 'portfolio',
+            title: 'RankWoven SEO Portfolio Case',
+            slug: 'rankwoven-seo-portfolio-case',
+            status: 'publish',
+            url: 'http://localhost:8088/portfolio/rankwoven-seo-portfolio-case/',
+            contentHtml: '<h1>RankWoven SEO Portfolio Case</h1><p>Portfolio case for AI SEO improvements.</p>',
+            categories: ['SEO'],
+            tags: ['RankWoven'],
+            updatedAt: '2026-08-09T08:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+
+    expect(syncResponse.statusCode).toBe(200);
+
+    const articlesResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/articles?pageSize=10`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    expect(articlesResponse.statusCode).toBe(200);
+    expect(articlesResponse.json()).toMatchObject({
+      data: {
+        articles: expect.arrayContaining([
+          expect.objectContaining({ cmsId: '301', type: 'product' }),
+          expect.objectContaining({ cmsId: '302', type: 'portfolio' })
+        ])
+      }
+    });
+
+    const auditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    expect(auditResponse.statusCode).toBe(201);
+
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=article&limit=20`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    const productInternalLinkSuggestion = suggestionsResponse
+      .json<{
+        data: {
+          suggestions: Array<{
+            targetCmsId: string;
+            suggestionType: string;
+            suggestedValue: string;
+          }>;
+        };
+      }>()
+      .data.suggestions.find((suggestion) =>
+        suggestion.targetCmsId === '301' && suggestion.suggestionType === 'internal_link'
+      );
+    const parsedSuggestion = JSON.parse(productInternalLinkSuggestion?.suggestedValue ?? '{}') as {
+      links?: Array<{ targetCmsId: string; targetUrl: string }>;
+    };
+
+    expect(suggestionsResponse.statusCode).toBe(200);
+    expect(productInternalLinkSuggestion).toBeDefined();
+    expect(parsedSuggestion.links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetCmsId: '302',
+          targetUrl: 'http://localhost:8088/portfolio/rankwoven-seo-portfolio-case/'
+        })
+      ])
+    );
+  });
+
   it('extracts plain text meta descriptions without shortcode markup', async () => {
     const { server, body } = await createWordPressConnection();
     const authToken = await loginDemoUser(server);

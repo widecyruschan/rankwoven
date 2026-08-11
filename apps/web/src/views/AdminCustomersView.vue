@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
+import { UserPlus, Users } from 'lucide-vue-next';
 
 interface CustomerRow {
   name: string;
@@ -20,6 +21,18 @@ const customers = computed<CustomerRow[]>(() => [
   { name: 'North Shop', plan: 'Starter', sites: 2, usage: '41%', status: t('admin.status.active') },
   { name: 'Bright Agency', plan: 'Agency', sites: 19, usage: '88%', status: t('admin.status.watch') },
   { name: 'Global Parts', plan: 'Enterprise', sites: 36, usage: '54%', status: t('admin.status.active') }
+]);
+
+const watchedCustomers = computed(() =>
+  customers.value.filter((customer) => customer.status === t('admin.status.watch')).length
+);
+const totalCustomerSites = computed(() =>
+  customers.value.reduce((total, customer) => total + customer.sites, 0)
+);
+const customerStats = computed(() => [
+  { label: t('admin.customers.totalCustomers'), value: String(customers.value.length), tone: 'primary' },
+  { label: t('admin.customers.connectedSites'), value: String(totalCustomerSites.value), tone: 'primary' },
+  { label: t('admin.customers.watchAccounts'), value: String(watchedCustomers.value), tone: 'accent' }
 ]);
 
 const columns = computed<TableColumnsType<CustomerRow>>(() => [
@@ -62,15 +75,35 @@ function openCustomer(customer: CustomerRow) {
 
 <template>
   <section class="page-section">
-    <div class="page-heading">
-      <div>
+    <section class="admin-command-hero admin-command-hero--compact">
+      <div class="admin-hero-copy">
+        <span class="hero-eyebrow">{{ t('admin.customers.heroEyebrow') }}</span>
         <h2>{{ t('admin.customers.title') }}</h2>
         <p>{{ t('admin.customers.body') }}</p>
       </div>
-      <a-button type="primary">{{ t('admin.customers.invite') }}</a-button>
+      <div class="admin-hero-card">
+        <div class="admin-hero-card-icon">
+          <Users :size="22" aria-hidden="true" />
+        </div>
+        <strong>{{ t('admin.customers.segmentTitle') }}</strong>
+        <span>{{ t('admin.customers.segmentBody') }}</span>
+        <a-button type="primary">
+          <template #icon>
+            <UserPlus :size="16" aria-hidden="true" />
+          </template>
+          {{ t('admin.customers.invite') }}
+        </a-button>
+      </div>
+    </section>
+
+    <div class="summary-grid compact-grid">
+      <article v-for="stat in customerStats" :key="stat.label" class="metric-card" :data-tone="stat.tone">
+        <span>{{ stat.label }}</span>
+        <strong>{{ stat.value }}</strong>
+      </article>
     </div>
 
-    <section class="content-panel">
+    <section class="content-panel admin-table-panel">
       <a-tabs default-active-key="active">
         <a-tab-pane key="active" :tab="t('admin.customers.activeTab')" />
         <a-tab-pane key="watch" :tab="t('admin.customers.watchTab')" />

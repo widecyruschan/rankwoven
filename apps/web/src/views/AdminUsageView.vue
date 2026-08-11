@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import type { TableColumnsType } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
+import { Gauge, WalletCards } from 'lucide-vue-next';
 import {
   getAdminSerpapiUsage,
   type SerpapiUsageStats
@@ -47,6 +48,12 @@ const providerRows = computed<ProviderUsageRow[]>(() => {
 
   return rows;
 });
+
+const usageSummaryCards = computed(() => [
+  { label: t('admin.usage.currentBurn'), value: '$3.09K', tone: 'primary' },
+  { label: t('admin.usage.monthlyGuardrail'), value: '$4.50K', tone: 'accent' },
+  { label: t('admin.usage.providerRoutes'), value: String(providerRows.value.length), tone: 'neutral' }
+]);
 
 const columns = computed<TableColumnsType<ProviderUsageRow>>(() => [
   {
@@ -101,16 +108,31 @@ onMounted(async () => {
 
 <template>
   <section class="page-section">
-    <div class="page-heading">
-      <div>
+    <section class="admin-command-hero admin-command-hero--compact">
+      <div class="admin-hero-copy">
+        <span class="hero-eyebrow">{{ t('admin.usage.heroEyebrow') }}</span>
         <h2>{{ t('admin.usage.title') }}</h2>
         <p>{{ t('admin.usage.body') }}</p>
       </div>
+      <div class="admin-hero-card">
+        <div class="admin-hero-card-icon">
+          <WalletCards :size="22" aria-hidden="true" />
+        </div>
+        <strong>{{ t('admin.usage.budgetHealth') }}</strong>
+        <span>{{ t('admin.usage.budgetBody') }}</span>
+      </div>
+    </section>
+
+    <div class="summary-grid compact-grid">
+      <article v-for="card in usageSummaryCards" :key="card.label" class="metric-card" :data-tone="card.tone">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+      </article>
     </div>
 
     <!-- SerpApi Usage Card -->
-    <div v-if="serpapiStats" style="margin-bottom: 16px">
-      <a-card size="small" :title="t('admin.usage.serpapi')" style="background: #f8f9fb">
+    <div v-if="serpapiStats" class="admin-serpapi-card">
+      <a-card size="small" :title="t('admin.usage.serpapi')">
         <a-row :gutter="16">
           <a-col :span="6">
             <a-statistic
@@ -133,14 +155,17 @@ onMounted(async () => {
             />
           </a-col>
           <a-col :span="6">
+            <div class="admin-progress-heading">
+              <Gauge :size="16" aria-hidden="true" />
+              <span>{{ t('admin.usage.creditUsage') }}</span>
+            </div>
             <a-progress
               :percent="serpapiUsagePercent()"
               :stroke-color="serpapiUsagePercent() > 80 ? '#cf1322' : '#1677ff'"
               :status="serpapiUsagePercent() > 80 ? 'exception' : 'active'"
               size="small"
-              style="max-width: 200px"
             />
-            <div style="margin-top: 4px; font-size: 12px; color: #888">
+            <div class="admin-card-note">
               {{ t('admin.usage.serpapiLimit') }}
             </div>
           </a-col>
@@ -148,7 +173,7 @@ onMounted(async () => {
       </a-card>
     </div>
 
-    <section class="content-panel">
+    <section class="content-panel admin-table-panel">
       <a-tabs default-active-key="providers">
         <a-tab-pane key="providers" :tab="t('admin.usage.providersTab')" />
         <a-tab-pane key="storage" :tab="t('admin.usage.storageTab')" />

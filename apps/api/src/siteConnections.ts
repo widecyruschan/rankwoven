@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 import { z } from 'zod';
 import { getBearerToken, requireAuth, type AuthService } from './auth';
+import { readGoogleCredentials } from './googleAuth';
+import { createSearchConsoleService } from './searchConsole';
 
 const cmsPlatformSchema = z.enum(['wordpress', 'joomla', 'opencart']);
 
@@ -39,6 +41,10 @@ const updateWordPressCredentialsSchema = z.object({
 
 const updateSiteAnalyticsSchema = z.object({
   googleAnalyticsPropertyId: optionalAnalyticsPropertyIdSchema
+});
+
+const submitSearchConsoleSitemapSchema = z.object({
+  sitemapPath: z.string().trim().min(1).max(240).default('sitemap.xml')
 });
 
 const syncedArticleTypeSchema = z.enum(['post', 'page', 'portfolio', 'product']);
@@ -480,6 +486,13 @@ CREATE TABLE IF NOT EXISTS synced_articles (
 
 CREATE INDEX IF NOT EXISTS idx_synced_articles_site_updated
   ON synced_articles(site_id, cms_updated_at DESC);
+
+ALTER TABLE synced_articles
+  DROP CONSTRAINT IF EXISTS synced_articles_type_check;
+
+ALTER TABLE synced_articles
+  ADD CONSTRAINT synced_articles_type_check
+  CHECK (type IN ('post', 'page', 'portfolio', 'product'));
 
 ALTER TABLE synced_articles
   ADD COLUMN IF NOT EXISTS meta_description varchar(500);
@@ -3286,6 +3299,8 @@ export function registerSiteConnectionRoutes(
   repository = createInMemorySiteConnectionRepository(),
   authService: AuthService
 ) {
+  const searchConsoleService = createSearchConsoleService();
+
   app.addHook('onClose', async () => {
     await repository.close?.();
   });
@@ -3581,6 +3596,94 @@ export function registerSiteConnectionRoutes(
         site
       }
     };
+  });
+
+  app.post<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/search-console/sitemaps', async (request, reply) => {
+    const parsed = submitSearchConsoleSitemapSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const existingSite = await repository.find(request.params.siteId);
+    const tokenAuthorized = await repository.verifyToken(
+      request.params.siteId,
+      getBearerToken(request)
+    );
+
+    if (!existingSite) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: {
+          code: 'SITE_NOT_FOUND'
+        }
+      });
+    }
+
+    if (!tokenAuthorized) {
+      const user = await requireAuth(authService, request, reply);
+
+      if (!user) {
+        return reply;
+      }
+
+      if (existingSite.workspaceId !== user.workspaceId) {
+        return reply.status(404).send({
+          success: false,
+          message: '找不到站點連接',
+          error: {
+            code: 'SITE_NOT_FOUND'
+          }
+        });
+      }
+    }
+
+    const credentials = await readGoogleCredentials();
+    if (!credentials) {
+      return reply.status(400).send({
+        success: false,
+        message: 'Google 憑證尚未配置',
+        error: {
+          code: 'GOOGLE_CREDENTIALS_NOT_CONFIGURED'
+        }
+      });
+    }
+
+    try {
+      const result = await searchConsoleService.submitSitemap(
+        existingSite.siteUrl,
+        credentials,
+        parsed.data.sitemapPath
+      );
+
+      return {
+        success: true,
+        message: 'Sitemap 已提交到 Google Search Console',
+        data: {
+          site: existingSite,
+          sitemapUrl: result.sitemapUrl,
+          propertyUrl: result.siteUrl,
+          submittedAt: result.submittedAt
+        }
+      };
+    } catch (error) {
+      const message = error instanceof Error && error.message !== ''
+        ? error.message
+        : 'Google sitemap submission failed';
+
+      return reply.status(502).send({
+        success: false,
+        message,
+        error: {
+          code: 'SEARCH_CONSOLE_SITEMAP_SUBMISSION_FAILED'
+        }
+      });
+    }
   });
 
   app.post<{
