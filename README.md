@@ -2339,3 +2339,21 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - `npm run security:audit` 通過，`found 0 vulnerabilities`。
   - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
 - 下一步行動清單：提交合併結果、推送 `main` 到 GitHub 觸發 Production Deploy，部署後檢查 `https://api.rankwoven.com/health` 和公開 Web robots / sitemap。
+
+### 2026-08-11（星期二）— 補強生產 Vite 後台 noindex header
+
+- 會話的主要目的：部署後確認 `robots.txt` 與 `sitemap.xml` 已正常，但 `/app`、`/admin` 回應未輸出預期 `X-Robots-Tag`，需補強生產實際使用的 Vite server header。
+- 完成的主要任務：
+  1. 在 `apps/web/vite.config.ts` 新增 `rankwoven-backoffice-robots-header` Vite plugin。
+  2. 對 `/app`、`/app/*`、`/admin`、`/admin/*` 回應加入 `X-Robots-Tag: noindex, nofollow, noarchive`。
+  3. 同時支援 Vite dev server 與 preview server，不影響公開首頁與 `/pricing`。
+- 關鍵決策和解決方案：保留既有 `robots.txt` 與 `apps/web/nginx.conf` 防護，但因目前生產 Web 由 Vite server 實際處理 SPA 回應，改在 Vite middleware 補上 route-specific header，避免全站 noindex。
+- 使用的技術棧：Vite、TypeScript、Vue 3、HTTP header。
+- 新增或修改文件：
+  - 修改：`apps/web/vite.config.ts`、`README.md`
+- 驗證結果：
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過，Vite 只有既有大型 chunk 警告。
+  - 本地 Vite server `curl -I http://127.0.0.1:5183/app` 已輸出 `X-Robots-Tag: noindex, nofollow, noarchive`。
+  - 本地 Vite server `curl -I http://127.0.0.1:5183/pricing` 未輸出 `X-Robots-Tag`，公開頁不受影響。
+- 下一步行動清單：提交並推送 `main`，等待 Production Deploy 完成後重新檢查 `https://rankwoven.com/app` 與 `https://rankwoven.com/admin` header。
