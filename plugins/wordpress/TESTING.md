@@ -50,6 +50,12 @@
 ```bash
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwoven-seo.php" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php"
+
+cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.js" \
+   "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.js"
+
+cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/admin.css" \
+   "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/admin.css"
 ```
 
 同步後執行 PHP 語法檢查並重啟容器：
@@ -65,6 +71,10 @@ docker restart cyruschan-wp
 diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwoven-seo.php" \
      "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php" \
   && echo SAME || echo DIFF
+
+diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/admin.css" \
+     "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/admin.css" \
+  && echo SAME || echo DIFF
 ```
 
 若後台看不到最新改動，先確認上述 `diff` 為 `SAME`，再清除瀏覽器快取或重新登入 WordPress。
@@ -76,7 +86,9 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwove
 ### 1. 啟用與基礎設定
 
 - [ ] 後台 `Plugins` 頁能看到並啟用 `RankWoven SEO`，無 PHP 警告或白屏。
-- [ ] `Settings -> RankWoven SEO` 頁面正常渲染。
+- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
+- [ ] `RankWoven SEO` 後台頁載入卡片化 UI：頂部 hero、連線狀態 pill、圓角 tabs、儀表板指標卡與快速操作按鈕樣式正常。
+- [ ] `Settings -> RankWoven SEO` 舊入口仍可打開並導向一般設定頁。
 - [ ] API Base URL 填 `http://host.docker.internal:3011` 並保存成功。
 - [ ] 保存 GA4 Property ID、WordPress 管理員用戶名和 Application Password 後重新打開頁面，值正確回顯（Application Password 不得明文回顯）。
 
@@ -88,7 +100,7 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwove
 
 ### 3. 同步任務
 
-- [ ] 點擊手動同步，插件建立同步任務並分頁推送 Posts、Pages 和媒體批次。
+- [ ] 點擊手動同步，插件建立同步任務並分頁推送 Posts、Pages、Portfolio、Products 和媒體批次。
 - [ ] 同步完成後顯示最近同步時間、文章數、媒體數、頁數、同步模式和任務 ID。
 - [ ] 再次同步時使用 `updatedAfter` 增量模式（首次為全量）。
 - [ ] RankWoven Web `/app/tasks` 任務列表能看到對應任務且狀態為完成。
@@ -121,6 +133,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 
 - [ ] 無 Token 或錯誤 Token 時返回 401 / 403。
 - [ ] `updatedAfter` 過濾生效（帶未來時間應返回空列表）。
+- [ ] `/wp-json/rankwoven/v1/posts` 回傳資料包含存在於測試站的 `post`、`page`、`portfolio` 和 `product` 類型；商品與 Portfolio 的公開分類 / 標籤會同步到 `categories` / `tags`，供內部連結建議使用。
 
 ### 7. 建議寫回（apply）
 
@@ -135,11 +148,27 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
 - [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
 - [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。
+- [ ] 直接點擊 WordPress 原生 `Update` / `Publish` 後重新打開編輯頁，Keywords 仍能正確回顯。
 - [ ] 沒有 RankWoven 站點連接時，`Generate & Apply SEO` 會停用，但手動保存仍可正常使用。
 - [ ] 重新打開編輯頁後，已保存的 SEO title / Meta description / Keywords 能正確回顯。
 - [ ] 打開已保存的前台頁面原始碼，`<head>` 內包含對應的 `meta name="description"` 和 `meta name="keywords"`。
 - [ ] 若內容有特色圖片，前台 `<head>` 內包含 Google+ itemprop、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 圖片標籤。
 - [ ] 在插件設定保存 Twitter/X Username 或 Facebook App ID 後，前台 `<head>` 內包含 `twitter:site`、`twitter:creator` 或 `fb:app_id`，且不出現 `@username` / `APP ID` placeholder。
+
+### 9. 內容類型 Meta 預設
+
+- [ ] `RankWoven SEO -> 搜尋外觀` 頁籤可正常顯示 `post`、`page`、`portfolio` 和 `product` 的模板區塊。
+- [ ] 為不同內容類型保存 `SEO Title Template`、`Meta Description Template` 和 `Meta Keywords Template` 後重新打開頁面，值可正確回顯。
+- [ ] `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}`、`{{post_type_label}}` 占位符可在前台單篇頁面正常展開。
+- [ ] 單篇文章若已保存自己的 SEO title / Meta description / Keywords，仍優先使用單篇值，不會被內容類型預設蓋掉。
+- [ ] 未保存單篇 SEO 欄位時，前台 `<head>` 會使用對應內容類型的預設模板輸出 meta。
+
+### Sitemap 與 Google 提交
+
+- [ ] `RankWoven SEO -> 網站地圖` 頁籤可正常顯示 `sitemap.xml` URL 和最近生成 / 提交狀態。
+- [ ] 點擊 `Generate sitemap.xml` 後，`/sitemap.xml` 可在前台直接開啟，且 XML 內容包含已發佈的 Posts、Pages、Portfolio 和 Products。
+- [ ] 點擊 `Submit to Google` 後，插件會調用 SaaS 後端 `POST /api/v1/site-connections/:siteId/search-console/sitemaps`，並使用 Google Search Console API 提交 `sitemap.xml`。
+- [ ] `robots.txt` 動態輸出包含 `Sitemap: <URL>` 行。
 
 ## 回歸重點
 
@@ -153,6 +182,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | REST API 路由 | 清單 6 |
 | 寫回 / Application Password | 清單 7 |
 | 前台 SEO meta 輸出 | 清單 8 |
+| 內容類型 Meta 預設 | 清單 9 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯

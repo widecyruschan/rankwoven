@@ -104,33 +104,15 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/app/articles',
-    name: 'AppArticles',
-    component: () => import('../views/ArticlesView.vue'),
-    meta: {
-      titleKey: 'nav.articles',
-      layout: 'app',
-      requiresAuth: true
-    }
+    redirect: '/app/sites'
   },
   {
     path: '/app/article-sync',
-    name: 'AppArticleSync',
-    component: () => import('../views/ArticleSyncView.vue'),
-    meta: {
-      titleKey: 'nav.articleSync',
-      layout: 'app',
-      requiresAuth: true
-    }
+    redirect: '/app/tasks'
   },
   {
     path: '/app/suggestions',
-    name: 'AppSuggestions',
-    component: () => import('../views/SuggestionsView.vue'),
-    meta: {
-      titleKey: 'nav.suggestions',
-      layout: 'app',
-      requiresAuth: true
-    }
+    redirect: '/app/media'
   },
   {
     path: '/app/media',
@@ -154,23 +136,11 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/app/article-suggestions',
-    name: 'AppArticleSuggestions',
-    component: () => import('../views/ArticleSuggestionsView.vue'),
-    meta: {
-      titleKey: 'nav.articleSuggestions',
-      layout: 'app',
-      requiresAuth: true
-    }
+    redirect: '/app/media'
   },
   {
     path: '/app/review',
-    name: 'AppReview',
-    component: () => import('../views/ReviewView.vue'),
-    meta: {
-      titleKey: 'nav.review',
-      layout: 'app',
-      requiresAuth: true
-    }
+    redirect: '/app/media'
   },
   {
     path: '/app/links',

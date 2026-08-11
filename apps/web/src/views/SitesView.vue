@@ -54,7 +54,6 @@ const siteRows = computed(() =>
     name: site.name,
     platform: platformLabels[site.platform],
     health: site.status === 'connected' ? t('sites.healthReady') : t('sites.healthRevoked'),
-    articles: site.lastSyncStats?.articlesReceived ?? 0,
     lastTokenUsed: formatDateTime(site.lastTokenUsedAt),
     lastSync: formatDateTime(site.lastSyncAt),
     status: site.status,
@@ -65,6 +64,27 @@ const siteRows = computed(() =>
 const filteredSiteRows = computed(() =>
   siteRows.value.filter((site) => (activeTab.value === 'connected' ? site.status === 'connected' : site.status === 'revoked'))
 );
+const connectedSiteCount = computed(() => siteRows.value.filter((site) => site.status === 'connected').length);
+const revokedSiteCount = computed(() => siteRows.value.filter((site) => site.status === 'revoked').length);
+const syncedSiteCount = computed(() => siteRows.value.filter((site) => site.lastSync !== '--').length);
+
+const siteSummaryCards = computed(() => [
+  {
+    label: t('sites.connectedCount'),
+    value: String(connectedSiteCount.value),
+    tone: 'primary'
+  },
+  {
+    label: t('sites.readySites'),
+    value: String(Math.max(connectedSiteCount.value - revokedSiteCount.value, 0)),
+    tone: 'accent'
+  },
+  {
+    label: t('sites.syncCovered'),
+    value: String(syncedSiteCount.value),
+    tone: 'neutral'
+  }
+]);
 
 const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() => [
   {
@@ -85,12 +105,6 @@ const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() =
     width: 130
   },
   {
-    title: t('sites.articles'),
-    dataIndex: 'articles',
-    key: 'articles',
-    width: 100
-  },
-  {
     title: t('sites.lastTokenUsed'),
     dataIndex: 'lastTokenUsed',
     key: 'lastTokenUsed',
@@ -109,7 +123,7 @@ const columns = computed<TableColumnsType<(typeof siteRows.value)[number]>>(() =
     width: 120
   },
   {
-    title: t('articles.action'),
+    title: t('sites.action'),
     key: 'action',
     width: 180
   }
@@ -178,7 +192,27 @@ onMounted(() => {
 
     <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
 
-    <section class="content-panel">
+    <div class="summary-grid compact-grid">
+      <article v-for="card in siteSummaryCards" :key="card.label" class="metric-card" :data-tone="card.tone">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+      </article>
+    </div>
+
+    <section class="content-panel site-management-panel">
+      <div class="site-onboarding-strip">
+        <div>
+          <span class="hero-eyebrow">{{ t('sites.onboardingEyebrow') }}</span>
+          <h3>{{ t('sites.onboardingTitle') }}</h3>
+          <p>{{ t('sites.onboardingBody') }}</p>
+        </div>
+        <ol class="site-step-list">
+          <li>{{ t('sites.connectStepOne') }}</li>
+          <li>{{ t('sites.connectStepTwo') }}</li>
+          <li>{{ t('sites.connectStepThree') }}</li>
+        </ol>
+      </div>
+
       <a-tabs v-model:active-key="activeTab">
         <a-tab-pane key="connected" :tab="t('sites.connectedTab')" />
         <a-tab-pane key="revoked" :tab="t('sites.revokedTab')" />
@@ -191,7 +225,15 @@ onMounted(() => {
         :loading="isLoading"
         :pagination="false"
       >
-        <template #emptyText>{{ t('sites.empty') }}</template>
+        <template #emptyText>
+          <div class="site-empty-state">
+            <strong>{{ t('sites.empty') }}</strong>
+            <span>{{ t('sites.emptyHint') }}</span>
+            <a-button type="primary" :loading="isLoading" @click="loadSites">
+              {{ t('sites.refresh') }}
+            </a-button>
+          </div>
+        </template>
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
             <strong>{{ record.name }}</strong>
@@ -240,8 +282,6 @@ onMounted(() => {
         <dd>{{ formatDateTime(selectedSite.lastTokenUsedAt) }}</dd>
         <dt>{{ t('sites.lastSync') }}</dt>
         <dd>{{ formatDateTime(selectedSite.lastSyncAt) }}</dd>
-        <dt>{{ t('sites.articles') }}</dt>
-        <dd>{{ selectedSite.lastSyncStats?.articlesReceived ?? 0 }}</dd>
         <dt>{{ t('media.title') }}</dt>
         <dd>{{ selectedSite.lastSyncStats?.mediaReceived ?? 0 }}</dd>
       </dl>

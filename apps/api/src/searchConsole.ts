@@ -6,7 +6,8 @@ import type { SiteConnectionRepository } from './siteConnections';
 import type { KeywordGscData } from './keywordSuggestions';
 
 const searchConsoleScope = 'https://www.googleapis.com/auth/webmasters.readonly';
-const searchConsoleBaseUrl = 'https://www.googleapis.com/webmasters/v3';
+const searchConsoleWriteScope = 'https://www.googleapis.com/auth/webmasters';
+const searchConsoleBaseUrl = 'https://searchconsole.googleapis.com/webmasters/v3';
 
 // ── In-memory GSC keyword cache ──────────────────────────────────
 // keyed by normalized lowercase keyword, maps to GSC performance data
@@ -35,6 +36,14 @@ export interface SearchConsoleKeywordsResult {
     averageCtr: number;
     averagePosition: number;
   };
+}
+
+export interface SearchConsoleSitemapSubmissionResult {
+  configured: boolean;
+  source: 'search-console';
+  siteUrl: string;
+  sitemapUrl: string;
+  submittedAt: string;
 }
 
 function computeTotals(keywords: SearchConsoleKeyword[]) {
@@ -129,6 +138,24 @@ function extractDomain(url: string): string {
   }
 }
 
+function getSearchConsolePropertyCandidates(siteUrl: string): string[] {
+  const candidates = [siteUrl];
+  if (!siteUrl.startsWith('sc-domain:')) {
+    const domain = extractDomain(siteUrl);
+    if (domain !== '') {
+      candidates.push(`sc-domain:${domain}`);
+    }
+  }
+
+  return candidates;
+}
+
+function buildSitemapUrl(siteUrl: string, sitemapPath: string): string {
+  const normalizedPath = sitemapPath.trim().replace(/^\/+/, '');
+  const baseUrl = siteUrl.endsWith('/') ? siteUrl : `${siteUrl}/`;
+  return new URL(normalizedPath !== '' ? normalizedPath : 'sitemap.xml', baseUrl).toString();
+}
+
 export function createSearchConsoleService() {
   return {
     async getKeywords(
@@ -143,13 +170,7 @@ export function createSearchConsoleService() {
 
       try {
         const accessToken = await requestGoogleAccessToken(credentials, searchConsoleScope);
-
-        // 依次尝试：原始 URL → sc-domain: 域名属性格式
-        const candidates = [siteUrl];
-        if (!siteUrl.startsWith('sc-domain:')) {
-          const domain = extractDomain(siteUrl);
-          candidates.push(`sc-domain:${domain}`);
-        }
+        const candidates = getSearchConsolePropertyCandidates(siteUrl);
 
         for (const candidate of candidates) {
           try {
@@ -196,6 +217,47 @@ export function createSearchConsoleService() {
           totals: { totalClicks: 0, totalImpressions: 0, averageCtr: 0, averagePosition: 0 }
         };
       }
+    },
+
+    async submitSitemap(
+      siteUrl: string,
+      credentials: GoogleServiceAccountCredentials,
+      sitemapPath = 'sitemap.xml'
+    ): Promise<SearchConsoleSitemapSubmissionResult> {
+      const accessToken = await requestGoogleAccessToken(credentials, searchConsoleWriteScope);
+      const sitemapUrl = buildSitemapUrl(siteUrl, sitemapPath);
+      const candidates = getSearchConsolePropertyCandidates(siteUrl);
+      let lastErrorMessage = '';
+
+      for (const candidate of candidates) {
+        const response = await fetch(
+          `${searchConsoleBaseUrl}/sites/${encodeURIComponent(candidate)}/sitemaps/${encodeURIComponent(sitemapUrl)}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/json'
+            }
+          }
+        );
+
+        if (response.ok) {
+          return {
+            configured: true,
+            source: 'search-console',
+            siteUrl: candidate,
+            sitemapUrl,
+            submittedAt: new Date().toISOString()
+          };
+        }
+
+        const errorText = (await response.text().catch(() => '')).trim();
+        lastErrorMessage = errorText !== ''
+          ? `Search Console API returned ${response.status}: ${errorText}`
+          : `Search Console API returned ${response.status}`;
+      }
+
+      throw new Error(lastErrorMessage || 'Search Console sitemap submission failed');
     }
   };
 }

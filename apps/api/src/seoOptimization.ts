@@ -449,7 +449,7 @@ async function buildSeoIssues(
         severity: 'low',
         message: '文章內部連結不足',
         currentValue: String(internalLinks.length),
-        suggestedValue: '補充 2-3 個與主題相關的站內連結',
+        suggestedValue: buildInternalLinkSuggestionValue(article, articles),
         fieldName: 'contentHtml'
       });
     }
@@ -547,6 +547,124 @@ async function buildSeoIssues(
   }
 
   return issues;
+}
+
+function normalizeInternalLinkTerms(values: string[]) {
+  return values
+    .map((value) => normalizePlainText(value).toLowerCase())
+    .filter(Boolean);
+}
+
+function countSharedTerms(leftValues: string[], rightValues: string[]) {
+  const leftTerms = new Set(normalizeInternalLinkTerms(leftValues));
+  const rightTerms = new Set(normalizeInternalLinkTerms(rightValues));
+  let sharedCount = 0;
+
+  for (const term of leftTerms) {
+    if (rightTerms.has(term)) {
+      sharedCount += 1;
+    }
+  }
+
+  return sharedCount;
+}
+
+function getInternalLinkTitleTokens(title: string) {
+  return normalizePlainText(title)
+    .toLowerCase()
+    .split(/[^a-z0-9\u4e00-\u9fff]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+function buildInternalLinkReason(
+  categoryMatches: number,
+  tagMatches: number,
+  titleMatches: number,
+  isFallback: boolean
+) {
+  if (categoryMatches > 0) {
+    return `共享 ${categoryMatches} 個分類，主題關聯度較高。`;
+  }
+
+  if (tagMatches > 0) {
+    return `共享 ${tagMatches} 個標籤，可補強站內主題群。`;
+  }
+
+  if (titleMatches > 0) {
+    return '標題關鍵詞有重疊，可作為相關閱讀補充。';
+  }
+
+  return isFallback ? '沒有明顯分類或標籤交集，先選擇近期內容補足站內導流。' : '可補充為相關閱讀連結。';
+}
+
+function buildInternalLinkSuggestionValue(article: SyncedArticle, articles: SyncedArticle[]) {
+  const sourceTitleTokens = getInternalLinkTitleTokens(article.title);
+  const candidates = articles
+    .filter((candidate) => candidate.cmsId !== article.cmsId)
+    .filter((candidate) => candidate.status === 'publish')
+    .filter((candidate) => candidate.url.trim() !== '');
+
+  const scoredCandidates = candidates
+    .map((candidate) => {
+      const categoryMatches = countSharedTerms(article.categories, candidate.categories);
+      const tagMatches = countSharedTerms(article.tags, candidate.tags);
+      const titleMatches = countSharedTerms(sourceTitleTokens, getInternalLinkTitleTokens(candidate.title));
+      const score = categoryMatches * 4 + tagMatches * 3 + titleMatches * 2;
+
+      return {
+        candidate,
+        categoryMatches,
+        tagMatches,
+        titleMatches,
+        score
+      };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return right.candidate.updatedAt.localeCompare(left.candidate.updatedAt);
+    });
+
+  const fallbackCandidates = scoredCandidates.length > 0
+    ? []
+    : candidates
+        .slice()
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .slice(0, 3)
+        .map((candidate, index) => ({
+          candidate,
+          categoryMatches: 0,
+          tagMatches: 0,
+          titleMatches: 0,
+          score: Math.max(1, 3 - index)
+        }));
+
+  const selectedCandidates = (scoredCandidates.length > 0 ? scoredCandidates : fallbackCandidates).slice(0, 3);
+  if (selectedCandidates.length === 0) {
+    return '補充 2-3 個與主題相關的站內連結';
+  }
+
+  return JSON.stringify({
+    format: 'rankwoven-internal-links-v1',
+    intro: '建議在內容最後加入以下相關閱讀連結，避免破壞原有 WPBakery 或頁面建構器結構。',
+    links: selectedCandidates.map((item) => ({
+      targetCmsId: item.candidate.cmsId,
+      targetTitle: item.candidate.title,
+      targetUrl: item.candidate.url,
+      anchorText: item.candidate.title,
+      relevance: item.score >= 7 ? 'high' : item.score >= 4 ? 'medium' : 'low',
+      reason: buildInternalLinkReason(
+        item.categoryMatches,
+        item.tagMatches,
+        item.titleMatches,
+        scoredCandidates.length === 0
+      )
+    }))
+  });
 }
 
 function normalizeTitleSuggestion(title: string) {
@@ -2099,6 +2217,48 @@ async function ensureSiteTokenAccess(
   return site;
 }
 
+async function ensureSiteTokenOrWorkspaceAccess(
+  repository: SiteConnectionRepository,
+  authService: AuthService,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  siteId: string
+) {
+  const site = await repository.find(siteId);
+  if (!site) {
+    reply.status(404).send({
+      success: false,
+      message: '找不到站點連接',
+      error: {
+        code: 'SITE_NOT_FOUND'
+      }
+    });
+    return undefined;
+  }
+
+  if (await repository.verifyToken(site.id, getBearerToken(request))) {
+    return site;
+  }
+
+  const user = await requireAuth(authService, request, reply);
+  if (!user) {
+    return undefined;
+  }
+
+  if (site.workspaceId !== user.workspaceId) {
+    reply.status(404).send({
+      success: false,
+      message: '找不到站點連接',
+      error: {
+        code: 'SITE_NOT_FOUND'
+      }
+    });
+    return undefined;
+  }
+
+  return site;
+}
+
 async function listAllArticlesForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
   const articles: SyncedArticle[] = [];
   let page = 1;
@@ -2155,25 +2315,22 @@ export function registerSeoOptimizationRoutes(
   app.post<{ Params: { siteId: string } }>(
     '/api/v1/site-connections/:siteId/audits',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const articles = await listAllArticlesForAudit(siteRepository, site.id);
       const media = await listAllMediaForAudit(siteRepository, site.id);
       const issues = await buildSeoIssues(articles, media, {
         siteId: site.id,
-        userId: user.id,
+        userId: site.id,
         locale: 'zh-Hant',
         textProvider
       });
@@ -2199,18 +2356,15 @@ export function registerSeoOptimizationRoutes(
   app.get<{ Params: { siteId: string } }>(
     '/api/v1/site-connections/:siteId/audits',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const audits = await seoRepository.listAudits(site.id);
@@ -2271,18 +2425,15 @@ export function registerSeoOptimizationRoutes(
   }>(
     '/api/v1/site-connections/:siteId/suggestions',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const parsedQuery = listSuggestionsQuerySchema.safeParse(request.query);
@@ -2308,18 +2459,15 @@ export function registerSeoOptimizationRoutes(
   app.get<{ Params: { siteId: string } }>(
     '/api/v1/site-connections/:siteId/apply-queue',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const [suggestions, tasks, snapshots] = await Promise.all([
@@ -2450,18 +2598,15 @@ export function registerSeoOptimizationRoutes(
   app.post<{ Params: { siteId: string; suggestionId: string } }>(
     '/api/v1/site-connections/:siteId/suggestions/:suggestionId/approve',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const existingSuggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
@@ -2506,18 +2651,15 @@ export function registerSeoOptimizationRoutes(
   app.post<{ Params: { siteId: string }; Body: { suggestionIds: string[] } }>(
     '/api/v1/site-connections/:siteId/suggestions/batch-approve',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const { suggestionIds } = request.body;
@@ -2585,18 +2727,15 @@ export function registerSeoOptimizationRoutes(
   app.post<{ Params: { siteId: string; suggestionId: string } }>(
     '/api/v1/site-connections/:siteId/suggestions/:suggestionId/apply',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       let suggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
@@ -2660,18 +2799,15 @@ export function registerSeoOptimizationRoutes(
   app.post<{ Params: { siteId: string }; Body: { suggestionIds: string[] } }>(
     '/api/v1/site-connections/:siteId/suggestions/batch-apply',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const { suggestionIds } = request.body;
@@ -2753,18 +2889,15 @@ export function registerSeoOptimizationRoutes(
   app.post<{ Params: { siteId: string; snapshotId: string } }>(
     '/api/v1/site-connections/:siteId/apply-snapshots/:snapshotId/rollback',
     async (request, reply) => {
-      const user = await requireAuth(authService, request, reply);
-      if (!user) {
-        return reply;
-      }
-
-      const site = await siteRepository.findForWorkspace(request.params.siteId, user.workspaceId);
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
       if (!site) {
-        return reply.status(404).send({
-          success: false,
-          message: '找不到站點連接',
-          error: { code: 'SITE_NOT_FOUND' }
-        });
+        return reply;
       }
 
       const snapshot = await seoRepository.findApplySnapshot(site.id, request.params.snapshotId);

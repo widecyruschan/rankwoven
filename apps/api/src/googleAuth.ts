@@ -65,15 +65,25 @@ export function createServiceAccountJwt(
   return `${unsignedToken}.${signature}`;
 }
 
-let cachedAccessToken: string | null = null;
-let cachedTokenExpiry = 0;
+interface CachedAccessToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
+const cachedAccessTokens = new Map<string, CachedAccessToken>();
+
+function getAccessTokenCacheKey(credentials: GoogleServiceAccountCredentials, scope: string) {
+  return `${credentials.client_email}:${scope}`;
+}
 
 export async function requestGoogleAccessToken(
   credentials: GoogleServiceAccountCredentials,
   scope: string
 ): Promise<string> {
-  if (cachedAccessToken && Date.now() < cachedTokenExpiry - 300_000) {
-    return cachedAccessToken;
+  const cacheKey = getAccessTokenCacheKey(credentials, scope);
+  const cachedToken = cachedAccessTokens.get(cacheKey);
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 300_000) {
+    return cachedToken.accessToken;
   }
 
   const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -86,14 +96,17 @@ export async function requestGoogleAccessToken(
       assertion: createServiceAccountJwt(credentials, scope)
     })
   });
-  const body = (await response.json()) as { access_token?: string };
+  const body = (await response.json()) as { access_token?: string; expires_in?: number };
 
   if (!response.ok || !body.access_token) {
     throw new Error('Google access token request failed');
   }
 
-  cachedAccessToken = body.access_token;
-  cachedTokenExpiry = Date.now();
+  const expiresInSeconds = typeof body.expires_in === 'number' && body.expires_in > 0 ? body.expires_in : 3600;
+  cachedAccessTokens.set(cacheKey, {
+    accessToken: body.access_token,
+    expiresAt: Date.now() + expiresInSeconds * 1000
+  });
 
   return body.access_token;
 }

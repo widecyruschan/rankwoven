@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { Spin, Tag } from 'ant-design-vue';
-import { ChartBar, Eye, Search, Target } from 'lucide-vue-next';
+import { ArrowRight, ChartBar, Eye, Link2, Search, ShieldCheck, Sparkles, Target } from 'lucide-vue-next';
 import { getSiteConnections, type SiteConnection } from '@/api/siteConnections';
 import {
   getSearchConsoleKeywords,
@@ -19,6 +19,9 @@ const router = useRouter();
 
 // ── Dynamic metrics ──────────────────────────────────────────
 const sites = ref<SiteConnection[]>([]);
+const totalSyncedMedia = computed(() =>
+  sites.value.reduce((total, site) => total + (site.lastSyncStats?.mediaReceived ?? 0), 0)
+);
 const metrics = computed(() => [
   {
     label: t('dashboard.connectedSites'),
@@ -26,18 +29,18 @@ const metrics = computed(() => [
     tone: 'primary' as const
   },
   {
-    label: t('dashboard.indexedArticles'),
-    value: t('dashboard.syncProgress'),
+    label: t('dashboard.syncedMedia'),
+    value: String(totalSyncedMedia.value),
     tone: 'neutral' as const
   },
   {
     label: t('dashboard.pendingSuggestions'),
-    value: t('dashboard.title'),
+    value: '--',
     tone: 'accent' as const
   },
   {
     label: t('dashboard.runningTasks'),
-    value: t('dashboard.pipelineTitle'),
+    value: '--',
     tone: 'neutral' as const
   },
   {
@@ -61,6 +64,21 @@ const metrics = computed(() => [
   }
 ]);
 
+const dashboardHeroStats = computed(() => [
+  {
+    label: t('dashboard.siteConnectionsLabel'),
+    value: String(sites.value.length)
+  },
+  {
+    label: t('dashboard.mediaIndexedLabel'),
+    value: String(totalSyncedMedia.value)
+  },
+  {
+    label: t('dashboard.saasSignals'),
+    value: overviewLhScores.value ? `${Math.round(overviewLhScores.value.seo)}/100` : '--'
+  }
+]);
+
 // ── Pipeline visualization (placeholder) ────────────────────
 const pipelineSteps = computed(() => [
   { label: t('dashboard.pipelineScan'), value: '100%' },
@@ -71,9 +89,9 @@ const pipelineSteps = computed(() => [
 ]);
 
 const priorities = computed(() => [
-  t('dashboard.priorityArticle'),
   t('dashboard.priorityImage'),
-  t('dashboard.priorityLinks')
+  t('dashboard.priorityLinks'),
+  t('dashboard.prioritySiteAudit')
 ]);
 
 // ── Site selection ───────────────────────────────────────────
@@ -203,7 +221,13 @@ function navigateToTab(tab: string) {
   dashboardTab.value = tab;
 }
 function navigateToAudit() {
-  router.push('/audit');
+  router.push('/app/lighthouse');
+}
+function navigateToSites() {
+  router.push('/app/sites');
+}
+function navigateToLinks() {
+  router.push('/app/links');
 }
 
 onMounted(async () => {
@@ -221,6 +245,48 @@ onMounted(async () => {
 
 <template>
   <section class="page-section">
+    <section class="dashboard-hero">
+      <div class="dashboard-hero-copy">
+        <span class="hero-eyebrow">
+          <Sparkles :size="15" aria-hidden="true" />
+          {{ t('dashboard.heroEyebrow') }}
+        </span>
+        <h2>{{ t('dashboard.heroTitle') }}</h2>
+        <p>{{ t('dashboard.heroBody') }}</p>
+        <div class="dashboard-hero-actions">
+          <a-button type="primary" size="large" @click="navigateToSites">
+            {{ t('dashboard.openSites') }}
+            <template #icon>
+              <ArrowRight :size="16" aria-hidden="true" />
+            </template>
+          </a-button>
+          <a-button size="large" @click="navigateToLinks">
+            <template #icon>
+              <Link2 :size="16" aria-hidden="true" />
+            </template>
+            {{ t('dashboard.reviewLinks') }}
+          </a-button>
+        </div>
+      </div>
+
+      <aside class="dashboard-hero-card" :aria-label="t('dashboard.pluginReady')">
+        <div class="hero-card-header">
+          <span class="status-dot" />
+          <strong>{{ t('dashboard.pluginReady') }}</strong>
+        </div>
+        <div class="hero-stat-list">
+          <div v-for="stat in dashboardHeroStats" :key="stat.label" class="hero-stat-item">
+            <span>{{ stat.label }}</span>
+            <strong>{{ stat.value }}</strong>
+          </div>
+        </div>
+        <button class="hero-inline-action" type="button" @click="navigateToAudit">
+          <ShieldCheck :size="16" aria-hidden="true" />
+          {{ t('dashboard.runAudit') }}
+        </button>
+      </aside>
+    </section>
+
     <!-- Summary metrics -->
     <div class="summary-grid">
       <article v-for="metric in metrics" :key="metric.label" class="metric-card" :data-tone="metric.tone">

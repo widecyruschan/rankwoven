@@ -85,6 +85,48 @@
     return state;
   }
 
+  function getFieldValue(field) {
+    return field ? String(field.value || '') : '';
+  }
+
+  function getSeoScoreValue() {
+    return Number(getFieldValue(seoScoreInput).replace('/100', '')) || 0;
+  }
+
+  function syncEditorMetaState() {
+    if (!(window.wp && wp.data && typeof wp.data.dispatch === 'function')) {
+      return;
+    }
+
+    try {
+      const editor = wp.data.dispatch('core/editor');
+      if (editor && typeof editor.editPost === 'function') {
+        editor.editPost({
+          slug: getFieldValue(slugInput),
+          meta: {
+            _rankwoven_focus_keyphrase: getFieldValue(focusKeyphraseInput),
+            _rankwoven_seo_title: getFieldValue(seoTitleInput),
+            _rankwoven_seo_score: getSeoScoreValue(),
+            _rankwoven_meta_description: getFieldValue(metaDescriptionInput),
+            _rankwoven_meta_keywords: getFieldValue(metaKeywordsInput),
+            _rankwoven_seo_analysis: getFieldValue(analysisInput)
+          }
+        });
+      }
+    } catch {
+      // Server-side save remains the source of truth when Gutenberg meta sync is unavailable.
+    }
+  }
+
+  function bindEditorMetaSync(field) {
+    if (!field || typeof field.addEventListener !== 'function') {
+      return;
+    }
+
+    field.addEventListener('input', syncEditorMetaState);
+    field.addEventListener('change', syncEditorMetaState);
+  }
+
   function applyEditorState(data) {
     if (seoTitleInput) {
       seoTitleInput.value = data.seoTitle || '';
@@ -187,4 +229,12 @@
       void requestEditorSeo('save');
     });
   }
+
+  [
+    focusKeyphraseInput,
+    seoTitleInput,
+    slugInput,
+    metaDescriptionInput,
+    metaKeywordsInput
+  ].forEach(bindEditorMetaSync);
 })();

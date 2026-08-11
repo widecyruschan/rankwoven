@@ -16,14 +16,17 @@ wp-content/plugins/rankwoven-seo
 
 ## 後台入口
 
-啟用後可在 WordPress 後台進入：
+啟用後可在 WordPress 後台側欄看到 `RankWoven SEO` 主選單，也可從 WordPress 設定頁進入：
 
 ```text
+RankWoven SEO
 Settings -> RankWoven SEO
 ```
 
 當前後台支援：
 
+- 以接近 AIOSEO 的方式提供 `儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`圖片屬性`、`工具類` 和 `診斷` 管理入口。
+- 後台 UI 使用 WordPress 原生 admin 元件加 RankWoven 輕量樣式，提供卡片化儀表板、連線狀態、快速操作與更清楚的設定分區，不額外載入前端 SPA 框架。
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
 - 輸入此 WordPress 站點的 GA4 Property ID，讓 SaaS 分析頁按站點讀取 SEO 流量資料。
@@ -32,10 +35,12 @@ Settings -> RankWoven SEO
 - 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 查看只讀診斷頁，檢查 API 連接、Token、本地同步、圖片屬性和 Application Password 配置狀態。
+- 在 `搜尋外觀` 頁籤為文章、頁面、Portfolio 和商品設定預設 SEO title、Meta description 與 Meta keywords 模板。
+- 在 `網站地圖` 頁籤動態生成 `sitemap.xml`，並提交到 Google Search Console。
 - 在文章、頁面、Portfolio 和商品編輯頁顯示 RankWoven SEO 面板，輸入 Focus keyphrase 後可用 AI 生成或優化 SEO title、Slug 和 Meta description。
 - 在文章、頁面、Portfolio 和商品編輯頁保存 Keywords，並在前台頁面的 `<head>` 輸出 Meta description、Meta keywords、Google+ itemprop、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
-- 一鍵建立後端同步任務，分頁批量同步 Posts、Pages 和圖片媒體。
+- 一鍵建立後端同步任務，分頁批量同步 Posts、Pages、Portfolio、Products 和圖片媒體。
 - 顯示最近一次同步時間、文章數、媒體數、同步頁數、同步模式、`updatedAfter` 和同步任務 ID。
 - 當 SaaS 返回 `SITE_TOKEN_INVALID` 時，提示用戶重新生成 Token 並重新保存或重新連接站點。
 
@@ -77,8 +82,13 @@ http://host.docker.internal:3011
 
 - `Generate & Apply SEO`：把當前內容、摘要、SEO title 與 Focus keyphrase 一起送到 RankWoven API，生成並套用新的 SEO 建議。
 - `Save SEO Fields`：保存手動編輯的 SEO title、Slug、Meta description 和 Keywords，並重新分析當前內容的 SEO 分數。
+- WordPress 原生 `Update` / `Publish`：也會保存 RankWoven 面板中的 SEO title、Meta description 和 Keywords，避免刷新後欄位變空。
 
 RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。內容分數會根據當前標題、Meta description、Slug、正文長度、H1、內部連結與 Focus keyphrase 覆蓋情況即時計算。
+
+`搜尋外觀` 頁籤可為不同內容類型設定預設模板，支援的占位符包括 `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}` 和 `{{post_type_label}}`；早期單括號格式也會兼容。單篇文章若已保存自訂 SEO 欄位，仍會優先使用單篇值。
+
+`網站地圖` 頁籤會動態輸出 `sitemap.xml`，包含已發佈的文章、頁面、Portfolio 和商品，並在 `robots.txt` 動態補上 `Sitemap:` 行。`Submit to Google` 會透過 SaaS 後端的 Google Search Console API 將 `sitemap.xml` 提交給 Google。
 
 Twitter/X Username 與 Facebook App ID 可在 `Settings -> RankWoven SEO` 保存；留空時不輸出 `@username` 或 `APP ID` 這類 placeholder。需要由主題或自訂代碼覆寫時，也可使用 `rankwoven_seo_twitter_username` 和 `rankwoven_seo_facebook_app_id` filter 返回正式值。
 
@@ -154,6 +164,7 @@ Settings -> RankWoven SEO -> Diagnostics
 | `PUT` | `/api/v1/site-connections/:siteId/analytics-settings` | 更新此站點 GA4 Property ID |
 | `PUT` | `/api/v1/site-connections/:siteId/wordpress-credentials` | 更新 WordPress 管理員用戶名和 Application Password |
 | `POST` | `/api/v1/site-connections/:siteId/editor-seo` | 依據當前內容和 Focus keyphrase 生成 SEO title、Slug 和 Meta description |
+| `POST` | `/api/v1/site-connections/:siteId/search-console/sitemaps` | 將 WordPress 的 `sitemap.xml` 提交到 Google Search Console |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks` | 建立同步任務，可帶 `updatedAfter` |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 分頁推送文章與媒體同步批次 |
 | `POST` | `/api/v1/site-connections/:siteId/sync` | 舊版單次同步兼容接口 |
@@ -165,7 +176,7 @@ Authorization: Bearer <Site Token>
 Content-Type: application/json
 ```
 
-手動同步會先在 SaaS 後端建立同步任務，再以每頁 100 筆分頁讀取 WordPress Posts、Pages 和圖片媒體，逐批推送到同步任務。插件會使用上一次成功同步的 `syncStartedAt` 作為下一次同步的 `updatedAfter`，首次同步沒有記錄時自動全量同步。最後一批完成後，後端會累計任務批次、文章數和媒體數，並更新站點最近同步統計。
+手動同步會先在 SaaS 後端建立同步任務，再以每頁 100 筆分頁讀取 WordPress Posts、Pages、Portfolio、Products 和圖片媒體，逐批推送到同步任務。插件會使用上一次成功同步的 `syncStartedAt` 作為下一次同步的 `updatedAfter`，首次同步沒有記錄時自動全量同步。最後一批完成後，後端會累計任務批次、文章數和媒體數，並更新站點最近同步統計。
 
 GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。RankWoven 平台仍需要配置 Google 服務帳號憑據，且該服務帳號必須被加入客戶 GA4 Property 的可讀權限，否則客戶後台分析頁會返回示範數據。
 
@@ -176,8 +187,8 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 | Method | URL | 用途 |
 |---|---|---|
 | `GET` | `/wp-json/rankwoven/v1/site` | 獲取站點基礎資訊 |
-| `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取 Posts 和 Pages，可按修改時間增量過濾 |
-| `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇 Post 或 Page |
+| `GET` | `/wp-json/rankwoven/v1/posts?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取 Posts、Pages、Portfolio 和 Products，可按修改時間增量過濾 |
+| `GET` | `/wp-json/rankwoven/v1/posts/:id` | 讀取單篇 Post、Page、Portfolio 或 Product |
 | `POST` | `/wp-json/rankwoven/v1/posts/:id/apply` | 使用 WordPress Application Password 身份寫回已批准文章建議 |
 | `GET` | `/wp-json/rankwoven/v1/media?page=1&perPage=100&updatedAfter=2026-07-26T00:00:00Z` | 分頁讀取圖片媒體，可按修改時間增量過濾 |
 | `GET` | `/wp-json/rankwoven/v1/media/:id` | 讀取單個圖片媒體 |
@@ -187,7 +198,7 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 
 ## 同步欄位
 
-文章同步欄位：
+文章同步欄位，`type` 支援 `post`、`page`、`portfolio` 和 `product`：
 
 - `cmsId`
 - `type`
@@ -204,6 +215,8 @@ GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。Ran
 - `featuredImageId`
 - `publishedAt`
 - `updatedAt`
+
+`categories` 和 `tags` 會按內容類型讀取公開 taxonomy，例如文章分類 / 標籤、商品分類 / 標籤與 Portfolio 自訂分類，供 SaaS 內部連結推薦計算相關性。
 
 `metaDescription` 會優先讀取 Yoast `_yoast_wpseo_metadesc`、Rank Math `rank_math_description`、AIOSEO `_aioseo_description` / `_aioseop_description`，沒有 SEO 插件欄位時回退 WordPress 摘要。
 

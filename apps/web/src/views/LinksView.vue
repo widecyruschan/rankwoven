@@ -37,10 +37,15 @@ const clusters = computed(() => [
 
 <template>
   <section class="page-section">
-    <div class="page-heading">
+    <div class="page-heading link-assistant-heading">
       <div>
+        <span class="hero-eyebrow">{{ t('links.heroEyebrow') }}</span>
         <h2>{{ t('links.title') }}</h2>
         <p>{{ t('links.body') }}</p>
+      </div>
+      <div class="link-safety-card">
+        <strong>{{ t('links.safeAppend') }}</strong>
+        <span>{{ t('links.applyHint') }}</span>
       </div>
     </div>
 
@@ -51,7 +56,13 @@ const clusters = computed(() => [
       </article>
     </div>
 
-    <section class="content-panel">
+    <section class="content-panel link-opportunity-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>{{ t('links.reviewQueue') }}</h2>
+          <span>{{ t('links.heroBody') }}</span>
+        </div>
+      </div>
       <div class="data-table" role="table">
         <div class="data-row data-head" role="row">
           <span>{{ t('links.source') }}</span>
@@ -66,7 +77,7 @@ const clusters = computed(() => [
           <span>{{ item.target }}</span>
           <span>{{ item.anchor }}</span>
           <span>{{ item.reason }}</span>
-          <span>{{ item.confidence }}</span>
+          <span class="confidence-pill">{{ item.confidence }}</span>
           <button class="text-button" type="button">{{ t('links.action') }}</button>
         </div>
       </div>
