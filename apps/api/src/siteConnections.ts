@@ -1465,6 +1465,8 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
   const mediaBySite = new Map<string, Map<string, SyncedMedia>>();
   const syncTasks = new Map<string, SyncTask>();
   const syncTaskBatchIndexes = new Map<string, Set<number>>();
+  const fullSyncArticleIds = new Map<string, Set<string>>();
+  const fullSyncMediaIds = new Map<string, Set<string>>();
 
   return {
     async create(input) {
@@ -1712,6 +1714,10 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
 
       syncTasks.set(task.id, task);
       syncTaskBatchIndexes.set(task.id, new Set());
+      if (task.scope === 'full') {
+        fullSyncArticleIds.set(task.id, new Set());
+        fullSyncMediaIds.set(task.id, new Set());
+      }
       return task;
     },
     async listSyncTasks(options) {
@@ -1873,14 +1879,36 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
 
       for (const article of payload.articles) {
         siteArticles.set(article.cmsId, article);
+        fullSyncArticleIds.get(syncTaskId)?.add(article.cmsId);
       }
 
       for (const media of payload.media) {
         siteMedia.set(media.cmsId, media);
+        fullSyncMediaIds.get(syncTaskId)?.add(media.cmsId);
       }
 
       articlesBySite.set(siteId, siteArticles);
       mediaBySite.set(siteId, siteMedia);
+
+      if (payload.isFinalBatch && task.scope === 'full') {
+        const seenArticleIds = fullSyncArticleIds.get(syncTaskId) ?? new Set<string>();
+        const seenMediaIds = fullSyncMediaIds.get(syncTaskId) ?? new Set<string>();
+
+        for (const cmsId of Array.from(siteArticles.keys())) {
+          if (!seenArticleIds.has(cmsId)) {
+            siteArticles.delete(cmsId);
+          }
+        }
+
+        for (const cmsId of Array.from(siteMedia.keys())) {
+          if (!seenMediaIds.has(cmsId)) {
+            siteMedia.delete(cmsId);
+          }
+        }
+
+        fullSyncArticleIds.delete(syncTaskId);
+        fullSyncMediaIds.delete(syncTaskId);
+      }
 
       task.status = payload.isFinalBatch ? 'completed' : 'running';
       batchIndexes.add(payload.batchIndex);
@@ -2865,6 +2893,10 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         ]
       );
 
+      if (payload.isFinalBatch && task.scope === 'full') {
+        await this.cleanupStaleFullSyncContent(client, siteId, new Date(task.createdAt));
+      }
+
       const updatedTaskResult = await client.query(
         `
           UPDATE sync_tasks
@@ -3206,6 +3238,82 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         media.updatedAt,
         syncedAt
       ]
+    );
+  }
+
+  private async cleanupStaleFullSyncContent(
+    client: PoolClient,
+    siteId: string,
+    syncTaskCreatedAt: Date
+  ) {
+    const cleanupStartedAt = Number.isNaN(syncTaskCreatedAt.getTime())
+      ? new Date()
+      : syncTaskCreatedAt;
+    const staleArticlesResult = await client.query(
+      `
+        DELETE FROM synced_articles
+        WHERE site_id = $1
+          AND synced_at < $2
+        RETURNING cms_id, url
+      `,
+      [siteId, cleanupStartedAt]
+    );
+    const staleMediaResult = await client.query(
+      `
+        DELETE FROM synced_media
+        WHERE site_id = $1
+          AND synced_at < $2
+        RETURNING cms_id
+      `,
+      [siteId, cleanupStartedAt]
+    );
+    const staleArticleIds = staleArticlesResult.rows.map((row) => String(row.cms_id));
+    const staleArticleUrls = staleArticlesResult.rows
+      .map((row) => String(row.url ?? '').trim())
+      .filter(Boolean);
+    const staleMediaIds = staleMediaResult.rows.map((row) => String(row.cms_id));
+
+    if (staleArticleIds.length === 0 && staleMediaIds.length === 0) {
+      return;
+    }
+
+    const suggestionsTableResult = await client.query(
+      `SELECT to_regclass('public.optimization_suggestions') AS table_name`
+    );
+    if (!suggestionsTableResult.rows[0]?.table_name) {
+      return;
+    }
+
+    await client.query(
+      `
+        DELETE FROM optimization_suggestions
+        WHERE site_id = $1
+          AND (
+            (
+              status != 'applied'
+              AND (
+                (target_type = 'article' AND target_cms_id = ANY($2::varchar[]))
+                OR (target_type = 'media' AND target_cms_id = ANY($3::varchar[]))
+              )
+            )
+            OR (
+              suggestion_type = 'internal_link'
+              AND (
+                (target_type = 'article' AND target_cms_id = ANY($2::varchar[]))
+                OR (
+                  metadata IS NOT NULL
+                  AND (
+                    metadata->>'sourceCmsId' = ANY($2::varchar[])
+                    OR metadata->>'targetCmsId' = ANY($2::varchar[])
+                    OR metadata->>'sourceUrl' = ANY($4::text[])
+                    OR metadata->>'targetUrl' = ANY($4::text[])
+                  )
+                )
+              )
+            )
+          )
+      `,
+      [siteId, staleArticleIds, staleMediaIds, staleArticleUrls]
     );
   }
 }

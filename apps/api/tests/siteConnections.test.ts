@@ -2,6 +2,7 @@ import type { TextGenerationProvider, TextGenerationResult } from '@aieo/ai-prov
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
+import { createInMemorySeoOptimizationRepository } from '../src/seoOptimization';
 
 interface CreateSiteConnectionResponse {
   success: boolean;
@@ -2037,6 +2038,337 @@ describe('site connection routes', () => {
         }
       }
     });
+  });
+
+  it('removes stale content and internal link suggestions after a full rescan', async () => {
+    const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
+    const articles = [
+      {
+        cmsId: '301',
+        type: 'post',
+        title: 'WordPress SEO Cluster Guide Complete Tutorial',
+        slug: 'wordpress-seo-cluster-guide',
+        status: 'publish',
+        url: 'http://localhost:8088/wordpress-seo-cluster-guide/',
+        excerpt: 'WordPress SEO cluster guide.',
+        metaDescription: 'Learn how to build a complete WordPress SEO topic cluster with internal links.',
+        contentHtml: '<h1>WordPress SEO Cluster Guide Complete Tutorial</h1><p>Build SEO topic clusters.</p>',
+        author: 'Admin',
+        categories: ['SEO'],
+        tags: ['wordpress', 'internal links'],
+        updatedAt: '2026-07-26T02:00:00+00:00'
+      },
+      {
+        cmsId: '302',
+        type: 'page',
+        title: 'Advanced WordPress SEO Internal Linking Strategy',
+        slug: 'advanced-wordpress-seo-internal-linking',
+        status: 'publish',
+        url: 'http://localhost:8088/advanced-wordpress-seo-internal-linking/',
+        excerpt: 'Internal linking strategy.',
+        metaDescription: 'Plan better internal links between WordPress articles, pages, products, and portfolio content.',
+        contentHtml: '<h1>Advanced WordPress SEO Internal Linking Strategy</h1><p>Plan internal links.</p>',
+        author: 'Admin',
+        categories: ['SEO'],
+        tags: ['wordpress', 'internal links'],
+        updatedAt: '2026-07-26T02:10:00+00:00'
+      },
+      {
+        cmsId: '303',
+        type: 'portfolio',
+        title: 'Portfolio SEO Case Study Internal Links',
+        slug: 'portfolio-seo-case-study-internal-links',
+        status: 'publish',
+        url: 'http://localhost:8088/portfolio-seo-case-study-internal-links/',
+        excerpt: 'Portfolio SEO case study.',
+        metaDescription: 'A portfolio SEO case study showing how internal links improve discovery.',
+        contentHtml: '<h1>Portfolio SEO Case Study Internal Links</h1><p>Portfolio SEO example.</p>',
+        author: 'Admin',
+        categories: ['SEO'],
+        tags: ['portfolio', 'internal links'],
+        updatedAt: '2026-07-26T02:20:00+00:00'
+      }
+    ];
+
+    const firstTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        syncStartedAt: '2026-07-26T03:00:00+00:00'
+      }
+    });
+    const firstTaskBody = firstTaskResponse.json();
+    const firstBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks/${firstTaskBody.data.task.id}/batches`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        batchIndex: 1,
+        syncStartedAt: '2026-07-26T03:00:00+00:00',
+        isFinalBatch: true,
+        articles,
+        media: []
+      }
+    });
+    const firstAuditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+
+    expect(firstTaskResponse.statusCode).toBe(201);
+    expect(firstBatchResponse.statusCode).toBe(200);
+    expect(firstAuditResponse.statusCode).toBe(201);
+
+    const secondTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        syncStartedAt: '2026-07-26T04:00:00+00:00'
+      }
+    });
+    const secondTaskBody = secondTaskResponse.json();
+    const secondBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/sync-tasks/${secondTaskBody.data.task.id}/batches`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        batchIndex: 1,
+        syncStartedAt: '2026-07-26T04:00:00+00:00',
+        isFinalBatch: true,
+        articles: articles.slice(0, 2),
+        media: []
+      }
+    });
+    const secondAuditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      }
+    });
+    const articlesResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/articles?page=1&pageSize=20`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions?targetType=article&limit=100`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const visibleArticleIds = articlesResponse
+      .json<{ data: { articles: Array<{ cmsId: string }> } }>()
+      .data.articles.map((article) => article.cmsId);
+
+    expect(secondTaskResponse.statusCode).toBe(201);
+    expect(secondBatchResponse.statusCode).toBe(200);
+    expect(secondAuditResponse.statusCode).toBe(201);
+    expect(articlesResponse.statusCode).toBe(200);
+    expect(visibleArticleIds).toEqual(['302', '301']);
+    expect(JSON.stringify(suggestionsResponse.json())).not.toContain('"targetCmsId":"303"');
+  });
+
+  it('hides applied internal link suggestions when the target URL is removed', async () => {
+    const seoRepository = createInMemorySeoOptimizationRepository();
+    const { server, body } = await createWordPressConnection({}, {
+      seoOptimizationRepository: seoRepository
+    });
+    const authToken = await loginDemoUser(server);
+    const siteToken = body.data.apiToken;
+    const siteId = body.data.site.id;
+
+    const initialTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/sync-tasks`,
+      headers: {
+        authorization: `Bearer ${siteToken}`
+      },
+      payload: {
+        syncStartedAt: '2026-08-10T01:00:00+00:00'
+      }
+    });
+    const initialTaskId = initialTaskResponse.json().data.task.id;
+    const initialBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/sync-tasks/${initialTaskId}/batches`,
+      headers: {
+        authorization: `Bearer ${siteToken}`
+      },
+      payload: {
+        batchIndex: 1,
+        syncStartedAt: '2026-08-10T01:00:00+00:00',
+        isFinalBatch: true,
+        articles: [
+          {
+            cmsId: '1670',
+            type: 'post',
+            title: 'SEO 文章內容與搜尋引擎優化完整指南',
+            slug: 'seo-guide',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1670',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>SEO 文章內容與搜尋引擎優化完整指南</h1><p>內容尚未加入內部連結。</p>',
+            updatedAt: '2026-08-10T00:00:00+00:00'
+          },
+          {
+            cmsId: '1536',
+            type: 'page',
+            title: 'FAQ',
+            slug: 'faq',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1536',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>FAQ</h1><p>常見問題。</p>',
+            updatedAt: '2026-08-10T00:00:00+00:00'
+          },
+          {
+            cmsId: '1700',
+            type: 'post',
+            title: 'SEO 內容優化實戰與常見問題',
+            slug: 'seo-content-practice',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1700',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>SEO 內容優化實戰與常見問題</h1><p>另一個仍然存在的相關頁面。</p>',
+            updatedAt: '2026-08-10T00:30:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+
+    const createSuggestionResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/suggestions`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {
+        targetType: 'article',
+        targetCmsId: '1670',
+        suggestionType: 'internal_link',
+        fieldName: 'contentHtml',
+        currentValue: '<p>內容尚未加入內部連結。</p>',
+        suggestedValue: JSON.stringify({
+          format: 'rankwoven-internal-links-v1',
+          links: [
+            {
+              targetTitle: 'FAQ',
+              targetUrl: 'https://cyruschan.com/?page_id=1536',
+              anchorText: 'FAQ',
+              relevance: '20%',
+              reason: '舊版建議只保存 targetUrl。'
+            }
+          ]
+        }),
+        metadata: {
+          sourceCmsId: '1670',
+          sourceTitle: 'SEO 文章內容與搜尋引擎優化完整指南',
+          targetTitle: 'FAQ',
+          targetUrl: 'https://cyruschan.com/?page_id=1536',
+          anchorText: 'FAQ',
+          relevance: 20,
+          reason: '舊版建議只保存 targetUrl。'
+        }
+      }
+    });
+    const suggestionId = createSuggestionResponse.json().data.suggestion.id;
+    await seoRepository.markSuggestionApplied(suggestionId);
+
+    const rescanTaskResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/sync-tasks`,
+      headers: {
+        authorization: `Bearer ${siteToken}`
+      },
+      payload: {
+        syncStartedAt: '2026-08-10T02:00:00+00:00'
+      }
+    });
+    const rescanTaskId = rescanTaskResponse.json().data.task.id;
+    const rescanBatchResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/sync-tasks/${rescanTaskId}/batches`,
+      headers: {
+        authorization: `Bearer ${siteToken}`
+      },
+      payload: {
+        batchIndex: 1,
+        syncStartedAt: '2026-08-10T02:00:00+00:00',
+        isFinalBatch: true,
+        articles: [
+          {
+            cmsId: '1670',
+            type: 'post',
+            title: 'SEO 文章內容與搜尋引擎優化完整指南',
+            slug: 'seo-guide',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1670',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>SEO 文章內容與搜尋引擎優化完整指南</h1><p>內容尚未加入內部連結。</p>',
+            updatedAt: '2026-08-10T02:00:00+00:00'
+          },
+          {
+            cmsId: '1700',
+            type: 'post',
+            title: 'SEO 內容優化實戰與常見問題',
+            slug: 'seo-content-practice',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1700',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>SEO 內容優化實戰與常見問題</h1><p>另一個仍然存在的相關頁面。</p>',
+            updatedAt: '2026-08-10T02:00:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+    const auditResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/audits`,
+      headers: {
+        authorization: `Bearer ${siteToken}`
+      }
+    });
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${siteId}/suggestions?targetType=article&limit=100`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const suggestions = suggestionsResponse.json().data.suggestions;
+
+    expect(initialBatchResponse.statusCode).toBe(200);
+    expect(createSuggestionResponse.statusCode).toBe(201);
+    expect(rescanBatchResponse.statusCode).toBe(200);
+    expect(auditResponse.statusCode).toBe(201);
+    expect(suggestionsResponse.statusCode).toBe(200);
+    expect(JSON.stringify(suggestions)).not.toContain('page_id=1536');
+    expect(JSON.stringify(suggestions)).toContain('page_id=1700');
   });
 
   it('creates manual article and media refresh tasks and lists batch progress', async () => {

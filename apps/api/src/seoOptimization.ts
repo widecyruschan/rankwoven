@@ -1470,6 +1470,110 @@ function normalizeSlugForFileName(value: string) {
     .slice(0, 80);
 }
 
+function readCmsId(value: unknown) {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return '';
+}
+
+function collectInternalLinkCmsIds(suggestion: OptimizationSuggestion) {
+  const cmsIds = new Set<string>();
+  const metadata = suggestion.metadata ?? {};
+  const metadataSourceCmsId = readCmsId(metadata.sourceCmsId);
+  const metadataTargetCmsId = readCmsId(metadata.targetCmsId);
+
+  if (metadataSourceCmsId !== '') {
+    cmsIds.add(metadataSourceCmsId);
+  }
+
+  if (metadataTargetCmsId !== '') {
+    cmsIds.add(metadataTargetCmsId);
+  }
+
+  try {
+    const decoded = JSON.parse(suggestion.suggestedValue) as { links?: unknown };
+    if (Array.isArray(decoded.links)) {
+      for (const link of decoded.links) {
+        if (link && typeof link === 'object') {
+          const targetCmsId = readCmsId((link as Record<string, unknown>).targetCmsId);
+          if (targetCmsId !== '') {
+            cmsIds.add(targetCmsId);
+          }
+        }
+      }
+    }
+  } catch {
+    return cmsIds;
+  }
+
+  return cmsIds;
+}
+
+function collectInternalLinkTargetUrls(suggestion: OptimizationSuggestion) {
+  const targetUrls = new Set<string>();
+  const metadata = suggestion.metadata ?? {};
+  const metadataTargetUrl = typeof metadata.targetUrl === 'string' ? metadata.targetUrl.trim() : '';
+
+  if (metadataTargetUrl !== '') {
+    targetUrls.add(metadataTargetUrl);
+  }
+
+  try {
+    const decoded = JSON.parse(suggestion.suggestedValue) as { links?: unknown };
+    if (Array.isArray(decoded.links)) {
+      for (const link of decoded.links) {
+        if (link && typeof link === 'object') {
+          const targetUrl = (link as Record<string, unknown>).targetUrl;
+          if (typeof targetUrl === 'string' && targetUrl.trim() !== '') {
+            targetUrls.add(targetUrl.trim());
+          }
+        }
+      }
+    }
+  } catch {
+    return targetUrls;
+  }
+
+  return targetUrls;
+}
+
+function isSuggestionVisibleForCurrentContent(
+  suggestion: OptimizationSuggestion,
+  articleIds: Set<string>,
+  mediaIds: Set<string>,
+  articleUrls: Set<string>
+) {
+  if (suggestion.targetType === 'article' && !articleIds.has(suggestion.targetCmsId)) {
+    return false;
+  }
+
+  if (suggestion.targetType === 'media' && !mediaIds.has(suggestion.targetCmsId)) {
+    return false;
+  }
+
+  if (suggestion.suggestionType === 'internal_link') {
+    for (const cmsId of collectInternalLinkCmsIds(suggestion)) {
+      if (!articleIds.has(cmsId)) {
+        return false;
+      }
+    }
+
+    for (const targetUrl of collectInternalLinkTargetUrls(suggestion)) {
+      if (!articleUrls.has(normalizeInternalLinkTargetUrl(targetUrl))) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 function toSuggestionType(issue: Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>): SuggestionType {
   if (issue.ruleCode === 'MEDIA_TITLE_CONTEXT') {
     return 'media_title';
@@ -2328,6 +2432,32 @@ async function listAllMediaForAudit(siteRepository: SiteConnectionRepository, si
   return media;
 }
 
+async function filterSuggestionsForCurrentContent(
+  siteRepository: SiteConnectionRepository,
+  siteId: string,
+  suggestions: OptimizationSuggestion[]
+) {
+  if (suggestions.length === 0) {
+    return suggestions;
+  }
+
+  const articles = await listAllArticlesForAudit(siteRepository, siteId);
+  const media = suggestions.some((suggestion) => suggestion.targetType === 'media')
+    ? await listAllMediaForAudit(siteRepository, siteId)
+    : [];
+  const articleIds = new Set(articles.map((article) => article.cmsId));
+  const mediaIds = new Set(media.map((mediaItem) => mediaItem.cmsId));
+  const articleUrls = new Set(
+    articles
+      .map((article) => normalizeInternalLinkTargetUrl(article.url))
+      .filter(Boolean)
+  );
+
+  return suggestions.filter((suggestion) =>
+    isSuggestionVisibleForCurrentContent(suggestion, articleIds, mediaIds, articleUrls)
+  );
+}
+
 function stripHtml(value: string) {
   return value
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -2364,6 +2494,16 @@ function normalizeUrlForInternalLink(value: string, baseUrl?: string) {
   try {
     const url = new URL(value, baseUrl);
     return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, '') || '/'}`;
+  } catch {
+    return value.trim().replace(/\/+$/, '');
+  }
+}
+
+function normalizeInternalLinkTargetUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const pathname = url.pathname.replace(/\/+$/, '') || '/';
+    return `${url.hostname.toLowerCase()}${pathname}${url.search}`;
   } catch {
     return value.trim().replace(/\/+$/, '');
   }
@@ -2692,12 +2832,13 @@ export function registerSeoOptimizationRoutes(
       const audits = await seoRepository.listAudits(site.id);
       const latestAudit = audits[0];
       const latestIssues = latestAudit ? await seoRepository.listIssues(latestAudit.id) : [];
+      const suggestions = await seoRepository.listSuggestions(site.id, parsedQuery.data);
 
       return {
         success: true,
         message: '操作成功',
         data: {
-          suggestions: await seoRepository.listSuggestions(site.id, parsedQuery.data),
+          suggestions: await filterSuggestionsForCurrentContent(siteRepository, site.id, suggestions),
           latestAudit: summarizeAudit(latestAudit, latestIssues)
         }
       };
