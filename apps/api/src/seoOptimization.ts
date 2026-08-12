@@ -2408,7 +2408,7 @@ async function listAllArticlesForAudit(siteRepository: SiteConnectionRepository,
     page += 1;
   }
 
-  return articles;
+  return articles.filter((article) => article.status.toLowerCase() === 'publish');
 }
 
 async function listAllMediaForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
