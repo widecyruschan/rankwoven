@@ -40,4 +40,14 @@ describe('web smoke test', () => {
       i18n.global.locale.value = originalLocale;
     }
   });
+
+  it('defaults traffic analytics to the first connected site', async () => {
+    const analyticsViewSource = await readFile(resolve('src/views/AnalyticsView.vue'), 'utf8');
+
+    expect(analyticsViewSource).toContain('const hasSelectedSite = sites.value.some((site) => site.id === selectedSiteId.value);');
+    expect(analyticsViewSource).toContain('selectedSiteId.value = sites.value[0].id;');
+    expect(analyticsViewSource.indexOf('await loadSites();')).toBeLessThan(
+      analyticsViewSource.indexOf('await loadAnalytics();')
+    );
+  });
 });

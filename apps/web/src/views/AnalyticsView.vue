@@ -114,6 +114,11 @@ async function loadAnalytics() {
 async function loadSites() {
   const result = await getSiteConnections();
   sites.value = result.sites;
+  const hasSelectedSite = sites.value.some((site) => site.id === selectedSiteId.value);
+
+  if (!hasSelectedSite && sites.value.length > 0) {
+    selectedSiteId.value = sites.value[0].id;
+  }
 }
 
 async function loadAnalyticsPage() {
