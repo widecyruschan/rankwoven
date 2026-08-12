@@ -1543,6 +1543,84 @@ function collectInternalLinkTargetUrls(suggestion: OptimizationSuggestion) {
   return targetUrls;
 }
 
+function readInternalLinkText(value: unknown) {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return '';
+}
+
+function normalizeInternalLinkResponseLink(link: Record<string, unknown>) {
+  const targetUrl = readInternalLinkText(link.targetUrl);
+  const anchorText = readInternalLinkText(link.anchorText) || readInternalLinkText(link.targetTitle);
+
+  if (targetUrl === '' || anchorText === '') {
+    return undefined;
+  }
+
+  return {
+    targetCmsId: readCmsId(link.targetCmsId),
+    targetTitle: readInternalLinkText(link.targetTitle),
+    targetType: readInternalLinkText(link.targetType),
+    targetUrl,
+    anchorText,
+    relevance: readInternalLinkText(link.relevance),
+    reason: readInternalLinkText(link.reason)
+  };
+}
+
+function getInternalLinkResponseLinks(suggestion: OptimizationSuggestion) {
+  try {
+    const decoded = JSON.parse(suggestion.suggestedValue) as { links?: unknown };
+    if (Array.isArray(decoded.links)) {
+      const links = decoded.links
+        .filter((link): link is Record<string, unknown> => Boolean(link) && typeof link === 'object')
+        .map(normalizeInternalLinkResponseLink)
+        .filter((link): link is NonNullable<typeof link> => Boolean(link));
+
+      if (links.length > 0) {
+        return links;
+      }
+    }
+  } catch {
+    // Legacy internal-link suggestions may store full HTML instead of JSON.
+  }
+
+  const metadata = suggestion.metadata ?? {};
+  const metadataLink = normalizeInternalLinkResponseLink(metadata);
+  return metadataLink ? [metadataLink] : [];
+}
+
+function sanitizeInternalLinkSuggestionForListResponse(suggestion: OptimizationSuggestion): OptimizationSuggestion {
+  const links = getInternalLinkResponseLinks(suggestion);
+  const suggestedValue = links.length > 0
+    ? JSON.stringify({
+        format: 'rankwoven-internal-links-v1',
+        intro: '建議在內容最後加入以下相關閱讀連結，避免破壞原有 WPBakery 或頁面建構器結構。',
+        links
+      })
+    : '建議在內容最後加入相關站內連結。';
+
+  return {
+    ...suggestion,
+    currentValue: undefined,
+    suggestedValue
+  };
+}
+
+function sanitizeSuggestionsForListResponse(suggestions: OptimizationSuggestion[]) {
+  return suggestions.map((suggestion) =>
+    suggestion.suggestionType === 'internal_link'
+      ? sanitizeInternalLinkSuggestionForListResponse(suggestion)
+      : suggestion
+  );
+}
+
 function isSuggestionVisibleForCurrentContent(
   suggestion: OptimizationSuggestion,
   articleIds: Set<string>,
@@ -2838,7 +2916,9 @@ export function registerSeoOptimizationRoutes(
         success: true,
         message: '操作成功',
         data: {
-          suggestions: await filterSuggestionsForCurrentContent(siteRepository, site.id, suggestions),
+          suggestions: sanitizeSuggestionsForListResponse(
+            await filterSuggestionsForCurrentContent(siteRepository, site.id, suggestions)
+          ),
           latestAudit: summarizeAudit(latestAudit, latestIssues)
         }
       };

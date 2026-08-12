@@ -2371,6 +2371,118 @@ describe('site connection routes', () => {
     expect(JSON.stringify(suggestions)).toContain('page_id=1700');
   });
 
+  it('sanitizes legacy internal link suggestion HTML from list responses', async () => {
+    const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
+    const siteToken = body.data.apiToken;
+    const siteId = body.data.site.id;
+
+    const syncResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/sync`,
+      headers: {
+        authorization: `Bearer ${siteToken}`
+      },
+      payload: {
+        articles: [
+          {
+            cmsId: '1670',
+            type: 'post',
+            title: 'SEO 文章內容與搜尋引擎優化完整指南',
+            slug: 'seo-guide',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1670',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>SEO 指南</h1><p><a href="https://cyruschan.com/?page_id=1536">舊 FAQ</a></p>',
+            updatedAt: '2026-08-12T00:00:00+00:00'
+          },
+          {
+            cmsId: '1700',
+            type: 'post',
+            title: 'SEO 內容優化實戰與常見問題',
+            slug: 'seo-content-practice',
+            status: 'publish',
+            url: 'https://cyruschan.com/?page_id=1700',
+            categories: ['SEO'],
+            tags: ['SEO'],
+            contentHtml: '<h1>SEO 內容優化實戰與常見問題</h1><p>仍然存在的相關頁面。</p>',
+            updatedAt: '2026-08-12T00:10:00+00:00'
+          }
+        ],
+        media: []
+      }
+    });
+    const createSuggestionResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${siteId}/suggestions`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
+      payload: {
+        targetType: 'article',
+        targetCmsId: '1670',
+        suggestionType: 'internal_link',
+        fieldName: 'contentHtml',
+        currentValue: '<p><a href="https://cyruschan.com/?page_id=1536">舊 FAQ</a></p>',
+        suggestedValue: [
+          '<p><a href="https://cyruschan.com/?page_id=1536">舊 FAQ</a></p>',
+          '<p data-rankwoven-internal-link="true">延伸閱讀：',
+          '<a href="https://cyruschan.com/?page_id=1700">SEO 內容優化實戰</a></p>'
+        ].join('\n'),
+        metadata: {
+          sourceCmsId: '1670',
+          sourceTitle: 'SEO 文章內容與搜尋引擎優化完整指南',
+          sourceUrl: 'https://cyruschan.com/?page_id=1670',
+          targetCmsId: '1700',
+          targetTitle: 'SEO 內容優化實戰與常見問題',
+          targetUrl: 'https://cyruschan.com/?page_id=1700',
+          anchorText: 'SEO 內容優化實戰',
+          relevance: 42,
+          reason: '仍然存在的相關頁面。'
+        }
+      }
+    });
+    const suggestionsResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${siteId}/suggestions?targetType=article&limit=100`,
+      headers: {
+        authorization: `Bearer ${authToken}`
+      }
+    });
+    const suggestions = suggestionsResponse
+      .json<{
+        data: {
+          suggestions: Array<{
+            currentValue?: string;
+            suggestedValue: string;
+            suggestionType: string;
+          }>;
+        };
+      }>()
+      .data.suggestions;
+    const internalLinkSuggestion = suggestions.find((suggestion) => suggestion.suggestionType === 'internal_link');
+    const parsedSuggestion = JSON.parse(internalLinkSuggestion?.suggestedValue ?? '{}') as {
+      format?: string;
+      links?: Array<{ targetUrl: string; anchorText: string }>;
+    };
+
+    expect(syncResponse.statusCode).toBe(200);
+    expect(createSuggestionResponse.statusCode).toBe(201);
+    expect(suggestionsResponse.statusCode).toBe(200);
+    expect(JSON.stringify(suggestions)).not.toContain('page_id=1536');
+    expect(internalLinkSuggestion?.currentValue).toBeUndefined();
+    expect(parsedSuggestion).toMatchObject({
+      format: 'rankwoven-internal-links-v1',
+      links: [
+        expect.objectContaining({
+          targetUrl: 'https://cyruschan.com/?page_id=1700',
+          anchorText: 'SEO 內容優化實戰'
+        })
+      ]
+    });
+  });
+
   it('hides internal link suggestions for trashed synced articles', async () => {
     const { server, body } = await createWordPressConnection();
     const authToken = await loginDemoUser(server);
