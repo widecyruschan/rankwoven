@@ -2845,3 +2845,151 @@ Fastify、TypeScript、Zod、Vitest、WordPress PHP Plugin、WordPress HTTP API�
 1. 啟動 Docker Desktop 後執行插件 PHP 語法檢查。
 2. 在 `http://localhost:8088` 用一張文件名無語義的圖片測試 `Test Bulk Updater`，確認五個欄位均來自所在內容上下文。
 3. 確認本地結果後，再提交並推送 SaaS API 與 WordPress 插件更新。
+
+---
+
+## 會話總結（2026-08-14）— 媒體 SEO 建議失敗後可重試套用
+
+### 會話主要目的
+
+修復 SaaS 後台媒體處理詳情中，圖片 SEO 建議提交失敗後只顯示「需重試」和錯誤碼，但沒有可點擊重試按鈕，導致用戶無法再次提交的問題。
+
+### 完成的主要任務
+
+1. 在媒體詳情表格的失敗建議行新增「重試套用」操作，讓用戶不必再進入其他頁面尋找重試入口。
+2. 在媒體審核彈窗中，針對 `failed` 狀態新增「重試套用」主按鈕。
+3. 新增 `retrySuggestion` 前端流程：如建議內容已被修改則先保存，再重新批准建議，最後重新建立寫回任務。
+4. 補齊英文與繁體中文 i18n 文案，避免界面顯示 key 或缺失翻譯。
+5. 補充 Web smoke test，鎖定 failed 狀態必須存在重試操作與對應文案。
+
+### 關鍵決策和解決方案
+
+- 不新增後端 API，直接複用既有 `approve` 和 `apply` 端點，降低部署與兼容風險。
+- `SUGGESTION_NOT_APPROVED` 這類失敗可以通過重新批准後再套用恢復；前端按鈕封裝此流程，避免用戶手動理解狀態機。
+- 若用戶在審核彈窗中先修改了建議內容，重試前會先保存修改，避免重新套用舊內容。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Ant Design Vue、Vue I18n、Vitest、Vite。
+
+### 新增或修改文件
+
+- `apps/web/src/views/MediaOptimizationView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/web -- smoke.test.ts` 通過，4 tests。
+- `npm run build -w @aieo/web` 通過，包含 `vue-tsc --noEmit` 與 Vite build；僅保留既有 vendor chunk 偏大提示。
+- `npm run lint` 通過。
+- `git diff --check -- apps/web/src/views/MediaOptimizationView.vue apps/web/src/i18n.ts apps/web/tests/smoke.test.ts` 通過。
+- 本次尚未提交或推送到 GitHub，等待確認後再進行。
+
+### 下一步行動清單
+
+1. 在本地或正式 SaaS 後台打開 `/app/media`，對一條 `需重試` 建議點擊「重試套用」，確認任務重新入隊。
+2. 若重試仍失敗，檢查對應任務隊列錯誤，判斷是否為 WordPress 憑證、插件版本或 CMS 寫回接口問題。
+3. 確認界面行為無誤後，再授權提交並推送到 GitHub 觸發部署。
+
+---
+
+## 會話總結（2026-08-14）— 媒體重新掃描清理已刪除項目
+
+### 會話主要目的
+
+修復 SaaS 後台媒體處理頁面中，WordPress 媒體庫已刪除圖片後，點擊「掃描並分析」或重新掃描仍然顯示已刪除媒體的問題。
+
+### 完成的主要任務
+
+1. 為 `/api/v1/site-connections/:siteId/media-scan` 新增回歸測試，模擬第一次掃描有兩張圖片、第二次 WordPress 只返回一張圖片的場景。
+2. 修正 in-memory repository 的 `saveMediaScan` 行為：全量媒體掃描時，以本次掃描結果為準移除未再返回的舊媒體。
+3. 修正 PostgreSQL repository 的 `saveMediaScan` 行為：全量媒體掃描完成後刪除 `synced_media` 中 stale media。
+4. 同步清理 stale media 對應且尚未套用的媒體 SEO 建議，避免已刪除圖片仍出現在待處理建議列表。
+5. 補充 PostgreSQL 條件式回歸測試，鎖定 stale media 與 pending media suggestions 都會被清理。
+
+### 關鍵決策和解決方案
+
+- 只有沒有 `updatedAfter` 的全量媒體掃描會清理舊媒體；帶 `updatedAfter` 的增量掃描不做刪除，避免 WordPress 只返回變更項目時誤刪未變更媒體。
+- PostgreSQL 清理邏輯必須放在 `/media-scan` 實際使用的 `saveMediaScan`，不能放在一般插件同步入口 `saveSync`，否則真實 SaaS 資料庫路徑不會生效。
+- 已套用的建議保留歷史記錄；未套用、待審核或失敗的媒體建議會跟隨 stale media 一起清理。
+
+### 使用的技術棧
+
+Fastify、TypeScript、Vitest、PostgreSQL、WordPress REST API。
+
+### 新增或修改文件
+
+- `apps/api/src/siteConnections.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `apps/api/tests/siteConnections.postgres.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/api -- siteConnections.test.ts -t "removes media deleted"` 通過。
+- `npm run test -w @aieo/api -- siteConnections.test.ts` 通過，32 tests。
+- `npm run build -w @aieo/api` 通過。
+- `npm run lint` 通過。
+- `npm run test -w @aieo/api -- siteConnections.postgres.test.ts` 可執行，但本機未設定 `RUN_POSTGRES_TESTS=1`，因此 4 個 PostgreSQL 測試按設計 skipped。
+
+### 下一步行動清單
+
+1. 啟用 Docker/PostgreSQL 測試環境後，用 `RUN_POSTGRES_TESTS=1` 跑一次 `siteConnections.postgres.test.ts`。
+2. 在本地或正式 SaaS `/app/media` 對已刪除 WordPress 媒體執行一次「掃描並分析」，確認列表總數同步下降。
+3. 確認後再授權提交、推送與部署到正式環境。
+
+---
+
+## 會話總結（2026-08-14）— SEO Slug 限制為英文小寫與下劃線
+
+### 會話主要目的
+
+修復 WordPress 編輯頁 `RankWoven SEO` 面板中，AI 生成或手動保存的 Slug 可能出現中文、其他語言或 URL encode 字串的問題；新規則要求 Slug 只能使用英文小寫字母與下劃線。
+
+### 完成的主要任務
+
+1. 調整 SaaS `editor-seo` AI prompt，明確要求 slug 只允許英文小寫與下劃線，不允許中文或其他非英文字符。
+2. 重寫 SaaS API 的 editor SEO slug normalizer：先處理 URL encode，再移除重音，只保留 `a-z`，其他字符統一轉為 `_` 並壓縮。
+3. 新增 API 回歸測試，覆蓋 `%e6...` URL encode、中文、數字和連字號混合 slug，確認最後只返回 `seo` 這類安全格式。
+4. 同步更新 WordPress 插件 PHP 保存與 AJAX 套用路徑，避免手動輸入或舊文章 slug 繞過 SaaS 清洗。
+5. 同步更新插件前端 `editor-seo.js`，在欄位顯示、AJAX payload 與 Gutenberg `editPost` 狀態同步前都套用同一條規則。
+6. 更新插件 README 與本地測試清單，記錄 slug 只允許 `a-z_` 的驗收標準。
+
+### 關鍵決策和解決方案
+
+- 按本次需求採用最嚴格規則：只保留英文小寫字母與下劃線，不保留數字、連字號、中文或其他語言字符。
+- 對 `%e7...` 這類 URL encoded slug 先解碼再清洗，避免把百分號編碼拆成 `e`、數字和連字號後錯誤保存。
+- SaaS API 與 WordPress 插件端都加保護，確保即使 AI 回傳不合規、SaaS 尚未部署或用戶手動貼入中文 slug，最終保存仍符合規則。
+
+### 使用的技術棧
+
+Fastify、TypeScript、Vitest、WordPress PHP Plugin、WordPress JavaScript、WordPress REST / AJAX。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/api -- siteConnections.test.ts -t "normalizes editor SEO slugs"` 先紅後綠，確認能捕捉並修復 `%e6...` 與中文 slug。
+- `npm run test -w @aieo/api -- siteConnections.test.ts -t "generates editor SEO recommendations"` 通過。
+- `npm run test -w @aieo/api -- siteConnections.test.ts` 通過，33 tests。
+- `npm run build -w @aieo/api` 通過。
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過，4 tests。
+- `node --check plugins/wordpress/rankwoven-seo/assets/editor-seo.js` 通過。
+- 未能執行 `php -l` 或 WordPress 後台手動測試，原因是本機沒有 PHP CLI，且 Docker Desktop daemon 未運行。
+
+### 下一步行動清單
+
+1. 啟動 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 同步插件到本地 WordPress 測試站。
+2. 執行 `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`。
+3. 在文章編輯頁貼入中文或 `%e7...` slug，點擊 `Generate & Apply SEO` 和 `Save SEO Fields`，確認保存後只剩 `a-z_`。

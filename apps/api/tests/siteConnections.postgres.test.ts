@@ -141,6 +141,99 @@ async function loginDemoUser(server: ReturnType<typeof createServer>) {
 }
 
 describePostgres('PostgreSQL site connection repository', () => {
+  it('removes stale media and pending media suggestions after a full media scan', async () => {
+    const databaseUrl = postgresTestDatabaseUrl as string;
+    const repository = createPostgresSiteConnectionRepository(databaseUrl);
+    const seoOptimizationRepository = new PostgresSeoOptimizationRepository(databaseUrl);
+    const pool = new Pool({ connectionString: databaseUrl });
+    let siteId = '';
+
+    try {
+      const created = await repository.create({
+        platform: 'wordpress',
+        name: `Postgres Media Scan ${crypto.randomUUID()}`,
+        siteUrl: 'http://localhost:8088',
+        cmsVersion: '6.8.2',
+        pluginVersion: '0.1.0',
+        wordpressAdminUsername: 'postgres-admin',
+        wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+      });
+      siteId = created.site.id;
+
+      await repository.saveMediaScan(siteId, {
+        syncStartedAt: '2026-08-14T01:00:00+00:00',
+        articles: [],
+        media: [
+          {
+            cmsId: '801',
+            title: 'Postgres Existing Media',
+            url: 'http://localhost:8088/wp-content/uploads/postgres-existing-media.jpg',
+            mimeType: 'image/jpeg',
+            fileName: 'postgres-existing-media.jpg',
+            updatedAt: '2026-08-14T01:00:00+00:00'
+          },
+          {
+            cmsId: '802',
+            title: 'Postgres Deleted Media',
+            url: 'http://localhost:8088/wp-content/uploads/postgres-deleted-media.jpg',
+            mimeType: 'image/jpeg',
+            fileName: 'postgres-deleted-media.jpg',
+            updatedAt: '2026-08-14T01:05:00+00:00'
+          }
+        ]
+      });
+      await seoOptimizationRepository.createSuggestion(siteId, {
+        targetType: 'media',
+        targetCmsId: '802',
+        suggestionType: 'media_alt_text',
+        fieldName: 'altText',
+        currentValue: '',
+        suggestedValue: 'Deleted media alt text'
+      });
+
+      await repository.saveMediaScan(siteId, {
+        syncStartedAt: '2026-08-14T02:00:00+00:00',
+        articles: [],
+        media: [
+          {
+            cmsId: '801',
+            title: 'Postgres Existing Media',
+            url: 'http://localhost:8088/wp-content/uploads/postgres-existing-media.jpg',
+            mimeType: 'image/jpeg',
+            fileName: 'postgres-existing-media.jpg',
+            updatedAt: '2026-08-14T02:00:00+00:00'
+          }
+        ]
+      });
+
+      const mediaResult = await repository.listMedia(siteId, { page: 1, pageSize: 20 });
+      const suggestionResult = await pool.query(
+        `
+          SELECT COUNT(*)::int AS suggestion_count
+          FROM optimization_suggestions
+          WHERE site_id = $1
+            AND target_type = 'media'
+            AND target_cms_id = '802'
+        `,
+        [siteId]
+      );
+
+      expect(mediaResult.items.map((item) => item.cmsId)).toEqual(['801']);
+      expect(mediaResult.pagination.total).toBe(1);
+      expect(suggestionResult.rows[0].suggestion_count).toBe(0);
+    } finally {
+      if (siteId) {
+        await pool.query('DELETE FROM site_connections WHERE id = $1', [siteId]);
+      }
+
+      await pool.end();
+      await seoOptimizationRepository.close();
+      if (repository.close) {
+        await repository.close();
+      }
+    }
+  });
+
   it('persists site connections, token hash, sync runs, articles, and media', async () => {
     const databaseUrl = postgresTestDatabaseUrl as string;
     const repository = createPostgresSiteConnectionRepository(databaseUrl);

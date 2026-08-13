@@ -939,6 +939,149 @@ describe('site connection routes', () => {
     }
   });
 
+  it('removes media deleted from WordPress after a full media rescan', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+    const authToken = await loginDemoUser(server);
+    const originalFetch = globalThis.fetch;
+    let includeDeletedMedia = true;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/wp-json/wp/v2/media')) {
+        const mediaItems = [
+          {
+            id: 904,
+            title: { rendered: 'Existing Hero Image' },
+            source_url: 'http://localhost:8088/wp-content/uploads/existing-hero-image.jpg',
+            media_type: 'image',
+            mime_type: 'image/jpeg',
+            alt_text: 'Existing hero image',
+            caption: { rendered: '' },
+            description: { rendered: '' },
+            post: 404,
+            modified_gmt: '2026-08-04T08:00:00'
+          },
+          ...(includeDeletedMedia
+            ? [
+                {
+                  id: 905,
+                  title: { rendered: 'Deleted Hero Image' },
+                  source_url: 'http://localhost:8088/wp-content/uploads/deleted-hero-image.jpg',
+                  media_type: 'image',
+                  mime_type: 'image/jpeg',
+                  alt_text: 'Deleted hero image',
+                  caption: { rendered: '' },
+                  description: { rendered: '' },
+                  post: 404,
+                  modified_gmt: '2026-08-04T08:05:00'
+                }
+              ]
+            : [])
+        ];
+
+        return new Response(JSON.stringify(mediaItems), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-TotalPages': '1'
+          }
+        });
+      }
+
+      if (url.includes('/wp-json/wp/v2/posts/404')) {
+        return new Response(
+          JSON.stringify({
+            id: 404,
+            type: 'post',
+            title: { rendered: 'SEO Media Cleanup Guide' },
+            slug: 'seo-media-cleanup-guide',
+            status: 'publish',
+            link: 'http://localhost:8088/seo-media-cleanup-guide/',
+            excerpt: { rendered: '<p>Cleanup deleted media from SaaS scans.</p>' },
+            content: { rendered: '<h1>SEO Media Cleanup Guide</h1><p>Keep media inventory fresh.</p>' },
+            author: 1,
+            categories: [],
+            tags: [],
+            featured_media: 904,
+            date_gmt: '2026-08-04T07:30:00',
+            modified_gmt: '2026-08-04T08:00:00'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const firstScanResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/media-scan`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {}
+      });
+      const firstMediaResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/media?page=1&pageSize=20`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+
+      expect(firstScanResponse.statusCode).toBe(200);
+      expect(firstMediaResponse.json<{ data: { media: Array<{ cmsId: string }> } }>().data.media.map((item) => item.cmsId)).toEqual([
+        '905',
+        '904'
+      ]);
+
+      includeDeletedMedia = false;
+
+      const secondScanResponse = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/media-scan`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
+        payload: {}
+      });
+      const secondMediaResponse = await server.inject({
+        method: 'GET',
+        url: `/api/v1/site-connections/${body.data.site.id}/media?page=1&pageSize=20`,
+        headers: {
+          authorization: `Bearer ${authToken}`
+        }
+      });
+      const secondMediaBody = secondMediaResponse.json<{
+        data: {
+          media: Array<{ cmsId: string }>;
+          pagination: { total: number };
+        };
+      }>();
+
+      expect(secondScanResponse.statusCode).toBe(200);
+      expect(secondScanResponse.json()).toMatchObject({
+        data: {
+          mediaReceived: 1
+        }
+      });
+      expect(secondMediaBody.data.media.map((item) => item.cmsId)).toEqual(['904']);
+      expect(secondMediaBody.data.pagination.total).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('recognizes WooCommerce product images through product REST parent context', async () => {
     const { server, body } = await createWordPressConnection({
       wordpressAdminUsername: 'site-admin',
@@ -1523,7 +1666,7 @@ describe('site connection routes', () => {
 
       return JSON.stringify({
         seoTitle: 'WordPress AI SEO Settings | RankWoven',
-        slug: 'wordpress-ai-seo-settings',
+        slug: 'wordpress_ai_seo_settings',
         metaDescription: 'AI SEO settings for WordPress editors who want better titles, slugs, and meta descriptions.',
         analysis: 'This article focuses on editor workflow and should keep the keyphrase near the start.'
       });
@@ -1580,7 +1723,7 @@ describe('site connection routes', () => {
         postType: 'post',
         focusKeyphrase: 'AI SEO settings',
         seoTitle: 'WordPress AI SEO Settings | RankWoven',
-        slug: 'wordpress-ai-seo-settings',
+        slug: 'wordpress_ai_seo_settings',
         metaDescription: 'AI SEO settings for WordPress editors who want better titles, slugs, and meta descriptions.',
         scoreSummary: expect.stringContaining('目前內容 SEO 分數'),
         analysis: expect.stringContaining('This article focuses on editor workflow and should keep the keyphrase near the start.')
@@ -1594,6 +1737,49 @@ describe('site connection routes', () => {
         expect.objectContaining({ key: 'content-length' })
       ])
     );
+  });
+
+  it('normalizes editor SEO slugs to lowercase English letters and underscores', async () => {
+    const textProvider = createStubTextProvider(() => JSON.stringify({
+      seoTitle: '新加坡 SEO 服務 | RankWoven',
+      slug: '%e6%96%b0%e5%8a%a0%e5%9d%a1-seo-服務-2026',
+      metaDescription: '使用 RankWoven 優化新加坡 SEO 服務頁面的標題、描述與內容結構。',
+      analysis: 'Slug contains encoded Chinese and numbers and must be normalized before saving.'
+    }));
+    const { server, body } = await createWordPressConnection(
+      {
+        wordpressAdminUsername: 'site-admin',
+        wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+      },
+      {
+        textGenerationProvider: textProvider
+      }
+    );
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/editor-seo`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        postType: 'post',
+        currentTitle: '新加坡 SEO 服務',
+        currentSeoTitle: '新加坡 SEO 服務',
+        currentSlug: '%e6%96%b0%e5%8a%a0%e5%9d%a1-seo-%e6%9c%8d%e5%8b%99',
+        focusKeyphrase: '新加坡 SEO 服務',
+        excerpt: '協助企業優化搜尋可見性。',
+        contentHtml: '<h1>新加坡 SEO 服務</h1><p>RankWoven 幫助團隊優化 SEO 內容。</p>',
+        currentMetaDescription: '舊描述',
+        locale: 'zh-Hant'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const responseBody = response.json<{ data: { slug: string } }>();
+    expect(responseBody.data.slug).toBe('seo');
+    expect(responseBody.data.slug).toMatch(/^[a-z_]+$/);
+    expect(responseBody.data.slug).not.toMatch(/[-0-9%\u4e00-\u9fff]/);
   });
 
   it('generates image attributes from AI using attachment context instead of filename cleanup', async () => {

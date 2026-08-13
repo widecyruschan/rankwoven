@@ -18,11 +18,13 @@ describe('web smoke test', () => {
       expect(i18n.global.t('common.cancel')).toBe('Cancel');
       expect(i18n.global.t('articleSuggestions.approve')).toBe('Approve');
       expect(i18n.global.t('media.applySelected', { count: 2 })).toBe('Apply selected changes (2)');
+      expect(i18n.global.t('media.retryApply')).toBe('Retry apply');
 
       i18n.global.locale.value = 'zh-Hant';
       expect(i18n.global.t('common.cancel')).toBe('取消');
       expect(i18n.global.t('articleSuggestions.approve')).toBe('批准');
       expect(i18n.global.t('media.applySelected', { count: 2 })).toBe('一鍵套用修改（2）');
+      expect(i18n.global.t('media.retryApply')).toBe('重試套用');
 
       expect(mediaViewSource).not.toContain("t('suggestions.approve')");
       expect(mediaViewSource).toContain("t('articleSuggestions.approve')");
@@ -34,6 +36,9 @@ describe('web smoke test', () => {
       expect(mediaViewSource).toContain('batchApproveOptimizationSuggestions');
       expect(mediaViewSource).toContain('batchApplyOptimizationSuggestions');
       expect(mediaViewSource).toContain('@click="applySelectedMediaSuggestions"');
+      expect(mediaViewSource).toContain('async function retrySuggestion');
+      expect(mediaViewSource).toContain("activeReviewRow.suggestion.status === 'failed'");
+      expect(mediaViewSource).toContain('@click="retrySuggestion(activeReviewRow.suggestion)"');
       expect(mediaViewSource).toContain('selectedIds.has(suggestion.targetCmsId)');
       expect(appSource).not.toContain("{ to: '/app/apply', labelKey: 'nav.apply'");
     } finally {

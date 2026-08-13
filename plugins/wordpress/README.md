@@ -86,6 +86,7 @@ http://host.docker.internal:3011
 
 - `Generate & Apply SEO`：把當前內容、摘要、SEO title 與 Focus keyphrase 一起送到 RankWoven API，生成並套用新的 SEO 建議。
 - `Save SEO Fields`：保存手動編輯的 SEO title、Slug、Meta description 和 Keywords，並重新分析當前內容的 SEO 分數。
+- Slug 會在 SaaS API、插件 AJAX 和前端欄位同步時統一清洗，只允許英文小寫字母與下劃線，例如 `wordpress_seo_settings`；中文、其他語言、數字、URL encode、空格和連字號都會被移除或轉換。
 - WordPress 原生 `Update` / `Publish`：也會保存 RankWoven 面板中的 SEO title、Meta description 和 Keywords，避免刷新後欄位變空。
 - 若 WordPress AJAX 返回 nonce 過期、未登入、插件 action 未載入或 PHP 非 JSON 錯誤，面板會顯示可讀原因，避免只顯示泛化的 `SEO request failed`。
 

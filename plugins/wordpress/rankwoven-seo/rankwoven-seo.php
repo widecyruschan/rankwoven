@@ -286,7 +286,7 @@ final class RankWoven_SEO_Plugin
         $meta_keywords = $this->get_post_meta_keywords($post);
         $seo_score = max(0, min(100, (int) get_post_meta($post->ID, self::META_EDITOR_SEO_SCORE, true)));
         $analysis = sanitize_textarea_field((string) get_post_meta($post->ID, self::META_EDITOR_ANALYSIS, true));
-        $slug = sanitize_title((string) $post->post_name);
+        $slug = $this->normalize_editor_seo_slug((string) $post->post_name, (string) $post->post_title);
         $api_ready = $this->get_api_base_url() !== ''
             && sanitize_text_field(get_option(self::OPTION_SITE_ID, '')) !== ''
             && sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, '')) !== '';
@@ -628,12 +628,35 @@ final class RankWoven_SEO_Plugin
 
     private function normalize_editor_seo_slug(string $value, string $fallback = ''): string
     {
-        $slug = sanitize_title($value);
+        $slug = $this->normalize_editor_seo_slug_candidate($value);
         if ($slug === '' && $fallback !== '') {
-            $slug = sanitize_title($fallback);
+            $slug = $this->normalize_editor_seo_slug_candidate($fallback);
         }
 
-        return $slug !== '' ? $slug : 'rankwoven-seo';
+        return $slug !== '' ? $slug : 'rankwoven_seo';
+    }
+
+    private function normalize_editor_seo_slug_candidate(string $value): string
+    {
+        $decoded = trim(wp_strip_all_tags($value));
+        for ($index = 0; $index < 2; $index++) {
+            $next_decoded = rawurldecode($decoded);
+            if ($next_decoded === $decoded) {
+                break;
+            }
+            $decoded = $next_decoded;
+        }
+
+        if (function_exists('remove_accents')) {
+            $decoded = remove_accents($decoded);
+        }
+
+        $slug = strtolower($decoded);
+        $slug = (string) preg_replace('/[^a-z]+/', '_', $slug);
+        $slug = (string) preg_replace('/_+/', '_', $slug);
+        $slug = trim($slug, '_');
+
+        return substr($slug, 0, 240);
     }
 
     private function truncate_editor_seo_text(string $value, int $max_length): string
@@ -959,14 +982,14 @@ final class RankWoven_SEO_Plugin
 
         $focus_keyphrase = sanitize_text_field(wp_unslash($_POST['focusKeyphrase'] ?? ''));
         $seo_title = sanitize_text_field(wp_unslash($_POST['seoTitle'] ?? ''));
-        $slug = sanitize_title(wp_unslash($_POST['slug'] ?? ''));
+        $slug = $this->normalize_editor_seo_slug_candidate((string) wp_unslash($_POST['slug'] ?? ''));
         $meta_description = sanitize_textarea_field(wp_unslash($_POST['metaDescription'] ?? ''));
         $meta_keywords = $this->sanitize_editor_meta_keywords(wp_unslash($_POST['metaKeywords'] ?? ''));
         $seo_score = max(0, min(100, (int) ($_POST['seoScore'] ?? 0)));
         $analysis = sanitize_textarea_field(wp_unslash($_POST['analysis'] ?? ''));
         $current_title = sanitize_text_field(wp_unslash($_POST['currentTitle'] ?? $post->post_title));
         $current_seo_title = sanitize_text_field(wp_unslash($_POST['currentSeoTitle'] ?? $seo_title));
-        $current_slug = sanitize_title(wp_unslash($_POST['currentSlug'] ?? $post->post_name));
+        $current_slug = $this->normalize_editor_seo_slug((string) wp_unslash($_POST['currentSlug'] ?? $post->post_name), (string) $post->post_title);
         $content_html = wp_kses_post(wp_unslash($_POST['contentHtml'] ?? $post->post_content));
         $excerpt = wp_kses_post(wp_unslash($_POST['excerpt'] ?? $post->post_excerpt));
         $locale = sanitize_text_field(wp_unslash($_POST['locale'] ?? get_locale()));
@@ -1088,14 +1111,15 @@ final class RankWoven_SEO_Plugin
 
         $focus_keyphrase = sanitize_text_field(wp_unslash($_POST['rankwoven_focus_keyphrase'] ?? ''));
         $seo_title = sanitize_text_field(wp_unslash($_POST['rankwoven_seo_title'] ?? ''));
-        $slug = sanitize_title(wp_unslash($_POST['rankwoven_seo_slug'] ?? $post->post_name));
+        $slug = $this->normalize_editor_seo_slug_candidate((string) wp_unslash($_POST['rankwoven_seo_slug'] ?? ''));
+        $current_post_slug = $this->normalize_editor_seo_slug((string) $post->post_name, (string) get_the_title($post_id));
         $meta_description = sanitize_textarea_field(wp_unslash($_POST['rankwoven_meta_description'] ?? ''));
         $meta_keywords = $this->sanitize_editor_meta_keywords(wp_unslash($_POST['rankwoven_meta_keywords'] ?? ''));
 
         $local_analysis = $this->calculate_local_editor_seo_score(
             $focus_keyphrase,
             $seo_title !== '' ? $seo_title : sanitize_text_field((string) get_the_title($post_id)),
-            $slug !== '' ? $slug : sanitize_title($post->post_name),
+            $slug !== '' ? $slug : $current_post_slug,
             $meta_description,
             (string) $post->post_content
         );

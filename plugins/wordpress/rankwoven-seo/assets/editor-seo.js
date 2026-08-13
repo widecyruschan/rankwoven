@@ -89,6 +89,42 @@
     return field ? String(field.value || '') : '';
   }
 
+  function decodeSlugValue(value) {
+    let decoded = String(value || '').trim();
+
+    for (let index = 0; index < 2; index += 1) {
+      try {
+        const nextDecoded = decodeURIComponent(decoded);
+        if (nextDecoded === decoded) {
+          break;
+        }
+        decoded = nextDecoded;
+      } catch {
+        break;
+      }
+    }
+
+    return decoded;
+  }
+
+  function normalizeEditorSeoSlug(value, fallback) {
+    const normalizeCandidate = (candidate) => decodeSlugValue(candidate)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 240)
+      .replace(/^_+|_+$/g, '');
+
+    return normalizeCandidate(value) || normalizeCandidate(fallback || '') || 'rankwoven_seo';
+  }
+
+  function getSlugFieldValue(fallback) {
+    return normalizeEditorSeoSlug(getFieldValue(slugInput), fallback);
+  }
+
   function getSeoScoreValue() {
     return Number(getFieldValue(seoScoreInput).replace('/100', '')) || 0;
   }
@@ -143,8 +179,12 @@
     try {
       const editor = wp.data.dispatch('core/editor');
       if (editor && typeof editor.editPost === 'function') {
+        const normalizedSlug = normalizeEditorSeoSlug(getFieldValue(slugInput), getEditorState().currentTitle);
+        if (slugInput) {
+          slugInput.value = normalizedSlug;
+        }
         editor.editPost({
-          slug: getFieldValue(slugInput),
+          slug: normalizedSlug,
           meta: {
             _rankwoven_focus_keyphrase: getFieldValue(focusKeyphraseInput),
             _rankwoven_seo_title: getFieldValue(seoTitleInput),
@@ -174,7 +214,7 @@
       seoTitleInput.value = data.seoTitle || '';
     }
     if (slugInput) {
-      slugInput.value = data.slug || '';
+      slugInput.value = normalizeEditorSeoSlug(data.slug || '', data.seoTitle || '');
     }
     if (metaDescriptionInput) {
       metaDescriptionInput.value = data.metaDescription || '';
@@ -194,7 +234,7 @@
         const editor = wp.data.dispatch('core/editor');
         if (editor && typeof editor.editPost === 'function') {
           editor.editPost({
-            slug: data.slug || '',
+            slug: normalizeEditorSeoSlug(data.slug || '', data.seoTitle || ''),
             meta: {
               _rankwoven_focus_keyphrase: data.focusKeyphrase || '',
               _rankwoven_seo_title: data.seoTitle || '',
@@ -221,10 +261,10 @@
     payload.set('postType', config.postType || '');
     payload.set('currentTitle', editorState.currentTitle || '');
     payload.set('currentSeoTitle', seoTitleInput ? String(seoTitleInput.value || '') : '');
-    payload.set('currentSlug', slugInput ? String(slugInput.value || '') : editorState.currentSlug || '');
+    payload.set('currentSlug', slugInput ? getSlugFieldValue(editorState.currentSlug) : normalizeEditorSeoSlug(editorState.currentSlug, editorState.currentTitle));
     payload.set('focusKeyphrase', focusKeyphraseInput ? String(focusKeyphraseInput.value || '') : '');
     payload.set('seoTitle', seoTitleInput ? String(seoTitleInput.value || '') : '');
-    payload.set('slug', slugInput ? String(slugInput.value || '') : editorState.currentSlug || '');
+    payload.set('slug', slugInput ? getSlugFieldValue(editorState.currentSlug) : normalizeEditorSeoSlug(editorState.currentSlug, editorState.currentTitle));
     payload.set('seoScore', seoScoreInput ? String(seoScoreInput.value || '').replace('/100', '') : '0');
     payload.set('metaDescription', metaDescriptionInput ? String(metaDescriptionInput.value || '') : '');
     payload.set('metaKeywords', metaKeywordsInput ? String(metaKeywordsInput.value || '') : '');
@@ -276,4 +316,11 @@
     metaDescriptionInput,
     metaKeywordsInput
   ].forEach(bindEditorMetaSync);
+
+  if (slugInput && typeof slugInput.addEventListener === 'function') {
+    slugInput.addEventListener('change', () => {
+      slugInput.value = normalizeEditorSeoSlug(slugInput.value, getEditorState().currentTitle);
+      syncEditorMetaState();
+    });
+  }
 })();

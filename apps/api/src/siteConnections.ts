@@ -1671,6 +1671,15 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         siteMedia.set(media.cmsId, media);
       }
 
+      if (!payload.updatedAfter) {
+        const scannedMediaIds = new Set(payload.media.map((media) => media.cmsId));
+        for (const cmsId of Array.from(siteMedia.keys())) {
+          if (!scannedMediaIds.has(cmsId)) {
+            siteMedia.delete(cmsId);
+          }
+        }
+      }
+
       articlesBySite.set(siteId, siteArticles);
       mediaBySite.set(siteId, siteMedia);
 
@@ -2431,6 +2440,10 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
 
       for (const media of payload.media) {
         await this.upsertMedia(client, siteId, media, completedAt);
+      }
+
+      if (!payload.updatedAfter) {
+        await this.cleanupStaleMediaScanContent(client, siteId, completedAt);
       }
 
       await client.query(
@@ -3314,6 +3327,45 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           )
       `,
       [siteId, staleArticleIds, staleMediaIds, staleArticleUrls]
+    );
+  }
+
+  private async cleanupStaleMediaScanContent(
+    client: PoolClient,
+    siteId: string,
+    mediaScanCompletedAt: Date
+  ) {
+    const staleMediaResult = await client.query(
+      `
+        DELETE FROM synced_media
+        WHERE site_id = $1
+          AND synced_at < $2
+        RETURNING cms_id
+      `,
+      [siteId, mediaScanCompletedAt]
+    );
+    const staleMediaIds = staleMediaResult.rows.map((row) => String(row.cms_id));
+
+    if (staleMediaIds.length === 0) {
+      return;
+    }
+
+    const suggestionsTableResult = await client.query(
+      `SELECT to_regclass('public.optimization_suggestions') AS table_name`
+    );
+    if (!suggestionsTableResult.rows[0]?.table_name) {
+      return;
+    }
+
+    await client.query(
+      `
+        DELETE FROM optimization_suggestions
+        WHERE site_id = $1
+          AND status != 'applied'
+          AND target_type = 'media'
+          AND target_cms_id = ANY($2::varchar[])
+      `,
+      [siteId, staleMediaIds]
     );
   }
 }

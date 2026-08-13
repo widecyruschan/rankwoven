@@ -985,8 +985,8 @@ async function generateEditorSeoSuggestion(
       promptVersion: '2026-08-08.editor-seo-ai-1',
       title:
         'Return JSON only with keys seoTitle, slug, metaDescription, analysis. ' +
-        'Keep seoTitle and metaDescription concise. The slug must be lowercase, URL-safe, and suitable for WordPress. ' +
-        'Use the same language as the current content. If the content is Chinese, keep the title and description in Chinese, but still make the slug URL-safe.',
+        'Keep seoTitle and metaDescription concise. The slug must use lowercase English letters and underscores only. ' +
+        'Use the same language as the current content for the title and description, but never use Chinese or other non-English characters in the slug.',
       html: [
         `Post type: ${input.postType}`,
         input.focusKeyphrase ? `Focus keyphrase: ${input.focusKeyphrase}` : '',
@@ -1355,22 +1355,40 @@ interface EditorSeoScoreResult {
   checks: EditorSeoScoreCheck[];
 }
 
-function normalizeEditorSeoSlug(value: string) {
-  const normalized = normalizePlainText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '');
+function decodeEditorSeoSlugValue(value: string) {
+  let decoded = normalizePlainText(value);
 
-  return normalized.slice(0, 240);
+  for (let index = 0; index < 2; index += 1) {
+    try {
+      const nextDecoded = decodeURIComponent(decoded);
+      if (nextDecoded === decoded) {
+        break;
+      }
+      decoded = nextDecoded;
+    } catch {
+      break;
+    }
+  }
+
+  return decoded;
+}
+
+function normalizeEditorSeoSlug(value: string) {
+  const normalized = decodeEditorSeoSlugValue(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 240)
+    .replace(/^_+|_+$/g, '');
+
+  return normalized;
 }
 
 function normalizeEditorSeoKeywordSlug(value: string) {
-  return normalizePlainText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return normalizeEditorSeoSlug(value);
 }
 
 function buildEditorSeoScoreCheck(

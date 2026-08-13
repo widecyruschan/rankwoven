@@ -125,7 +125,7 @@ const detailColumns = computed<TableColumnsType<MediaSuggestionRow>>(() => [
   {
     title: t('media.openReviewColumn'),
     key: 'action',
-    width: 160
+    width: 220
   }
 ]);
 
@@ -375,6 +375,38 @@ async function applySuggestion(suggestionId: string) {
     refreshSuggestionDrafts();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('media.applyFailed');
+  } finally {
+    actionSuggestionId.value = '';
+  }
+}
+
+async function retrySuggestion(suggestion: OptimizationSuggestion) {
+  if (!selectedSiteId.value) {
+    return;
+  }
+
+  actionSuggestionId.value = suggestion.id;
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  try {
+    if (isSuggestionDirty(suggestion)) {
+      const nextValue = suggestionDrafts.value[suggestion.id]?.trim() ?? '';
+      if (nextValue === '') {
+        errorMessage.value = t('media.saveDraftFailed');
+        return;
+      }
+      await updateOptimizationSuggestion(selectedSiteId.value, suggestion.id, nextValue);
+    }
+
+    await approveOptimizationSuggestion(selectedSiteId.value, suggestion.id);
+    await applyOptimizationSuggestion(selectedSiteId.value, suggestion.id);
+    successMessage.value = t('media.retryApplyQueued');
+    activeReviewField.value = null;
+    await loadSuggestions();
+    refreshSuggestionDrafts();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : t('media.retryApplyFailed');
   } finally {
     actionSuggestionId.value = '';
   }
@@ -764,14 +796,24 @@ watch(selectedSiteId, () => {
             </a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button
-              v-if="record.suggestion"
-              type="link"
-              size="small"
-              @click="openSuggestionReview(record)"
-            >
-              {{ t('media.openReview') }}
-            </a-button>
+            <a-space v-if="record.suggestion">
+              <a-button
+                type="link"
+                size="small"
+                @click="openSuggestionReview(record)"
+              >
+                {{ t('media.openReview') }}
+              </a-button>
+              <a-button
+                v-if="record.suggestion.status === 'failed'"
+                type="link"
+                size="small"
+                :loading="actionSuggestionId === record.suggestion.id"
+                @click="retrySuggestion(record.suggestion)"
+              >
+                {{ t('media.retryApply') }}
+              </a-button>
+            </a-space>
             <span v-else>-</span>
           </template>
         </template>
@@ -834,6 +876,15 @@ watch(selectedSiteId, () => {
             @click="applySuggestion(activeReviewRow.suggestion.id)"
           >
             {{ t('media.queueApply') }}
+          </a-button>
+          <a-button
+            v-if="activeReviewRow.suggestion.status === 'failed'"
+            type="primary"
+            danger
+            :loading="actionSuggestionId === activeReviewRow.suggestion.id"
+            @click="retrySuggestion(activeReviewRow.suggestion)"
+          >
+            {{ t('media.retryApply') }}
           </a-button>
         </div>
       </template>
