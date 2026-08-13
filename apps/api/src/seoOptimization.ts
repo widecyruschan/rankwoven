@@ -217,6 +217,26 @@ const editorSeoGenerationSchema = z.object({
   locale: z.string().trim().min(2).max(20).default('zh-Hant')
 });
 
+const imageAttributeGenerationSchema = z.object({
+  attachmentId: z.string().trim().min(1).max(80),
+  imageUrl: z.url().or(z.literal('')).optional().default(''),
+  mimeType: z.string().trim().max(120).optional().default(''),
+  fileName: z.string().trim().max(240).optional().default(''),
+  currentTitle: z.string().trim().max(300).optional().default(''),
+  currentCaption: z.string().max(5000).optional().default(''),
+  currentDescription: z.string().max(20_000).optional().default(''),
+  currentAltText: z.string().max(500).optional().default(''),
+  attachedToCmsId: z.string().trim().max(80).optional().default(''),
+  attachedToTitle: z.string().trim().max(300).optional().default(''),
+  contextPostType: z.enum(['post', 'page', 'portfolio', 'product']).optional().default('post'),
+  contextTitle: z.string().trim().max(300).optional().default(''),
+  contextSlug: z.string().trim().max(240).optional().default(''),
+  contextExcerpt: z.string().max(2000).optional().default(''),
+  contextHtml: z.string().max(500_000).optional().default(''),
+  sequenceNumber: z.coerce.number().int().min(1).max(999).optional().default(1),
+  locale: z.string().trim().min(2).max(20).default('zh-Hant')
+});
+
 const internalLinkGenerationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)
 });
@@ -891,13 +911,19 @@ async function generateAiMediaSuggestions(
   }
 
   try {
+    const currentImageTitle = normalizePlainText(mediaItem.title);
+    const fileNameTitle = normalizeImageText(mediaItem.fileName || '');
+    const contextAwareCurrentTitle = normalizeComparableText(currentImageTitle) !== normalizeComparableText(fileNameTitle)
+      ? currentImageTitle
+      : '';
     const response = await textProvider.rewriteContent({
       siteId: options.siteId,
       userId: options.userId,
       locale: options.locale ?? 'zh-Hant',
-      promptVersion: '2026-08-04.media-context-ai-1',
+      promptVersion: '2026-08-13.media-context-ai-2',
       title:
         'Return JSON only with keys title, caption, description, altText, fileName. ' +
+        'Generate the semantic content from the article and image placement context. Do not derive semantic content by cleaning or rearranging the original filename or a filename-like current title. ' +
         'Use Traditional Chinese for text fields, keep them concise and SEO-friendly, and make the filename lowercase ASCII with hyphens plus extension.',
       html: [
         `Article title: ${mediaContext.contextTitle || '(none)'}`,
@@ -905,13 +931,12 @@ async function generateAiMediaSuggestions(
         mediaContext.placementContext ? `Image placement context: ${truncateContext(mediaContext.placementContext, 1200)}` : '',
         mediaContext.contextSummary ? `Article summary: ${truncateContext(mediaContext.contextSummary, 600)}` : '',
         mediaContext.contextDetail ? `Article detail: ${truncateContext(mediaContext.contextDetail, 1800)}` : '',
-        `Current image title: ${normalizePlainText(mediaItem.title) || '(empty)'}`,
+        `Current image title: ${contextAwareCurrentTitle || '(empty)'}`,
         `Current image caption: ${normalizePlainText(mediaItem.caption || '') || '(empty)'}`,
         `Current image description: ${normalizePlainText(mediaItem.description || '') || '(empty)'}`,
         `Current image alt text: ${normalizePlainText(mediaItem.altText || '') || '(empty)'}`,
-        `Current filename: ${mediaItem.fileName || '(empty)'}`,
+        `Image file extension: ${mediaContext.extension || 'jpg'}`,
         `Preferred filename base slug: ${mediaContext.contextSlug || '(none)'}`,
-        `Image descriptor from current metadata: ${mediaContext.imageDescriptor || '(none)'}`
       ]
         .filter(Boolean)
         .join('\n')
@@ -1116,6 +1141,100 @@ function buildMediaFileNameSuggestion(mediaItem: SyncedMedia, mediaContext: Medi
   }
 
   return mediaItem.fileName ? normalizeFileName(mediaItem.fileName) : '';
+}
+
+function buildImageAttributeContextFallback(mediaContext: MediaContext, siteName: string): Required<AiMediaSuggestionResult> {
+  const siteTitle = trimSeoText(normalizePlainText(siteName) || 'RankWoven', 100);
+  const contextBase = mediaContext.contextTitle
+    || mediaContext.contextSummary
+    || mediaContext.contextDetail
+    || siteTitle;
+  const title = mediaContext.sequenceNumber > 1
+    ? trimSeoText(`${contextBase} ${mediaContext.sequenceNumber}`, 140)
+    : trimSeoText(contextBase, 140);
+  const fileNameBase = normalizeSlugForFileName(mediaContext.contextSlug)
+    || normalizeSlugForFileName(siteTitle)
+    || 'rankwoven-image';
+
+  return {
+    title,
+    caption: trimSeoText(mediaContext.contextSummary || title, 180),
+    description: trimSeoText(mediaContext.contextDetail || mediaContext.contextSummary || title, 280),
+    altText: trimSeoText(title, 125),
+    fileName: `${fileNameBase}-${mediaContext.sequenceNumber}.${mediaContext.extension || 'jpg'}`
+  };
+}
+
+async function generateImageAttributeValues(
+  textProvider: TextGenerationProvider | undefined,
+  input: z.infer<typeof imageAttributeGenerationSchema> & { siteId: string; siteName: string; userId: string }
+) {
+  const hasContextArticle = [
+    input.attachedToCmsId,
+    input.attachedToTitle,
+    input.contextTitle,
+    input.contextSlug,
+    input.contextExcerpt,
+    input.contextHtml
+  ].some((value) => value.trim() !== '');
+  const contextCmsId = input.attachedToCmsId || (hasContextArticle ? 'context' : '');
+  const mediaItem: SyncedMedia = {
+    cmsId: input.attachmentId,
+    title: input.currentTitle,
+    url: input.imageUrl,
+    mimeType: input.mimeType || undefined,
+    fileName: input.fileName || undefined,
+    caption: input.currentCaption || undefined,
+    description: input.currentDescription || undefined,
+    altText: input.currentAltText || undefined,
+    attachedToCmsId: contextCmsId || undefined,
+    attachedToTitle: input.attachedToTitle || input.contextTitle || undefined,
+    updatedAt: new Date().toISOString()
+  };
+  const contextArticle: SyncedArticle = {
+    cmsId: contextCmsId || 'context',
+    type: input.contextPostType,
+    title: input.contextTitle || input.attachedToTitle || input.currentTitle,
+    slug: input.contextSlug,
+    status: 'publish',
+    url: '',
+    excerpt: input.contextExcerpt,
+    contentHtml: input.contextHtml,
+    categories: [],
+    tags: [],
+    updatedAt: new Date().toISOString()
+  };
+  const articleById = new Map<string, SyncedArticle>();
+  if (contextCmsId !== '') {
+    articleById.set(contextCmsId, contextArticle);
+  }
+  const mediaContext = buildMediaContext(mediaItem, articleById, input.sequenceNumber);
+  const aiSuggestions = await generateAiMediaSuggestions(
+    textProvider,
+    {
+      siteId: input.siteId,
+      userId: input.userId,
+      locale: input.locale
+    },
+    mediaItem,
+    mediaContext
+  );
+  const fallback = buildImageAttributeContextFallback(mediaContext, input.siteName);
+  const title = normalizeMediaSuggestionValue('title', aiSuggestions?.title || fallback.title);
+
+  return {
+    imageTitle: title,
+    title,
+    caption: normalizeMediaSuggestionValue('caption', aiSuggestions?.caption || fallback.caption),
+    description: normalizeMediaSuggestionValue('description', aiSuggestions?.description || fallback.description),
+    altText: normalizeMediaSuggestionValue('altText', aiSuggestions?.altText || fallback.altText),
+    fileName: normalizeMediaSuggestionValue(
+      'fileName',
+      aiSuggestions?.fileName || fallback.fileName,
+      mediaContext.extension
+    ),
+    source: aiSuggestions ? 'ai' : 'local_context'
+  };
 }
 
 function normalizeSeoText(value: string) {
@@ -2835,6 +2954,34 @@ export function registerSeoOptimizationRoutes(
           postType: parsed.data.postType,
           focusKeyphrase: parsed.data.focusKeyphrase
         }
+      };
+    }
+  );
+
+  app.post<{ Params: { siteId: string } }>(
+    '/api/v1/site-connections/:siteId/image-attributes',
+    async (request, reply) => {
+      const site = await ensureSiteTokenAccess(siteRepository, request, reply, request.params.siteId);
+      if (!site) {
+        return reply;
+      }
+
+      const parsed = imageAttributeGenerationSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return validationError(reply, parsed.error);
+      }
+
+      const generated = await generateImageAttributeValues(textProvider, {
+        siteId: site.id,
+        siteName: site.name,
+        userId: site.id,
+        ...parsed.data
+      });
+
+      return {
+        success: true,
+        message: generated.source === 'ai' ? '圖片屬性建議已生成' : '已使用本地上下文生成圖片屬性建議',
+        data: generated
       };
     }
   );

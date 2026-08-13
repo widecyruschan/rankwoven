@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RankWoven SEO
  * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.1.1';
+    private const VERSION = '0.1.2';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -55,9 +55,11 @@ final class RankWoven_SEO_Plugin
         add_action('admin_post_rankwoven_save_settings', [$this, 'handle_save_settings']);
         add_action('admin_post_rankwoven_connect_site', [$this, 'handle_connect_site']);
         add_action('admin_post_rankwoven_sync_content', [$this, 'handle_sync_content']);
+        add_action('admin_post_rankwoven_rescan_internal_links', [$this, 'handle_rescan_internal_links']);
         add_action('admin_post_rankwoven_generate_sitemap', [$this, 'handle_generate_sitemap']);
         add_action('admin_post_rankwoven_submit_sitemap_google', [$this, 'handle_submit_sitemap_google']);
         add_action('admin_post_rankwoven_run_seo_audit', [$this, 'handle_run_seo_audit']);
+        add_action('admin_post_rankwoven_apply_audit_issue', [$this, 'handle_apply_audit_issue']);
         add_action('admin_post_rankwoven_manage_suggestions', [$this, 'handle_manage_suggestions']);
         add_action('admin_post_rankwoven_save_image_attributes', [$this, 'handle_save_image_attributes']);
         add_action('admin_post_rankwoven_test_image_attributes', [$this, 'handle_test_image_attributes']);
@@ -68,6 +70,7 @@ final class RankWoven_SEO_Plugin
         add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
         add_action('template_redirect', [$this, 'maybe_render_sitemap_xml']);
         add_filter('the_content', [$this, 'add_image_title_attributes_to_content']);
+        add_filter('sanitize_file_name', [$this, 'filter_uploaded_image_filename'], 20);
         add_filter('redirect_canonical', [$this, 'disable_core_sitemap_redirect'], 10, 2);
         add_filter('robots_txt', [$this, 'append_sitemap_to_robots_txt'], 20, 2);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
@@ -223,11 +226,17 @@ final class RankWoven_SEO_Plugin
             return;
         }
 
+        $admin_css_path = plugin_dir_path(__FILE__) . 'assets/admin.css';
+        $admin_css_version = self::VERSION;
+        if (file_exists($admin_css_path)) {
+            $admin_css_version .= '.' . (string) filemtime($admin_css_path);
+        }
+
         wp_enqueue_style(
             'rankwoven-admin',
             plugin_dir_url(__FILE__) . 'assets/admin.css',
             [],
-            self::VERSION
+            $admin_css_version
         );
     }
 
@@ -242,11 +251,17 @@ final class RankWoven_SEO_Plugin
             return;
         }
 
+        $editor_seo_script_path = plugin_dir_path(__FILE__) . 'assets/editor-seo.js';
+        $editor_seo_script_version = self::VERSION;
+        if (file_exists($editor_seo_script_path)) {
+            $editor_seo_script_version .= '.' . (string) filemtime($editor_seo_script_path);
+        }
+
         wp_enqueue_script(
             'rankwoven-editor-seo',
             plugin_dir_url(__FILE__) . 'assets/editor-seo.js',
             ['wp-data'],
-            self::VERSION,
+            $editor_seo_script_version,
             true
         );
 
@@ -914,7 +929,11 @@ final class RankWoven_SEO_Plugin
 
     public function handle_editor_seo_ajax(): void
     {
-        check_ajax_referer('rankwoven_editor_seo', 'nonce');
+        if (!check_ajax_referer('rankwoven_editor_seo', 'nonce', false)) {
+            wp_send_json_error([
+                'message' => __('Security check failed. Please refresh the editor page and try again.', 'rankwoven-seo')
+            ], 403);
+        }
 
         $post_id = (int) ($_POST['postId'] ?? 0);
         $post = get_post($post_id);
@@ -932,6 +951,12 @@ final class RankWoven_SEO_Plugin
         }
 
         $mode = sanitize_key(wp_unslash($_POST['mode'] ?? 'save'));
+        if (!in_array($mode, ['generate', 'save'], true)) {
+            wp_send_json_error([
+                'message' => __('Unsupported SEO action.', 'rankwoven-seo')
+            ], 400);
+        }
+
         $focus_keyphrase = sanitize_text_field(wp_unslash($_POST['focusKeyphrase'] ?? ''));
         $seo_title = sanitize_text_field(wp_unslash($_POST['seoTitle'] ?? ''));
         $slug = sanitize_title(wp_unslash($_POST['slug'] ?? ''));
@@ -994,15 +1019,18 @@ final class RankWoven_SEO_Plugin
             $analysis = sanitize_textarea_field((string) ($local_analysis['analysis'] ?? $analysis));
         }
 
-        $save_result = wp_update_post(wp_slash([
-            'ID' => $post_id,
-            'post_name' => $slug !== '' ? $slug : $current_slug
-        ]), true);
+        $saved_slug = $slug !== '' ? $slug : $current_slug;
+        if ($saved_slug !== '' && $saved_slug !== (string) $post->post_name) {
+            $save_result = wp_update_post(wp_slash([
+                'ID' => $post_id,
+                'post_name' => $saved_slug
+            ]), true);
 
-        if (is_wp_error($save_result)) {
-            wp_send_json_error([
-                'message' => $save_result->get_error_message()
-            ], 500);
+            if (is_wp_error($save_result)) {
+                wp_send_json_error([
+                    'message' => $save_result->get_error_message()
+                ], 500);
+            }
         }
 
         $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_FOCUS_KEYPHRASE, $focus_keyphrase);
@@ -1018,7 +1046,7 @@ final class RankWoven_SEO_Plugin
             'postType' => $post->post_type,
             'focusKeyphrase' => $focus_keyphrase,
             'seoTitle' => $seo_title,
-            'slug' => $slug !== '' ? $slug : $current_slug,
+            'slug' => $saved_slug,
             'seoScore' => $seo_score,
             'metaDescription' => $meta_description,
             'metaKeywords' => $meta_keywords,
@@ -1463,9 +1491,10 @@ final class RankWoven_SEO_Plugin
         <?php
         $latest_audit = $this->get_latest_audit_from_data($audit_data);
         $issues = $this->get_audit_issues_from_data($audit_data);
+        $issue_groups = $this->group_audit_issues_by_content_type($issues);
         ?>
         <h3><?php echo esc_html__('最新審計', 'rankwoven-seo'); ?></h3>
-        <table class="widefat striped" style="max-width: 960px;">
+        <table class="widefat striped">
             <tbody>
                 <?php $this->render_diagnostic_row(__('分數', 'rankwoven-seo'), !empty($latest_audit['score']) ? sprintf('%d/100', (int) $latest_audit['score']) : __('尚未審計', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('規則版本', 'rankwoven-seo'), sanitize_text_field((string) ($latest_audit['rulesVersion'] ?? ''))); ?>
@@ -1478,29 +1507,89 @@ final class RankWoven_SEO_Plugin
         <?php if (empty($issues)) : ?>
             <p><?php echo esc_html__('目前尚未找到問題。請先同步內容，再執行審計。', 'rankwoven-seo'); ?></p>
         <?php else : ?>
-            <table class="widefat striped">
-                <thead>
-                    <tr>
-                        <th><?php echo esc_html__('嚴重程度', 'rankwoven-seo'); ?></th>
-                        <th><?php echo esc_html__('目標內容', 'rankwoven-seo'); ?></th>
-                        <th><?php echo esc_html__('規則', 'rankwoven-seo'); ?></th>
-                        <th><?php echo esc_html__('訊息', 'rankwoven-seo'); ?></th>
-                        <th><?php echo esc_html__('建議', 'rankwoven-seo'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($issues as $issue) : ?>
+            <div class="rankwoven-audit-type-summary" aria-label="<?php echo esc_attr__('SEO issue counts by content type', 'rankwoven-seo'); ?>">
+                <?php foreach ($issue_groups as $group) : ?>
+                    <span class="rankwoven-audit-type-chip">
+                        <?php echo esc_html((string) $group['label']); ?>
+                        <strong><?php echo esc_html((string) count($group['issues'])); ?></strong>
+                    </span>
+                <?php endforeach; ?>
+            </div>
+
+            <?php foreach ($issue_groups as $group) : ?>
+                <h4 class="rankwoven-audit-group-title">
+                    <?php echo esc_html((string) $group['label']); ?>
+                    <span><?php echo esc_html(sprintf(__('%d 個問題', 'rankwoven-seo'), count($group['issues']))); ?></span>
+                </h4>
+                <table class="widefat striped rankwoven-audit-issue-table">
+                    <thead>
                         <tr>
-                            <td><?php echo esc_html((string) ($issue['severity'] ?? '')); ?></td>
-                            <td><?php echo esc_html($this->get_suggestion_target_label($issue)); ?></td>
-                            <td><code><?php echo esc_html((string) ($issue['ruleCode'] ?? '')); ?></code></td>
-                            <td><?php echo esc_html((string) ($issue['message'] ?? '')); ?></td>
-                            <td><?php echo esc_html($this->get_suggestion_summary_text((string) ($issue['suggestedValue'] ?? ''))); ?></td>
+                            <th><?php echo esc_html__('嚴重程度', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('目標內容', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('規則', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('訊息', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('建議', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('操作', 'rankwoven-seo'); ?></th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($group['issues'] as $issue) : ?>
+                            <tr>
+                                <td><?php echo esc_html((string) ($issue['severity'] ?? '')); ?></td>
+                                <td><?php echo esc_html($this->get_suggestion_target_label($issue)); ?></td>
+                                <td><code><?php echo esc_html((string) ($issue['ruleCode'] ?? '')); ?></code></td>
+                                <td><?php echo esc_html((string) ($issue['message'] ?? '')); ?></td>
+                                <td><?php echo esc_html($this->get_suggestion_summary_text((string) ($issue['suggestedValue'] ?? ''))); ?></td>
+                                <td><?php $this->render_audit_issue_actions($issue); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endforeach; ?>
         <?php endif; ?>
+        <?php
+    }
+
+    private function render_audit_issue_actions(array $issue): void
+    {
+        $target_cms_id = (int) ($issue['targetCmsId'] ?? 0);
+        $edit_url = $target_cms_id > 0 ? get_edit_post_link($target_cms_id, '') : '';
+        $apply_payload = $this->get_audit_issue_apply_payload($issue);
+        ?>
+        <div class="rankwoven-audit-actions">
+            <?php if (is_string($edit_url) && $edit_url !== '') : ?>
+                <a class="button button-small" href="<?php echo esc_url($edit_url); ?>">
+                    <?php echo esc_html__('修改', 'rankwoven-seo'); ?>
+                </a>
+            <?php else : ?>
+                <button type="button" class="button button-small" disabled>
+                    <?php echo esc_html__('修改', 'rankwoven-seo'); ?>
+                </button>
+            <?php endif; ?>
+
+            <?php if (is_array($apply_payload)) : ?>
+                <form class="rankwoven-inline-action-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php wp_nonce_field('rankwoven_apply_audit_issue'); ?>
+                    <input type="hidden" name="action" value="rankwoven_apply_audit_issue" />
+                    <input type="hidden" name="rankwoven_target_type" value="<?php echo esc_attr((string) $apply_payload['target_type']); ?>" />
+                    <input type="hidden" name="rankwoven_target_cms_id" value="<?php echo esc_attr((string) $apply_payload['target_cms_id']); ?>" />
+                    <input type="hidden" name="rankwoven_field_name" value="<?php echo esc_attr((string) $apply_payload['field_name']); ?>" />
+                    <input type="hidden" name="rankwoven_suggested_value" value="<?php echo esc_attr((string) $apply_payload['suggested_value']); ?>" />
+                    <button type="submit" class="button button-small button-primary">
+                        <?php echo esc_html__('套用', 'rankwoven-seo'); ?>
+                    </button>
+                </form>
+            <?php else : ?>
+                <button
+                    type="button"
+                    class="button button-small"
+                    title="<?php echo esc_attr__('此問題需要人工檢查內容後修改，不能安全直接套用。', 'rankwoven-seo'); ?>"
+                    disabled
+                >
+                    <?php echo esc_html__('套用', 'rankwoven-seo'); ?>
+                </button>
+            <?php endif; ?>
+        </div>
         <?php
     }
 
@@ -1512,6 +1601,12 @@ final class RankWoven_SEO_Plugin
         <p>
             <?php echo esc_html__('檢視 SaaS 生成的內部連結機會。已批准的建議只會在內容尾部追加「相關閱讀」文字連結區塊，不會重寫既有 WPBakery 或頁面建構器結構。', 'rankwoven-seo'); ?>
         </p>
+        <div class="rankwoven-action-row">
+            <?php $this->render_admin_post_button('rankwoven_rescan_internal_links', 'rankwoven_rescan_internal_links', __('重新掃描內部連結', 'rankwoven-seo'), 'primary'); ?>
+            <span class="description">
+                <?php echo esc_html__('刪除文章、頁面、商品或 Portfolio 後使用。系統會完整重新同步內容，清理舊候選，再重新產生可套用的內部連結建議。', 'rankwoven-seo'); ?>
+            </span>
+        </div>
 
         <?php if (is_wp_error($suggestions_data)) : ?>
             <div class="notice notice-warning inline"><p><?php echo esc_html($suggestions_data->get_error_message()); ?></p></div>
@@ -1580,17 +1675,10 @@ final class RankWoven_SEO_Plugin
             <?php echo esc_html__('Set default SEO title, meta description, and keywords templates for each content type. These values apply when a single post does not already have its own saved SEO fields.', 'rankwoven-seo'); ?>
         </p>
         <p class="description">
-            <?php echo esc_html__('Available placeholders:', 'rankwoven-seo'); ?>
-            <code>{{title}}</code>
-            <code>{{excerpt}}</code>
-            <code>{{focus_keyphrase}}</code>
-            <code>{{site_name}}</code>
-            <code>{{slug}}</code>
-            <code>{{post_type}}</code>
-            <code>{{post_type_label}}</code>
+            <?php echo esc_html__('Click a tag above each template field to insert variables automatically. Customers do not need to type placeholder code manually.', 'rankwoven-seo'); ?>
         </p>
 
-        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-rankwoven-content-meta-settings>
             <?php wp_nonce_field('rankwoven_save_settings'); ?>
             <input type="hidden" name="action" value="rankwoven_save_settings" />
             <input type="hidden" name="rankwoven_settings_scope" value="content_meta" />
@@ -1633,37 +1721,105 @@ final class RankWoven_SEO_Plugin
 
             <?php submit_button(__('Save Content Meta Settings', 'rankwoven-seo')); ?>
         </form>
+        <?php $this->render_content_meta_settings_script(); ?>
         <?php
     }
 
     private function render_content_meta_field_row(string $field_name, string $value, string $label, string $description, bool $multiline = false): void
     {
         $field_id = sanitize_key(str_replace(['[', ']'], ['_', ''], $field_name));
+        $tokens = [
+            '{{title}}' => __('Title', 'rankwoven-seo'),
+            '{{excerpt}}' => __('Excerpt', 'rankwoven-seo'),
+            '{{focus_keyphrase}}' => __('Focus Keyphrase', 'rankwoven-seo'),
+            '{{site_name}}' => __('Site Name', 'rankwoven-seo'),
+            '{{slug}}' => __('Slug', 'rankwoven-seo'),
+            '{{post_type}}' => __('Post Type', 'rankwoven-seo'),
+            '{{post_type_label}}' => __('Post Type Label', 'rankwoven-seo'),
+        ];
         ?>
         <tr>
             <th scope="row">
                 <label for="<?php echo esc_attr($field_id); ?>"><?php echo esc_html($label); ?></label>
             </th>
             <td>
-                <?php if ($multiline) : ?>
-                    <textarea
-                        id="<?php echo esc_attr($field_id); ?>"
-                        name="<?php echo esc_attr($field_name); ?>"
-                        class="large-text"
-                        rows="3"
-                    ><?php echo esc_textarea($value); ?></textarea>
-                <?php else : ?>
-                    <input
-                        type="text"
-                        id="<?php echo esc_attr($field_id); ?>"
-                        name="<?php echo esc_attr($field_name); ?>"
-                        class="regular-text"
-                        value="<?php echo esc_attr($value); ?>"
-                    />
-                <?php endif; ?>
-                <p class="description"><?php echo esc_html($description); ?></p>
+                <div class="rankwoven-content-meta-field" data-rankwoven-content-meta-field>
+                    <p class="description rankwoven-token-help">
+                        <?php echo esc_html__('Click a tag to insert variables into this template.', 'rankwoven-seo'); ?>
+                    </p>
+                    <div class="rankwoven-token-row">
+                        <?php foreach ($tokens as $token => $token_label) : ?>
+                            <?php $button_aria_label = sprintf(__('Insert %s placeholder', 'rankwoven-seo'), $token_label); ?>
+                            <button
+                                type="button"
+                                class="button rankwoven-token-button"
+                                data-rankwoven-content-token="<?php echo esc_attr($token); ?>"
+                                aria-label="<?php echo esc_attr($button_aria_label); ?>"
+                            >
+                                + <?php echo esc_html($token_label); ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if ($multiline) : ?>
+                        <textarea
+                            id="<?php echo esc_attr($field_id); ?>"
+                            name="<?php echo esc_attr($field_name); ?>"
+                            class="large-text"
+                            rows="3"
+                            data-rankwoven-content-meta-input
+                        ><?php echo esc_textarea($value); ?></textarea>
+                    <?php else : ?>
+                        <input
+                            type="text"
+                            id="<?php echo esc_attr($field_id); ?>"
+                            name="<?php echo esc_attr($field_name); ?>"
+                            class="large-text"
+                            value="<?php echo esc_attr($value); ?>"
+                            data-rankwoven-content-meta-input
+                        />
+                    <?php endif; ?>
+                    <p class="description"><?php echo esc_html($description); ?></p>
+                </div>
             </td>
         </tr>
+        <?php
+    }
+
+    private function render_content_meta_settings_script(): void
+    {
+        ?>
+        <script>
+        (() => {
+            const root = document.querySelector('[data-rankwoven-content-meta-settings]');
+            if (!root) {
+                return;
+            }
+
+            const insertToken = (input, token) => {
+                const start = input.selectionStart ?? input.value.length;
+                const end = input.selectionEnd ?? input.value.length;
+                input.value = `${input.value.slice(0, start)}${token}${input.value.slice(end)}`;
+                input.focus();
+                input.setSelectionRange(start + token.length, start + token.length);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+
+            root.addEventListener('click', (event) => {
+                const tokenButton = event.target.closest('[data-rankwoven-content-token]');
+                if (!tokenButton) {
+                    return;
+                }
+
+                const token = tokenButton.dataset.rankwovenContentToken || '';
+                const field = tokenButton.closest('[data-rankwoven-content-meta-field]');
+                const input = field ? field.querySelector('[data-rankwoven-content-meta-input]') : null;
+                if (input && token !== '') {
+                    insertToken(input, token);
+                }
+            });
+        })();
+        </script>
         <?php
     }
 
@@ -1775,38 +1931,60 @@ final class RankWoven_SEO_Plugin
     private function render_image_attributes_page(): void
     {
         $settings = $this->get_image_attribute_settings();
+        $profiles = $this->get_image_attribute_profiles();
+        $first_attribute = (string) array_key_first($profiles);
         ?>
         <h2><?php echo esc_html__('Image Attribute Settings', 'rankwoven-seo'); ?></h2>
         <p>
-            <?php echo esc_html__('Use new image filenames to automatically generate image title, alternative text, caption, and description.', 'rankwoven-seo'); ?>
+            <?php echo esc_html__('Configure how AI-generated image context is formatted for each attribute. RankWoven generates the image title, alt text, caption, description, and filename from the surrounding post or page context first; these settings only control the final format.', 'rankwoven-seo'); ?>
         </p>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <?php wp_nonce_field('rankwoven_save_image_attributes'); ?>
             <input type="hidden" name="action" value="rankwoven_save_image_attributes" />
-            <table class="form-table" role="presentation">
-                <tr>
-                    <th scope="row"><?php echo esc_html__('General Settings', 'rankwoven-seo'); ?></th>
-                    <td>
-                        <?php $this->render_checkbox('set_title', $settings, __('Set title for newly uploaded images', 'rankwoven-seo')); ?>
-                        <?php $this->render_checkbox('set_alt_text', $settings, __('Set alternative text for newly uploaded images', 'rankwoven-seo')); ?>
-                        <?php $this->render_checkbox('set_caption', $settings, __('Set caption for newly uploaded images', 'rankwoven-seo')); ?>
-                        <?php $this->render_checkbox('set_description', $settings, __('Set description for newly uploaded images', 'rankwoven-seo')); ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><?php echo esc_html__('Filename Cleanup', 'rankwoven-seo'); ?></th>
-                    <td>
-                        <?php $this->render_checkbox('remove_hyphen', $settings, __('Remove hyphens from filenames', 'rankwoven-seo'), '-'); ?>
-                        <?php $this->render_checkbox('remove_underscore', $settings, __('Remove underscores from filenames', 'rankwoven-seo'), '_'); ?>
-                        <?php $this->render_checkbox('remove_period', $settings, __('Remove periods from filenames', 'rankwoven-seo'), '.'); ?>
-                        <?php $this->render_checkbox('remove_comma', $settings, __('Remove commas from filenames', 'rankwoven-seo'), ','); ?>
-                        <?php $this->render_checkbox('remove_numbers', $settings, __('Remove all numbers from filenames', 'rankwoven-seo')); ?>
-                    </td>
-                </tr>
+            <div class="rankwoven-image-settings" data-rankwoven-image-settings>
+                <div class="rankwoven-image-tabs" role="tablist" aria-label="<?php echo esc_attr__('Image attribute fields', 'rankwoven-seo'); ?>">
+                    <?php foreach ($profiles as $attribute => $profile) : ?>
+                        <button
+                            type="button"
+                            class="rankwoven-image-tab<?php echo $attribute === $first_attribute ? ' is-active' : ''; ?>"
+                            role="tab"
+                            aria-selected="<?php echo $attribute === $first_attribute ? 'true' : 'false'; ?>"
+                            data-rankwoven-image-tab="<?php echo esc_attr($attribute); ?>"
+                        >
+                            <?php echo esc_html((string) $profile['label']); ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php foreach ($profiles as $attribute => $profile) : ?>
+                    <?php
+                    $rule = isset($settings['attributes'][$attribute]) && is_array($settings['attributes'][$attribute])
+                        ? $settings['attributes'][$attribute]
+                        : $this->get_image_attribute_rule($attribute, []);
+                    ?>
+                    <section
+                        class="rankwoven-image-panel<?php echo $attribute === $first_attribute ? ' is-active' : ''; ?>"
+                        data-rankwoven-image-panel="<?php echo esc_attr($attribute); ?>"
+                        <?php echo $attribute === $first_attribute ? '' : 'hidden'; ?>
+                    >
+                        <?php $this->render_image_attribute_rule_panel($attribute, $profile, $rule); ?>
+                    </section>
+                <?php endforeach; ?>
+            </div>
+
+            <table class="form-table rankwoven-image-global-settings" role="presentation">
                 <tr>
                     <th scope="row"><?php echo esc_html__('Basic SEO Settings', 'rankwoven-seo'); ?></th>
                     <td>
-                        <?php $this->render_checkbox('insert_title_attribute', $settings, __('Insert image title into content HTML output', 'rankwoven-seo')); ?>
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="rankwoven_image_attributes[insert_title_attribute]"
+                                value="1"
+                                <?php checked(!empty($settings['insert_title_attribute'])); ?>
+                            />
+                            <?php echo esc_html__('Insert image title into content HTML output', 'rankwoven-seo'); ?>
+                        </label>
                         <p class="description">
                             <?php echo esc_html__('When enabled, RankWoven adds a title attribute to rendered image tags when a title is available.', 'rankwoven-seo'); ?>
                         </p>
@@ -1815,6 +1993,7 @@ final class RankWoven_SEO_Plugin
             </table>
             <?php submit_button(__('Save Image Attribute Settings', 'rankwoven-seo')); ?>
         </form>
+        <?php $this->render_image_attribute_settings_script(); ?>
         <?php
     }
 
@@ -1827,7 +2006,7 @@ final class RankWoven_SEO_Plugin
         ?>
         <h2><?php echo esc_html__('Bulk Image Attribute Updater', 'rankwoven-seo'); ?></h2>
         <p>
-            <?php echo esc_html__('Run the bulk updater to update existing image titles, captions, descriptions, and alternative text from filenames.', 'rankwoven-seo'); ?>
+            <?php echo esc_html__('Run the bulk updater to update existing image titles, captions, descriptions, and alternative text from AI-generated context, then apply your saved format rules.', 'rankwoven-seo'); ?>
         </p>
         <div class="notice notice-warning inline">
             <p><strong><?php echo esc_html__('Important:', 'rankwoven-seo'); ?></strong> <?php echo esc_html__('Back up this WordPress database before running a bulk update.', 'rankwoven-seo'); ?></p>
@@ -1991,27 +2170,48 @@ final class RankWoven_SEO_Plugin
     {
         $this->assert_admin_action('rankwoven_sync_content');
 
+        $this->run_content_sync(false, 'connection');
+        delete_option(self::OPTION_LAST_ERROR);
+        $this->redirect_with_status('sync_completed');
+    }
+
+    public function handle_rescan_internal_links(): void
+    {
+        $this->assert_admin_action('rankwoven_rescan_internal_links');
+
+        $this->run_content_sync(true, 'link_assistant');
+        $audit_result = $this->request_saas_site_api('POST', 'audits');
+        if (is_wp_error($audit_result)) {
+            $this->redirect_with_status('internal_links_rescan_failed', 'link_assistant');
+        }
+
+        delete_option(self::OPTION_LAST_ERROR);
+        $this->redirect_with_status('internal_links_rescan_completed', 'link_assistant');
+    }
+
+    private function run_content_sync(bool $force_full, string $failure_tab): array
+    {
         $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
         $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
 
         if ($site_id === '' || $site_token === '') {
-            $this->redirect_with_status('missing_site_credentials');
+            $this->redirect_with_status('missing_site_credentials', $failure_tab);
         }
 
         $sync_started_at = gmdate('c');
-        $updated_after = $this->get_incremental_updated_after();
+        $updated_after = $force_full ? '' : $this->get_incremental_updated_after();
         $task_response = $this->create_sync_task($site_id, $site_token, $sync_started_at, $updated_after);
 
         if (is_wp_error($task_response)) {
-            $this->redirect_with_status('sync_failed');
+            $this->redirect_with_status('sync_failed', $failure_tab);
         }
 
         $task_body = $this->decode_response_body($task_response);
-        $this->redirect_if_sync_response_failed($task_response, $task_body);
+        $this->redirect_if_sync_response_failed($task_response, $task_body, $failure_tab);
 
         $sync_task_id = sanitize_text_field($task_body['data']['task']['id'] ?? '');
         if ($sync_task_id === '') {
-            $this->redirect_with_status('sync_failed');
+            $this->redirect_with_status('sync_failed', $failure_tab);
         }
 
         $sync_summary = $this->sync_paginated_content_batches(
@@ -2019,24 +2219,26 @@ final class RankWoven_SEO_Plugin
             $site_token,
             $sync_task_id,
             $sync_started_at,
-            $updated_after
+            $updated_after,
+            $failure_tab
         );
 
-        update_option(self::OPTION_LAST_SYNC_RESULT, [
+        $sync_result = [
             'syncedAt' => gmdate('c'),
             'syncStartedAt' => $sync_started_at,
             'updatedAfter' => $updated_after,
-            'syncMode' => $updated_after === '' ? 'full' : 'incremental',
+            'syncMode' => $force_full ? 'rescan' : ($updated_after === '' ? 'full' : 'incremental'),
             'syncTaskId' => $sync_task_id,
             'articlesReceived' => (int) $sync_summary['articlesReceived'],
             'mediaReceived' => (int) $sync_summary['mediaReceived'],
             'articlePagesSynced' => (int) $sync_summary['articlePagesSynced'],
             'mediaPagesSynced' => (int) $sync_summary['mediaPagesSynced']
-        ]);
-        update_option(self::OPTION_LAST_TOKEN_USED_AT, gmdate('c'));
-        delete_option(self::OPTION_LAST_ERROR);
+        ];
 
-        $this->redirect_with_status('sync_completed');
+        update_option(self::OPTION_LAST_SYNC_RESULT, $sync_result);
+        update_option(self::OPTION_LAST_TOKEN_USED_AT, gmdate('c'));
+
+        return $sync_result;
     }
 
     public function handle_generate_sitemap(): void
@@ -2150,6 +2352,26 @@ final class RankWoven_SEO_Plugin
 
         delete_option(self::OPTION_LAST_ERROR);
         $this->redirect_with_status('seo_audit_completed', 'seo_analysis');
+    }
+
+    public function handle_apply_audit_issue(): void
+    {
+        $this->assert_admin_action('rankwoven_apply_audit_issue');
+
+        $payload = [
+            'target_type' => sanitize_key(wp_unslash($_POST['rankwoven_target_type'] ?? '')),
+            'target_cms_id' => (int) wp_unslash($_POST['rankwoven_target_cms_id'] ?? 0),
+            'field_name' => sanitize_text_field(wp_unslash($_POST['rankwoven_field_name'] ?? '')),
+            'suggested_value' => sanitize_textarea_field(wp_unslash($_POST['rankwoven_suggested_value'] ?? ''))
+        ];
+
+        $result = $this->apply_audit_issue_payload($payload);
+        if (is_wp_error($result)) {
+            $this->redirect_with_status('audit_issue_apply_failed', 'seo_analysis');
+        }
+
+        delete_option(self::OPTION_LAST_ERROR);
+        $this->redirect_with_status('audit_issue_applied', 'seo_analysis');
     }
 
     public function handle_manage_suggestions(): void
@@ -2266,6 +2488,37 @@ final class RankWoven_SEO_Plugin
         }
 
         $this->update_image_attachment_attributes($attachment_id);
+    }
+
+    public function filter_uploaded_image_filename(string $filename): string
+    {
+        $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'], true)) {
+            return $filename;
+        }
+
+        $settings = $this->get_image_attribute_settings();
+        $filename_rule = isset($settings['attributes']['filename']) && is_array($settings['attributes']['filename'])
+            ? $settings['attributes']['filename']
+            : $this->get_image_attribute_rule('filename', []);
+        if (empty($filename_rule['enabled'])) {
+            return $filename;
+        }
+
+        if ($this->get_upload_context_post_id() <= 0) {
+            return $filename;
+        }
+
+        $generated_filename = $this->render_image_attribute_text_from_values(
+            $this->generate_image_attribute_context_values_for_upload($filename),
+            'filename'
+        );
+        if ($generated_filename === '') {
+            return $filename;
+        }
+
+        $slug = sanitize_title($generated_filename);
+        return $slug !== '' ? $slug . '.' . $extension : $filename;
     }
 
     public function add_image_title_attributes_to_content(string $content): string
@@ -2760,7 +3013,8 @@ final class RankWoven_SEO_Plugin
         string $site_token,
         string $sync_task_id,
         string $sync_started_at,
-        string $updated_after
+        string $updated_after,
+        string $failure_tab = 'connection'
     ): array
     {
         $article_pages_synced = 0;
@@ -2797,11 +3051,11 @@ final class RankWoven_SEO_Plugin
             );
 
             if (is_wp_error($response)) {
-                $this->redirect_with_status('sync_failed');
+                $this->redirect_with_status('sync_failed', $failure_tab);
             }
 
             $body = $this->decode_response_body($response);
-            $this->redirect_if_sync_response_failed($response, $body);
+            $this->redirect_if_sync_response_failed($response, $body, $failure_tab);
 
             $articles_received = (int) ($body['data']['task']['articlesReceived'] ?? ($articles_received + $article_count));
             $media_received = (int) ($body['data']['task']['mediaReceived'] ?? ($media_received + $media_count));
@@ -2814,7 +3068,7 @@ final class RankWoven_SEO_Plugin
         }
 
         if ($page > self::SYNC_MAX_BATCH_PAGES) {
-            $this->redirect_with_status('sync_failed');
+            $this->redirect_with_status('sync_failed', $failure_tab);
         }
 
         return [
@@ -2858,7 +3112,7 @@ final class RankWoven_SEO_Plugin
         ]);
     }
 
-    private function redirect_if_sync_response_failed($response, array $body): void
+    private function redirect_if_sync_response_failed($response, array $body, string $failure_tab = 'connection'): void
     {
         if (($body['success'] ?? false)) {
             return;
@@ -2866,10 +3120,10 @@ final class RankWoven_SEO_Plugin
 
         $error_code = $body['error']['code'] ?? '';
         if (wp_remote_retrieve_response_code($response) === 401 || $error_code === 'SITE_TOKEN_INVALID') {
-            $this->redirect_with_status('site_token_invalid');
+            $this->redirect_with_status('site_token_invalid', $failure_tab);
         }
 
-        $this->redirect_with_status('sync_failed');
+        $this->redirect_with_status('sync_failed', $failure_tab);
     }
 
     private function get_incremental_updated_after(): string
@@ -3092,33 +3346,149 @@ final class RankWoven_SEO_Plugin
 
     private function get_image_attribute_settings(): array
     {
-        $settings = get_option(self::OPTION_IMAGE_ATTRIBUTE_SETTINGS, []);
-        $defaults = [
-            'set_title' => true,
-            'set_alt_text' => true,
-            'set_caption' => true,
-            'set_description' => true,
-            'remove_hyphen' => true,
-            'remove_underscore' => true,
-            'remove_period' => false,
-            'remove_comma' => false,
-            'remove_numbers' => false,
-            'insert_title_attribute' => true
+        $saved_settings = get_option(self::OPTION_IMAGE_ATTRIBUTE_SETTINGS, []);
+        $saved_settings = is_array($saved_settings) ? $saved_settings : [];
+        $settings = [
+            'insert_title_attribute' => array_key_exists('insert_title_attribute', $saved_settings)
+                ? (bool) $saved_settings['insert_title_attribute']
+                : true,
+            'attributes' => []
         ];
 
-        return array_merge($defaults, is_array($settings) ? $settings : []);
+        foreach (array_keys($this->get_image_attribute_profiles()) as $attribute) {
+            $settings['attributes'][$attribute] = $this->get_image_attribute_rule($attribute, $saved_settings);
+        }
+
+        return $settings;
     }
 
     private function sanitize_image_attribute_settings(array $input): array
     {
-        $defaults = $this->get_image_attribute_settings();
-        $sanitized = [];
+        $posted_settings = isset($input['rankwoven_image_attributes']) && is_array($input['rankwoven_image_attributes'])
+            ? $input['rankwoven_image_attributes']
+            : [];
+        $sanitized = [
+            'insert_title_attribute' => !empty($posted_settings['insert_title_attribute']),
+            'attributes' => []
+        ];
+        $casing_modes = ['disabled', 'lower', 'title', 'sentence'];
 
-        foreach (array_keys($defaults) as $key) {
-            $sanitized[$key] = !empty($input['rankwoven_image_attributes'][$key]);
+        foreach (array_keys($this->get_image_attribute_profiles()) as $attribute) {
+            $posted_rule = isset($posted_settings['attributes'][$attribute]) && is_array($posted_settings['attributes'][$attribute])
+                ? $posted_settings['attributes'][$attribute]
+                : [];
+            $format = sanitize_text_field((string) ($posted_rule['format'] ?? '{{image_title}}'));
+            $casing = sanitize_key((string) ($posted_rule['casing'] ?? 'title'));
+
+            $sanitized['attributes'][$attribute] = [
+                'enabled' => !empty($posted_rule['enabled']),
+                'format' => $format !== '' ? $format : '{{image_title}}',
+                'strip_punctuation' => !empty($posted_rule['strip_punctuation']),
+                'space_hyphen' => !empty($posted_rule['space_hyphen']),
+                'space_underscore' => !empty($posted_rule['space_underscore']),
+                'strip_period' => !empty($posted_rule['strip_period']),
+                'strip_comma' => !empty($posted_rule['strip_comma']),
+                'strip_numbers' => !empty($posted_rule['strip_numbers']),
+                'strip_plus' => !empty($posted_rule['strip_plus']),
+                'strip_ampersand' => !empty($posted_rule['strip_ampersand']),
+                'words_to_strip' => sanitize_textarea_field((string) ($posted_rule['words_to_strip'] ?? '')),
+                'casing' => in_array($casing, $casing_modes, true) ? $casing : 'title'
+            ];
         }
 
         return $sanitized;
+    }
+
+    private function get_image_attribute_profiles(): array
+    {
+        return [
+            'alt_text' => [
+                'label' => __('Alt Tag', 'rankwoven-seo'),
+                'format_label' => __('Alt Tag Format', 'rankwoven-seo'),
+                'enable_label' => __('Autogenerate Alt Text on Upload', 'rankwoven-seo'),
+                'description' => __('AI generates the alternative text from the surrounding content first. This format only controls how that generated value is written to WordPress.', 'rankwoven-seo'),
+                'legacy_enabled_key' => 'set_alt_text',
+                'default_enabled' => true,
+                'default_format' => '{{alt_text}}'
+            ],
+            'title' => [
+                'label' => __('Title', 'rankwoven-seo'),
+                'format_label' => __('Title Format', 'rankwoven-seo'),
+                'enable_label' => __('Autogenerate Title on Upload', 'rankwoven-seo'),
+                'description' => __('AI generates the WordPress media title from the surrounding content first. This format only controls the final title pattern.', 'rankwoven-seo'),
+                'legacy_enabled_key' => 'set_title',
+                'default_enabled' => true,
+                'default_format' => '{{image_title}} {{separator}} {{site_title}}'
+            ],
+            'caption' => [
+                'label' => __('Caption', 'rankwoven-seo'),
+                'format_label' => __('Caption Format', 'rankwoven-seo'),
+                'enable_label' => __('Autogenerate Caption on Upload', 'rankwoven-seo'),
+                'description' => __('AI generates the caption from the related post, page, product, or portfolio context first. This format only controls the final caption pattern.', 'rankwoven-seo'),
+                'legacy_enabled_key' => 'set_caption',
+                'default_enabled' => true,
+                'default_format' => '{{caption}}'
+            ],
+            'description' => [
+                'label' => __('Description', 'rankwoven-seo'),
+                'format_label' => __('Description Format', 'rankwoven-seo'),
+                'enable_label' => __('Autogenerate Description on Upload', 'rankwoven-seo'),
+                'description' => __('AI generates the attachment description from the surrounding content first. This format only controls the final description pattern.', 'rankwoven-seo'),
+                'legacy_enabled_key' => 'set_description',
+                'default_enabled' => true,
+                'default_format' => '{{description}}'
+            ],
+            'filename' => [
+                'label' => __('Filename', 'rankwoven-seo'),
+                'format_label' => __('Filename Format', 'rankwoven-seo'),
+                'enable_label' => __('Clean Filename on Upload', 'rankwoven-seo'),
+                'description' => __('AI generates a context-aware filename before WordPress stores the upload. This format only controls the final filename pattern; existing files are not renamed by the bulk updater.', 'rankwoven-seo'),
+                'legacy_enabled_key' => '',
+                'default_enabled' => false,
+                'default_format' => '{{filename}}'
+            ]
+        ];
+    }
+
+    private function get_image_attribute_rule(string $attribute, array $saved_settings): array
+    {
+        $profiles = $this->get_image_attribute_profiles();
+        $profile = $profiles[$attribute] ?? $profiles['alt_text'];
+        $saved_rule = isset($saved_settings['attributes'][$attribute]) && is_array($saved_settings['attributes'][$attribute])
+            ? $saved_settings['attributes'][$attribute]
+            : [];
+        $legacy_enabled_key = (string) ($profile['legacy_enabled_key'] ?? '');
+
+        return [
+            'enabled' => array_key_exists('enabled', $saved_rule)
+                ? (bool) $saved_rule['enabled']
+                : ($legacy_enabled_key !== '' && array_key_exists($legacy_enabled_key, $saved_settings)
+                    ? (bool) $saved_settings[$legacy_enabled_key]
+                    : (bool) $profile['default_enabled']),
+            'format' => sanitize_text_field((string) ($saved_rule['format'] ?? $profile['default_format'])),
+            'strip_punctuation' => array_key_exists('strip_punctuation', $saved_rule) ? (bool) $saved_rule['strip_punctuation'] : true,
+            'space_hyphen' => array_key_exists('space_hyphen', $saved_rule)
+                ? (bool) $saved_rule['space_hyphen']
+                : (bool) ($saved_settings['remove_hyphen'] ?? true),
+            'space_underscore' => array_key_exists('space_underscore', $saved_rule)
+                ? (bool) $saved_rule['space_underscore']
+                : (bool) ($saved_settings['remove_underscore'] ?? true),
+            'strip_period' => array_key_exists('strip_period', $saved_rule)
+                ? (bool) $saved_rule['strip_period']
+                : (bool) ($saved_settings['remove_period'] ?? false),
+            'strip_comma' => array_key_exists('strip_comma', $saved_rule)
+                ? (bool) $saved_rule['strip_comma']
+                : (bool) ($saved_settings['remove_comma'] ?? false),
+            'strip_numbers' => array_key_exists('strip_numbers', $saved_rule)
+                ? (bool) $saved_rule['strip_numbers']
+                : (bool) ($saved_settings['remove_numbers'] ?? false),
+            'strip_plus' => !empty($saved_rule['strip_plus']),
+            'strip_ampersand' => !empty($saved_rule['strip_ampersand']),
+            'words_to_strip' => sanitize_textarea_field((string) ($saved_rule['words_to_strip'] ?? '')),
+            'casing' => in_array((string) ($saved_rule['casing'] ?? 'title'), ['disabled', 'lower', 'title', 'sentence'], true)
+                ? (string) ($saved_rule['casing'] ?? 'title')
+                : 'title'
+        ];
     }
 
     private function get_default_content_meta_settings(): array
@@ -3221,6 +3591,189 @@ final class RankWoven_SEO_Plugin
         return trim($rendered);
     }
 
+    private function render_image_attribute_rule_panel(string $attribute, array $profile, array $rule): void
+    {
+        $field_prefix = 'rankwoven_image_attributes[attributes][' . $attribute . ']';
+        $tokens = [
+            '{{image_title}}' => __('AI Image Title', 'rankwoven-seo'),
+            '{{alt_text}}' => __('AI Alt Text', 'rankwoven-seo'),
+            '{{caption}}' => __('AI Caption', 'rankwoven-seo'),
+            '{{description}}' => __('AI Description', 'rankwoven-seo'),
+            '{{filename}}' => __('AI Filename', 'rankwoven-seo'),
+            '{{separator}}' => __('Separator', 'rankwoven-seo'),
+            '{{site_title}}' => __('Site Title', 'rankwoven-seo'),
+            '{{attachment_id}}' => __('Attachment ID', 'rankwoven-seo')
+        ];
+        ?>
+        <div class="rankwoven-image-panel-intro">
+            <h3><?php echo esc_html((string) $profile['label']); ?></h3>
+            <p><?php echo esc_html((string) $profile['description']); ?></p>
+        </div>
+        <table class="form-table rankwoven-image-rule-table" role="presentation">
+            <tr>
+                <th scope="row"><?php echo esc_html((string) $profile['enable_label']); ?></th>
+                <td>
+                    <label class="rankwoven-toggle-row">
+                        <input
+                            type="checkbox"
+                            name="<?php echo esc_attr($field_prefix); ?>[enabled]"
+                            value="1"
+                            <?php checked(!empty($rule['enabled'])); ?>
+                        />
+                        <?php echo esc_html__('Enabled', 'rankwoven-seo'); ?>
+                    </label>
+                    <?php if ($attribute === 'filename') : ?>
+                        <p class="description">
+                            <?php echo esc_html__('Filename cleanup only applies to new image uploads. Existing files are not renamed by the bulk updater.', 'rankwoven-seo'); ?>
+                        </p>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><?php echo esc_html((string) $profile['format_label']); ?></th>
+                <td>
+                    <p class="description">
+                        <?php echo esc_html__('Click a tag to insert AI-generated context values into this final format. The tags are not copied from the original filename.', 'rankwoven-seo'); ?>
+                    </p>
+                    <div class="rankwoven-token-row">
+                        <?php foreach ($tokens as $token => $label) : ?>
+                            <button type="button" class="button rankwoven-token-button" data-rankwoven-token="<?php echo esc_attr($token); ?>">
+                                + <?php echo esc_html($label); ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <input
+                        type="text"
+                        class="large-text rankwoven-format-input"
+                        name="<?php echo esc_attr($field_prefix); ?>[format]"
+                        value="<?php echo esc_attr((string) $rule['format']); ?>"
+                        data-rankwoven-format-input
+                    />
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><?php echo esc_html__('Strip Punctuation', 'rankwoven-seo'); ?></th>
+                <td>
+                    <label class="rankwoven-toggle-row">
+                        <input
+                            type="checkbox"
+                            name="<?php echo esc_attr($field_prefix); ?>[strip_punctuation]"
+                            value="1"
+                            <?php checked(!empty($rule['strip_punctuation'])); ?>
+                        />
+                        <?php echo esc_html__('Enabled', 'rankwoven-seo'); ?>
+                    </label>
+                    <div class="rankwoven-checkbox-grid">
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'space_hyphen', __('Convert dashes (-) to spaces', 'rankwoven-seo')); ?>
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'space_underscore', __('Convert underscores (_) to spaces', 'rankwoven-seo')); ?>
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'strip_period', __('Strip periods (.)', 'rankwoven-seo')); ?>
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'strip_comma', __('Strip commas (,)', 'rankwoven-seo')); ?>
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'strip_numbers', __('Strip numbers (0-9)', 'rankwoven-seo')); ?>
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'strip_plus', __('Strip plus signs (+)', 'rankwoven-seo')); ?>
+                        <?php $this->render_image_attribute_checkbox($field_prefix, $rule, 'strip_ampersand', __('Strip ampersands (&)', 'rankwoven-seo')); ?>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><?php echo esc_html__('Casing', 'rankwoven-seo'); ?></th>
+                <td>
+                    <select name="<?php echo esc_attr($field_prefix); ?>[casing]">
+                        <option value="disabled" <?php selected((string) $rule['casing'], 'disabled'); ?>><?php echo esc_html__('Disabled', 'rankwoven-seo'); ?></option>
+                        <option value="lower" <?php selected((string) $rule['casing'], 'lower'); ?>><?php echo esc_html__('Lower Case', 'rankwoven-seo'); ?></option>
+                        <option value="title" <?php selected((string) $rule['casing'], 'title'); ?>><?php echo esc_html__('Title Case', 'rankwoven-seo'); ?></option>
+                        <option value="sentence" <?php selected((string) $rule['casing'], 'sentence'); ?>><?php echo esc_html__('Sentence Case', 'rankwoven-seo'); ?></option>
+                    </select>
+                    <p class="description">
+                        <?php echo esc_html__('Choose which casing should be applied after cleanup.', 'rankwoven-seo'); ?>
+                    </p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><?php echo esc_html__('Words to Strip', 'rankwoven-seo'); ?></th>
+                <td>
+                    <textarea
+                        class="large-text"
+                        rows="4"
+                        name="<?php echo esc_attr($field_prefix); ?>[words_to_strip]"
+                    ><?php echo esc_textarea((string) $rule['words_to_strip']); ?></textarea>
+                    <p class="description">
+                        <?php echo esc_html__('Add one word or phrase per line. Matching words are removed before casing is applied.', 'rankwoven-seo'); ?>
+                    </p>
+                </td>
+            </tr>
+        </table>
+        <?php
+    }
+
+    private function render_image_attribute_checkbox(string $field_prefix, array $rule, string $key, string $label): void
+    {
+        ?>
+        <label>
+            <input
+                type="checkbox"
+                name="<?php echo esc_attr($field_prefix); ?>[<?php echo esc_attr($key); ?>]"
+                value="1"
+                <?php checked(!empty($rule[$key])); ?>
+            />
+            <?php echo esc_html($label); ?>
+        </label>
+        <?php
+    }
+
+    private function render_image_attribute_settings_script(): void
+    {
+        ?>
+        <script>
+        (() => {
+            const root = document.querySelector('[data-rankwoven-image-settings]');
+            if (!root) {
+                return;
+            }
+
+            const activatePanel = (attribute) => {
+                root.querySelectorAll('[data-rankwoven-image-tab]').forEach((tab) => {
+                    const isActive = tab.dataset.rankwovenImageTab === attribute;
+                    tab.classList.toggle('is-active', isActive);
+                    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+                root.querySelectorAll('[data-rankwoven-image-panel]').forEach((panel) => {
+                    const isActive = panel.dataset.rankwovenImagePanel === attribute;
+                    panel.classList.toggle('is-active', isActive);
+                    panel.hidden = !isActive;
+                });
+            };
+
+            const insertToken = (input, token) => {
+                const start = input.selectionStart ?? input.value.length;
+                const end = input.selectionEnd ?? input.value.length;
+                input.value = `${input.value.slice(0, start)}${token}${input.value.slice(end)}`;
+                input.focus();
+                input.setSelectionRange(start + token.length, start + token.length);
+            };
+
+            root.addEventListener('click', (event) => {
+                const tab = event.target.closest('[data-rankwoven-image-tab]');
+                if (tab) {
+                    activatePanel(tab.dataset.rankwovenImageTab);
+                    return;
+                }
+
+                const tokenButton = event.target.closest('[data-rankwoven-token]');
+                if (!tokenButton) {
+                    return;
+                }
+
+                const panel = tokenButton.closest('[data-rankwoven-image-panel]');
+                const input = panel ? panel.querySelector('[data-rankwoven-format-input]') : null;
+                if (input) {
+                    insertToken(input, tokenButton.dataset.rankwovenToken);
+                }
+            });
+        })();
+        </script>
+        <?php
+    }
+
     private function render_checkbox(string $key, array $settings, string $label, string $symbol = ''): void
     {
         ?>
@@ -3311,18 +3864,15 @@ final class RankWoven_SEO_Plugin
     private function get_image_attribute_settings_label(array $settings): string
     {
         $enabled_labels = [];
-        $label_map = [
-            'set_title' => __('Title', 'rankwoven-seo'),
-            'set_alt_text' => __('Alt Text', 'rankwoven-seo'),
-            'set_caption' => __('Caption', 'rankwoven-seo'),
-            'set_description' => __('Description', 'rankwoven-seo'),
-            'insert_title_attribute' => __('HTML title attribute', 'rankwoven-seo')
-        ];
 
-        foreach ($label_map as $key => $label) {
-            if (!empty($settings[$key])) {
-                $enabled_labels[] = $label;
+        foreach ($this->get_image_attribute_profiles() as $attribute => $profile) {
+            if (!empty($settings['attributes'][$attribute]['enabled'])) {
+                $enabled_labels[] = (string) $profile['label'];
             }
+        }
+
+        if (!empty($settings['insert_title_attribute'])) {
+            $enabled_labels[] = __('HTML title attribute', 'rankwoven-seo');
         }
 
         return empty($enabled_labels)
@@ -3498,56 +4048,293 @@ final class RankWoven_SEO_Plugin
             return '';
         }
 
-        $settings = $this->get_image_attribute_settings();
-        $generated_text = $this->generate_image_text_from_filename($attachment_id);
-        if ($generated_text === '') {
-            return '';
-        }
-
         $post_update = ['ID' => $attachment_id];
-        if ($settings['set_title']) {
-            $post_update['post_title'] = $generated_text;
+        $generated = [];
+        $attribute_values = $this->generate_image_attribute_context_values($attachment_id);
+        $title_text = $this->render_image_attribute_text_from_values($attribute_values, 'title', $attachment_id);
+        $caption_text = $this->render_image_attribute_text_from_values($attribute_values, 'caption', $attachment_id);
+        $description_text = $this->render_image_attribute_text_from_values($attribute_values, 'description', $attachment_id);
+        $alt_text = $this->render_image_attribute_text_from_values($attribute_values, 'alt_text', $attachment_id);
+
+        if ($title_text !== '') {
+            $post_update['post_title'] = $title_text;
+            $generated[] = sprintf('Title: %s', $title_text);
         }
-        if ($settings['set_caption']) {
-            $post_update['post_excerpt'] = $generated_text;
+        if ($caption_text !== '') {
+            $post_update['post_excerpt'] = $caption_text;
+            $generated[] = sprintf('Caption: %s', $caption_text);
         }
-        if ($settings['set_description']) {
-            $post_update['post_content'] = $generated_text;
+        if ($description_text !== '') {
+            $post_update['post_content'] = $description_text;
+            $generated[] = sprintf('Description: %s', $description_text);
         }
 
         if (count($post_update) > 1) {
             wp_update_post(wp_slash($post_update));
         }
 
-        if ($settings['set_alt_text']) {
-            update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
+        if ($alt_text !== '') {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+            $generated[] = sprintf('Alt: %s', $alt_text);
         }
 
-        return $generated_text;
+        return implode('; ', $generated);
     }
 
-    private function generate_image_text_from_filename(int $attachment_id): string
+    private function generate_image_attribute_context_values(int $attachment_id): array
     {
         $attached_file = get_attached_file($attachment_id);
-        if (!is_string($attached_file) || $attached_file === '') {
+        $file_name = is_string($attached_file) && $attached_file !== '' ? basename($attached_file) : '';
+        $attachment = get_post($attachment_id);
+        $context_post_id = $attachment instanceof WP_Post ? (int) $attachment->post_parent : 0;
+        $fallback_values = $this->build_local_image_attribute_values($attachment_id, $file_name, $context_post_id);
+        $remote_values = $this->request_saas_image_attribute_values($attachment_id, $file_name, $context_post_id);
+
+        return is_array($remote_values) ? $this->merge_image_attribute_values($fallback_values, $remote_values) : $fallback_values;
+    }
+
+    private function generate_image_attribute_context_values_for_upload(string $filename): array
+    {
+        $context_post_id = $this->get_upload_context_post_id();
+        $fallback_values = $this->build_local_image_attribute_values(0, $filename, $context_post_id);
+        $remote_values = $this->request_saas_image_attribute_values(0, $filename, $context_post_id);
+
+        return is_array($remote_values) ? $this->merge_image_attribute_values($fallback_values, $remote_values) : $fallback_values;
+    }
+
+    private function get_upload_context_post_id(): int
+    {
+        foreach (['post_id', 'postId', 'post'] as $key) {
+            $raw_value = $_REQUEST[$key] ?? 0;
+            if (is_array($raw_value)) {
+                continue;
+            }
+
+            $post_id = (int) sanitize_text_field(wp_unslash((string) $raw_value));
+            if ($post_id > 0) {
+                return $post_id;
+            }
+        }
+
+        return 0;
+    }
+
+    private function build_local_image_attribute_values(int $attachment_id, string $file_name = '', int $context_post_id = 0): array
+    {
+        $context_post = $context_post_id > 0 ? get_post($context_post_id) : null;
+        $site_title = sanitize_text_field((string) get_bloginfo('name'));
+        $context_title = $context_post instanceof WP_Post ? sanitize_text_field((string) get_the_title($context_post)) : '';
+        $context_slug = $context_post instanceof WP_Post ? sanitize_title((string) $context_post->post_name) : '';
+        $context_excerpt = $context_post instanceof WP_Post
+            ? $this->extract_plain_text_content($context_post->post_excerpt !== '' ? $context_post->post_excerpt : $context_post->post_content)
+            : '';
+        $sequence_number = $this->get_image_attachment_sequence_number($attachment_id, $context_post_id);
+        $title_base = $context_title !== ''
+            ? ($sequence_number > 1 ? sprintf('%s %d', $context_title, $sequence_number) : $context_title)
+            : sprintf('%s image%s', $site_title !== '' ? $site_title : 'RankWoven', $attachment_id > 0 ? ' ' . $attachment_id : '');
+        $caption = $context_excerpt !== ''
+            ? wp_trim_words($context_excerpt, 28, '')
+            : sprintf('%s related image', $context_title !== '' ? $context_title : ($site_title !== '' ? $site_title : 'RankWoven'));
+        $description = $context_excerpt !== ''
+            ? wp_trim_words($context_excerpt, 48, '')
+            : $caption;
+        $file_base = $context_slug !== ''
+            ? ($sequence_number > 1 ? sprintf('%s-%d', $context_slug, $sequence_number) : $context_slug)
+            : sanitize_title($title_base);
+
+        return [
+            'imageTitle' => $title_base,
+            'title' => $title_base,
+            'altText' => $title_base,
+            'caption' => $caption,
+            'description' => $description,
+            'fileName' => $file_base !== '' ? $file_base : sanitize_title((string) pathinfo($file_name, PATHINFO_FILENAME)),
+            'source' => 'local_context'
+        ];
+    }
+
+    private function get_image_attachment_sequence_number(int $attachment_id, int $context_post_id): int
+    {
+        if ($context_post_id <= 0) {
+            return 1;
+        }
+
+        $attachments = get_posts([
+            'post_parent' => $context_post_id,
+            'post_type' => 'attachment',
+            'post_mime_type' => 'image',
+            'post_status' => 'inherit',
+            'orderby' => 'ID',
+            'order' => 'ASC',
+            'fields' => 'ids',
+            'numberposts' => -1
+        ]);
+
+        if (!is_array($attachments) || empty($attachments)) {
+            return 1;
+        }
+
+        $attachment_ids = array_values(array_map('intval', $attachments));
+        $position = $attachment_id > 0 ? array_search($attachment_id, $attachment_ids, true) : count($attachment_ids);
+
+        return is_int($position) ? $position + 1 : count($attachment_ids) + 1;
+    }
+
+    private function request_saas_image_attribute_values(int $attachment_id, string $file_name, int $context_post_id)
+    {
+        if (!$this->is_saas_site_ready()) {
+            return null;
+        }
+
+        $payload = $this->build_image_attribute_generation_payload($attachment_id, $file_name, $context_post_id);
+        $result = $this->request_saas_site_api('POST', 'image-attributes', $payload);
+        if (is_wp_error($result)) {
+            return null;
+        }
+
+        return $this->sanitize_image_attribute_generation_values($result);
+    }
+
+    private function build_image_attribute_generation_payload(int $attachment_id, string $file_name, int $context_post_id): array
+    {
+        $attachment = $attachment_id > 0 ? get_post($attachment_id) : null;
+        $context_post = $context_post_id > 0 ? get_post($context_post_id) : null;
+        $attached_file = $attachment_id > 0 ? get_attached_file($attachment_id) : '';
+        $resolved_file_name = $file_name !== ''
+            ? $file_name
+            : (is_string($attached_file) && $attached_file !== '' ? basename($attached_file) : '');
+        $context_excerpt = $context_post instanceof WP_Post
+            ? $this->extract_plain_text_content($context_post->post_excerpt !== '' ? $context_post->post_excerpt : $context_post->post_content)
+            : '';
+
+        return [
+            'attachmentId' => $attachment_id > 0 ? (string) $attachment_id : 'new-upload',
+            'imageUrl' => $attachment_id > 0 ? (wp_get_attachment_url($attachment_id) ?: '') : '',
+            'mimeType' => $attachment_id > 0 ? (get_post_mime_type($attachment_id) ?: '') : '',
+            'fileName' => $resolved_file_name,
+            'currentTitle' => $attachment instanceof WP_Post ? sanitize_text_field((string) get_the_title($attachment)) : '',
+            'currentCaption' => $attachment instanceof WP_Post ? wp_strip_all_tags((string) $attachment->post_excerpt) : '',
+            'currentDescription' => $attachment instanceof WP_Post ? wp_strip_all_tags((string) $attachment->post_content) : '',
+            'currentAltText' => $attachment_id > 0 ? sanitize_textarea_field((string) get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) : '',
+            'attachedToCmsId' => $context_post_id > 0 ? (string) $context_post_id : '',
+            'attachedToTitle' => $context_post instanceof WP_Post ? sanitize_text_field((string) get_the_title($context_post)) : '',
+            'contextPostType' => $context_post instanceof WP_Post ? $this->normalize_synced_post_type((string) $context_post->post_type) : 'post',
+            'contextTitle' => $context_post instanceof WP_Post ? sanitize_text_field((string) get_the_title($context_post)) : '',
+            'contextSlug' => $context_post instanceof WP_Post ? sanitize_title((string) $context_post->post_name) : '',
+            'contextExcerpt' => wp_trim_words($context_excerpt, 80, ''),
+            'contextHtml' => $context_post instanceof WP_Post ? (string) $context_post->post_content : '',
+            'sequenceNumber' => $this->get_image_attachment_sequence_number($attachment_id, $context_post_id),
+            'locale' => str_replace('_', '-', get_locale())
+        ];
+    }
+
+    private function sanitize_image_attribute_generation_values(array $values): array
+    {
+        $file_name = basename((string) ($values['fileName'] ?? ''));
+        $file_base = $file_name !== '' ? preg_replace('/\.[^.]+$/', '', $file_name) : '';
+
+        return [
+            'imageTitle' => sanitize_text_field((string) ($values['imageTitle'] ?? $values['title'] ?? '')),
+            'title' => sanitize_text_field((string) ($values['title'] ?? $values['imageTitle'] ?? '')),
+            'altText' => sanitize_textarea_field((string) ($values['altText'] ?? '')),
+            'caption' => sanitize_textarea_field((string) ($values['caption'] ?? '')),
+            'description' => sanitize_textarea_field((string) ($values['description'] ?? '')),
+            'fileName' => sanitize_title((string) $file_base),
+            'source' => sanitize_key((string) ($values['source'] ?? 'ai'))
+        ];
+    }
+
+    private function merge_image_attribute_values(array $fallback_values, array $remote_values): array
+    {
+        foreach ($remote_values as $key => $value) {
+            if ($key === 'source' || trim((string) $value) !== '') {
+                $fallback_values[$key] = $value;
+            }
+        }
+
+        return $fallback_values;
+    }
+
+    private function render_image_attribute_text_from_values(array $values, string $attribute, int $attachment_id = 0): string
+    {
+        $settings = $this->get_image_attribute_settings();
+        $rule = isset($settings['attributes'][$attribute]) && is_array($settings['attributes'][$attribute])
+            ? $settings['attributes'][$attribute]
+            : $this->get_image_attribute_rule($attribute, []);
+
+        if (empty($rule['enabled'])) {
             return '';
         }
 
-        $settings = $this->get_image_attribute_settings();
-        $filename = pathinfo($attached_file, PATHINFO_FILENAME);
-        $text = str_replace(['-', '_', '.', ','], [
-            $settings['remove_hyphen'] ? ' ' : '-',
-            $settings['remove_underscore'] ? ' ' : '_',
-            $settings['remove_period'] ? ' ' : '.',
-            $settings['remove_comma'] ? ' ' : ','
-        ], $filename);
+        $context = [
+            '{{image_title}}' => (string) ($values['imageTitle'] ?? ''),
+            '{{alt_text}}' => (string) ($values['altText'] ?? ''),
+            '{{caption}}' => (string) ($values['caption'] ?? ''),
+            '{{description}}' => (string) ($values['description'] ?? ''),
+            '{{filename}}' => (string) ($values['fileName'] ?? ''),
+            '{{separator}}' => '|',
+            '{{site_title}}' => sanitize_text_field((string) get_bloginfo('name')),
+            '{{attachment_id}}' => $attachment_id > 0 ? (string) $attachment_id : ''
+        ];
 
-        if ($settings['remove_numbers']) {
-            $text = preg_replace('/\d+/', '', $text) ?? $text;
+        foreach ($context as $key => $value) {
+            $context[str_replace(['{{', '}}'], ['{', '}'], $key)] = $value;
+        }
+
+        $format = trim((string) ($rule['format'] ?? '{{image_title}}'));
+        $text = strtr($format !== '' ? $format : '{{image_title}}', $context);
+        return $this->normalize_image_attribute_text($text, $rule);
+    }
+
+    private function normalize_image_attribute_text(string $text, array $rule): string
+    {
+        if (!empty($rule['strip_punctuation'])) {
+            $text = str_replace('-', !empty($rule['space_hyphen']) ? ' ' : '-', $text);
+            $text = str_replace('_', !empty($rule['space_underscore']) ? ' ' : '_', $text);
+            $text = !empty($rule['strip_period']) ? str_replace('.', '', $text) : $text;
+            $text = !empty($rule['strip_comma']) ? str_replace(',', '', $text) : $text;
+            $text = !empty($rule['strip_plus']) ? str_replace('+', '', $text) : $text;
+            $text = !empty($rule['strip_ampersand']) ? str_replace('&', '', $text) : $text;
+
+            if (!empty($rule['strip_numbers'])) {
+                $text = preg_replace('/\d+/', '', $text) ?? $text;
+            }
+        }
+
+        $words_to_strip = preg_split('/\R+/', (string) ($rule['words_to_strip'] ?? '')) ?: [];
+        foreach ($words_to_strip as $word) {
+            $word = trim($word);
+            if ($word !== '') {
+                $text = preg_replace('/' . preg_quote($word, '/') . '/iu', '', $text) ?? $text;
+            }
         }
 
         $text = preg_replace('/\s+/', ' ', trim($text)) ?? trim($text);
-        return ucwords($text);
+        return $this->apply_image_attribute_casing($text, (string) ($rule['casing'] ?? 'title'));
+    }
+
+    private function apply_image_attribute_casing(string $text, string $casing): string
+    {
+        if ($text === '' || $casing === 'disabled') {
+            return $text;
+        }
+
+        if ($casing === 'lower') {
+            return function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
+        }
+
+        if ($casing === 'sentence') {
+            $lower_text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
+            if (function_exists('mb_substr') && function_exists('mb_strtoupper')) {
+                return mb_strtoupper(mb_substr($lower_text, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($lower_text, 1, null, 'UTF-8');
+            }
+
+            return ucfirst($lower_text);
+        }
+
+        return function_exists('mb_convert_case')
+            ? mb_convert_case($text, MB_CASE_TITLE, 'UTF-8')
+            : ucwords(strtolower($text));
     }
 
     private function is_image_attachment(int $attachment_id): bool
@@ -3712,6 +4499,241 @@ final class RankWoven_SEO_Plugin
         return array_values(array_filter($issues, 'is_array'));
     }
 
+    private function group_audit_issues_by_content_type(array $issues): array
+    {
+        $groups = [];
+
+        foreach ($issues as $issue) {
+            if (!is_array($issue)) {
+                continue;
+            }
+
+            $category = $this->get_audit_issue_content_type($issue);
+            $key = (string) $category['key'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'key' => $key,
+                    'label' => (string) $category['label'],
+                    'issues' => []
+                ];
+            }
+
+            $groups[$key]['issues'][] = $issue;
+        }
+
+        uasort($groups, function (array $left, array $right): int {
+            $left_order = $this->get_audit_issue_group_order((string) $left['key']);
+            $right_order = $this->get_audit_issue_group_order((string) $right['key']);
+
+            if ($left_order === $right_order) {
+                return strcmp((string) $left['label'], (string) $right['label']);
+            }
+
+            return $left_order <=> $right_order;
+        });
+
+        return array_values($groups);
+    }
+
+    private function get_audit_issue_content_type(array $issue): array
+    {
+        $target_type = sanitize_key((string) ($issue['targetType'] ?? ''));
+        $target_cms_id = (int) ($issue['targetCmsId'] ?? 0);
+
+        if ($target_type === 'media' || $target_type === 'image') {
+            $mime_type = $target_cms_id > 0 ? get_post_mime_type($target_cms_id) : '';
+            $is_image = is_string($mime_type) && str_starts_with($mime_type, 'image/');
+
+            return $is_image
+                ? ['key' => 'image', 'label' => __('圖片', 'rankwoven-seo')]
+                : ['key' => 'media', 'label' => __('媒體', 'rankwoven-seo')];
+        }
+
+        if ($target_type === 'article') {
+            $post_type = $target_cms_id > 0 ? (string) get_post_type($target_cms_id) : '';
+            $post_type = $post_type !== '' ? sanitize_key($post_type) : 'post';
+
+            return [
+                'key' => $post_type,
+                'label' => $this->get_audit_issue_post_type_label($post_type)
+            ];
+        }
+
+        return ['key' => 'unknown', 'label' => __('未分類', 'rankwoven-seo')];
+    }
+
+    private function get_audit_issue_post_type_label(string $post_type): string
+    {
+        $known_labels = [
+            'post' => __('文章', 'rankwoven-seo'),
+            'page' => __('頁面', 'rankwoven-seo'),
+            'product' => __('商品', 'rankwoven-seo'),
+            'portfolio' => __('Portfolio', 'rankwoven-seo')
+        ];
+
+        if (isset($known_labels[$post_type])) {
+            return (string) $known_labels[$post_type];
+        }
+
+        $post_type_object = get_post_type_object($post_type);
+        if (is_object($post_type_object)) {
+            return sanitize_text_field((string) ($post_type_object->labels->singular_name ?? $post_type));
+        }
+
+        return __('文章', 'rankwoven-seo');
+    }
+
+    private function get_audit_issue_group_order(string $group_key): int
+    {
+        $order = [
+            'post' => 10,
+            'page' => 20,
+            'product' => 30,
+            'portfolio' => 40,
+            'image' => 50,
+            'media' => 60,
+            'unknown' => 999
+        ];
+
+        return $order[$group_key] ?? 80;
+    }
+
+    private function get_audit_issue_apply_payload(array $issue): ?array
+    {
+        $target_type = sanitize_key((string) ($issue['targetType'] ?? ''));
+        $target_cms_id = (int) ($issue['targetCmsId'] ?? 0);
+        $field_name = $this->get_audit_issue_field_name($issue);
+        $suggested_value = trim((string) ($issue['suggestedValue'] ?? ''));
+
+        if ($target_cms_id <= 0 || $field_name === '' || $suggested_value === '') {
+            return null;
+        }
+
+        $article_fields = ['title', 'metaDescription'];
+        $media_fields = ['title', 'caption', 'description', 'altText'];
+        if ($target_type === 'article' && in_array($field_name, $article_fields, true)) {
+            return [
+                'target_type' => $target_type,
+                'target_cms_id' => $target_cms_id,
+                'field_name' => $field_name,
+                'suggested_value' => $suggested_value
+            ];
+        }
+
+        if ($target_type === 'media' && in_array($field_name, $media_fields, true)) {
+            return [
+                'target_type' => $target_type,
+                'target_cms_id' => $target_cms_id,
+                'field_name' => $field_name,
+                'suggested_value' => $suggested_value
+            ];
+        }
+
+        return null;
+    }
+
+    private function get_audit_issue_field_name(array $issue): string
+    {
+        $field_name = sanitize_text_field((string) ($issue['fieldName'] ?? ''));
+        if ($field_name !== '') {
+            return $field_name;
+        }
+
+        $rule_code = strtoupper(sanitize_text_field((string) ($issue['ruleCode'] ?? '')));
+        return match ($rule_code) {
+            'ARTICLE_TITLE_LENGTH', 'MEDIA_TITLE_CONTEXT' => 'title',
+            'ARTICLE_META_DESCRIPTION_LENGTH' => 'metaDescription',
+            'MEDIA_CAPTION_CONTEXT' => 'caption',
+            'MEDIA_DESCRIPTION_CONTEXT' => 'description',
+            'MEDIA_ALT_TEXT_CONTEXT' => 'altText',
+            default => ''
+        };
+    }
+
+    private function apply_audit_issue_payload(array $payload)
+    {
+        $target_type = sanitize_key((string) ($payload['target_type'] ?? ''));
+        $target_cms_id = (int) ($payload['target_cms_id'] ?? 0);
+        $field_name = sanitize_text_field((string) ($payload['field_name'] ?? ''));
+        $suggested_value = trim(sanitize_textarea_field((string) ($payload['suggested_value'] ?? '')));
+
+        if ($target_cms_id <= 0 || $field_name === '' || $suggested_value === '') {
+            return new WP_Error('rankwoven_audit_issue_invalid_payload', __('Audit issue apply payload is invalid.', 'rankwoven-seo'));
+        }
+
+        if ($target_type === 'article') {
+            return $this->apply_audit_issue_to_article($target_cms_id, $field_name, $suggested_value);
+        }
+
+        if ($target_type === 'media') {
+            return $this->apply_audit_issue_to_media($target_cms_id, $field_name, $suggested_value);
+        }
+
+        return new WP_Error('rankwoven_audit_issue_unsupported_target', __('This audit issue target cannot be applied automatically.', 'rankwoven-seo'));
+    }
+
+    private function apply_audit_issue_to_article(int $post_id, string $field_name, string $suggested_value)
+    {
+        $post = get_post($post_id);
+        if (!($post instanceof WP_Post) || !in_array($post->post_type, $this->get_supported_editor_post_types(), true)) {
+            return new WP_Error('rankwoven_audit_issue_article_not_found', __('Article not found or cannot be updated.', 'rankwoven-seo'));
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return new WP_Error('rankwoven_audit_issue_article_forbidden', __('You do not have permission to edit this content.', 'rankwoven-seo'));
+        }
+
+        if ($field_name === 'title') {
+            $result = wp_update_post(wp_slash([
+                'ID' => $post_id,
+                'post_title' => sanitize_text_field($suggested_value)
+            ]), true);
+
+            return is_wp_error($result) ? $result : true;
+        }
+
+        if ($field_name === 'metaDescription') {
+            foreach ($this->get_editor_seo_meta_description_keys() as $meta_key) {
+                $this->save_editor_seo_meta_value($post_id, $meta_key, sanitize_textarea_field($suggested_value));
+            }
+
+            return true;
+        }
+
+        return new WP_Error('rankwoven_audit_issue_article_field_unsupported', __('This article field cannot be applied automatically.', 'rankwoven-seo'));
+    }
+
+    private function apply_audit_issue_to_media(int $attachment_id, string $field_name, string $suggested_value)
+    {
+        $attachment = get_post($attachment_id);
+        if (!($attachment instanceof WP_Post) || $attachment->post_type !== 'attachment') {
+            return new WP_Error('rankwoven_audit_issue_media_not_found', __('Media item not found or cannot be updated.', 'rankwoven-seo'));
+        }
+
+        if (!current_user_can('edit_post', $attachment_id)) {
+            return new WP_Error('rankwoven_audit_issue_media_forbidden', __('You do not have permission to edit this media item.', 'rankwoven-seo'));
+        }
+
+        if ($field_name === 'altText') {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_textarea_field($suggested_value));
+            return true;
+        }
+
+        $post_update = ['ID' => $attachment_id];
+        if ($field_name === 'title') {
+            $post_update['post_title'] = sanitize_text_field($suggested_value);
+        } elseif ($field_name === 'caption') {
+            $post_update['post_excerpt'] = wp_kses_post($suggested_value);
+        } elseif ($field_name === 'description') {
+            $post_update['post_content'] = wp_kses_post($suggested_value);
+        } else {
+            return new WP_Error('rankwoven_audit_issue_media_field_unsupported', __('This media field cannot be applied automatically.', 'rankwoven-seo'));
+        }
+
+        $result = wp_update_post(wp_slash($post_update), true);
+        return is_wp_error($result) ? $result : true;
+    }
+
     private function get_internal_link_suggestions_from_data(array $suggestions_data): array
     {
         $suggestions = is_array($suggestions_data['suggestions'] ?? null) ? $suggestions_data['suggestions'] : [];
@@ -3793,21 +4815,24 @@ final class RankWoven_SEO_Plugin
             );
         }
 
-        return sanitize_text_field($suggested_value);
+        return $this->get_readable_content_excerpt($suggested_value);
     }
 
     private function render_internal_link_candidate_list(array $suggestion): void
     {
         $suggested_value = (string) ($suggestion['suggestedValue'] ?? '');
         $internal_link_data = $this->decode_internal_link_suggestion_value($suggested_value);
+        $links = !empty($internal_link_data['links'])
+            ? $internal_link_data['links']
+            : $this->get_internal_link_candidate_links_from_metadata($suggestion);
 
-        if (empty($internal_link_data['links'])) {
+        if (empty($links)) {
             echo esc_html($this->get_suggestion_summary_text($suggested_value));
             return;
         }
 
         echo '<ul style="margin:0;">';
-        foreach ($internal_link_data['links'] as $link) {
+        foreach ($links as $link) {
             $meta = array_filter([
                 $link['relevance'] !== '' ? sprintf(__('Relevance: %s', 'rankwoven-seo'), $link['relevance']) : '',
                 $link['reason']
@@ -3820,6 +4845,60 @@ final class RankWoven_SEO_Plugin
             echo '</li>';
         }
         echo '</ul>';
+    }
+
+    private function get_internal_link_candidate_links_from_metadata(array $suggestion): array
+    {
+        $metadata = $suggestion['metadata'] ?? [];
+        if (is_string($metadata)) {
+            $decoded_metadata = json_decode($metadata, true);
+            $metadata = is_array($decoded_metadata) ? $decoded_metadata : [];
+        }
+
+        if (!is_array($metadata)) {
+            return [];
+        }
+
+        $target_url = esc_url_raw((string) ($metadata['targetUrl'] ?? ''));
+        $anchor_text = sanitize_text_field((string) ($metadata['anchorText'] ?? $metadata['targetTitle'] ?? ''));
+        if ($target_url === '' || $anchor_text === '') {
+            return [];
+        }
+
+        return [[
+            'targetCmsId' => sanitize_text_field((string) ($metadata['targetCmsId'] ?? '')),
+            'targetTitle' => sanitize_text_field((string) ($metadata['targetTitle'] ?? '')),
+            'targetUrl' => $target_url,
+            'anchorText' => $anchor_text,
+            'relevance' => sanitize_text_field((string) ($metadata['relevance'] ?? '')),
+            'reason' => sanitize_text_field((string) ($metadata['reason'] ?? ''))
+        ]];
+    }
+
+    private function get_readable_content_excerpt(string $value, int $max_length = 220): string
+    {
+        $text = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, get_bloginfo('charset') ?: 'UTF-8');
+        $text = preg_replace('/<script\b[^>]*>.*?<\/script>/is', ' ', $text) ?? $text;
+        $text = preg_replace('/<style\b[^>]*>.*?<\/style>/is', ' ', $text) ?? $text;
+        $text = preg_replace('/\[(\/?)[a-zA-Z0-9_-]+(?:\s+[^\]]*)?\]/', ' ', $text) ?? $text;
+        $text = strip_shortcodes($text);
+        $text = wp_strip_all_tags($text, true);
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        if ($text === '') {
+            return __('No readable content preview.', 'rankwoven-seo');
+        }
+
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            return mb_strlen($text) > $max_length
+                ? mb_substr($text, 0, $max_length) . '...'
+                : $text;
+        }
+
+        return strlen($text) > $max_length
+            ? substr($text, 0, $max_length) . '...'
+            : $text;
     }
 
     private function sync_wordpress_credentials_to_saas(
@@ -3933,6 +5012,8 @@ final class RankWoven_SEO_Plugin
             'google_credentials_not_configured' => __('Google credentials are not configured on the SaaS service.', 'rankwoven-seo'),
             'sitemap_submit_failed' => __('Sitemap submission failed. Please check the SaaS API and Google credentials.', 'rankwoven-seo'),
             'seo_audit_failed' => __('SEO Analysis failed. Please sync content, then check the SaaS API service.', 'rankwoven-seo'),
+            'internal_links_rescan_failed' => __('Internal link rescan failed. Please check the SaaS API service and run sync again.', 'rankwoven-seo'),
+            'audit_issue_apply_failed' => __('Audit issue could not be applied automatically. Please edit the content manually.', 'rankwoven-seo'),
             'suggestions_missing_selection' => __('Please select at least one suggestion first.', 'rankwoven-seo'),
             'suggestions_action_failed' => __('Suggestion action failed. Please check the SaaS API service and Site Token.', 'rankwoven-seo')
         ];
@@ -3963,6 +5044,10 @@ final class RankWoven_SEO_Plugin
             'sitemap_generated' => ['updated', __('Sitemap.xml generated successfully.', 'rankwoven-seo')],
             'sitemap_submitted' => ['updated', __('Sitemap.xml submitted to Google Search Console.', 'rankwoven-seo')],
             'seo_audit_completed' => ['updated', __('SEO Analysis completed.', 'rankwoven-seo')],
+            'internal_links_rescan_completed' => ['updated', __('Internal links rescanned. Deleted content was removed from candidates and new suggestions were generated.', 'rankwoven-seo')],
+            'internal_links_rescan_failed' => ['error', __('Internal link rescan failed. Please check the SaaS API service and Site Token.', 'rankwoven-seo')],
+            'audit_issue_applied' => ['updated', __('SEO Analysis issue suggestion applied to WordPress content.', 'rankwoven-seo')],
+            'audit_issue_apply_failed' => ['error', __('This SEO Analysis issue could not be applied automatically. Please edit the content manually.', 'rankwoven-seo')],
             'suggestions_approved' => ['updated', __('Selected suggestions approved.', 'rankwoven-seo')],
             'suggestions_applied' => ['updated', __('Selected suggestions approved and queued for WordPress writeback.', 'rankwoven-seo')],
             'image_attribute_settings_saved' => ['updated', __('Image attribute settings saved.', 'rankwoven-seo')],

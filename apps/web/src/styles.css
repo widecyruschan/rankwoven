@@ -1542,6 +1542,44 @@ a:visited {
   gap: 18px;
 }
 
+.site-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+}
+
+.site-action-buttons .ant-btn-link {
+  padding-inline: 4px;
+  height: auto;
+}
+
+.site-detail-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.site-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.site-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-delete-confirm span {
+  color: var(--color-ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.site-delete-confirm p {
+  margin: 8px 0 0;
+}
+
 .site-onboarding-strip {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);

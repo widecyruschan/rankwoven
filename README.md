@@ -2357,3 +2357,491 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
   - 本地 Vite server `curl -I http://127.0.0.1:5183/app` 已輸出 `X-Robots-Tag: noindex, nofollow, noarchive`。
   - 本地 Vite server `curl -I http://127.0.0.1:5183/pricing` 未輸出 `X-Robots-Tag`，公開頁不受影響。
 - 下一步行動清單：提交並推送 `main`，等待 Production Deploy 完成後重新檢查 `https://rankwoven.com/app` 與 `https://rankwoven.com/admin` header。
+
+### 2026-08-11（星期二）— 拆分 WordPress 圖片屬性獨立設定
+
+- 會話的主要目的：按參考截圖調整 WordPress 插件 `Image Attribute Settings`，讓 Alt Tag、Title、Caption、Description 和 Filename 每個屬性都能分開設定。
+- 完成的主要任務：
+  1. 將圖片屬性設定由舊的 flat checkbox 升級為 `attributes.alt_text/title/caption/description/filename` 五組獨立規則。
+  2. 每組規則支援獨立 `Enabled`、格式模板、Strip Punctuation、Casing 和 Words to Strip。
+  3. 新增設定頁 tab UI，並加入 token button，可插入 `{{image_title}}`、`{{filename}}`、`{{separator}}`、`{{site_title}}`、`{{attachment_id}}`。
+  4. 更新圖片屬性生成流程，標題、Alt Text、Caption、Description 各自按自己的規則產生。
+  5. 新增新上傳圖片 Filename 清理流程；出於安全考量，Bulk Updater 不重命名既有實體檔案。
+  6. 保留舊版 `set_title`、`set_alt_text`、`remove_hyphen` 等設定的兼容映射，避免已安裝站點升級後丟失行為。
+- 關鍵決策和解決方案：只對新上傳檔名做清理，不在批量更新中改檔案路徑，降低破壞既有媒體 URL、CDN 快取或文章圖片引用的風險。
+- 使用的技術棧：WordPress PHP、WordPress Admin UI、原生 JavaScript、WordPress Docker / WP-CLI。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/admin.css`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 已同步插件主檔與 `admin.css` 到本地 WordPress 測試站。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - WP-CLI smoke 驗證五個獨立 panel 與 format input 均已輸出。
+  - WP-CLI smoke 驗證五組規則可各自生成不同結果，且 Filename 清理輸出 `blue-chair-new.jpg`。
+  - `curl -I http://localhost:8088/wp-content/plugins/rankwoven-seo/assets/admin.css` 返回 `200 OK`。
+- 下一步行動清單：在瀏覽器手動打開本地 WordPress `RankWoven SEO -> 圖片屬性`，確認 tab 切換、token 插入和保存體驗；確認後再由使用者授權提交與部署。
+
+### 2026-08-11（星期二）— 流量分析預設選中第一個站點
+
+- 會話的主要目的：讓 SaaS `流量分析` 頁載入後不再停留在「全部站點」，而是預設選中第一個已連接站點。
+- 完成的主要任務：
+  1. 更新 `apps/web/src/views/AnalyticsView.vue` 的站點載入流程。
+  2. 當目前選中的站點不存在或尚未選擇，且站點列表不為空時，自動選中第一個站點。
+  3. 保留用戶手動切換回「全部站點」或其他站點的能力。
+- 關鍵決策和解決方案：只調整初始化選擇邏輯，不移除「全部站點」選項，避免影響需要跨站匯總查看的場景。
+- 使用的技術棧：Vue 3、TypeScript、Ant Design Vue。
+- 新增或修改文件：
+  - 修改：`apps/web/src/views/AnalyticsView.vue`、`README.md`
+- 驗證結果：
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過，Vite 只有既有大型 chunk 警告。
+- 下一步行動清單：在瀏覽器打開 `/app/analytics`，確認下拉框默認顯示第一個站點，刷新按鈕讀取該站點 GA4 數據。
+
+### 2026-08-11（星期二）— 搜尋外觀模板欄位加入點擊插入標籤
+
+- 會話的主要目的：按參考截圖優化 WordPress 插件 `搜尋外觀` 頁，讓客戶不用手動輸入 `{{title}}` 等 placeholder 代碼。
+- 完成的主要任務：
+  1. 在每個內容類型的 `SEO Title Template`、`Meta Description Template` 和 `Meta Keywords Template` 欄位上方加入可點擊 token button。
+  2. 支援一鍵插入 `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}` 和 `{{post_type_label}}`。
+  3. 插入時保留目前游標位置，並觸發 `input` / `change` 事件，方便後續表單互動擴展。
+  4. 將原本上方的手動 placeholder 列表改為操作說明，降低非技術客戶的理解成本。
+- 關鍵決策和解決方案：復用圖片屬性頁既有 token button 視覺樣式，只新增 `data-rankwoven-content-meta-settings` 作用域內的輕量原生 JavaScript，避免影響其他設定頁。
+- 使用的技術棧：WordPress PHP、WordPress Admin UI、原生 JavaScript、CSS、Docker WordPress。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/admin.css`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 已同步插件主檔與 `admin.css` 到本地 WordPress 測試站。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 容器內 PHP Reflection smoke check 顯示 `content_token_buttons=85`、`content_meta_inputs=13`、`content_script=yes`。
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過，Vite 只有既有大型 chunk 警告。
+  - `git diff --check` 通過。
+- 下一步行動清單：在瀏覽器打開本地 WordPress `RankWoven SEO -> 搜尋外觀`，手動點擊各欄位標籤確認會插入到游標位置；確認後再由使用者授權提交與推送。
+
+### 2026-08-11（星期二）— SEO 分析問題列表按內容種類分組
+
+- 會話的主要目的：按使用者截圖優化 WordPress 插件 `SEO 分析` 頁，避免文章、商品、Portfolio、圖片和媒體問題全部混在同一張長表中。
+- 完成的主要任務：
+  1. 將最新 SEO 審計問題按內容種類分組顯示，並在表格中新增「種類」欄位。
+  2. `article` 類審計問題會用本地 `targetCmsId` 查 WordPress `post_type`，細分為文章、頁面、商品、Portfolio 或其他自訂文章類型。
+  3. `media` 類審計問題會用附件 MIME type 判斷，圖片顯示為「圖片」，其他附件顯示為「媒體」。
+  4. 新增分類摘要 chip、分組標題和種類 badge，方便管理員快速瀏覽問題分佈。
+- 關鍵決策和解決方案：不改 SaaS API 與資料庫 schema，直接復用 API 已返回的 `targetType` / `targetCmsId`，在插件端用 WordPress 本地資料補足細分類，降低部署風險。
+- 使用的技術棧：WordPress PHP、WordPress Admin UI、CSS、Docker WordPress、原生 WordPress post type / attachment API。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/admin.css`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 已同步插件主檔與 `admin.css` 到本地 WordPress 測試站。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 容器內 Reflection smoke check 顯示分類結果：`文章,頁面,商品,Portfolio,圖片,媒體`。
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過，Vite 只有既有大型 chunk 警告。
+  - `git diff --check` 通過。
+- 下一步行動清單：在瀏覽器打開本地 WordPress `RankWoven SEO -> SEO 分析`，確認最新審計問題會按內容種類分組；確認後再由使用者授權提交與推送。
+
+### 2026-08-11（星期二）— SEO 分析問題行加入修改與套用操作
+
+- 會話的主要目的：按使用者反饋調整 WordPress 插件 `SEO 分析` 問題列表，分組後不再重複顯示「種類」欄，並為每行提供修改與套用操作。
+- 完成的主要任務：
+  1. 移除分組表格中的「種類」欄，保留上方分類摘要與每組標題。
+  2. 每行新增 `操作` 欄，提供 `修改` 按鈕連到 WordPress 對應文章、頁面、商品、Portfolio 或媒體編輯頁。
+  3. 為可安全自動寫入的欄位提供 `套用` 按鈕：文章 Title、文章 Meta Description、媒體 Title、Caption、Description 和 Alt Text。
+  4. H1、內部連結、既有媒體檔名等需要人工檢查或有結構風險的問題，保留 `套用` 停用狀態並提示手動修改。
+  5. 新增本地 `admin-post` 套用入口，套用時再次驗證管理員權限、目標內容權限和欄位白名單。
+- 關鍵決策和解決方案：直接套用只處理明確、低風險欄位；不自動改正文 H1、內部連結和既有檔名，避免破壞 WPBakery 結構、既有媒體 URL 或文章正文。
+- 使用的技術棧：WordPress PHP、WordPress Admin UI、CSS、Docker WordPress、Reflection smoke test。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/admin.css`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 已同步插件主檔與 `admin.css` 到本地 WordPress 測試站。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 容器內 smoke check 建立並清理臨時文章和附件，確認文章 Title、Meta Description、圖片 Alt Text 可由套用方法寫入。
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/web` 通過，Vite 只有既有大型 chunk 警告。
+  - `git diff --check` 通過。
+- 下一步行動清單：在瀏覽器打開本地 WordPress `RankWoven SEO -> SEO 分析`，確認每行有 `修改` / `套用` 操作；對非安全欄位確認 `套用` 保持停用。
+
+### 2026-08-11（星期二）— 後台列表與表單寬度自適應
+
+- 會話的主要目的：讓 RankWoven WordPress 插件後台所有列表、表單與設定卡按內容區寬度自適應，避免桌面頁面右側留下大片空白。
+- 完成的主要任務：
+  1. 移除 `.rankwoven-admin-wrap` 的固定 `max-width`，讓後台主容器可填滿可用內容區。
+  2. 讓 `widefat` 表格、`form-table`、設定卡片與輸入框全面採用 `width: 100%` 與 `max-width: none`。
+  3. 將長文字、`code` 標籤與表格儲存格改為可換行，避免小螢幕或長內容撐破版面。
+  4. 調整內容型設定區與勾選格版面，讓欄位在不同螢幕寬度下自然伸縮。
+- 關鍵決策和解決方案：不再使用固定 1180px 版心，而改由 WordPress 後台本身控制外層寬度，插件只負責在內容區內完整鋪滿，保留響應式行為。
+- 使用的技術棧：WordPress CSS、WordPress Admin UI、PHP、Docker WordPress。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/assets/admin.css`、`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 已同步插件主檔與 `admin.css` 到本地 WordPress 測試站。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - `git diff --check` 通過。
+- 下一步行動清單：在瀏覽器打開本地 WordPress 後台，確認 hero、摘要卡、問題列表與所有表單已撐滿內容區，右側不再保留大面積空白。
+
+### 2026-08-11（星期二）— 建議列表顯示過濾 shortcode 與代碼片段
+
+- 會話的主要目的：修正 WordPress 插件建議列表中直接顯示 WPBakery shortcode、HTML 和 CSS 片段的問題，讓內容欄只展示可讀摘要或目標連結。
+- 完成的主要任務：
+  1. 新增顯示用摘要清理 helper，會移除 `[vc_row]`、`[vc_column]`、`[vc_column_text]` 等 shortcode、HTML tag、`style/script` 內容與多餘空白。
+  2. `get_suggestion_summary_text()` 的 fallback 改用可讀摘要，不再直接輸出 raw `suggestedValue`。
+  3. `render_internal_link_candidate_list()` 在 JSON links 缺失時優先使用 suggestion metadata 中的 `targetUrl`、`anchorText`、`relevance` 和 `reason` 生成可讀連結。
+  4. 保留 raw `currentValue` / `suggestedValue` 作為套用資料，不在資料層刪除 shortcode，避免破壞 WPBakery 頁面結構。
+- 關鍵決策和解決方案：只清理後台顯示層，不改實際寫回內容；內部連結套用仍沿用既有安全策略，只在內容尾部追加連結區塊。
+- 使用的技術棧：WordPress PHP、WordPress shortcode / HTML 清理、Docker WordPress、Reflection smoke test。
+- 新增或修改文件：
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`
+- 驗證結果：
+  - `docker run --rm -v "/Volumes/Extreme SSD/gitCode/AIEO":/workspace wordpress:6.7.2-php8.2-apache php -l /workspace/plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 已同步插件主檔到本地 WordPress 測試站。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 容器內 smoke check 確認 `[vc_row]` / `vc_custom` / HTML tag 會從摘要移除，metadata 目標連結正常顯示。
+  - `git diff --check` 通過。
+- 下一步行動清單：在瀏覽器打開本地 WordPress `RankWoven SEO -> Link Assistant`，確認列表不再顯示 WPBakery shortcode 或 CSS 片段。
+
+### 2026-08-11（星期二）— 內部連結加入重新掃描與已刪內容清理
+
+- 會話的主要目的：為 WordPress 插件 `Link Assistant` 增加重新掃描功能，讓文章、頁面、商品或 Portfolio 被刪除後，SaaS 內部連結建議不再指向已不存在內容。
+- 完成的主要任務：
+  1. WordPress 插件新增 `重新掃描內部連結` 按鈕與 `admin-post` handler，強制建立 full sync 任務，不使用 `updatedAfter`。
+  2. 重新掃描完成後立即呼叫 SaaS `POST /api/v1/site-connections/:siteId/audits`，重新產生 SEO 分析與內部連結建議。
+  3. API full sync 最後批次完成時，InMemory repository 會按本輪出現的 CMS ID 移除 stale 文章和媒體；PostgreSQL repository 會移除任務建立前未被重新同步的 stale 文章和媒體。
+  4. PostgreSQL cleanup 會清走與 stale 內容相關的未套用 `optimization_suggestions`，但保留 `applied` 記錄，避免破壞已審核歷史。
+  5. suggestions API 回傳前會按目前同步內容過濾來源、媒體與內鏈 metadata / JSON 目標，防止舊版本殘留建議在插件後台顯示。
+  6. 更新 WordPress 插件 README 和 TESTING 文件，補充重新掃描使用說明與刪除內容後的測試清單。
+- 關鍵決策和解決方案：用 SaaS 任務建立時間作為 full sync 清理邊界，避免 WordPress 與 API 伺服器時間偏差誤刪本輪新同步資料；重新掃描只清理 SaaS 同步庫與未套用建議，不自動刪除已寫入 WordPress 正文的連結，降低破壞 WPBakery 或人工內容調整的風險。
+- 使用的技術棧：Fastify、TypeScript、Zod、PostgreSQL、Vitest、WordPress PHP、WordPress Admin UI、Docker WordPress。
+- 新增或修改文件：
+  - 修改：`apps/api/src/siteConnections.ts`
+  - 修改：`apps/api/src/seoOptimization.ts`
+  - 修改：`apps/api/tests/siteConnections.test.ts`
+  - 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+  - 修改：`plugins/wordpress/rankwoven-seo/assets/admin.css`
+  - 修改：`plugins/wordpress/README.md`
+  - 修改：`plugins/wordpress/TESTING.md`
+  - 修改：`README.md`
+- 驗證結果：
+  - `npm run test -w @aieo/api -- siteConnections.test.ts` 通過，26 tests。
+  - `npm run test` 通過，50 tests passed、3 tests skipped。
+  - `npm run build -w @aieo/api` 通過。
+  - `npm run lint` 通過。
+  - `git diff --check` 通過。
+  - 本機未安裝 `php` CLI，改用 WordPress PHP Docker 鏡像執行 `php -l`，插件主檔語法通過。
+  - 已同步插件主檔與 `admin.css` 到本地 WordPress 測試站 `/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/`。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+- 下一步行動清單：在瀏覽器打開本地 WordPress `RankWoven SEO -> Link Assistant`，刪除或移到回收桶一篇測試內容後點擊 `重新掃描內部連結`，確認舊內容不再出現在來源或建議連結中；確認無問題後再由使用者授權提交與推送。
+
+### 2026-08-11（星期二）— 插件後台頁面自動全屏與 CSS 快取修正
+
+- 會話的主要目的：修正 WordPress 插件後台頁面只佔左側、右側留下大面積空白的問題。
+- 完成的主要任務：調整插件主容器寬度，使其按瀏覽器視窗與 WordPress 後台側欄狀態自動鋪滿可用內容區；側欄收合、平板及手機版使用不同寬度規則，避免小螢幕橫向溢出；插件版本升至 `0.1.2`。
+- 關鍵決策和解決方案：保留只改 CSS 的全寬方案，並讓 `admin.css` 使用 `0.1.2.<filemtime>` 作為 WordPress asset version，避免正式站因 `0.1.1` 舊快取而繼續顯示舊版寬度。
+- 使用的技術棧：WordPress Admin CSS、響應式 CSS、Docker WordPress。
+- 新增或修改文件：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`、`plugins/wordpress/rankwoven-seo/assets/admin.css`、`plugins/wordpress/README.md`、`plugins/wordpress/TESTING.md`、`README.md`。
+- 驗證結果：
+  - 已同步 `admin.css` 到本地 WordPress 測試站 `/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/admin.css`。
+  - 已同步 `rankwoven-seo.php` 到本地 WordPress 測試站，插件版本為 `0.1.2`。
+  - `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+  - 源碼與測試站 `admin.css` 文件一致性檢查通過。
+  - `git diff --check` 通過。
+- 下一步行動清單：在本地 WordPress 後台刷新 RankWoven SEO 頁面，確認桌面寬螢幕右側不再留下大面積空白，並檢查側欄收合及手機版顯示。
+
+### 2026-08-11（星期二）— 重新掃描清理已刪頁面的舊內部連結建議
+
+- 會話的主要目的：修復正式 WordPress 站刪除 `https://cyruschan.com/?page_id=1536` 後，`Link Assistant` 重新掃描仍顯示舊 `applied` 內部連結建議的問題。
+- 完成的主要任務：
+  1. SaaS API 回傳 suggestions 前，除了檢查來源/目標 CMS ID，也檢查 internal-link metadata 或 JSON 中的 `targetUrl` 是否仍存在於目前同步內容。
+  2. PostgreSQL full sync cleanup 對 stale 來源/目標的 `internal_link` 建議不再保留 `applied` 歷史，並兼容舊版只保存 URL、沒有 `targetCmsId` 的記錄。
+  3. 一般 title、Meta Description、媒體欄位等已套用歷史仍按原策略保留。
+  4. 新增回歸測試，覆蓋「已套用、只有 targetUrl、目標頁刪除、重新 full rescan」流程。
+- 關鍵決策和解決方案：只清理失效的 `internal_link` 建議，不自動改寫或刪除 WordPress 正文，避免破壞 WPBakery 結構；要讓正式站生效，必須部署 `apps/api` 的 SaaS 後端，單獨上傳插件不會更新 SaaS suggestion data。
+- 使用的技術棧：Fastify、TypeScript、Vitest、PostgreSQL、WordPress REST sync。
+- 新增或修改文件：
+  - 修改：`apps/api/src/seoOptimization.ts`
+  - 修改：`apps/api/src/siteConnections.ts`
+  - 修改：`apps/api/tests/siteConnections.test.ts`
+  - 修改：`plugins/wordpress/README.md`
+  - 修改：`plugins/wordpress/TESTING.md`
+  - 修改：`README.md`
+- 驗證結果：
+  - API 回歸測試 `27/27` 通過。
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/api` 通過。
+  - PostgreSQL 測試因本機未設定 `TEST_DATABASE_URL` / `DATABASE_URL` 而跳過，未洩露任何資料庫憑據。
+  - `https://cyruschan.com/?page_id=1536` 公開入口返回 `404`，確認目標頁已刪除；正式站插件 `admin.css` 已是全寬版。
+- 下一步行動清單：提交並部署 SaaS API 到 `https://api.rankwoven.com`，部署後在正式 WordPress 插件點擊一次 `重新掃描內部連結`，再確認 `page_id=1536` 不再出現在 Link Assistant。
+
+### 2026-08-11（星期二）— SaaS API 修正推送與生產部署完成
+
+- 會話的主要目的：將刪除內容後清理舊內部連結建議的 SaaS API 修正推送到 GitHub，並部署到正式環境。
+- 完成的主要任務：
+  1. 提交 `3076c1a`，只包含 `apps/api/src/seoOptimization.ts`、`apps/api/src/siteConnections.ts` 和 `apps/api/tests/siteConnections.test.ts`。
+  2. 推送到 `origin/main`，觸發 GitHub Actions `Production Deploy`。
+  3. Verify job 通過 lint、test、build 和 security audit；Deploy job 成功更新 Hostinger VPS。
+  4. 正式 API `https://api.rankwoven.com/health` 返回成功，確認 SaaS 服務已恢復正常。
+- 關鍵決策和解決方案：因工作區仍有其他插件、Web 和未追蹤文件，發布時只暫存本次 SaaS API 文件；README 本身保留本地未提交狀態，避免將無關修改或密碼 / `.env` 相關內容推送到 GitHub。
+- 使用的技術棧：Git、GitHub Actions、Fastify、TypeScript、Vitest、Hostinger VPS、Docker Compose。
+- 新增或修改文件：已提交 API 三個文件；本地追加 `README.md` 會話記錄，未提交其他工作區修改。
+- 驗證結果：
+  - 完整測試通過：API `37 passed / 3 skipped`、Web `2 passed`、Worker `4 passed`、AI providers `7 passed`、CMS adapters `1 passed`。
+  - `npm run lint`、`npm run build`、`npm run security:audit` 均通過。
+  - GitHub Actions Run `31520024730` 的 Verify 與 Deploy 均為 `success`。
+  - `curl -fsS https://api.rankwoven.com/health` 返回 `{"success":true,"message":"API 服務正常","data":{"service":"api"}}`。
+- 下一步行動清單：在正式 WordPress 插件 `Link Assistant` 點擊一次 `重新掃描內部連結`，確認已刪除的 `page_id=1536` 不再出現。
+
+### 2026-08-12（星期三）— 淨化內部連結建議列表回傳並完成 SaaS 部署
+
+- 會話的主要目的：繼續修復正式 WordPress `Link Assistant` 仍顯示已刪除頁 `https://cyruschan.com/?page_id=1536` 的剩餘問題。
+- 完成的主要任務：
+  1. 在 SaaS API `GET /api/v1/site-connections/:siteId/suggestions` 回傳前，對 `internal_link` 建議做列表專用 projection。
+  2. `internal_link` 列表回傳不再輸出整段 `currentValue` 原始 HTML，避免舊正文中的已刪 URL 污染 UI 或插件列表。
+  3. 舊版 HTML `suggestedValue` 會按 metadata 轉為 `rankwoven-internal-links-v1` JSON links，保留目標文章、錨文本、相關性與原因等顯示/套用所需資料。
+  4. 新增回歸測試，覆蓋有效建議的 `currentValue` / 舊版 HTML `suggestedValue` 內仍殘留 `page_id=1536` 的正式站情境。
+  5. 提交 `d7fff39` 並推送到 `origin/main`，觸發 GitHub Actions 生產部署。
+- 關鍵決策和解決方案：只淨化 suggestions 列表 API 的 response，不改資料庫原始建議、不自動改寫 WordPress 正文，讓 Worker 套用仍按原始資料在內容尾部追加相關閱讀區塊，降低破壞 WPBakery Page Builder 結構的風險。
+- 使用的技術棧：Fastify、TypeScript、Vitest、GitHub Actions、Hostinger VPS、Docker Compose。
+- 新增或修改文件：
+  - 修改並已提交：`apps/api/src/seoOptimization.ts`
+  - 修改並已提交：`apps/api/tests/siteConnections.test.ts`
+  - 修改但未提交：`README.md` 會話記錄
+- 驗證結果：
+  - `npm run test -w @aieo/api -- siteConnections.test.ts` 通過，29 tests。
+  - `npm run lint` 通過。
+  - `npm run build -w @aieo/api` 通過。
+  - `npm run test` 通過，API `39 passed / 3 skipped`、Web `2 passed`、Worker `4 passed`、AI providers `7 passed`、CMS adapters `1 passed`。
+  - `npm run build` 通過，僅保留既有前端 large chunk warning。
+  - `npm run security:audit` 通過，`found 0 vulnerabilities`。
+  - GitHub Actions Run `31557096197` 成功完成，部署版本 `d7fff397e8b4fd4f5f43b54698aedb44b7f6d9d6`。
+  - 正式 API `https://api.rankwoven.com/health` 返回 `success:true`。
+  - 正式 cyruschan suggestions 驗證：`suggestionsCount=69`、`internalLinkSuggestionsCount=23`、`containsDeletedPage1536=false`、`invalidSuggestionCount=0`。
+- 下一步行動清單：在正式 WordPress 插件 `Link Assistant` 重新整理頁面，確認列表不再看到 `page_id=1536`；若文章正文中人工或歷史已寫入該舊連結，需要由 WordPress 內容端單獨清理，SaaS 本次不自動修改正文。
+
+### 2026-08-12（星期三）— 流量分析預設選擇第一個網站
+
+- 會話的主要目的：修正 SaaS 後台 `流量分析` 頁面預設停在「全部站點」的體驗，讓頁面載入後自動選擇第一個網站。
+- 完成的主要任務：
+  1. 確認 `apps/web/src/views/AnalyticsView.vue` 已在載入站點後檢查目前選擇是否有效。
+  2. 若沒有有效選擇且存在站點，`selectedSiteId` 會自動設為站點列表第一個網站 ID。
+  3. 補充 Web smoke test，鎖定「先載入站點、選第一個站點、再載入 analytics」的初始化順序。
+- 關鍵決策和解決方案：保留「全部站點」作為可手動選項，但初始化預設選第一個網站，符合圖片中下拉列表的使用需求且不移除原有彙總分析能力。
+- 使用的技術棧：Vue 3、TypeScript、Vite、Vitest、Ant Design Vue。
+- 新增或修改文件：
+  - 修改：`apps/web/src/views/AnalyticsView.vue`
+  - 修改：`apps/web/tests/smoke.test.ts`
+  - 修改：`README.md`
+- 驗證結果：
+  - `npm run test -w @aieo/web` 通過，3 tests。
+  - `npm run build -w @aieo/web` 通過，僅保留既有前端 large chunk warning。
+- 下一步行動清單：如需同步到正式 SaaS，需提交並推送包含 `AnalyticsView.vue` 與測試的 Web 更新，觸發 GitHub Actions 部署。
+
+---
+
+## 会话总结（2026-08-13）— 修复站点管理删除按钮无反应
+
+### 会话主要目的
+
+SaaS 站点管理列表中「删除」按钮点击无反应。
+
+### 完成的主要任务
+
+1. 定位问题：表格内 `a-popconfirm` 在操作列中反馈不明显/易失效（长警告文案 + 表格布局）。
+2. 改为 `Modal.confirm` 居中确认删除，点击即有明确弹窗。
+3. 删除成功/失败增加 `message` 提示；删除中显示 loading。
+4. 加固 `deleteSiteConnection` API：正确处理 DELETE 无 `data` 字段的响应。
+
+### 关键决策和解决方案
+
+- 破坏性操作改用 Modal 确认，比表格内 Popconfirm 更可靠、可读性更好。
+- 删除按钮使用 `@click.stop`，避免事件被表格行吞掉。
+
+### 使用的技术栈
+
+Vue 3、Ant Design Vue `Modal.confirm` / `message`、Fastify DELETE `/api/v1/site-connections/:siteId`
+
+### 修改了哪些文件
+
+- `apps/web/src/views/SitesView.vue`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/styles.css`
+- `README.md`
+
+
+---
+
+## 会话总结（2026-08-13）— 完善站点「查看详情」
+
+### 会话主要目的
+
+站点管理「查看详情」弹窗信息过少、无实用价值。
+
+### 完成的主要任务
+
+1. 详情弹窗改为展示完整连接信息：网址、Site ID、状态、CMS/插件版本、Token 预览、同步统计、WP 凭证状态、GA 资源等。
+2. 打开详情时拉取 `GET /api/v1/site-connections/:siteId` 最新数据。
+3. 增加快捷入口：文章同步、网站检测、文章审计；支持复制 Site ID。
+
+### 关键决策和解决方案
+
+- 详情不只展示时间戳，而是运维真正需要的连接与同步元数据。
+- 保留列表内快捷「网站检测」，详情内再提供跨模块跳转。
+
+### 使用的技术栈
+
+Vue 3、Ant Design Vue Modal/Spin/Tag、Vue I18n
+
+### 修改了哪些文件
+
+- `apps/web/src/views/SitesView.vue`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/styles.css`
+- `README.md`
+
+---
+
+## 會話總結（2026-08-13）— 精簡站點詳情並修復刪除確認
+
+### 會話主要目的
+
+修復 SaaS 站點管理頁「查看詳情」顯示過多無意義/偏技術資訊，以及「刪除」按鈕點擊後沒有明確反應的問題。
+
+### 完成的主要任務
+
+1. 將站點詳情彈窗改為客戶可理解的摘要，只保留站點網址、平台、狀態、最近同步、同步文章/媒體數、WordPress 寫回狀態和流量分析狀態。
+2. 移除詳情中的 Site ID、Token Preview、CMS/插件版本、WordPress 管理員等內部或敏感偏技術欄位。
+3. 將刪除流程改為頁面內受控確認彈窗，點擊刪除後立即顯示確認視窗，確認後顯示 loading，成功刷新列表，失敗保留錯誤提示。
+4. 加固 `deleteSiteConnection()`，兼容 DELETE 成功但回應 body 為空或缺少 `data` 的情況。
+5. 補充 Web smoke test，鎖定詳情內容不再回退到技術欄位，並確認刪除使用受控確認流程。
+
+### 關鍵決策和解決方案
+
+- 刪除是破壞性操作，保留確認流程，但不再依賴表格內 `Popconfirm`；改用已註冊的 `Modal` 組件，避免點擊後沒有可見反饋。
+- 詳情頁面面向客戶而不是運維排錯，因此只保留狀態與下一步操作所需資訊。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Ant Design Vue Modal/Spin/Tag、Vue I18n、Vitest、Vite。
+
+### 新增或修改文件
+
+- `apps/web/src/views/SitesView.vue`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/styles.css`
+- `apps/web/src/main.ts`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過，4 tests。
+- `npm run build -w @aieo/web` 通過，僅保留既有 Vite large chunk warning。
+
+### 下一步行動清單
+
+1. 在本地或正式 SaaS 後台 `/app/sites` 手動點擊「查看詳情」與「刪除」，確認互動符合預期。
+2. 若需要上線，請再授權提交並推送到 GitHub 觸發部署。
+
+---
+
+## 會話總結（2026-08-13）— 修復插件編輯頁 SEO 保存錯誤提示
+
+### 會話主要目的
+
+排查 WordPress 插件文章/頁面編輯頁 RankWoven SEO 面板保存或生成時顯示 `SEO request failed` 的問題。
+
+### 完成的主要任務
+
+1. 加固 `editor-seo.js` 的 `admin-ajax.php` 回應解析，能識別 `-1` nonce 失效、`0` action 未載入、空回應和 PHP/HTML 非 JSON 回應。
+2. 將 PHP AJAX nonce 驗證改為標準 JSON error，避免 WordPress 預設輸出 `-1` 被前端誤解為泛化錯誤。
+3. 增加 AJAX `mode` 白名單，避免未知操作進入保存流程。
+4. SEO AJAX 保存時只在 Slug 真正改變時才執行 `wp_update_post`，普通保存 Keywords、Description 和 SEO meta 不再無端觸發整篇文章保存鉤子。
+5. 為 `editor-seo.js` 使用 `filemtime` 版本號，避免正式站或瀏覽器沿用舊 JS 快取。
+6. 已同步 `rankwoven-seo.php` 和 `assets/editor-seo.js` 到本地 WordPress 測試站插件目錄。
+
+### 關鍵決策和解決方案
+
+- 先修最小可落地的 AJAX 錯誤鏈路，不改 SaaS API 協議。
+- `Save SEO Fields` 保持本地保存，不依賴 SaaS；`Generate & Apply SEO` 遠端不可用時仍沿用既有本地 SEO 建議 fallback。
+
+### 使用的技術棧
+
+WordPress PHP Plugin、WordPress Admin Ajax、原生 JavaScript、Node.js 靜態檢查。
+
+### 新增或修改文件
+
+- 修改：`plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+- 修改：`plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- 修改：`plugins/wordpress/README.md`
+- 修改：`README.md`
+
+### 驗證結果
+
+- `node --check plugins/wordpress/rankwoven-seo/assets/editor-seo.js` 通過。
+- Node harness 驗證 `-1`、`0`、HTML 非 JSON 回應不再顯示泛化 `SEO request failed`。
+- `git diff --check -- plugins/wordpress/rankwoven-seo/assets/editor-seo.js plugins/wordpress/rankwoven-seo/rankwoven-seo.php` 通過。
+- 已確認 AIEO 插件文件與本地 WordPress 測試站插件文件一致。
+- 未能執行 `php -l` 或 WordPress 後台實測，原因是本機 PHP CLI 不存在且 Docker Desktop API 目前無法連接。
+
+### 下一步行動清單
+
+1. 開啟 Docker Desktop 後執行 `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`。
+2. 在 `http://localhost:8088` 編輯頁手動點擊 `Save SEO Fields` 和 `Generate & Apply SEO`，確認保存成功或顯示具體錯誤原因。
+3. 若正式站仍報錯，按新錯誤文字對應檢查 nonce、插件是否啟用、登入狀態或 PHP error log。
+
+---
+
+## 會話總結（2026-08-13）— 圖片屬性改為 AI 上下文生成
+
+### 會話主要目的
+
+修正 WordPress 插件圖片屬性生成邏輯：`Image Attribute Settings` 表單只控制最終輸出格式，實際 Title、Alt Text、Caption、Description 和 Filename 必須由 AI 根據圖片所在內容上下文生成，不能把原文件名清洗或重新組合後當成內容。
+
+### 完成的主要任務
+
+1. 新增 Site Token 保護的 `POST /api/v1/site-connections/:siteId/image-attributes` SaaS API，接收圖片、關聯內容與所在段落上下文，一次生成五個圖片屬性。
+2. AI prompt 改為優先使用文章、頁面、商品或 Portfolio 的標題、Slug、摘要、正文及圖片所在段落，並明確禁止由原文件名或文件名式預設標題推導語義內容。
+3. AI 不可用時改用內容上下文本地 fallback；測試鎖定回傳值不得包含原文件名 `IMG_9382`。
+4. WordPress 插件上傳與批量更新改為先向 SaaS 取得上下文生成值，再套用各屬性的格式、標點、大小寫和移除詞規則。
+5. Alt Text、Caption、Description 和 Filename 的預設模板分別改為 `{{alt_text}}`、`{{caption}}`、`{{description}}` 和 `{{filename}}`，不再全部套用 `{{image_title}}`。
+6. 設定頁 tag 文案改為 `AI Image Title`、`AI Alt Text`、`AI Caption`、`AI Description`、`AI Filename`，清楚說明 tag 不是從原文件名取值。
+7. `Filename` 未啟用或上傳請求沒有文章/頁面上下文時不呼叫 AI、不改名，避免無上下文生成或不必要 API 成本。
+
+### 關鍵決策和解決方案
+
+- 格式設定只負責最後組合，不負責生成語義內容；五個欄位保留獨立 AI 值，避免 Caption / Description 被圖片標題覆蓋。
+- SaaS AI 是主要生成來源；服務不可用時使用內容標題、摘要、正文和 Slug fallback，而不是退回原文件名清洗。
+- 新上傳檔名只有在 WordPress 能提供關聯內容 ID 時才自動生成；無上下文時保持原檔名，比假裝完成 AI 生成更可靠。
+
+### 使用的技術棧
+
+Fastify、TypeScript、Zod、Vitest、WordPress PHP Plugin、WordPress HTTP API。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/api -- siteConnections.test.ts` 通過，31 tests。
+- `npm run build -w @aieo/api` 通過。
+- `npx eslint apps/api/src/seoOptimization.ts apps/api/tests/siteConnections.test.ts --max-warnings 0` 通過。
+- `node --check plugins/wordpress/rankwoven-seo/assets/editor-seo.js` 通過。
+- `git diff --check` 通過。
+- 尚未執行 PHP `php -l` 與 WordPress 後台手動測試，因 Docker Desktop daemon 未運行且本機沒有可用 PHP CLI。
+
+### 下一步行動清單
+
+1. 啟動 Docker Desktop 後執行插件 PHP 語法檢查。
+2. 在 `http://localhost:8088` 用一張文件名無語義的圖片測試 `Test Bulk Updater`，確認五個欄位均來自所在內容上下文。
+3. 確認本地結果後，再提交並推送 SaaS API 與 WordPress 插件更新。

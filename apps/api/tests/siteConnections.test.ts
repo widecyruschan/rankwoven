@@ -1596,6 +1596,109 @@ describe('site connection routes', () => {
     );
   });
 
+  it('generates image attributes from AI using attachment context instead of filename cleanup', async () => {
+    const textProvider = createStubTextProvider((request) => {
+      expect(request.title).toContain('Return JSON only with keys title, caption, description, altText, fileName');
+      expect(request.title).toContain('Do not derive semantic content by cleaning or rearranging the original filename');
+      expect(request.html).toContain('Article title: 高端網頁設計案例');
+      expect(request.html).toContain('Image placement context: 這張作品圖展示品牌首頁的視覺層級');
+      expect(request.html).toContain('Current image title: (empty)');
+      expect(request.html).toContain('Image file extension: jpg');
+      expect(request.html).not.toContain('Current filename: IMG_9382-final-copy.jpg');
+
+      return JSON.stringify({
+        title: '品牌首頁視覺層級設計圖',
+        caption: '展示高端網頁設計案例中的首頁版面與品牌視覺重點。',
+        description: '這張圖片說明首頁設計如何透過視覺層級、內容區塊與行動引導提升品牌網站轉換。',
+        altText: '高端網頁設計案例首頁視覺層級展示',
+        fileName: 'premium-web-design-homepage-layout.jpg'
+      });
+    });
+    const { server, body } = await createWordPressConnection(
+      {
+        wordpressAdminUsername: 'site-admin',
+        wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+      },
+      {
+        textGenerationProvider: textProvider
+      }
+    );
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/image-attributes`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        attachmentId: '9382',
+        imageUrl: 'http://localhost:8088/wp-content/uploads/IMG_9382-final-copy.jpg',
+        fileName: 'IMG_9382-final-copy.jpg',
+        currentTitle: 'IMG 9382 final copy',
+        attachedToCmsId: '1536',
+        attachedToTitle: '高端網頁設計案例',
+        contextPostType: 'page',
+        contextTitle: '高端網頁設計案例',
+        contextSlug: 'premium-web-design-case-study',
+        contextExcerpt: '介紹企業網站改版如何提升品牌信任與查詢轉換。',
+        contextHtml: '<p>這張作品圖展示品牌首頁的視覺層級、服務入口與 CTA 區塊。</p><figure><img class="wp-image-9382" src="http://localhost:8088/wp-content/uploads/IMG_9382-final-copy.jpg" /></figure>',
+        locale: 'zh-Hant'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        source: 'ai',
+        imageTitle: '品牌首頁視覺層級設計圖',
+        title: '品牌首頁視覺層級設計圖',
+        altText: '高端網頁設計案例首頁視覺層級展示',
+        caption: '展示高端網頁設計案例中的首頁版面與品牌視覺重點。',
+        description: '這張圖片說明首頁設計如何透過視覺層級、內容區塊與行動引導提升品牌網站轉換。',
+        fileName: 'premium-web-design-homepage-layout.jpg'
+      }
+    });
+  });
+
+  it('falls back to content context without reusing the original image filename', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/image-attributes`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        attachmentId: '9382',
+        fileName: 'IMG_9382-final-copy.jpg',
+        currentTitle: 'IMG 9382 final copy',
+        attachedToCmsId: '1536',
+        contextPostType: 'page',
+        contextTitle: '高端網頁設計案例',
+        contextSlug: 'premium-web-design-case-study',
+        contextExcerpt: '介紹企業網站改版如何提升品牌信任與查詢轉換。',
+        contextHtml: '<p>這張作品圖展示品牌首頁的視覺層級、服務入口與 CTA 區塊。</p>',
+        locale: 'zh-Hant'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        source: 'local_context',
+        imageTitle: '高端網頁設計案例',
+        title: '高端網頁設計案例',
+        altText: '高端網頁設計案例',
+        caption: '介紹企業網站改版如何提升品牌信任與查詢轉換。',
+        description: '這張作品圖展示品牌首頁的視覺層級、服務入口與 CTA 區塊。',
+        fileName: 'premium-web-design-case-study-1.jpg'
+      }
+    });
+    expect(JSON.stringify(response.json())).not.toContain('IMG_9382');
+  });
+
   it('allows WordPress site tokens to read and apply internal link suggestions', async () => {
     const { server, body } = await createWordPressConnection({
       wordpressAdminUsername: 'site-admin',

@@ -93,6 +93,48 @@
     return Number(getFieldValue(seoScoreInput).replace('/100', '')) || 0;
   }
 
+  function getResponseErrorMessage(response, body, rawText) {
+    const trimmedText = String(rawText || '').trim();
+
+    if (trimmedText === '-1' || body === -1) {
+      return 'Security check failed. Please refresh the editor page and try again.';
+    }
+
+    if (trimmedText === '0' || body === 0) {
+      return 'WordPress AJAX action is unavailable. Please refresh the page and confirm RankWoven SEO is active.';
+    }
+
+    if (body && typeof body === 'object') {
+      return body?.data?.message || body?.message || `SEO request failed (${response.status}).`;
+    }
+
+    if (trimmedText === '') {
+      return `WordPress returned an empty response (${response.status}).`;
+    }
+
+    return `WordPress returned a non-JSON response (${response.status}). Please check the PHP error log.`;
+  }
+
+  async function parseSeoResponse(response) {
+    const rawText = await response.text();
+    const trimmedText = rawText.trim();
+    let body = null;
+
+    if (trimmedText !== '') {
+      try {
+        body = JSON.parse(trimmedText);
+      } catch {
+        throw new Error(getResponseErrorMessage(response, null, rawText));
+      }
+    }
+
+    if (!response.ok || !body || typeof body !== 'object' || !body.success) {
+      throw new Error(getResponseErrorMessage(response, body, rawText));
+    }
+
+    return body;
+  }
+
   function syncEditorMetaState() {
     if (!(window.wp && wp.data && typeof wp.data.dispatch === 'function')) {
       return;
@@ -204,10 +246,7 @@
         body: payload.toString()
       });
 
-      const body = await response.json();
-      if (!response.ok || !body.success) {
-        throw new Error(body?.data?.message || body?.message || 'SEO request failed');
-      }
+      const body = await parseSeoResponse(response);
 
       applyEditorState(body.data);
       setStatus(mode === 'generate' ? 'SEO suggestions generated and applied.' : 'SEO fields saved.');

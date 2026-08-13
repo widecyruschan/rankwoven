@@ -88,6 +88,7 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 - [ ] 後台 `Plugins` 頁能看到並啟用 `RankWoven SEO`，無 PHP 警告或白屏。
 - [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
 - [ ] `RankWoven SEO` 後台頁載入卡片化 UI：頂部 hero、連線狀態 pill、圓角 tabs、儀表板指標卡與快速操作按鈕樣式正常。
+- [ ] 插件主容器會自動鋪滿 WordPress 後台可用寬度；各頁列表、表單和設定卡會按內容區自適應，桌面寬螢幕不應留下大面積空白，小螢幕長文字可換行不撐破版面。
 - [ ] `Settings -> RankWoven SEO` 舊入口仍可打開並導向一般設定頁。
 - [ ] API Base URL 填 `http://host.docker.internal:3011` 並保存成功。
 - [ ] 保存 GA4 Property ID、WordPress 管理員用戶名和 Application Password 後重新打開頁面，值正確回顯（Application Password 不得明文回顯）。
@@ -105,11 +106,18 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 - [ ] 再次同步時使用 `updatedAfter` 增量模式（首次為全量）。
 - [ ] RankWoven Web `/app/tasks` 任務列表能看到對應任務且狀態為完成。
 - [ ] RankWoven Web 的同步內容中能保留 `post`、`page`、`portfolio`、`product` 類型，未啟用的 post type 不應造成同步失敗。
+- [ ] `RankWoven SEO -> SEO 分析` 載入最新審計後，問題列表按內容種類分組顯示文章、頁面、商品、Portfolio、圖片和其他媒體；分組表格不再顯示「種類」欄。
+- [ ] `SEO 分析` 每行問題都顯示 `修改` 按鈕；文章標題 / Meta Description、媒體 Title / Caption / Description / Alt Text 這類安全欄位顯示可用 `套用` 按鈕，其餘需人工檢查的問題保持 `套用` 停用。
 
 ### 4. 圖片屬性與批量更新
 
-- [ ] `Image Attributes` 頁籤保存規則後，上傳新圖片自動生成標題、Alt Text、Caption、Description（例如 `a-lot_like_love.jpg -> A Lot Like Love`）。
-- [ ] `Bulk Updater` 先執行 `Test Bulk Updater` 只更新一張並檢查結果。
+- [ ] `Image Attributes` 頁籤顯示 `Alt Tag`、`Title`、`Caption`、`Description`、`Filename` 五個獨立 tab。
+- [ ] 每個 tab 都可分開保存 `Enabled`、`Format`、`Strip Punctuation`、`Casing` 和 `Words to Strip`。
+- [ ] 每個 tab 的 tag 按鈕顯示 `AI Image Title`、`AI Alt Text`、`AI Caption`、`AI Description` 和 `AI Filename`，表單只控制最後格式，不表示從原文件名取值。
+- [ ] 上傳新圖片或批量更新時，標題、Alt Text、Caption、Description 先由 SaaS AI 根據圖片所在文章、頁面、商品或 Portfolio 上下文生成；AI 不可用時使用內容上下文本地 fallback，不應只把原文件名清洗後套模板。
+- [ ] `Alt Tag` 預設使用 `{{alt_text}}`，`Caption` 預設使用 `{{caption}}`，`Description` 預設使用 `{{description}}`，`Filename` 預設使用 `{{filename}}`；各欄位可設成不同結果。
+- [ ] `Filename` tab 只影響新上傳檔案名稱清理，不會由 `Bulk Updater` 重命名既有媒體檔案。
+- [ ] `Bulk Updater` 先執行 `Test Bulk Updater` 只更新一張並檢查各欄位結果。
 - [ ] `Run Bulk Updater` 每批最多 50 張，`Reset Counter` 後可從頭再跑。
 
 ### 5. 只讀診斷頁
@@ -147,7 +155,10 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 在插件端完成文章、頁面、Portfolio、商品同步後，進入 RankWoven Web `/app/links`。
 - [ ] 選擇目標站點並點擊「生成內部連結建議」，列表顯示來源內容、目標內容、錨文本、相關性和推薦理由。
 - [ ] 勾選多條待處理建議後批量套用，來源內容應插入 `data-rankwoven-internal-link="true"` 的延伸閱讀段落。
+- [ ] WordPress 插件 `Link Assistant` / 建議摘要不應顯示 `[vc_row]`、`[vc_column]`、HTML tag 或 CSS 片段，列表只顯示可讀文字摘要或目標連結。
 - [ ] 已經連到同一目標 URL 的來源內容不應重複產生相同內部連結建議。
+- [ ] 刪除或移到回收桶一篇文章、頁面、商品或 Portfolio 後，在 `RankWoven SEO -> Link Assistant` 點擊 `重新掃描內部連結`，舊內容不再出現在來源內容或建議連結中，列表會改為推薦其他仍存在的內容。
+- [ ] 若舊 internal-link 建議已是 `applied`，且只保存 `targetUrl` 沒有 `targetCmsId`，刪除目標頁後重新掃描也不應再顯示該 URL；其他已套用 SEO 欄位歷史仍保留。
 - [ ] 寫回後在 WordPress 編輯頁或前台檢查連結指向正確目標，並確認可通過既有快照流程回滾。
 
 ### 9. 編輯頁 SEO 面板
@@ -167,6 +178,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 ### 10. 內容類型 Meta 預設
 
 - [ ] `RankWoven SEO -> 搜尋外觀` 頁籤可正常顯示 `post`、`page`、`portfolio` 和 `product` 的模板區塊。
+- [ ] 每個內容類型的 `SEO Title Template`、`Meta Description Template` 和 `Meta Keywords Template` 欄位都顯示 placeholder 標籤按鈕，點擊後會插入到目前游標位置。
 - [ ] 為不同內容類型保存 `SEO Title Template`、`Meta Description Template` 和 `Meta Keywords Template` 後重新打開頁面，值可正確回顯。
 - [ ] `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}`、`{{post_type_label}}` 占位符可在前台單篇頁面正常展開。
 - [ ] 單篇文章若已保存自己的 SEO title / Meta description / Keywords，仍優先使用單篇值，不會被內容類型預設蓋掉。

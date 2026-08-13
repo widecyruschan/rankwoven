@@ -50,4 +50,18 @@ describe('web smoke test', () => {
       analyticsViewSource.indexOf('await loadAnalytics();')
     );
   });
+
+  it('keeps site details customer-facing and delete confirmation controlled', async () => {
+    const sitesViewSource = await readFile(resolve('src/views/SitesView.vue'), 'utf8');
+
+    expect(sitesViewSource).toContain('sitePendingDelete');
+    expect(sitesViewSource).toContain('@click.stop="openDeleteConfirm(record.raw)"');
+    expect(sitesViewSource).toContain('@ok="confirmDeleteSite"');
+    expect(sitesViewSource).toContain(':confirm-loading="isDeleting"');
+    expect(sitesViewSource).toContain("t('sites.writebackStatus')");
+    expect(sitesViewSource).toContain("t('sites.analyticsStatus')");
+    expect(sitesViewSource).not.toContain("t('sites.siteId')");
+    expect(sitesViewSource).not.toContain("t('sites.tokenPreview')");
+    expect(sitesViewSource).not.toContain("t('sites.wordpressUser')");
+  });
 });

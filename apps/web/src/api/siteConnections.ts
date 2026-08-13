@@ -259,6 +259,13 @@ export async function getSiteConnections() {
   }>('/api/v1/site-connections');
 }
 
+/** GET /api/v1/site-connections/:siteId — fetch a single site connection */
+export async function getSiteConnection(siteId: string) {
+  return requestApi<{
+    site: SiteConnection;
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}`);
+}
+
 export interface SyncTaskListFilters {
   siteId?: string;
   scope?: SyncTaskScope;
@@ -579,7 +586,28 @@ export async function rollbackApplySnapshot(siteId: string, snapshotId: string) 
 
 /** DELETE /api/v1/site-connections/:siteId — remove a site and all cascaded data */
 export async function deleteSiteConnection(siteId: string): Promise<void> {
-  await requestApi<void>(`/api/v1/site-connections/${encodeURIComponent(siteId)}`, { method: 'DELETE' });
+  const token = getStoredToken();
+  const response = await fetch(`${apiBaseUrl}/api/v1/site-connections/${encodeURIComponent(siteId)}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+
+  let body: ApiResponse<unknown> | null = null;
+  try {
+    body = (await response.json()) as ApiResponse<unknown>;
+  } catch {
+    // DELETE may return 204/empty body; a successful HTTP status is enough here.
+  }
+
+  if (response.ok && (!body || body.success)) {
+    return;
+  }
+
+  if (!response.ok || body?.success === false) {
+    throw new Error(body?.message || 'Failed to delete site');
+  }
 }
 
 // ── Site Audit ──────────────────────────────────────────────────────────────
