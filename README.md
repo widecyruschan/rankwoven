@@ -3195,3 +3195,20 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vite、marked、DOMPurify、WebP、
 1. 正式 SEO 上線前，將 Blog 公開層遷移至 SSG/SSR，輸出可被搜尋引擎直接讀取的文章 HTML。
 2. 補人工審校的其他 locale 翻譯、`hreflang` 和文章作者／更新日期 metadata。
 3. 如需上線，再按部署規則完成乾淨 commit、push 到 `main`，並由 GitHub Actions 部署後做公開入口 smoke check。
+
+## 會話補充（2026-08-24）— Blog 生產部署驗證
+
+### 完成的主要任務
+
+1. 提交 `1038903` 並推送 `main`，GitHub Actions `32655639517` 完成 Verify 與 Hostinger 部署。
+2. 部署後發現 `/blog/` 因 Nginx 將實體 `blog/` 資料夾當目錄處理而回傳 403；以 `try_files $uri /index.html` 修復 SPA fallback，提交 `f43598a`。
+3. 第二次 GitHub Actions `32655966157` 通過完整 Verify 和 Deploy，VPS `.deploy-version` 已更新至 `f43598a`。
+
+### 驗證結果
+
+- `https://api.rankwoven.com/health` 返回成功。
+- `https://rankwoven.com/`、`/blog/`、`/blog/seo-introduction` 均返回 HTTP 200。
+- production 瀏覽器確認 Blog 列表渲染 12 張封面、文章正文和目錄正常，封面 WebP 可載入且桌面無橫向溢出。
+- VPS `api`、`web`、`worker`、`postgres`、`redis` 容器均 healthy／running。
+- GitHub Actions 仍提示 actions/checkout 與 actions/setup-node 使用 Node.js 20 的棄用警告；不影響本次部署，但應後續升級 action 版本。
+- production console 的統計腳本 warning／連線錯誤來自既有 Google Analytics／Ahrefs 外部腳本，非 Blog 應用資源失敗。
