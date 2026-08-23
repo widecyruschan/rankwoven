@@ -3265,3 +3265,10 @@ Vue 3、Vue Router、Vue I18n、TypeScript、Vite、Schema.org JSON-LD、Open Gr
 1. 正式 SEO 上線前，把公開首頁和 Blog 文章遷移到 SSG/SSR，讓正文 H1 和內文直接出現在初始 HTML。
 2. 在 Google Search Console 提交 sitemap，持續觀察主題詞「SEO 教學」「網站 SEO」「AI 優化教程」的曝光和點擊。
 3. 後續為 86 篇文章補作者、更新日期和人工審校的多語言版本，避免只有 runtime metadata 而缺少可索引的語言頁。
+
+### 部署結果補記
+
+- GitHub Actions run `32657772521` 已成功部署 `4c5bbd3`；後續修正的 run `32658183424` Verify 成功，但 Deploy 在 SSH connectivity probe 因 runner 暫時連不上 VPS 而失敗。
+- 已使用既有 `scripts/deploy-production.sh` 以乾淨 Git ref `4b766d2` 完成手動部署；部署前配置與資料庫備份均已建立，migration 全部為已套用狀態。
+- 生產驗證通過：`https://api.rankwoven.com/health`、受保護 API smoke check、Web／API／Worker／Postgres／Redis 容器狀態；`/login`、`/register`、`/app` 回傳 `X-Robots-Tag: noindex, nofollow, noarchive`，首頁維持可索引。
+- 生產入口仍是 Vite SPA；Blog 與公開子頁的完整初始 HTML metadata／正文 SSR/SSG 仍列在後續行動清單，不宣稱已完成。
