@@ -22,6 +22,10 @@ export default [
       globals: {
         window: 'readonly',
         document: 'readonly',
+        Element: 'readonly',
+        HTMLElement: 'readonly',
+        HTMLScriptElement: 'readonly',
+        MouseEvent: 'readonly',
         console: 'readonly',
         alert: 'readonly',
         setInterval: 'readonly',

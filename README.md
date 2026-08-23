@@ -3002,6 +3002,93 @@ Fastify、TypeScript、Vitest、WordPress PHP Plugin、WordPress JavaScript、Wo
 2. 執行 `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`。
 3. 在文章編輯頁貼入中文或 `%e7...` slug，點擊 `Generate & Apply SEO` 和 `Save SEO Fields`，確認保存後只剩 `a-z_`。
 
+---
+
+## 會話總結（2026-08-17）— WordPress robots.txt 手動設定
+
+### 會話主要目的
+
+在 WordPress 插件後台增加 `robots.txt` 手動修改功能，讓管理員可直接在 RankWoven SEO 插件中控制動態 robots 規則。
+
+### 完成的主要任務
+
+1. 在 `網站地圖` 頁籤新增 `robots.txt` 手動設定區塊，包含前台連結、textarea、保存按鈕和實體 `robots.txt` 文件提醒。
+2. 新增 `rankwoven_robots_txt_content` option，保存管理員輸入的 robots 規則；清空保存時刪除 option 並恢復 WordPress 預設輸出。
+3. 調整 `robots_txt` filter：有手動內容時優先輸出手動內容，否則保留 WordPress / 其他插件原本輸出，最後自動補上 RankWoven `Sitemap:` 行。
+4. 將 RankWoven robots filter 優先級提高到 `20000`，避免被 AIOSEO 等較晚執行的 SEO 插件覆蓋。
+5. 更新 WordPress 插件 README 與測試清單，記錄手動 robots、AIOSEO 兼容和實體文件注意事項。
+
+### 關鍵決策和解決方案
+
+- 不直接寫入主機根目錄實體 `robots.txt`，只通過 WordPress 動態 `robots_txt` filter 輸出，降低文件權限與部署風險。
+- 保留 WordPress `blog_public` 隱私設定優先級；若站點設為不允許搜尋引擎索引，插件不會用手動內容覆蓋該保護。
+- 自訂內容與預設內容都會自動補 RankWoven `sitemap.xml`，避免客戶手動編輯後漏掉 Sitemap。
+
+### 使用的技術棧
+
+WordPress PHP Plugin、WordPress Admin、WordPress `robots_txt` filter、Docker Desktop 本地測試站。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php` 通過。
+- 已將插件主文件同步到本地 WordPress 測試站 `/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`。
+- robots smoke 通過：臨時保存 `Disallow: /rankwoven-test/` 後，`http://localhost:8088/robots.txt` 同時包含手動 robots 指令與 RankWoven `/sitemap.xml` 行。
+- 清空 robots option 後再次 smoke 通過：`http://localhost:8088/robots.txt` 恢復 WordPress / AIOSEO 原輸出，且 RankWoven `/sitemap.xml` 行仍存在。
+- 已還原測試站 `rankwoven_robots_txt_content` option，沒有保留測試用 `Disallow: /rankwoven-test/`。
+- `git diff --check -- plugins/wordpress/rankwoven-seo/rankwoven-seo.php plugins/wordpress/README.md plugins/wordpress/TESTING.md` 通過。
+
+### 下一步行動清單
+
+1. 在本地 WordPress 後台打開 `RankWoven SEO -> 網站地圖`，視覺確認 textarea、保存提示和打開 `robots.txt` 連結正常。
+2. 上傳插件到真實 WordPress 站後，保存正式 robots 規則，再打開 `https://cyruschan.com/robots.txt` 確認前台輸出。
+3. 如真實站根目錄存在實體 `robots.txt`，需同步檢查主機文件是否優先於 WordPress 動態輸出。
+
+---
+
+## 會話總結（2026-08-20）— 前端頁底加入 Plausible 統計碼
+
+### 會話主要目的
+
+在 RankWoven SaaS 前端頁面底部加入 Plausible 統計 script，讓正式站 `rankwoven.com` 可接入 `plausible.shipsolo.io` 的訪問分析。
+
+### 完成的主要任務
+
+1. 在 `apps/web/index.html` 的 `body` 底部、Vite 入口 script 後加入 Plausible 追蹤碼。
+2. 保持 script 原始屬性：`defer`、`data-domain="rankwoven.com"` 和 `src="https://plausible.shipsolo.io/js/script.js"`。
+3. 執行前端 build，確認 Vite 打包後 `dist/index.html` 仍包含該追蹤碼。
+
+### 關鍵決策和解決方案
+
+- 追蹤碼放在 `apps/web/index.html`，而不是 Vue 單頁組件內，確保前台、客戶後台和管理後台共用同一份 HTML 時都能載入。
+- 按使用者要求放在頁底，即 `</body>` 前，避免改動現有 Vue layout。
+
+### 使用的技術棧
+
+Vue 3、Vite、TypeScript、Plausible Analytics。
+
+### 新增或修改文件
+
+- `apps/web/index.html`
+- `README.md`
+
+### 驗證結果
+
+- `npm run build -w @aieo/web` 通過；僅保留既有 vendor chunk 偏大提示。
+- 已確認 `apps/web/dist/index.html` 包含 `https://plausible.shipsolo.io/js/script.js`。
+- `git diff --check -- apps/web/index.html` 通過。
+
+### 下一步行動清單
+
+1. 如需正式部署，提交並推送到 `main` 觸發 SaaS 前端部署。
+2. 部署後打開 `https://rankwoven.com` 查看頁面原始碼，確認 Plausible script 已出現在 body 底部。
+
 ## 會話總結（2026-08-23）— 按 PRD 補齊前端公開頁面與多語言契約
 
 ### 會話主要目的
@@ -3053,3 +3140,58 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vite、Ant Design Vue、CSS respons
 1. 使用瀏覽器或 Playwright 逐一打開公開路由，確認 mobile viewport 無橫向滾動、語言切換及 head meta 正常。
 2. 正式 SEO 上線前把營銷與內容層遷移到 SSG/SSR，確保首頁初始 HTML 含真實 H1 與主要文案。
 3. 替換法律文件骨架、接入聯絡 API，並補 FAQPage、BlogPosting、Organization schema 與 hreflang。
+
+## 會話總結（2026-08-24）— 整理 SEO 文章到 Blog
+
+### 會話主要目的
+
+將 `/Volumes/Extreme SSD/gitCode/終身學習文件/SEO/` 的 SEO 教材整理為 RankWoven `/blog` 文章，並補齊中英文等多語言 UI。
+
+### 完成的主要任務
+
+1. 匯入 86 篇 SEO 文章、86 張封面圖和 16 個主題分類；正文整理為 Markdown，封面壓縮為 WebP。
+2. 新增 `/blog` 列表與 `/blog/:slug` 詳情頁，支援搜尋、分類、分頁、文章目錄、前後篇和不存在 slug 的錯誤狀態。
+3. 使用 `marked` + `DOMPurify` 安全渲染 Markdown，處理外部連結、表格、code block 和文章內部連結。
+4. 使用 Vue I18n 補齊 Blog 導覽、篩選器、metadata、錯誤狀態和 footer 的英文與繁體中文；正文維持繁體中文，避免未審校的假翻譯。
+5. 生成包含公開頁面與 86 篇文章 URL 的 `sitemap.xml`，並更新前端頁面規格文件。
+
+### 關鍵決策和解決方案
+
+- 文章資料採索引 manifest + `import.meta.glob` 按需載入，避免首次載入 86 篇長文。
+- Markdown 先由 `marked` 轉 HTML，再由 `DOMPurify` 消毒；文章內容不是 Vue 模板，因此不允許直接信任原始 HTML。
+- 維持現有 Vite SPA 架構；正式 SEO 上線前仍需把公開 Blog 遷移到 SSG/SSR，讓正文和 H1 出現在初始 HTML。
+- 瀏覽器 QA 發現文章正文曾因 loading 狀態尚未卸載而未掛載，已在 `BlogArticleView.vue` 延後 DOM 注入；手機另修正 Grid item `min-width` 造成的 8px 橫向溢出。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Vue Router、Vue I18n、Vite、marked、DOMPurify、WebP、Lucide Vue Next。
+
+### 新增或修改文件
+
+- `scripts/import-seo-blog.mjs`
+- `scripts/generate-sitemap.mjs`
+- `apps/web/src/blog/articles.ts`
+- `apps/web/src/content/seo/articles.json` 與 86 篇 Markdown
+- `apps/web/src/views/BlogView.vue`
+- `apps/web/src/views/BlogArticleView.vue`
+- `apps/web/public/blog/seo/images/*.webp`
+- `apps/web/public/sitemap.xml`
+- `apps/web/src/i18n/publicPages.ts`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/styles.css`
+- `apps/web/tests/smoke.test.ts`
+- `docs/frontend-page-spec.md`
+
+### 驗證結果
+
+- 86 篇文章、86 個唯一 slug、86 張 WebP；162 個文章內部連結均無失效路徑。
+- 瀏覽器 QA 通過桌面、平板、375px 手機列表與詳情頁；含表格／code block 的文章在手機無橫向溢出。
+- 搜尋、主題分類、分頁、英文 UI 切換、中文正文、內部文章連結和 404 slug 均已驗證。
+- `npm run lint`、`npm run test -w @aieo/web`、`npm run build -w @aieo/web` 通過；既有第三方 large chunk warning 仍存在。
+- 本次未 commit、未 push、未部署；未加入任何 `.env`、密碼、Token 或 API Key。
+
+### 下一步行動清單
+
+1. 正式 SEO 上線前，將 Blog 公開層遷移至 SSG/SSR，輸出可被搜尋引擎直接讀取的文章 HTML。
+2. 補人工審校的其他 locale 翻譯、`hreflang` 和文章作者／更新日期 metadata。
+3. 如需上線，再按部署規則完成乾淨 commit、push 到 `main`，並由 GitHub Actions 部署後做公開入口 smoke check。

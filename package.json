@@ -17,7 +17,9 @@
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "db:migrate": "bash scripts/migrate-database.sh",
-    "db:backup": "bash scripts/backup-database.sh"
+    "db:backup": "bash scripts/backup-database.sh",
+    "blog:import": "node scripts/import-seo-blog.mjs && node scripts/generate-sitemap.mjs",
+    "sitemap:generate": "node scripts/generate-sitemap.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,862 @@
+[
+  {
+    "chapter": 1,
+    "slug": "seo-introduction",
+    "title": "SEO 是什麼？搜尋引擎優化完整入門",
+    "excerpt": "SEO，全名 Search Engine Optimization，中文稱為「搜尋引擎優化」。簡單來說，SEO 是一套透過調整網站架構、內容品質與技術設定，讓網站在 Google、Bing 等搜尋引擎的「自然搜尋結果」中取得更高排名的策…",
+    "categoryId": "fundamentals",
+    "readingMinutes": 4,
+    "contentFile": "seo-chapter-01.md",
+    "coverImage": "/blog/seo/images/seo-chapter-01.webp"
+  },
+  {
+    "chapter": 2,
+    "slug": "seo-business-value",
+    "title": "SEO 的四大好處與商業價值",
+    "excerpt": "這是 SEO 最核心的商業價值。不同於廣告投放 —— 廣告費一停、流量就歸零 —— SEO 建立起來的排名能夠持續為網站帶來源源不絕的自然流量。",
+    "categoryId": "fundamentals",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-02.md",
+    "coverImage": "/blog/seo/images/seo-chapter-02.webp"
+  },
+  {
+    "chapter": 3,
+    "slug": "seo-vs-sem",
+    "title": "SEO 與 SEM 的差異與互補策略",
+    "excerpt": "雖然第一章已經簡單提過，但在深入比較之前，先確保定義完全清晰：",
+    "categoryId": "fundamentals",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-03.md",
+    "coverImage": "/blog/seo/images/seo-chapter-03.webp"
+  },
+  {
+    "chapter": 4,
+    "slug": "seo-glossary",
+    "title": "SEO 基礎名詞辭典——從零開始建立你的 SEO 詞彙庫",
+    "excerpt": "SEO 領域充滿大量專業術語與縮寫。對初學者來說，光是看到「SERP」、「CTR」、「DA」、「Sitemap」這些詞就足以讓人卻步。本章整理 50+ 個 SEO 核心名詞，按類別分組，讓你快速建立完整的詞彙地圖。",
+    "categoryId": "fundamentals",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-04.md",
+    "coverImage": "/blog/seo/images/seo-chapter-04.webp"
+  },
+  {
+    "chapter": 5,
+    "slug": "how-search-engines-work",
+    "title": "搜尋引擎如何運作？——檢索、索引、排名三階段完整解析",
+    "excerpt": "Crawl → Index → Rank。爬蟲抓網頁 → 存入索引資料庫 → 演算法排順序。SEO 就係圍繞呢三個環節做優化。",
+    "categoryId": "search-engines",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-05.md",
+    "coverImage": "/blog/seo/images/seo-chapter-05.webp"
+  },
+  {
+    "chapter": 6,
+    "slug": "serp-guide",
+    "title": "SERP 搜尋結果頁全解析——你以為的「十個藍色連結」早就不存在了",
+    "excerpt": "如果你還停留在「搜尋結果就是一排藍色的網站連結」的印象，那你對 SEO 的認知大概落後了十年。2026 年的 Google SERP（Search Engine Results Page）是一個資訊密度極高、功能極其豐富的動態頁面。",
+    "categoryId": "search-engines",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-06.md",
+    "coverImage": "/blog/seo/images/seo-chapter-06.webp"
+  },
+  {
+    "chapter": 7,
+    "slug": "search-intent",
+    "title": "四大搜尋意圖——搞懂用戶「真正想找什麼」是 SEO 的第一步",
+    "excerpt": "Google 的終極目標不是匹配關鍵字，而是滿足意圖。",
+    "categoryId": "search-engines",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-07.md",
+    "coverImage": "/blog/seo/images/seo-chapter-07.webp"
+  },
+  {
+    "chapter": 8,
+    "slug": "google-algorithm-history",
+    "title": "Google 演算法全景——從 Panda 到 MUM，13 年演算法進化史",
+    "excerpt": "不理解 Google 的過去，你就無法預判它的未來。",
+    "categoryId": "algorithms",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-08.md",
+    "coverImage": "/blog/seo/images/seo-chapter-08.webp"
+  },
+  {
+    "chapter": 9,
+    "slug": "google-core-updates",
+    "title": "Google 核心更新（Core Updates）應對指南——排名暴跌時的生存手冊",
+    "excerpt": "Core Update = Google 重新定義「什麼是好內容」的時刻。",
+    "categoryId": "algorithms",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-09.md",
+    "coverImage": "/blog/seo/images/seo-chapter-09.webp"
+  },
+  {
+    "chapter": 10,
+    "slug": "eeat-guide",
+    "title": "E-E-A-T 內容品質評估機制完整指南",
+    "excerpt": "E-E-A-T 是 Google 用來評估內容品質的核心框架，由四個英文單字的縮寫組成：",
+    "categoryId": "algorithms",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-10.md",
+    "coverImage": "/blog/seo/images/seo-chapter-10.webp"
+  },
+  {
+    "chapter": 11,
+    "slug": "seo-ranking-factors",
+    "title": "SEO 排名五大決定因素",
+    "excerpt": "Google 的排名演算法考慮超過 200 個信號（Signals），但如果要歸納出最核心的決定因素，可以濃縮為五大支柱。這五個因素不僅決定了你的網站能否排上第一頁，更決定了你能否留在第一頁。",
+    "categoryId": "algorithms",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-11.md",
+    "coverImage": "/blog/seo/images/seo-chapter-11.webp"
+  },
+  {
+    "chapter": 12,
+    "slug": "helpful-content",
+    "title": "Helpful Content 實用內容演算法",
+    "excerpt": "Google 的 Helpful Content System（實用內容系統） 是 2022 年 8 月首次推出的一個全站性信號，它的核心目標只有一個：在搜尋結果中優先展示「為人類創作」的內容，而非「為搜尋引擎排名」創作的內容。",
+    "categoryId": "algorithms",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-12.md",
+    "coverImage": "/blog/seo/images/seo-chapter-12.webp"
+  },
+  {
+    "chapter": 13,
+    "slug": "keyword-research",
+    "title": "關鍵字研究完整方法論",
+    "excerpt": "關鍵字研究是整個 SEO 策略的地基。所有後續的內容創作、頁面優化、內部連結布局，都必須建立在正確的關鍵字研究之上。",
+    "categoryId": "on-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-13.md",
+    "coverImage": "/blog/seo/images/seo-chapter-13.webp"
+  },
+  {
+    "chapter": 14,
+    "slug": "long-tail-keywords",
+    "title": "長尾關鍵字挖掘與應用策略",
+    "excerpt": "長尾關鍵字（Long-Tail Keywords） 是指搜尋量較低、通常字數較長、但意圖更精確的關鍵字詞組。",
+    "categoryId": "on-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-14.md",
+    "coverImage": "/blog/seo/images/seo-chapter-14.webp"
+  },
+  {
+    "chapter": 15,
+    "slug": "competitor-keyword-gap",
+    "title": "競品關鍵字分析與缺口策略",
+    "excerpt": "你不需要從零開始猜測哪些關鍵字有用——你的競爭對手已經用他們的排名告訴你了。",
+    "categoryId": "on-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-15.md",
+    "coverImage": "/blog/seo/images/seo-chapter-15.webp"
+  },
+  {
+    "chapter": 16,
+    "slug": "seo-keyword-matrix",
+    "title": "建立 SEO 關鍵字矩陣",
+    "excerpt": "關鍵字矩陣（Keyword Matrix） 是一種將大量關鍵字系統化組織、分類和排定優先級的管理工具。它不是單純的關鍵字列表，而是將關鍵字按照多個維度（搜尋意圖、競爭難度、商業價值、內容類型）進行交叉分析，幫助你做出更精準的 SEO 資…",
+    "categoryId": "on-page",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-16.md",
+    "coverImage": "/blog/seo/images/seo-chapter-16.webp"
+  },
+  {
+    "chapter": 17,
+    "slug": "title-tag-guide",
+    "title": "Title Tag 完整優化指南",
+    "excerpt": "Title Tag（標題標籤） 是 HTML 文件 <head 區域中的一個元素，用來定義網頁的標題。它是搜尋引擎結果頁面（SERP）中最顯眼的元素，通常以藍色、可點擊的大字顯示。",
+    "categoryId": "on-page",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-17.md",
+    "coverImage": "/blog/seo/images/seo-chapter-17.webp"
+  },
+  {
+    "chapter": 18,
+    "slug": "meta-description-guide",
+    "title": "Meta Description 全攻略",
+    "excerpt": "Meta Description（元描述） 是 HTML 文件 <head 區域中的一個標籤，用來提供頁面內容的簡短摘要。它通常顯示在搜尋結果頁面（SERP）的標題下方，以灰色小字呈現。",
+    "categoryId": "on-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-18.md",
+    "coverImage": "/blog/seo/images/seo-chapter-18.webp"
+  },
+  {
+    "chapter": 19,
+    "slug": "heading-tags",
+    "title": "Header 標籤（H1-H6）優化策略",
+    "excerpt": "Header 標籤（H1-H6） 是 HTML 中用來定義標題層級的標記，從最重要的 H1 到最次要的 H6，共六個層級。它們為頁面提供清晰的內容結構，就像一本書的章節標題。",
+    "categoryId": "on-page",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-19.md",
+    "coverImage": "/blog/seo/images/seo-chapter-19.webp"
+  },
+  {
+    "chapter": 20,
+    "slug": "seo-url-structure",
+    "title": "URL 結構優化完整指南",
+    "excerpt": "URL（網址）是使用者和搜尋引擎接觸你網站的第一個技術層面。一個好的 URL 結構不僅幫助 Google 理解頁面主題，更能提升使用者點擊意願和信任度。",
+    "categoryId": "on-page",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-20.md",
+    "coverImage": "/blog/seo/images/seo-chapter-20.webp"
+  },
+  {
+    "chapter": 21,
+    "slug": "image-seo",
+    "title": "圖片 SEO 完整指南",
+    "excerpt": "圖片搜尋佔 Google 總搜尋量約 20-25%，是一個常被忽視的龐大流量來源。更重要的的是，優化圖片不僅能帶來圖片搜尋流量，還能通過以下方式幫助你的網頁排名：",
+    "categoryId": "on-page",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-21.md",
+    "coverImage": "/blog/seo/images/seo-chapter-21.webp"
+  },
+  {
+    "chapter": 22,
+    "slug": "content-structure",
+    "title": "內容結構與格式化",
+    "excerpt": "Google 不只是「閱讀」你的內容——它在嘗試「理解」你的內容。良好的內容結構就像給 Google 一張清晰的地圖，告訴它：哪些是重點、哪些是次要、這些概念之間有什麼關係。",
+    "categoryId": "on-page",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-22.md",
+    "coverImage": "/blog/seo/images/seo-chapter-22.webp"
+  },
+  {
+    "chapter": 23,
+    "slug": "internal-linking",
+    "title": "內部連結 SEO 戰術",
+    "excerpt": "內部連結（Internal Links） 是指從你網站上的一個頁面連結到同網站的另一個頁面。與反向連結（Backlinks）不同，內部連結是你完全可控的排名助力。",
+    "categoryId": "on-page",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-23.md",
+    "coverImage": "/blog/seo/images/seo-chapter-23.webp"
+  },
+  {
+    "chapter": 24,
+    "slug": "schema-markup",
+    "title": "結構化資料（Schema Markup）完整入門",
+    "excerpt": "結構化資料（Structured Data） 是一種標準化的資料格式，用來明確告訴搜尋引擎「這個頁面上的內容是什麼」。它是搜尋引擎的「翻譯官」，將人類閱讀的內容轉換為機器可以精確理解的格式。",
+    "categoryId": "on-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-24.md",
+    "coverImage": "/blog/seo/images/seo-chapter-24.webp"
+  },
+  {
+    "chapter": 25,
+    "slug": "site-speed",
+    "title": "網站速度優化",
+    "excerpt": "Google 自 2010 年起就將網站速度納入排名信號，2018 年更進一步推出「速度更新（Speed Update）」，明確宣布行動版頁面的載入速度直接影響行動搜尋排名。",
+    "categoryId": "technical",
+    "readingMinutes": 4,
+    "contentFile": "seo-chapter-25.md",
+    "coverImage": "/blog/seo/images/seo-chapter-25.webp"
+  },
+  {
+    "chapter": 26,
+    "slug": "core-web-vitals",
+    "title": "Core Web Vitals 完整解析",
+    "excerpt": "Core Web Vitals（核心網頁體驗指標） 是 Google 定義的一組用於衡量網頁使用者體驗的關鍵指標。自 2021 年 6 月起，Core Web Vitals 正式成為 Google 排名信號的一部分。",
+    "categoryId": "technical",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-26.md",
+    "coverImage": "/blog/seo/images/seo-chapter-26.webp"
+  },
+  {
+    "chapter": 27,
+    "slug": "mobile-first-seo",
+    "title": "行動優先索引與 RWD 響應式設計",
+    "excerpt": "行動優先索引（Mobile-First Indexing） 是 Google 自 2018 年起逐步推行的索引策略：Google 主要使用網站的行動版內容進行索引和排名，而非桌面版。",
+    "categoryId": "technical",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-27.md",
+    "coverImage": "/blog/seo/images/seo-chapter-27.webp"
+  },
+  {
+    "chapter": 28,
+    "slug": "xml-sitemap",
+    "title": "Sitemap 製作與提交完整教學",
+    "excerpt": "Sitemap（網站地圖） 是一份列出網站所有重要頁面的檔案，作用是告訴搜尋引擎「我網站上有這些頁面、它們的優先級如何、多久更新一次」。對於大型網站、新網站、或含有大量孤立頁面的網站來說，Sitemap 是確保搜尋引擎能完整索引的關鍵工…",
+    "categoryId": "technical",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-28.md",
+    "coverImage": "/blog/seo/images/seo-chapter-28.webp"
+  },
+  {
+    "chapter": 29,
+    "slug": "robots-meta-robots",
+    "title": "robots.txt 與 Meta Robots 完整教學",
+    "excerpt": "robots.txt 是一個純文字檔案，放在網站的根目錄下，用來告訴搜尋引擎爬蟲：「哪些目錄或頁面你不要爬」。它是爬蟲造訪網站時第一個讀取的檔案，也是控制 crawl budget 的第一道關卡。",
+    "categoryId": "technical",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-29.md",
+    "coverImage": "/blog/seo/images/seo-chapter-29.webp"
+  },
+  {
+    "chapter": 30,
+    "slug": "canonical-duplicate-content",
+    "title": "Canonical 標記與重複內容處理",
+    "excerpt": "Canonical（標準網址標記） 是告訴搜尋引擎「這幾個 URL 雖然不同，但內容本質上是一樣的，請把 SEO 權重集中到這個標準版本」的機制。它是解決重複內容問題最核心、最重要的技術 SEO 工具。",
+    "categoryId": "technical",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-30.md",
+    "coverImage": "/blog/seo/images/seo-chapter-30.webp"
+  },
+  {
+    "chapter": 31,
+    "slug": "ssl-https-seo",
+    "title": "SSL 憑證與 HTTPS 完整指南",
+    "excerpt": "HTTPS（HyperText Transfer Protocol Secure） 是 HTTP 的加密版本，透過 SSL/TLS 憑證 在瀏覽器和伺服器之間建立加密連線。它確保使用者與網站之間傳輸的資料不會被第三方攔截、竄改或偽造。",
+    "categoryId": "technical",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-31.md",
+    "coverImage": "/blog/seo/images/seo-chapter-31.webp"
+  },
+  {
+    "chapter": 32,
+    "slug": "redirects-http-status",
+    "title": "301/302 轉址與 HTTP 狀態碼完整指南",
+    "excerpt": "每當瀏覽器向伺服器發出請求時，伺服器會返回一個三位數的 HTTP 狀態碼 來說明請求的結果。對 SEO 來說，理解這些狀態碼至關重要，因為它們直接影響搜尋引擎如何索引和排名你的頁面。",
+    "categoryId": "technical",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-32.md",
+    "coverImage": "/blog/seo/images/seo-chapter-32.webp"
+  },
+  {
+    "chapter": 33,
+    "slug": "javascript-seo-log-analysis",
+    "title": "JavaScript SEO 與 Log File 分析",
+    "excerpt": "在 SPA（Single Page Application）和前端框架（React、Vue、Angular）日益普及的時代，JavaScript SEO 成為技術 SEO 中最具挑戰性的領域。核心問題很簡單：",
+    "categoryId": "technical",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-33.md",
+    "coverImage": "/blog/seo/images/seo-chapter-33.webp"
+  },
+  {
+    "chapter": 34,
+    "slug": "technical-seo-checklist",
+    "title": "技術 SEO 總覽與檢查清單",
+    "excerpt": "技術 SEO 是 SEO 三大支柱（技術、內容、連結）中最基礎的一環。沒有良好的技術基礎，再好的內容也可能無法被搜尋引擎發現、爬取和索引。",
+    "categoryId": "technical",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-34.md",
+    "coverImage": "/blog/seo/images/seo-chapter-34.webp"
+  },
+  {
+    "chapter": 35,
+    "slug": "content-marketing-seo",
+    "title": "內容行銷與 SEO 的戰略整合",
+    "excerpt": "在 2026 年，內容行銷和 SEO 不再是兩個獨立的部門或策略。它們是同一個硬幣的兩面：",
+    "categoryId": "content",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-35.md",
+    "coverImage": "/blog/seo/images/seo-chapter-35.webp"
+  },
+  {
+    "chapter": 36,
+    "slug": "quality-seo-content",
+    "title": "高品質 SEO 內容的黃金法則",
+    "excerpt": "在 Google 的 Helpful Content 和 E-E-A-T 框架下，高品質 SEO 內容不是「為 SEO 寫的內容」，而是為人類寫、同時讓搜尋引擎能理解的內容。",
+    "categoryId": "content",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-36.md",
+    "coverImage": "/blog/seo/images/seo-chapter-36.webp"
+  },
+  {
+    "chapter": 37,
+    "slug": "seo-writing-framework",
+    "title": "SEO 文章寫作實戰框架",
+    "excerpt": "寫一篇能排名的 SEO 文章不是靈感來了就寫，而是有一套可複製的流程。本章提供一套經過驗證的 五階段寫作框架，涵蓋從關鍵字研究到發布後追蹤的完整流程。",
+    "categoryId": "content",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-37.md",
+    "coverImage": "/blog/seo/images/seo-chapter-37.webp"
+  },
+  {
+    "chapter": 38,
+    "slug": "content-refresh-pruning",
+    "title": "內容更新與 Content Pruning 策略",
+    "excerpt": "許多網站經營者陷入一個迷思：SEO = 不斷產出新內容。但現實是：",
+    "categoryId": "content",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-38.md",
+    "coverImage": "/blog/seo/images/seo-chapter-38.webp"
+  },
+  {
+    "chapter": 39,
+    "slug": "cro-and-seo",
+    "title": "轉換率優化（CRO）與 SEO 的協同效應",
+    "excerpt": "很多人把 SEO 的目標設定為「獲得更多流量」，但流量本身不是終點。真正的目標是轉換——讓訪客完成你希望他們做的行動：",
+    "categoryId": "content",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-39.md",
+    "coverImage": "/blog/seo/images/seo-chapter-39.webp"
+  },
+  {
+    "chapter": 40,
+    "slug": "ten-x-content",
+    "title": "十倍內容（10x Content）創作方法",
+    "excerpt": "10x Content（十倍內容） 是 Rand Fishkin（Moz 創辦人）提出的概念：不是比競爭對手好 10%，而是好 10 倍。",
+    "categoryId": "content",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-40.md",
+    "coverImage": "/blog/seo/images/seo-chapter-40.webp"
+  },
+  {
+    "chapter": 41,
+    "slug": "backlinks",
+    "title": "反向連結（Backlink）完整指南",
+    "excerpt": "反向連結（Backlink） 是其他網站連結到你網站的連結。在 Google 的演算法中，反向連結就像「投票」：每個從其他網站指向你的連結，都是一個對你內容品質的認可。",
+    "categoryId": "off-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-41.md",
+    "coverImage": "/blog/seo/images/seo-chapter-41.webp"
+  },
+  {
+    "chapter": 42,
+    "slug": "white-hat-link-building",
+    "title": "白帽連結建設六大方法",
+    "excerpt": "白帽連結建設（White Hat Link Building） 是透過創造真正的價值來自然地獲取反向連結，而不是透過購買、交換、垃圾留言等違反 Google 指南的方式。",
+    "categoryId": "off-page",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-42.md",
+    "coverImage": "/blog/seo/images/seo-chapter-42.webp"
+  },
+  {
+    "chapter": 43,
+    "slug": "anchor-text",
+    "title": "錨點文字（Anchor Text）策略",
+    "excerpt": "錨點文字（Anchor Text） 是超連結中可點擊的文字部分。它對 SEO 的重要性在於：Google 會將錨點文字視為對目標頁面內容的「描述」。",
+    "categoryId": "off-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-43.md",
+    "coverImage": "/blog/seo/images/seo-chapter-43.webp"
+  },
+  {
+    "chapter": 44,
+    "slug": "pagerank-link-equity",
+    "title": "PageRank 與連結權重傳遞原理",
+    "excerpt": "PageRank 是 Google 創始人 Larry Page 在史丹佛大學開發的演算法，也是 Google 搜尋引擎的原始核心。它的基本邏輯：",
+    "categoryId": "off-page",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-44.md",
+    "coverImage": "/blog/seo/images/seo-chapter-44.webp"
+  },
+  {
+    "chapter": 45,
+    "slug": "toxic-links-disavow",
+    "title": "有害連結辨識與 Disavow 拒絕工具",
+    "excerpt": "有害連結（Toxic Backlinks） 是來自低品質、垃圾或不相關網站的連結，這些連結可能對你網站的 SEO 產生負面影響。",
+    "categoryId": "off-page",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-45.md",
+    "coverImage": "/blog/seo/images/seo-chapter-45.webp"
+  },
+  {
+    "chapter": 46,
+    "slug": "local-seo",
+    "title": "在地 SEO 完整入門",
+    "excerpt": "在地 SEO（Local SEO） 是針對「地理位置相關搜尋」的優化策略。當使用者搜尋帶有地理意圖的關鍵字時，Google 會顯示在地搜尋結果。",
+    "categoryId": "local",
+    "readingMinutes": 5,
+    "contentFile": "seo-chapter-46.md",
+    "coverImage": "/blog/seo/images/seo-chapter-46.webp"
+  },
+  {
+    "chapter": 47,
+    "slug": "google-business-profile",
+    "title": "Google 商家檔案（GBP）完整設定教學",
+    "excerpt": "Google 商家檔案（Google Business Profile，簡稱 GBP，前身為 Google My Business） 是 Google 提供的免費工具，讓商家管理在 Google 搜尋和 Google Maps 上的呈現…",
+    "categoryId": "local",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-47.md",
+    "coverImage": "/blog/seo/images/seo-chapter-47.webp"
+  },
+  {
+    "chapter": 48,
+    "slug": "google-reviews",
+    "title": "Google 評論管理與回覆策略",
+    "excerpt": "Google 評論是在地 SEO 排名因素的重中之重，同時也是影響消費者決策的最強工具。",
+    "categoryId": "local",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-48.md",
+    "coverImage": "/blog/seo/images/seo-chapter-48.webp"
+  },
+  {
+    "chapter": 49,
+    "slug": "nap-citations",
+    "title": "NAP 一致性與在地引用管理",
+    "excerpt": "NAP 是三個元素的縮寫：",
+    "categoryId": "local",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-49.md",
+    "coverImage": "/blog/seo/images/seo-chapter-49.webp"
+  },
+  {
+    "chapter": 50,
+    "slug": "local-pack",
+    "title": "Local Pack 排名策略",
+    "excerpt": "Local Pack（在地套件）是 Google 針對具有在地意圖的搜尋查詢，在搜尋結果頁面（SERP）頂部顯示的三個商家結果，通常伴隨地圖顯示。",
+    "categoryId": "local",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-50.md",
+    "coverImage": "/blog/seo/images/seo-chapter-50.webp"
+  },
+  {
+    "chapter": 51,
+    "slug": "multi-location-seo",
+    "title": "多分店與服務區域商家 SEO",
+    "excerpt": "在地 SEO 面對兩種類型的複雜商家結構，各自有獨特的挑戰：",
+    "categoryId": "local",
+    "readingMinutes": 10,
+    "contentFile": "seo-chapter-51.md",
+    "coverImage": "/blog/seo/images/seo-chapter-51.webp"
+  },
+  {
+    "chapter": 52,
+    "slug": "local-business-schema",
+    "title": "結構化資料 — LocalBusiness Schema 完整指南",
+    "excerpt": "結構化資料（Structured Data） 是一種標準化的資料格式，用來「標記」網頁內容，讓搜尋引擎更容易理解你的網頁在說什麼。",
+    "categoryId": "advanced",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-52.md",
+    "coverImage": "/blog/seo/images/seo-chapter-52.webp"
+  },
+  {
+    "chapter": 53,
+    "slug": "multilingual-seo",
+    "title": "多語言 SEO 策略",
+    "excerpt": "在香港這個多語言市場，多語言 SEO 不是選項，而是基本配置。",
+    "categoryId": "advanced",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-53.md",
+    "coverImage": "/blog/seo/images/seo-chapter-53.webp"
+  },
+  {
+    "chapter": 54,
+    "slug": "international-seo",
+    "title": "國際 SEO 完整指南",
+    "excerpt": "國際 SEO（International SEO） 是針對不同國家和語言的受眾，優化網站的策略。它不只是多語言翻譯，而是涉及地理定位、當地搜尋引擎、文化差異、技術架構等全面策略。",
+    "categoryId": "advanced",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-54.md",
+    "coverImage": "/blog/seo/images/seo-chapter-54.webp"
+  },
+  {
+    "chapter": 55,
+    "slug": "pagination-infinite-scroll",
+    "title": "分頁 SEO 與無限滾動策略",
+    "excerpt": "分頁（Pagination） 是將大量內容拆分成多個頁面的技術。如果你的網站有 500 件商品、200 篇部落格文章、或任何需要多頁展示的內容，你就必須處理分頁 SEO。",
+    "categoryId": "advanced",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-55.md",
+    "coverImage": "/blog/seo/images/seo-chapter-55.webp"
+  },
+  {
+    "chapter": 56,
+    "slug": "crawl-budget",
+    "title": "Crawl Budget 爬取預算優化",
+    "excerpt": "Crawl Budget（爬取預算） 是 Googlebot 在你的網站上，每天願意爬取的 URL 數量上限。它不是一個固定數字，而是由兩個因素決定的動態配額。",
+    "categoryId": "advanced",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-56.md",
+    "coverImage": "/blog/seo/images/seo-chapter-56.webp"
+  },
+  {
+    "chapter": 57,
+    "slug": "site-migration-seo",
+    "title": "網站搬遷與域名遷移 SEO SOP",
+    "excerpt": "網站搬遷（Site Migration） 是 SEO 中風險最高的操作之一。如果處理不當，可能導致流量暴跌 50-90%，且需要數月才能恢復。",
+    "categoryId": "advanced",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-57.md",
+    "coverImage": "/blog/seo/images/seo-chapter-57.webp"
+  },
+  {
+    "chapter": 58,
+    "slug": "ai-search-seo",
+    "title": "AI 時代 SEO 全景 — AISO / AEO / GEO 名詞解析與分工",
+    "excerpt": "2000-2015：傳統 SEO（Traditional SEO） 目標：在 Google 的 10 個藍色連結中排名 策略：關鍵字密度、Meta Tags、反向連結數量 主角：Google Search",
+    "categoryId": "ai-search",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-58.md",
+    "coverImage": "/blog/seo/images/seo-chapter-58.webp"
+  },
+  {
+    "chapter": 59,
+    "slug": "aiso-principles",
+    "title": "AISO 的核心原理 — AI 如何「讀懂」你的內容",
+    "excerpt": "要理解 AISO，首先要打破一個迷思：AI 不像人類一樣逐字閱讀你的內容。AI 將你的內容轉換成數學表示（向量），並在語義空間中理解它的含義。",
+    "categoryId": "ai-search",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-59.md",
+    "coverImage": "/blog/seo/images/seo-chapter-59.webp"
+  },
+  {
+    "chapter": 60,
+    "slug": "aiso-basics",
+    "title": "AISO 入門三件事",
+    "excerpt": "你不需要從零開始重建 SEO。你只需要在現有基礎上，做三件關鍵的事：結構化你的內容、強化你的 Entity 身分、讓 AI 更容易找到你。",
+    "categoryId": "ai-search",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-60.md",
+    "coverImage": "/blog/seo/images/seo-chapter-60.webp"
+  },
+  {
+    "chapter": 61,
+    "slug": "geo-generative-engine-optimization",
+    "title": "GEO 生成式引擎優化完整實戰",
+    "excerpt": "GEO（Generative Engine Optimization） 是針對生成式 AI 搜尋引擎（ChatGPT Search、Perplexity、Google AI Overviews 等）的優化策略。與傳統 SEO 不同，GE…",
+    "categoryId": "ai-search",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-61.md",
+    "coverImage": "/blog/seo/images/seo-chapter-61.webp"
+  },
+  {
+    "chapter": 62,
+    "slug": "aeo-answer-engine-optimization",
+    "title": "AEO 答案引擎優化完整指南",
+    "excerpt": "AEO（Answer Engine Optimization） 是優化內容以成為「答案引擎」首選來源的策略。答案引擎與傳統搜尋引擎的區別在於：它們直接提供答案，而非提供連結列表。",
+    "categoryId": "ai-search",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-62.md",
+    "coverImage": "/blog/seo/images/seo-chapter-62.webp"
+  },
+  {
+    "chapter": 63,
+    "slug": "ai-citations",
+    "title": "網站如何被 AI 引用？六大內容訊號實戰手冊",
+    "excerpt": "第 59 章介紹了 AI 引用的六大內容訊號。本章將每個訊號轉化為可執行的檢查清單和實戰練習。如果你只能做一件事來提升被 AI 引用的機率，請完成本章的所有檢查清單。",
+    "categoryId": "ai-search",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-63.md",
+    "coverImage": "/blog/seo/images/seo-chapter-63.webp"
+  },
+  {
+    "chapter": 64,
+    "slug": "llms-txt",
+    "title": "llms.txt — AI 搜尋優化新標準",
+    "excerpt": "llms.txt 是 2025 年由知名開發者 Jeremy Howard 提出的新標準，專為大型語言模型（LLM）和 AI 爬蟲設計。它類似於 robots.txt，但用途完全不同。",
+    "categoryId": "ai-search",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-64.md",
+    "coverImage": "/blog/seo/images/seo-chapter-64.webp"
+  },
+  {
+    "chapter": 65,
+    "slug": "ai-seo-roadmap",
+    "title": "AI SEO 的六個月起步路線圖",
+    "excerpt": "這份路線圖將 AISO、AEO、GEO 的所有概念轉化為按月執行的行動計劃。無論你是從零開始，還是已經有一定的 SEO 基礎，這份路線圖都可以幫你逐步建立 AI 時代的搜尋存在感。",
+    "categoryId": "ai-search",
+    "readingMinutes": 9,
+    "contentFile": "seo-chapter-65.md",
+    "coverImage": "/blog/seo/images/seo-chapter-65.webp"
+  },
+  {
+    "chapter": 66,
+    "slug": "query-fan-out-entity-seo",
+    "title": "Query Fan-out 查詢擴散與 Entity SEO",
+    "excerpt": "Query Fan-out（查詢擴散） 描述了 AI 如何從一個簡單的查詢出發，自動擴展成一連串相關的子問題。理解這個機制，可以幫助你建立能「覆蓋整個問題網絡」的內容策略。",
+    "categoryId": "ai-search",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-66.md",
+    "coverImage": "/blog/seo/images/seo-chapter-66.webp"
+  },
+  {
+    "chapter": 67,
+    "slug": "seo-kpi",
+    "title": "SEO 七大 KPI 指標體系",
+    "excerpt": "沒有數據的 SEO 就像閉著眼睛開車 — 你可能感覺在動，但你不知道方向對不對。",
+    "categoryId": "analytics",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-67.md",
+    "coverImage": "/blog/seo/images/seo-chapter-67.webp"
+  },
+  {
+    "chapter": 68,
+    "slug": "google-search-console",
+    "title": "Google Search Console 完整操作教學",
+    "excerpt": "GSC 是 Google 給你的一面鏡子 — 它告訴你 Google 眼中的你長什麼樣。而這面鏡子，完全免費。",
+    "categoryId": "analytics",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-68.md",
+    "coverImage": "/blog/seo/images/seo-chapter-68.webp"
+  },
+  {
+    "chapter": 69,
+    "slug": "ga4-seo",
+    "title": "Google Analytics 4 與 SEO 數據整合",
+    "excerpt": "GA4 不是 Universal Analytics 的升級版 — 它是一個全新的物種。學好它，你的 SEO 數據分析能力直接翻倍。",
+    "categoryId": "analytics",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-69.md",
+    "coverImage": "/blog/seo/images/seo-chapter-69.webp"
+  },
+  {
+    "chapter": 70,
+    "slug": "seo-data-diagnosis",
+    "title": "SEO 數據分析常見診斷流程",
+    "excerpt": "SEO 出問題的時候，最危險的反應是「憑感覺亂改」。本章給你一套標準化的診斷 SOP，像醫生看診一樣：問症狀 → 做檢查 → 下診斷 → 開藥方。",
+    "categoryId": "analytics",
+    "readingMinutes": 10,
+    "contentFile": "seo-chapter-70.md",
+    "coverImage": "/blog/seo/images/seo-chapter-70.webp"
+  },
+  {
+    "chapter": 71,
+    "slug": "white-grey-black-hat-seo",
+    "title": "白帽 vs 灰帽 vs 黑帽 SEO 完整比較",
+    "excerpt": "「SEO 唔係關於點樣呃 Google，而係關於點樣幫 Google 幫你。」— 白帽 SEO 的核心哲學。",
+    "categoryId": "risk",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-71.md",
+    "coverImage": "/blog/seo/images/seo-chapter-71.webp"
+  },
+  {
+    "chapter": 72,
+    "slug": "google-penalties",
+    "title": "Google 手動處罰與演算法懲罰",
+    "excerpt": "被 Google 處罰的感覺，就像在高速公路上突然被警察攔下來。你不知道自己做錯了什麼，但你知道事情大條了。",
+    "categoryId": "risk",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-72.md",
+    "coverImage": "/blog/seo/images/seo-chapter-72.webp"
+  },
+  {
+    "chapter": 73,
+    "slug": "negative-seo",
+    "title": "負面 SEO 攻擊辨識與應對",
+    "excerpt": "你的競爭對手可能不會偷你的產品，但他們可能試圖摧毀你的 SEO。負面 SEO 是真實存在的威脅，你需要知道如何辨識、防禦、反擊。",
+    "categoryId": "risk",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-73.md",
+    "coverImage": "/blog/seo/images/seo-chapter-73.webp"
+  },
+  {
+    "chapter": 74,
+    "slug": "seo-budget",
+    "title": "SEO 預算規劃與方案選擇",
+    "excerpt": "SEO 不是一筆「費用」，而是一項「投資」。但任何投資都需要預算規劃，否則錢燒完了還沒看到結果。",
+    "categoryId": "management",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-74.md",
+    "coverImage": "/blog/seo/images/seo-chapter-74.webp"
+  },
+  {
+    "chapter": 75,
+    "slug": "seo-project-roadmap",
+    "title": "SEO 專案 12 個月里程碑規劃",
+    "excerpt": "SEO 最難的不是知道要做什麼，而是知道「什麼時候做什麼」。本章給你一個完整的 12 個月路線圖，讓你知道每個月該專注什麼。",
+    "categoryId": "management",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-75.md",
+    "coverImage": "/blog/seo/images/seo-chapter-75.webp"
+  },
+  {
+    "chapter": 76,
+    "slug": "seo-team",
+    "title": "SEO 團隊角色與技能配置",
+    "excerpt": "一個人的 SEO 可以做出成績，但一個對的團隊可以把 SEO 變成公司的核心成長引擎。",
+    "categoryId": "management",
+    "readingMinutes": 8,
+    "contentFile": "seo-chapter-76.md",
+    "coverImage": "/blog/seo/images/seo-chapter-76.webp"
+  },
+  {
+    "chapter": 77,
+    "slug": "seo-launch-checklist",
+    "title": "新網站上線前 SEO 檢查清單",
+    "excerpt": "網站上線後才發現 SEO 問題，就像房子蓋好才發現忘了鋪水管 — 要改可以，但代價大多了。",
+    "categoryId": "operations",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-77.md",
+    "coverImage": "/blog/seo/images/seo-chapter-77.webp"
+  },
+  {
+    "chapter": 78,
+    "slug": "website-redesign-migration",
+    "title": "網站改版/搬家 SEO 完整 SOP",
+    "excerpt": "網站改版是 SEO 最危險的時刻之一。一個錯誤的 301 可以讓你好幾年的 SEO 努力化為烏有。這份 SOP 讓你安全過渡。",
+    "categoryId": "operations",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-78.md",
+    "coverImage": "/blog/seo/images/seo-chapter-78.webp"
+  },
+  {
+    "chapter": 79,
+    "slug": "monthly-seo-maintenance",
+    "title": "每月 SEO 維運工作清單",
+    "excerpt": "SEO 不是一個「做完就沒事」的專案 — 它是一個需要持續維運的系統。這份每月清單讓你不會忘記任何重要的事。",
+    "categoryId": "operations",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-79.md",
+    "coverImage": "/blog/seo/images/seo-chapter-79.webp"
+  },
+  {
+    "chapter": 80,
+    "slug": "seo-health-check",
+    "title": "SEO 自我健檢 8 步驟",
+    "excerpt": "不需要是 SEO 專家也能完成的網站健檢。8 個步驟，1 小時內找到你網站最需要修復的 SEO 問題。",
+    "categoryId": "operations",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-80.md",
+    "coverImage": "/blog/seo/images/seo-chapter-80.webp"
+  },
+  {
+    "chapter": 81,
+    "slug": "youtube-seo",
+    "title": "YouTube SEO 完整教學",
+    "excerpt": "YouTube 是世界第二大搜尋引擎（僅次於 Google 本身）。如果你有影片內容，YouTube SEO 是一個完全不同的遊戲規則。",
+    "categoryId": "specialized",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-81.md",
+    "coverImage": "/blog/seo/images/seo-chapter-81.webp"
+  },
+  {
+    "chapter": 82,
+    "slug": "ecommerce-multilingual-seo",
+    "title": "跨境電商與多語系 SEO 完整指南",
+    "excerpt": "跨境電商的 SEO 不只是「把網站翻譯成英文」這麼簡單。每個市場都有自己的搜尋習慣、文化偏好和搜尋引擎生態。",
+    "categoryId": "specialized",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-82.md",
+    "coverImage": "/blog/seo/images/seo-chapter-82.webp"
+  },
+  {
+    "chapter": 83,
+    "slug": "taiwan-social-seo",
+    "title": "台灣社群 SEO（PTT / Dcard）整合策略",
+    "excerpt": "在台灣，人們不只 Google — 他們也在 PTT 和 Dcard 上搜尋。這些平台不只是社群，它們是台灣使用者獲取資訊的重要搜尋入口。",
+    "categoryId": "specialized",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-83.md",
+    "coverImage": "/blog/seo/images/seo-chapter-83.webp"
+  },
+  {
+    "chapter": 84,
+    "slug": "yahoo-bing-seo",
+    "title": "Yahoo 奇摩與 Bing SEO 策略",
+    "excerpt": "Google 不是唯一的搜尋引擎。在台灣，Yahoo 奇摩仍然有一席之地；在全球，Bing 正在因為 AI 整合（Copilot）而快速崛起。忽略它們等於放棄 10-25% 的搜尋流量。",
+    "categoryId": "specialized",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-84.md",
+    "coverImage": "/blog/seo/images/seo-chapter-84.webp"
+  },
+  {
+    "chapter": 85,
+    "slug": "seo-faq",
+    "title": "SEO 常見問題 FAQ 全集",
+    "excerpt": "從新手到進階，這份 FAQ 涵蓋了 SEO 最常被問到的問題。每個答案都直接、實用、不廢話。",
+    "categoryId": "faq",
+    "readingMinutes": 7,
+    "contentFile": "seo-chapter-85.md",
+    "coverImage": "/blog/seo/images/seo-chapter-85.webp"
+  },
+  {
+    "chapter": 86,
+    "slug": "seo-myths",
+    "title": "SEO 十大迷思破解",
+    "excerpt": "「關鍵字密度 3% 才會有排名」、「SEO 死咗啦」— SEO 界的都市傳說多得驚人。本章用事實和邏輯逐一擊破。",
+    "categoryId": "faq",
+    "readingMinutes": 6,
+    "contentFile": "seo-chapter-86.md",
+    "coverImage": "/blog/seo/images/seo-chapter-86.webp"
+  }
+]

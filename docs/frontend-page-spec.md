@@ -11,7 +11,7 @@
 | 營銷 | `/` | `index, follow` | `MarketingHomeView.vue` | 解釋可審核 AI SEO 價值，提供登入與定價入口 |
 | 營銷 | `/features` | `index, follow` | `PublicContentView.vue` | 展示 10 個核心後台模塊與產品截圖預留位 |
 | 營銷 | `/pricing` | `index, follow` | `PricingView.vue` | 展示 Starter、Growth、Agency、Enterprise 套餐 |
-| 內容 | `/blog` | `index, follow` | `PublicContentView.vue` | SEO 方法文章列表，文章內容應鏈接產品頁 |
+| 內容 | `/blog`、`/blog/:slug` | `index, follow` | `BlogView.vue`、`BlogArticleView.vue` | 86 篇 SEO 方法文章列表與詳情；支援搜尋、分類、分頁、目錄、前後篇和 BlogPosting schema |
 | 內容 | `/docs` | `index, follow` | `PublicContentView.vue` | 快速開始、CMS 連接、審核、套用與回滾說明 |
 | 內容 | `/help` | `index, follow` | `PublicContentView.vue` | FAQ 折疊內容，保留 FAQPage schema 接入位置 |
 | 品牌 | `/about` | `index, follow` | `PublicContentView.vue` | 品牌原則、產品使命與團隊價值 |
@@ -51,7 +51,16 @@
 - 選單保留英文、德文、法文、意大利文、簡體中文、繁中、日文、韓文、葡萄牙文、西班牙文和俄文；新增翻譯時需同時補上 `en`、`zh-Hant`，再按市場優先級擴展其他 locale。
 - 新增 locale 前先確認文案覆蓋率，不允許顯示未翻譯的 i18n key。
 
-## 4. 驗收清單
+## 4. Blog 內容契約
+
+- 文章索引資料集中在 `apps/web/src/content/seo/articles.json`，正文以按需載入的 Markdown 放在 `apps/web/src/content/seo/`。
+- `/blog` 每頁顯示 12 篇文章，搜尋同時比對標題和摘要，分類選單由 16 個 `BlogCategoryId` 驅動。
+- `/blog/:slug` 由 `BlogArticleView.vue` 載入正文，使用 `marked` 轉換 Markdown，再由 `DOMPurify` 消毒後插入 DOM；外部連結會加上 `target="_blank"` 與 `rel="noopener noreferrer"`。
+- 文章正文維持繁體中文；頁面導覽、篩選器、metadata、錯誤狀態和 footer 走 Vue I18n。切換至英文等 locale 時，不對正文做未經人工審校的假翻譯。
+- 文章封面輸出至 `apps/web/public/blog/seo/images/*.webp`；文章 URL 和公開頁面 URL 一起由 `scripts/generate-sitemap.mjs` 生成到 `apps/web/public/sitemap.xml`。
+- 正式 SEO 上線前仍需將公開 Blog 由目前 Vite SPA 遷移至 SSG/SSR，讓文章正文和 H1 出現在初始 HTML。
+
+## 5. 驗收清單
 
 - [x] 首頁與公開內容頁使用 Vue 路由，可由 sitemap 直接發現。
 - [x] `/privacy`、`/terms` 有固定路由並由 footer 可達。
@@ -59,6 +68,9 @@
 - [x] 公開頁面設置自指 canonical；路由切換會同步 document head。
 - [x] 多語言切換使用 Vue I18n，繁中與英文文案完整覆蓋新增頁面。
 - [x] 聯絡表單有必填與 email 型別校驗，提交只展示原型成功狀態，不偽造後端落庫。
+- [x] `/blog` 可搜尋、按 16 個主題分類、分頁瀏覽 86 篇文章；`/blog/:slug` 支援正文、目錄、前後篇、JSON-LD 和 404 狀態。
+- [x] Blog 文章 Markdown 經消毒後渲染，包含表格與 code block 的文章在桌面和手機無頁面橫向溢出。
+- [x] Blog 文章封面已壓縮為 WebP，sitemap 包含 86 個文章 URL；正文內部連結已驗證無失效路徑。
 - [ ] 公開頁面目前尚未達成初始 HTML SSR/SSG；需在正式 SEO 上線前完成前台渲染架構遷移。
 - [ ] 正式上線前替換法律文件骨架，並接入 FAQPage / BlogPosting / Organization schema。
 - [ ] 正式上線前把聯絡表單接到 API，加入限流、垃圾訊息防護與同意記錄。

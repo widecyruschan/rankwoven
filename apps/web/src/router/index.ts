@@ -15,7 +15,7 @@ const routes: RouteRecordRaw[] = [
       canonicalPath: '/'
     }
   },
-  ...(['features', 'blog', 'docs', 'help', 'about', 'contact', 'privacy', 'terms'] as const).map((page) => ({
+  ...(['features', 'docs', 'help', 'about', 'contact', 'privacy', 'terms'] as const).map((page) => ({
     path: `/${page}`,
     name: `${page[0].toUpperCase()}${page.slice(1)}`,
     component: () => import('../views/PublicContentView.vue'),
@@ -28,6 +28,29 @@ const routes: RouteRecordRaw[] = [
       canonicalPath: `/${page}`
     }
   })),
+  {
+    path: '/blog',
+    name: 'Blog',
+    component: () => import('../views/BlogView.vue'),
+    meta: {
+      titleKey: 'publicPages.blog.title',
+      layout: 'marketing',
+      requiresAuth: false,
+      indexable: true,
+      canonicalPath: '/blog'
+    }
+  },
+  {
+    path: '/blog/:slug',
+    name: 'BlogArticle',
+    component: () => import('../views/BlogArticleView.vue'),
+    meta: {
+      titleKey: 'publicPages.blog.title',
+      layout: 'marketing',
+      requiresAuth: false,
+      indexable: true
+    }
+  },
   {
     path: '/pricing',
     name: 'Pricing',

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { blogArticles, getAdjacentBlogArticles, loadBlogArticle } from '../src/blog/articles';
 import { i18n } from '../src/i18n';
 
 describe('web smoke test', () => {
@@ -84,5 +85,22 @@ describe('web smoke test', () => {
     } finally {
       i18n.global.locale.value = originalLocale;
     }
+  });
+
+  it('keeps the SEO handbook complete and internally navigable', async () => {
+    expect(blogArticles).toHaveLength(86);
+    expect(blogArticles.map((article) => article.chapter)).toEqual(Array.from({ length: 86 }, (_, index) => index + 1));
+    expect(new Set(blogArticles.map((article) => article.slug)).size).toBe(86);
+    expect(blogArticles.every((article) => article.coverImage.endsWith('.webp'))).toBe(true);
+
+    const firstArticle = await loadBlogArticle('seo-introduction');
+    expect(firstArticle?.title).toContain('SEO 是什麼');
+    expect(firstArticle?.html).toContain('/blog/seo-business-value');
+    expect(firstArticle?.html).not.toContain('<script');
+    expect(firstArticle?.tableOfContents.length).toBeGreaterThan(3);
+
+    const adjacentArticles = getAdjacentBlogArticles(1);
+    expect(adjacentArticles.previous).toBeNull();
+    expect(adjacentArticles.next?.slug).toBe('seo-business-value');
   });
 });

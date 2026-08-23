@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n';
 
 type PublicPageKey = 'features' | 'blog' | 'docs' | 'help' | 'about' | 'contact' | 'privacy' | 'terms';
 type ContentItem = { title: string; body: string };
-type BlogItem = { category: string; title: string; excerpt: string; readTime: string };
 type FaqItem = { question: string; answer: string };
 
 const route = useRoute();
@@ -32,7 +31,6 @@ const pageTitle = computed(() => t(pageTitles[pageKey.value]));
 const pageEyebrow = computed(() => t(`publicPages.${pageKey.value}.eyebrow`));
 const pageBody = computed(() => t(`publicPages.${pageKey.value}.body`));
 const featureItems = computed(() => tm('publicPages.features.items') as unknown as ContentItem[]);
-const blogPosts = computed(() => tm('publicPages.blog.posts') as unknown as BlogItem[]);
 const docNavigation = computed(() => tm('publicPages.docs.navigation') as unknown as string[]);
 const docSteps = computed(() => tm('publicPages.docs.steps') as unknown as ContentItem[]);
 const faqItems = computed(() => tm('publicPages.help.faqs') as unknown as FaqItem[]);
@@ -67,15 +65,6 @@ function submitContact() {
         </div>
       </div>
       <RouterLink class="primary-button" to="/login">{{ t('publicPages.features.cta') }}</RouterLink>
-    </section>
-
-    <section v-else-if="pageKey === 'blog'" class="public-content-section public-blog-grid">
-      <article v-for="post in blogPosts" :key="post.title" class="public-item-card public-blog-card">
-        <span class="public-card-kicker">{{ post.category }}</span>
-        <h2>{{ post.title }}</h2>
-        <p>{{ post.excerpt }}</p>
-        <footer><span>{{ post.readTime }}</span><a href="#article">{{ t('publicPages.blog.readArticle') }}</a></footer>
-      </article>
     </section>
 
     <section v-else-if="pageKey === 'docs'" class="public-content-section public-docs-layout">
