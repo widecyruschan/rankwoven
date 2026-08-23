@@ -81,7 +81,7 @@
 - [x] Blog 文章封面已壓縮為 WebP，sitemap 包含 86 個文章 URL；正文內部連結已驗證無失效路徑。
 - [x] 公開頁面共用 SEO head helper，含 description、canonical、robots、Open Graph、Twitter card；首頁初始 HTML 含核心詞 fallback 和 Organization/WebSite JSON-LD。
 - [x] 語言切換會同步公開頁面的 SEO head；文章頁保留文章 title、摘要、封面和 BlogPosting metadata。
-- [x] Nginx 對 `/login`、`/register`、`/forgot-password`、`/reset-password` 和所有 `/app`、`/admin` 路由輸出 `X-Robots-Tag: noindex, nofollow, noarchive`，避免 SPA 尚未執行時誤收錄私有頁。
+- [x] Nginx 透過 URI `map` 對 `/login`、`/register`、`/forgot-password`、`/reset-password` 和所有 `/app`、`/admin` 路由輸出 `X-Robots-Tag: noindex, nofollow, noarchive`；即使 SPA fallback 到 `index.html`，header 仍會保留。
 - [ ] 公開頁面目前尚未達成初始 HTML SSR/SSG；需在正式 SEO 上線前完成前台渲染架構遷移。
 - [ ] 正式上線前替換法律文件骨架，並接入 FAQPage / BlogPosting / Organization schema。
 - [ ] 正式上線前把聯絡表單接到 API，加入限流、垃圾訊息防護與同意記錄。

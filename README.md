@@ -3226,7 +3226,7 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vite、marked、DOMPurify、WebP、
 3. 為首頁、定價、公開內容頁、Blog 列表和文章路由補上 description metadata；文章頁按文章內容動態生成 canonical、封面 OG image 和 BlogPosting metadata。
 4. 在 `apps/web/index.html` 加入初始 HTML 的 metadata 及 Organization/WebSite JSON-LD，讓 SPA 尚未執行時仍有可讀的 SEO fallback。
 5. 語言切換同步更新公開頁面的 SEO head；登入與後台頁面仍維持 `noindex, nofollow`。
-6. Nginx 對登入／註冊流程、客戶後台和管理後台補上伺服器層 `X-Robots-Tag`，避免 SPA 尚未執行時誤收錄私有頁。
+6. Nginx 透過 URI `map` 對登入／註冊流程、客戶後台和管理後台補上伺服器層 `X-Robots-Tag`，即使 SPA fallback 到 `index.html` 也不會遺失 noindex。
 
 ### 關鍵決策和解決方案
 
@@ -3257,7 +3257,7 @@ Vue 3、Vue Router、Vue I18n、TypeScript、Vite、Schema.org JSON-LD、Open Gr
 - `npm run lint` 通過。
 - `npm run test -w @aieo/web` 通過，7 tests。
 - `npm run build -w @aieo/web` 通過；保留既有 Ant Design Vue / ECharts large chunk warning。
-- `apps/web/nginx.conf` 已加入私有路由的 `X-Robots-Tag`；本機沒有 nginx CLI，Docker nginx 語法檢查因本機 registry credentials 中斷，未完成容器級 `nginx -t`。
+- `apps/web/nginx.conf` 已加入 URI `map` 與私有路由的 `X-Robots-Tag`；本機沒有 nginx CLI，Docker nginx 語法檢查因本機 registry credentials 中斷，未完成本機容器級 `nginx -t`。
 - 瀏覽器驗證首頁、Blog 文章、英文／繁體中文 head 切換和登入頁 `noindex`；canonical、OG、Twitter 和 JSON-LD 均能讀取。
 
 ### 下一步行動清單
