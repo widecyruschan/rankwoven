@@ -3212,3 +3212,56 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vite、marked、DOMPurify、WebP、
 - VPS `api`、`web`、`worker`、`postgres`、`redis` 容器均 healthy／running。
 - GitHub Actions 仍提示 actions/checkout 與 actions/setup-node 使用 Node.js 20 的棄用警告；不影響本次部署，但應後續升級 action 版本。
 - production console 的統計腳本 warning／連線錯誤來自既有 Google Analytics／Ahrefs 外部腳本，非 Blog 應用資源失敗。
+
+## 會話總結（2026-08-24）— 整站 SEO 教學主題優化
+
+### 會話主要目的
+
+以 `SEO 教學｜網站 SEO 整合 AI 優化教程` 為網站主題與核心關鍵詞，提升 RankWoven 公開頁面的搜尋語意、社交分享 metadata 和 AI 搜尋可理解性。
+
+### 完成的主要任務
+
+1. 首頁中英文 title、H1、subtitle 和 description 改為自然覆蓋「SEO 教學」「網站 SEO」「AI 優化教程」的文案。
+2. 新增共用 `apps/web/src/utils/seoHead.ts`，統一管理 description、robots、canonical、Open Graph、Twitter card 和 locale。
+3. 為首頁、定價、公開內容頁、Blog 列表和文章路由補上 description metadata；文章頁按文章內容動態生成 canonical、封面 OG image 和 BlogPosting metadata。
+4. 在 `apps/web/index.html` 加入初始 HTML 的 metadata 及 Organization/WebSite JSON-LD，讓 SPA 尚未執行時仍有可讀的 SEO fallback。
+5. 語言切換同步更新公開頁面的 SEO head；登入與後台頁面仍維持 `noindex, nofollow`。
+6. Nginx 對登入／註冊流程、客戶後台和管理後台補上伺服器層 `X-Robots-Tag`，避免 SPA 尚未執行時誤收錄私有頁。
+
+### 關鍵決策和解決方案
+
+- 只把核心詞放在首頁和 Blog 定位，不把同一組關鍵詞硬塞到 86 篇文章，避免關鍵詞堆砌和頁面語意互相競爭。
+- 用既有 Vue I18n 管理中英文 SEO 文案；文章正文不做未經人工審校的自動翻譯。
+- 保留 Vite SPA 現況；初始 HTML metadata 和 JSON-LD 已補上，但公開正文要完全 SSR/SSG 才能讓爬蟲不依賴 JavaScript。
+
+### 使用的技術棧
+
+Vue 3、Vue Router、Vue I18n、TypeScript、Vite、Schema.org JSON-LD、Open Graph、Twitter Cards。
+
+### 新增或修改文件
+
+- `apps/web/src/utils/seoHead.ts`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/views/BlogArticleView.vue`
+- `apps/web/src/components/LanguageSwitcher.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/i18n/publicPages.ts`
+- `apps/web/index.html`
+- `apps/web/nginx.conf`
+- `apps/web/tests/smoke.test.ts`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過，7 tests。
+- `npm run build -w @aieo/web` 通過；保留既有 Ant Design Vue / ECharts large chunk warning。
+- `apps/web/nginx.conf` 已加入私有路由的 `X-Robots-Tag`；本機沒有 nginx CLI，Docker nginx 語法檢查因本機 registry credentials 中斷，未完成容器級 `nginx -t`。
+- 瀏覽器驗證首頁、Blog 文章、英文／繁體中文 head 切換和登入頁 `noindex`；canonical、OG、Twitter 和 JSON-LD 均能讀取。
+
+### 下一步行動清單
+
+1. 正式 SEO 上線前，把公開首頁和 Blog 文章遷移到 SSG/SSR，讓正文 H1 和內文直接出現在初始 HTML。
+2. 在 Google Search Console 提交 sitemap，持續觀察主題詞「SEO 教學」「網站 SEO」「AI 優化教程」的曝光和點擊。
+3. 後續為 86 篇文章補作者、更新日期和人工審校的多語言版本，避免只有 runtime metadata 而缺少可索引的語言頁。

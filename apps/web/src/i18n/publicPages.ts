@@ -21,8 +21,8 @@ export const publicPageMessages = {
     },
     blog: {
       eyebrow: 'RankWoven journal',
-      title: 'SEO learning centre',
-      body: 'A structured Traditional Chinese SEO handbook covering foundations, technical SEO, content, local search, analytics, and AI search.',
+      title: 'SEO Tutorials & AI Optimization',
+      body: 'A structured Traditional Chinese SEO tutorial covering website SEO, technical SEO, content, local search, analytics, and AI optimization.',
       readArticle: 'Read article',
       articleCount: '{count} articles',
       languageNote: 'Articles are written in Traditional Chinese',
@@ -168,8 +168,8 @@ export const publicPageMessages = {
     },
     blog: {
       eyebrow: 'RankWoven 專欄',
-      title: 'SEO 學習中心',
-      body: '一套有結構的繁體中文 SEO 手冊，涵蓋基礎、技術 SEO、內容、在地搜尋、數據分析與 AI 搜尋。',
+      title: 'SEO 教學專欄｜網站 SEO 與 AI 優化',
+      body: '一套有結構的繁體中文 SEO 教學，涵蓋網站 SEO 基礎、技術 SEO、內容、在地搜尋、數據分析與 AI 優化教程。',
       readArticle: '閱讀文章',
       articleCount: '共 {count} 篇文章',
       languageNote: '文章正文以繁體中文撰寫',

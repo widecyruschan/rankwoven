@@ -21,7 +21,7 @@
 | 客戶產品 | `/app/*` | `noindex, nofollow` | 現有 app views | 站點、分析、關鍵詞、媒體、內鏈、任務、CMS、Lighthouse、設定 |
 | 內部管理 | `/admin/*` | `noindex, nofollow` | 現有 admin views | 平台、客戶、用量、運營和管理設定 |
 
-路由 meta 由 `apps/web/src/router/index.ts` 維護 `indexable` 與 `canonicalPath`；router `afterEach` 會同步頁面 title、robots meta 和 canonical link。公開頁面 URL 同步到 `apps/web/public/sitemap.xml`，`/app` 與 `/admin` 同步由 `robots.txt` 禁止索引。
+路由 meta 由 `apps/web/src/router/index.ts` 維護 `indexable`、`canonicalPath` 和 `descriptionKey`；`apps/web/src/utils/seoHead.ts` 統一同步頁面 title、description、robots、canonical、Open Graph 和 Twitter card。公開頁面 URL 同步到 `apps/web/public/sitemap.xml`，`/app`、`/admin` 和登入／註冊流程同時由 Nginx `X-Robots-Tag` 與前端 meta 禁止索引。
 
 目前仍是 Vite + Vue SPA，公開頁面的真實文案在瀏覽器載入後由 Vue 渲染；router head 管理不能取代 PRD 要求的「首頁初始 HTML 含真實 H1」。正式 SEO 上線前需將營銷與內容層遷移到 SSG 或 SSR（例如靜態構建到 Cloudflare Pages，或獨立 Nuxt 前台），後台維持 SPA。
 
@@ -60,7 +60,15 @@
 - 文章封面輸出至 `apps/web/public/blog/seo/images/*.webp`；文章 URL 和公開頁面 URL 一起由 `scripts/generate-sitemap.mjs` 生成到 `apps/web/public/sitemap.xml`。
 - 正式 SEO 上線前仍需將公開 Blog 由目前 Vite SPA 遷移至 SSG/SSR，讓文章正文和 H1 出現在初始 HTML。
 
-## 5. 驗收清單
+## 5. 核心 SEO 關鍵詞策略
+
+- 網站主題與首頁核心詞：`SEO 教學｜網站 SEO 整合 AI 優化教程`。
+- 首頁 H1、title、description、Open Graph 和初始 HTML JSON-LD 均以自然語句覆蓋「SEO 教學」「網站 SEO」「AI 優化教程」，避免關鍵詞堆砌。
+- Blog 列表定位為「SEO 教學專欄｜網站 SEO 與 AI 優化」，文章頁按每篇正文摘要生成獨立 description、canonical、OG image 和 BlogPosting schema。
+- 英文 locale 使用對應的 `SEO tutorials` 與 `website SEO and AI optimization` 文案；正文仍以人工審校的繁體中文為主，不對文章做自動假翻譯。
+- 登入、客戶後台和管理後台維持 `noindex, nofollow`，不把產品操作頁與公開 SEO 教學內容混在索引池中。
+
+## 6. 驗收清單
 
 - [x] 首頁與公開內容頁使用 Vue 路由，可由 sitemap 直接發現。
 - [x] `/privacy`、`/terms` 有固定路由並由 footer 可達。
@@ -71,6 +79,9 @@
 - [x] `/blog` 可搜尋、按 16 個主題分類、分頁瀏覽 86 篇文章；`/blog/:slug` 支援正文、目錄、前後篇、JSON-LD 和 404 狀態。
 - [x] Blog 文章 Markdown 經消毒後渲染，包含表格與 code block 的文章在桌面和手機無頁面橫向溢出。
 - [x] Blog 文章封面已壓縮為 WebP，sitemap 包含 86 個文章 URL；正文內部連結已驗證無失效路徑。
+- [x] 公開頁面共用 SEO head helper，含 description、canonical、robots、Open Graph、Twitter card；首頁初始 HTML 含核心詞 fallback 和 Organization/WebSite JSON-LD。
+- [x] 語言切換會同步公開頁面的 SEO head；文章頁保留文章 title、摘要、封面和 BlogPosting metadata。
+- [x] Nginx 對 `/login`、`/register`、`/forgot-password`、`/reset-password` 和所有 `/app`、`/admin` 路由輸出 `X-Robots-Tag: noindex, nofollow, noarchive`，避免 SPA 尚未執行時誤收錄私有頁。
 - [ ] 公開頁面目前尚未達成初始 HTML SSR/SSG；需在正式 SEO 上線前完成前台渲染架構遷移。
 - [ ] 正式上線前替換法律文件骨架，並接入 FAQPage / BlogPosting / Organization schema。
 - [ ] 正式上線前把聯絡表單接到 API，加入限流、垃圾訊息防護與同意記錄。

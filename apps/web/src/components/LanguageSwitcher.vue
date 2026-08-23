@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { GlobalOutlined } from '@ant-design/icons-vue';
 import { supportedLocales, type AppLocale } from '../i18n';
+import { refreshCurrentRouteSeo } from '../router';
 
 const { locale } = useI18n();
 
@@ -13,6 +14,7 @@ const currentLanguage = computed(() => {
 function selectLocale(nextLocale: AppLocale) {
   locale.value = nextLocale;
   globalThis.localStorage?.setItem('aieo-locale', nextLocale);
+  refreshCurrentRouteSeo();
 }
 </script>
 

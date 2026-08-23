@@ -1,6 +1,7 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory, type RouteLocationNormalizedLoaded, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { i18n } from '../i18n';
+import { updateSeoHead } from '../utils/seoHead';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -12,7 +13,8 @@ const routes: RouteRecordRaw[] = [
       layout: 'marketing',
       requiresAuth: false,
       indexable: true,
-      canonicalPath: '/'
+      canonicalPath: '/',
+      descriptionKey: 'marketing.homeDescription'
     }
   },
   ...(['features', 'docs', 'help', 'about', 'contact', 'privacy', 'terms'] as const).map((page) => ({
@@ -25,7 +27,8 @@ const routes: RouteRecordRaw[] = [
       publicPageKey: page,
       requiresAuth: false,
       indexable: true,
-      canonicalPath: `/${page}`
+      canonicalPath: `/${page}`,
+      descriptionKey: `publicPages.${page}.body`
     }
   })),
   {
@@ -37,7 +40,8 @@ const routes: RouteRecordRaw[] = [
       layout: 'marketing',
       requiresAuth: false,
       indexable: true,
-      canonicalPath: '/blog'
+      canonicalPath: '/blog',
+      descriptionKey: 'publicPages.blog.body'
     }
   },
   {
@@ -48,7 +52,8 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'publicPages.blog.title',
       layout: 'marketing',
       requiresAuth: false,
-      indexable: true
+      indexable: true,
+      descriptionKey: 'publicPages.blog.body'
     }
   },
   {
@@ -60,7 +65,8 @@ const routes: RouteRecordRaw[] = [
       layout: 'marketing',
       requiresAuth: false,
       indexable: true,
-      canonicalPath: '/pricing'
+      canonicalPath: '/pricing',
+      descriptionKey: 'marketing.pricingDescription'
     }
   },
   {
@@ -342,6 +348,26 @@ export const router = createRouter({
   routes
 });
 
+function updateRouteSeo(to: RouteLocationNormalizedLoaded) {
+  if (typeof document === 'undefined') return;
+
+  const titleKey = typeof to.meta.titleKey === 'string' ? to.meta.titleKey : 'marketing.homeTitle';
+  const title = `${String(i18n.global.t(titleKey))} | RankWoven`;
+  const descriptionKey = typeof to.meta.descriptionKey === 'string' ? to.meta.descriptionKey : '';
+  const description = descriptionKey ? String(i18n.global.t(descriptionKey)) : '';
+  const canonicalUrl = new URL(String(to.meta.canonicalPath ?? to.path), window.location.origin).toString();
+  const locale = String(i18n.global.locale.value).replace('-', '_');
+
+  updateSeoHead({
+    title,
+    description,
+    canonicalUrl,
+    indexable: to.meta.indexable === true,
+    type: to.path.startsWith('/blog/') ? 'article' : 'website',
+    locale
+  });
+}
+
 router.beforeEach(async (to) => {
   const authStore = useAuthStore();
 
@@ -379,26 +405,8 @@ router.beforeEach(async (to) => {
   return true;
 });
 
-router.afterEach((to) => {
-  if (typeof document === 'undefined') return;
+router.afterEach(updateRouteSeo);
 
-  const titleKey = typeof to.meta.titleKey === 'string' ? to.meta.titleKey : 'marketing.homeTitle';
-  document.title = `${String(i18n.global.t(titleKey))} | RankWoven`;
-
-  let robots = document.head.querySelector('meta[name="robots"]');
-  if (!robots) {
-    robots = document.createElement('meta');
-    robots.setAttribute('name', 'robots');
-    document.head.appendChild(robots);
-  }
-  robots.setAttribute('content', to.meta.indexable === false ? 'noindex, nofollow' : 'index, follow');
-
-  const canonicalUrl = new URL(String(to.meta.canonicalPath ?? to.path), window.location.origin).toString();
-  let canonical = document.head.querySelector('link[rel="canonical"]');
-  if (!canonical) {
-    canonical = document.createElement('link');
-    canonical.setAttribute('rel', 'canonical');
-    document.head.appendChild(canonical);
-  }
-  canonical.setAttribute('href', canonicalUrl);
-});
+export function refreshCurrentRouteSeo() {
+  updateRouteSeo(router.currentRoute.value);
+}

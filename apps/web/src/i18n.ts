@@ -56,12 +56,15 @@ const messages = {
       cancel: 'Cancel'
     },
     marketing: {
-      homeTitle: 'AI SEO Platform',
+      homeTitle: 'SEO Tutorials | Website SEO and AI Optimization',
+      homeDescription:
+        'Practical SEO tutorials for website SEO, technical optimization, content strategy, and AI-powered workflows with RankWoven.',
       pricingTitle: 'Pricing',
+      pricingDescription: 'Compare RankWoven plans for website SEO audits, AI optimization, content workflows, and multi-site teams.',
       eyebrow: 'RankWoven AI SEO',
-      headline: 'Optimize existing content, images, and internal links with reviewable AI workflows',
+      headline: 'SEO tutorials for website SEO and AI optimization',
       subheadline:
-        'Connect WordPress first, then expand to Joomla, OpenCart, and more. RankWoven helps teams audit pages, generate SEO suggestions, enrich images, and keep every change human-approved.',
+        'Learn practical SEO, then connect WordPress to audit pages, improve content and images, and review every AI-assisted optimization before publishing.',
       primaryAction: 'Open dashboard',
       secondaryAction: 'View pricing',
       previewLabel: 'Product preview',
@@ -1136,12 +1139,15 @@ const messages = {
       cancel: '取消'
     },
     marketing: {
-      homeTitle: 'AI SEO 平台',
+      homeTitle: 'SEO 教學｜網站 SEO 整合 AI 優化教程',
+      homeDescription:
+        'RankWoven SEO 教學，整理網站 SEO、技術 SEO、內容優化與 AI 優化教程，幫助你建立可審核、可持續的搜尋增長流程。',
       pricingTitle: '定價',
+      pricingDescription: '比較 RankWoven 網站 SEO 審計、AI 優化、內容流程與多站點團隊方案，選擇適合的 SEO 工具套餐。',
       eyebrow: 'RankWoven AI SEO',
-      headline: '用可審核的 AI 流程優化現有文章、圖片與內部連結',
+      headline: 'SEO 教學與網站 SEO 整合 AI 優化教程',
       subheadline:
-        '先接入 WordPress，再擴展 Joomla、OpenCart 等常用系統。RankWoven 協助團隊審計頁面、生成 SEO 建議、補強圖片資訊，並保留人工批准流程。',
+        '從 SEO 基礎、技術 SEO 到 AI 搜尋優化，學習可執行的方法；再接入 WordPress 審計頁面、改善內容與圖片，所有 AI 建議發布前均可人工審核。',
       primaryAction: '進入後台',
       secondaryAction: '查看定價',
       previewLabel: '產品預覽',

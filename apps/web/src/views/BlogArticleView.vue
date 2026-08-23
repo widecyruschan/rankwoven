@@ -4,10 +4,11 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ArrowLeft, ArrowRight, Clock3, List } from 'lucide-vue-next';
 import { getAdjacentBlogArticles, loadBlogArticle, type BlogArticle } from '../blog/articles';
+import { updateSeoHead } from '../utils/seoHead';
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const article = ref<BlogArticle | null>(null);
 const contentElement = ref<HTMLElement | null>(null);
 const isLoading = ref(true);
@@ -16,14 +17,19 @@ let schemaElement: HTMLScriptElement | null = null;
 
 const adjacentArticles = computed(() => (article.value ? getAdjacentBlogArticles(article.value.chapter) : { previous: null, next: null }));
 
-function updateMetaDescription(content: string) {
-  let metaDescription = document.head.querySelector('meta[name="description"]');
-  if (!metaDescription) {
-    metaDescription = document.createElement('meta');
-    metaDescription.setAttribute('name', 'description');
-    document.head.appendChild(metaDescription);
-  }
-  metaDescription.setAttribute('content', content);
+function updateArticleSeo(currentArticle: BlogArticle) {
+  const canonicalUrl = new window.URL(`/blog/${currentArticle.slug}`, window.location.origin).toString();
+  updateSeoHead({
+    title: `${currentArticle.title} | RankWoven`,
+    description: currentArticle.excerpt,
+    canonicalUrl,
+    indexable: true,
+    type: 'article',
+    imageUrl: new window.URL(currentArticle.coverImage, window.location.origin).toString(),
+    // Article content is authored in Traditional Chinese; keep social metadata aligned
+    // instead of claiming an untranslated English article.
+    locale: 'zh_Hant'
+  });
 }
 
 function updateStructuredData(currentArticle: BlogArticle) {
@@ -55,18 +61,34 @@ async function loadCurrentArticle() {
   isLoading.value = true;
   loadFailed.value = false;
   article.value = null;
+  schemaElement?.remove();
+  schemaElement = null;
 
   try {
     article.value = await loadBlogArticle(String(route.params.slug ?? ''));
 
     if (article.value) {
-      document.title = `${article.value.title} | RankWoven`;
-      updateMetaDescription(article.value.excerpt);
+      updateArticleSeo(article.value);
       updateStructuredData(article.value);
+    } else {
+      updateSeoHead({
+        title: `${t('publicPages.blog.notFoundTitle')} | RankWoven`,
+        description: t('publicPages.blog.notFoundBody'),
+        canonicalUrl: new window.URL('/blog', window.location.origin).toString(),
+        indexable: false,
+        locale: String(locale.value).replace('-', '_')
+      });
     }
   } catch (error) {
     console.error(error);
     loadFailed.value = true;
+    updateSeoHead({
+      title: `${t('publicPages.blog.notFoundTitle')} | RankWoven`,
+      description: t('publicPages.blog.notFoundBody'),
+      canonicalUrl: new window.URL('/blog', window.location.origin).toString(),
+      indexable: false,
+      locale: String(locale.value).replace('-', '_')
+    });
   } finally {
     isLoading.value = false;
     if (article.value && !loadFailed.value) {
@@ -87,6 +109,12 @@ function navigateArticleContent(event: MouseEvent) {
 }
 
 watch(() => route.params.slug, loadCurrentArticle, { immediate: true });
+watch(locale, () => {
+  if (article.value) {
+    updateArticleSeo(article.value);
+    updateStructuredData(article.value);
+  }
+});
 
 onBeforeUnmount(() => {
   schemaElement?.remove();

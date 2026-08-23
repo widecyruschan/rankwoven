@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { blogArticles, getAdjacentBlogArticles, loadBlogArticle } from '../src/blog/articles';
 import { i18n } from '../src/i18n';
+import { updateSeoHead } from '../src/utils/seoHead';
 
 describe('web smoke test', () => {
   it('keeps the app test runner wired', () => {
@@ -102,5 +103,33 @@ describe('web smoke test', () => {
     const adjacentArticles = getAdjacentBlogArticles(1);
     expect(adjacentArticles.previous).toBeNull();
     expect(adjacentArticles.next?.slug).toBe('seo-business-value');
+  });
+
+  it('builds a keyword-aligned public SEO head without indexing private pages', () => {
+    document.head.innerHTML = '';
+
+    updateSeoHead({
+      title: 'SEO 教學｜網站 SEO 整合 AI 優化教程｜RankWoven',
+      description: 'RankWoven SEO 教學與網站 SEO 優化教程。',
+      canonicalUrl: 'https://rankwoven.com/',
+      indexable: true,
+      locale: 'zh_Hant'
+    });
+
+    expect(document.title).toContain('SEO 教學');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('網站 SEO');
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('index, follow');
+    expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://rankwoven.com/');
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://rankwoven.com/');
+
+    updateSeoHead({
+      title: '登入 RankWoven',
+      description: '登入工作台。',
+      canonicalUrl: 'https://rankwoven.com/login',
+      indexable: false,
+      locale: 'zh_Hant'
+    });
+
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex, nofollow');
   });
 });
