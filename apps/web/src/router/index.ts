@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { i18n } from '../i18n';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -9,9 +10,24 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'marketing.homeTitle',
       layout: 'marketing',
-      requiresAuth: false
+      requiresAuth: false,
+      indexable: true,
+      canonicalPath: '/'
     }
   },
+  ...(['features', 'blog', 'docs', 'help', 'about', 'contact', 'privacy', 'terms'] as const).map((page) => ({
+    path: `/${page}`,
+    name: `${page[0].toUpperCase()}${page.slice(1)}`,
+    component: () => import('../views/PublicContentView.vue'),
+    meta: {
+      titleKey: `publicPages.${page}.title`,
+      layout: 'marketing',
+      publicPageKey: page,
+      requiresAuth: false,
+      indexable: true,
+      canonicalPath: `/${page}`
+    }
+  })),
   {
     path: '/pricing',
     name: 'Pricing',
@@ -19,7 +35,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'marketing.pricingTitle',
       layout: 'marketing',
-      requiresAuth: false
+      requiresAuth: false,
+      indexable: true,
+      canonicalPath: '/pricing'
     }
   },
   {
@@ -29,7 +47,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'login.title',
       layout: 'marketing',
-      requiresAuth: false
+      requiresAuth: false,
+      indexable: false,
+      canonicalPath: '/login'
     }
   },
   {
@@ -39,7 +59,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'register.title',
       layout: 'marketing',
-      requiresAuth: false
+      requiresAuth: false,
+      indexable: false,
+      canonicalPath: '/register'
     }
   },
   {
@@ -49,7 +71,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'forgotPassword.title',
       layout: 'marketing',
-      requiresAuth: false
+      requiresAuth: false,
+      indexable: false,
+      canonicalPath: '/forgot-password'
     }
   },
   {
@@ -59,7 +83,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'resetPassword.title',
       layout: 'marketing',
-      requiresAuth: false
+      requiresAuth: false,
+      indexable: false,
+      canonicalPath: '/reset-password'
     }
   },
   {
@@ -69,7 +95,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.dashboard',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app'
     }
   },
   {
@@ -79,7 +107,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.sites',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/sites'
     }
   },
   {
@@ -89,7 +119,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.analytics',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/analytics'
     }
   },
   {
@@ -99,7 +131,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.keywords',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/keywords'
     }
   },
   {
@@ -121,7 +155,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.media',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/media'
     }
   },
   {
@@ -131,7 +167,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.apply',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/apply'
     }
   },
   {
@@ -149,7 +187,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.links',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/links'
     }
   },
   {
@@ -159,7 +199,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.tasks',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/tasks'
     }
   },
   {
@@ -169,7 +211,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.cmsAdapters',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/cms-adapters'
     }
   },
   {
@@ -179,7 +223,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.settings',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/settings'
     }
   },
   {
@@ -189,7 +235,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.lighthouse',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/lighthouse'
     }
   },
   {
@@ -199,7 +247,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'nav.siteAudit',
       layout: 'app',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/app/site-audit'
     }
   },
   {
@@ -209,7 +259,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.overview',
       layout: 'admin',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/admin'
     }
   },
   {
@@ -219,7 +271,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.customers',
       layout: 'admin',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/admin/customers'
     }
   },
   {
@@ -229,7 +283,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.usage',
       layout: 'admin',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/admin/usage'
     }
   },
   {
@@ -239,7 +295,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.operations',
       layout: 'admin',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/admin/operations'
     }
   },
   {
@@ -249,7 +307,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       titleKey: 'admin.nav.settings',
       layout: 'admin',
-      requiresAuth: true
+      requiresAuth: true,
+      indexable: false,
+      canonicalPath: '/admin/settings'
     }
   }
 ];
@@ -294,4 +354,28 @@ router.beforeEach(async (to) => {
   }
 
   return true;
+});
+
+router.afterEach((to) => {
+  if (typeof document === 'undefined') return;
+
+  const titleKey = typeof to.meta.titleKey === 'string' ? to.meta.titleKey : 'marketing.homeTitle';
+  document.title = `${String(i18n.global.t(titleKey))} | RankWoven`;
+
+  let robots = document.head.querySelector('meta[name="robots"]');
+  if (!robots) {
+    robots = document.createElement('meta');
+    robots.setAttribute('name', 'robots');
+    document.head.appendChild(robots);
+  }
+  robots.setAttribute('content', to.meta.indexable === false ? 'noindex, nofollow' : 'index, follow');
+
+  const canonicalUrl = new URL(String(to.meta.canonicalPath ?? to.path), window.location.origin).toString();
+  let canonical = document.head.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement('link');
+    canonical.setAttribute('rel', 'canonical');
+    document.head.appendChild(canonical);
+  }
+  canonical.setAttribute('href', canonicalUrl);
 });

@@ -69,4 +69,20 @@ describe('web smoke test', () => {
     expect(sitesViewSource).not.toContain("t('sites.tokenPreview')");
     expect(sitesViewSource).not.toContain("t('sites.wordpressUser')");
   });
+
+  it('keeps public page copy available in English and Traditional Chinese', () => {
+    const originalLocale = i18n.global.locale.value;
+
+    try {
+      i18n.global.locale.value = 'en';
+      expect(i18n.global.t('publicPages.features.title')).toContain('Reviewable SEO');
+      expect(i18n.global.t('publicPages.privacy.title')).toBe('Privacy policy');
+
+      i18n.global.locale.value = 'zh-Hant';
+      expect(i18n.global.t('publicPages.features.title')).toContain('可審核');
+      expect(i18n.global.t('publicPages.terms.title')).toBe('服務條款');
+    } finally {
+      i18n.global.locale.value = originalLocale;
+    }
+  });
 });

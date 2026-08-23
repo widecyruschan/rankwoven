@@ -1,4 +1,5 @@
 import { createI18n } from 'vue-i18n';
+import { publicPageMessages } from './i18n/publicPages';
 
 export const supportedLocales = [
   { code: 'en', label: 'English' },
@@ -135,8 +136,19 @@ const messages = {
       nav: {
         features: 'Features',
         pricing: 'Pricing',
+        blog: 'Journal',
+        docs: 'Docs',
+        help: 'Help',
+        about: 'About',
+        contact: 'Contact',
         login: 'Login',
         dashboard: 'Dashboard'
+      },
+      footer: {
+        tagline: 'Reviewable AI SEO workflows.',
+        legal: 'Legal navigation',
+        privacy: 'Privacy',
+        terms: 'Terms'
       },
       features: {
         auditTitle: 'SEO audit',
@@ -1204,8 +1216,19 @@ const messages = {
       nav: {
         features: '功能',
         pricing: '定價',
+        blog: '專欄',
+        docs: '文件',
+        help: '支援',
+        about: '關於',
+        contact: '聯絡',
         login: '登入',
         dashboard: '後台'
+      },
+      footer: {
+        tagline: '可審核的 AI SEO 流程。',
+        legal: '法律文件導覽',
+        privacy: '私隱政策',
+        terms: '服務條款'
       },
       features: {
         auditTitle: 'SEO 審計',
@@ -2152,6 +2175,9 @@ const messages = {
     }
   }
 };
+
+Object.assign(messages.en, { publicPages: publicPageMessages.en });
+Object.assign(messages['zh-Hant'], { publicPages: publicPageMessages['zh-Hant'] });
 
 function isSupportedLocale(value: string | null | undefined): value is AppLocale {
   return supportedLocales.some((item) => item.code === value);

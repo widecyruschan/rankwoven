@@ -190,7 +190,15 @@ SUPPORT_EMAIL=support@rankwoven.com
 當前前端原型已拆分為前台展示頁、客戶後台和管理後台三層：
 
 - `/`：前台功能簡介首頁
+- `/features`：前台核心功能頁，展示 PRD 定義的 10 個產品模塊
 - `/pricing`：定價頁
+- `/blog`：SEO 方法文章列表
+- `/docs`：產品快速開始與使用文件
+- `/help`：常見問題與支援入口
+- `/about`：品牌使命與產品原則
+- `/contact`：支援查詢表單原型
+- `/privacy`：私隱政策頁骨架
+- `/terms`：服務條款頁骨架
 - `/login`：用戶登入頁原型
 - `/app`：客戶後台站點概覽
 - `/app/sites`：客戶後台站點管理
@@ -213,7 +221,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## 狀態管理說明
 
-當前已建立 Pinia，部分客戶後台頁面已開始直接接入 API；後續資料共享增加後再拆分 Store。建議拆分：
+當前已建立 Pinia，部分客戶後台頁面已開始直接接入 API；前端文案統一由 Vue I18n 管理，完整提供 `en` 與 `zh-Hant`，其他語言選項以英文 fallback，後續按市場優先級補齊翻譯。後續資料共享增加後再拆分 Store。建議拆分：
 
 - `useAuthStore`：登入狀態和用戶資料
 - `useSiteStore`：當前站點、站點列表
@@ -2993,3 +3001,55 @@ Fastify、TypeScript、Vitest、WordPress PHP Plugin、WordPress JavaScript、Wo
 1. 啟動 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 同步插件到本地 WordPress 測試站。
 2. 執行 `docker exec cyruschan-wp php -l /var/www/html/wp-content/plugins/rankwoven-seo/rankwoven-seo.php`。
 3. 在文章編輯頁貼入中文或 `%e7...` slug，點擊 `Generate & Apply SEO` 和 `Save SEO Fields`，確認保存後只剩 `a-z_`。
+
+## 會話總結（2026-08-23）— 按 PRD 補齊前端公開頁面與多語言契約
+
+### 會話主要目的
+
+根據外部 `rankwoven-prd.md` 補齊前端頁面文件與可達路由，並落實使用 Vue I18n 的中英文等多語言策略。
+
+### 完成的主要任務
+
+1. 新增 `/features`、`/blog`、`/docs`、`/help`、`/about`、`/contact`、`/privacy`、`/terms` 公開頁面路由，使用共用 `PublicContentView.vue` 呈現功能、內容、文件、FAQ、品牌、聯絡和法律頁。
+2. 依 PRD Route Contract 為公開頁面、登入頁、`/app/*` 和 `/admin/*` 補上 `indexable`、`canonicalPath`，router 切換時同步 title、robots meta 和 canonical link。
+3. 更新 sitemap，納入 10 個可索引公開頁；保留 robots.txt 對客戶後台和管理後台的禁止索引規則。
+4. 新增 `docs/frontend-page-spec.md`，記錄頁面矩陣、10 個後台模塊對照、多語言策略與驗收清單。
+5. 以 Vue I18n 補齊新增頁面的英文與繁體中文文案；語言選擇保存到 `aieo-locale`，並同步 `<html lang>`。
+6. Footer 增加 `/about`、`/contact`、`/privacy`、`/terms` 入口，聯絡表單保留前端驗證與原型成功狀態，不偽造後端落庫。
+
+### 關鍵決策和解決方案
+
+- 先使用單一共用公開內容元件承接 PRD 新增頁面，避免為一次性靜態內容複製 8 個 Vue 文件；頁面差異由路由 meta 與 i18n 資源驅動。
+- `en` 與 `zh-Hant` 是完整翻譯語言；現有其他語言選項保留並 fallback 到英文，待確認市場優先級後再投入人工翻譯，避免顯示空白或 i18n key。
+- 私隱政策與服務條款目前是可替換的法律文件骨架，正式上線前必須由法律或合規負責人審批。
+- 保留現有 Vite SPA 架構；雖然公開路由已具備 sitemap、robots、canonical 和 runtime head 管理，但初始 HTML 尚未 SSR/SSG，這項 P0 SEO 風險不在本次頁面補齊範圍內。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Vue Router、Vue I18n、Vite、Ant Design Vue、CSS responsive layout。
+
+### 新增或修改文件
+
+- `apps/web/src/views/PublicContentView.vue`
+- `apps/web/src/i18n/publicPages.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/App.vue`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/styles.css`
+- `apps/web/public/sitemap.xml`
+- `apps/web/tests/smoke.test.ts`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run build -w @aieo/web` 通過；保留既有 Ant Design Vue / ECharts large chunk warning。
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過，5 tests。
+- 本地 Vite `5174` smoke 通過，8 個新增公開路由均返回 HTTP 200；以 Node fetch 驗證，未執行 Playwright 視覺截圖。
+
+### 下一步行動清單
+
+1. 使用瀏覽器或 Playwright 逐一打開公開路由，確認 mobile viewport 無橫向滾動、語言切換及 head meta 正常。
+2. 正式 SEO 上線前把營銷與內容層遷移到 SSG/SSR，確保首頁初始 HTML 含真實 H1 與主要文案。
+3. 替換法律文件骨架、接入聯絡 API，並補 FAQPage、BlogPosting、Organization schema 與 hreflang。

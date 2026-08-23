@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
@@ -25,13 +25,16 @@ import { useAuthStore } from './stores/auth';
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const authStore = useAuthStore();
 const isNavigationOpen = ref(false);
 
 const marketingItems = [
-  { to: '/', labelKey: 'marketing.nav.features' },
+  { to: '/features', labelKey: 'marketing.nav.features' },
   { to: '/pricing', labelKey: 'marketing.nav.pricing' },
+  { to: '/blog', labelKey: 'marketing.nav.blog' },
+  { to: '/docs', labelKey: 'marketing.nav.docs' },
+  { to: '/help', labelKey: 'marketing.nav.help' },
   { to: '/login', labelKey: 'marketing.nav.login' }
 ];
 
@@ -66,6 +69,16 @@ const topbarPhase = computed(() => (isAdminLayout.value ? t('admin.phase') : t('
 const selectedMenuKeys = computed(() => [route.path]);
 const marketingEntryLink = computed(() => (authStore.isLoggedIn ? '/app' : '/login'));
 const marketingEntryLabelKey = computed(() => (authStore.isLoggedIn ? 'marketing.nav.dashboard' : 'marketing.nav.login'));
+
+watch(
+  locale,
+  (value) => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = value === 'zh-Hant' ? 'zh-Hant' : value;
+    }
+  },
+  { immediate: true }
+);
 
 function toggleNavigation() {
   isNavigationOpen.value = !isNavigationOpen.value;
@@ -109,6 +122,18 @@ function logout() {
     </header>
 
     <RouterView />
+    <footer class="marketing-footer">
+      <div>
+        <strong>RankWoven</strong>
+        <span>{{ t('marketing.footer.tagline') }}</span>
+      </div>
+      <nav :aria-label="t('marketing.footer.legal')">
+        <RouterLink to="/about">{{ t('marketing.nav.about') }}</RouterLink>
+        <RouterLink to="/contact">{{ t('marketing.nav.contact') }}</RouterLink>
+        <RouterLink to="/privacy">{{ t('marketing.footer.privacy') }}</RouterLink>
+        <RouterLink to="/terms">{{ t('marketing.footer.terms') }}</RouterLink>
+      </nav>
+    </footer>
   </div>
 
   <a-layout v-else class="app-shell">
