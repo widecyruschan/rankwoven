@@ -3322,3 +3322,21 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vitest、Schema.org BlogPosting。
 - `apps/web/nginx.conf` 的公開 fallback 會優先返回路由專屬 `index.html`；登入、認證和後台路由仍使用 noindex fallback。
 - 這是 metadata fallback，不是完整 SSR/SSG：公開頁面的 H1 和正文仍由 Vue runtime 渲染，完整內容索引仍列為後續架構工作。
 - 驗證：`npm run lint`、`npm run test`（43 passed、4 skipped API；8 passed Web；4 passed Worker；7 passed ai-providers；1 passed cms-adapters）、`npm run build`、`npm run security:audit` 和 `git diff --check` 均通過；獨立腳本核對 96 個輸出頁與 96 個唯一 keywords 一致。Nginx 容器語法檢查因本機 Docker containerd read-only 而未完成，本機亦沒有 nginx CLI。
+
+## 會話總結（2026-08-24）— 推送 SEO keyword 變更
+
+### 會話主要目的
+
+將已驗證的公開頁面長尾 keyword 變更推送至 GitHub `main`。
+
+### 完成的主要任務
+
+- 只暫存並提交 SEO keyword 實作、前端文案、測試、SEO fallback generator、Nginx fallback 和相關文件。
+- 排除既有 Plausible script、WordPress 文件／插件、`.gitignore`、`.codebuddy` 目錄和 `0.jpeg` 等無關 dirty worktree。
+- 建立 commit `92f6c44`：`feat(seo): add localized page keywords`。
+- 推送至 `https://github.com/widecyruschan/rankwoven.git` 的 `main` 分支。
+
+### 驗證與下一步
+
+- 推送前 `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 和 `git diff --cached --check` 均通過。
+- 本次只執行 GitHub push，沒有手動部署；推送 `main` 可能依既有 GitHub Actions workflow 自動觸發生產部署。
