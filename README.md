@@ -3340,3 +3340,33 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vitest、Schema.org BlogPosting。
 
 - 推送前 `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 和 `git diff --cached --check` 均通過。
 - 本次只執行 GitHub push，沒有手動部署；推送 `main` 可能依既有 GitHub Actions workflow 自動觸發生產部署。
+
+## 會話總結（2026-08-24）— 修復 Production Deploy 測試波動
+
+### 會話主要目的
+
+修復 GitHub Actions `Production Deploy` 在 Verify 階段偶發把媒體 title 建議 `904` 誤認為文章 title 建議 `404`，導致部署被跳過的問題。
+
+### 完成的主要任務
+
+- 分析失敗 workflow `32695265212`，確認失敗位於 `apps/api/tests/siteConnections.test.ts` 的建議選取，而非部署腳本或 SEO 頁面。
+- 建立媒體 title 排在文章 title 前面的確定性回歸場景，成功重現相同 `404`／`904` 錯配。
+- 將文章 title 建議的選取條件收緊為 `targetType === 'article' && fieldName === 'title'`，不再依賴 API 回應順序。
+- 保留媒體優先排列的回歸保護，確保之後 repository 時序不同也不會批准或套用錯誤建議。
+
+### 關鍵決策和解決方案
+
+- API 的建議列表按建立時間倒序返回；不同 runner 上同毫秒建立的建議可能有不同相對順序，因此測試必須以目標類型與欄位識別資料。
+- 不修改產品 API 排序契約，只修正測試的模糊 selector，避免為測試穩定性引入不必要的業務行為變更。
+
+### 使用的技術棧與修改文件
+
+- Vitest、Fastify inject、TypeScript。
+- `apps/api/tests/siteConnections.test.ts`
+- `README.md`
+
+### 驗證與下一步
+
+- 修正前確定性回歸測試失敗，實際取得 `targetCmsId: '904'`；修正後同一命令通過並正確對文章 `404` 執行批准與套用。
+- 強制媒體優先排序的回歸測試連續 20/20 次通過；`npm run lint`、`npm run test`（API 43 passed／4 skipped、Web 8 passed、Worker 4 passed、共享包 8 passed）、`npm run build`、`npm run security:audit` 和 `git diff --check` 均通過。
+- 推送 `main` 後確認新的 Production Deploy workflow，並在 workflow 完成後檢查公開 API health。

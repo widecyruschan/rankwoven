@@ -3159,8 +3159,13 @@ describe('site connection routes', () => {
         }>;
       };
     }>();
-    const titleSuggestion = suggestionsBody.data.suggestions.find(
-      (suggestion) => suggestion.fieldName === 'title'
+    // Suggestions are newest-first, so media can precede article suggestions.
+    const suggestionsWithMediaFirst = [
+      ...suggestionsBody.data.suggestions.filter((suggestion) => suggestion.targetType === 'media'),
+      ...suggestionsBody.data.suggestions.filter((suggestion) => suggestion.targetType !== 'media')
+    ];
+    const titleSuggestion = suggestionsWithMediaFirst.find(
+      (suggestion) => suggestion.targetType === 'article' && suggestion.fieldName === 'title'
     );
     const metaDescriptionSuggestion = suggestionsBody.data.suggestions.find(
       (suggestion) => suggestion.fieldName === 'metaDescription'
