@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { blogArticles, getAdjacentBlogArticles, loadBlogArticle } from '../src/blog/articles';
+import { publicSeoKeywordKeys } from '../src/constants/publicSeo';
 import { i18n } from '../src/i18n';
 import { updateSeoHead } from '../src/utils/seoHead';
 
@@ -77,12 +78,12 @@ describe('web smoke test', () => {
 
     try {
       i18n.global.locale.value = 'en';
-      expect(i18n.global.t('publicPages.features.title')).toContain('Reviewable SEO');
-      expect(i18n.global.t('publicPages.privacy.title')).toBe('Privacy policy');
+      expect(i18n.global.t('publicPages.features.title')).toContain('AI SEO Website Optimization Tools');
+      expect(i18n.global.t('publicPages.privacy.title')).toBe('AI SEO Tool Privacy Policy');
 
       i18n.global.locale.value = 'zh-Hant';
       expect(i18n.global.t('publicPages.features.title')).toContain('可審核');
-      expect(i18n.global.t('publicPages.terms.title')).toBe('服務條款');
+      expect(i18n.global.t('publicPages.terms.title')).toBe('AI SEO 工具服務條款');
     } finally {
       i18n.global.locale.value = originalLocale;
     }
@@ -113,12 +114,14 @@ describe('web smoke test', () => {
       description: 'RankWoven SEO 教學與網站 SEO 優化教程。',
       canonicalUrl: 'https://rankwoven.com/',
       indexable: true,
+      keywords: ['SEO 教學'],
       locale: 'zh_Hant'
     });
 
     expect(document.title).toContain('SEO 教學');
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('網站 SEO');
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('index, follow');
+    expect(document.querySelector('meta[name="keywords"]')?.getAttribute('content')).toBe('SEO 教學');
     expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://rankwoven.com/');
     expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://rankwoven.com/');
 
@@ -131,5 +134,43 @@ describe('web smoke test', () => {
     });
 
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex, nofollow');
+    expect(document.querySelector('meta[name="keywords"]')).toBeNull();
+  });
+
+  it('assigns one unique localized keyword to every indexable public page', () => {
+    const originalLocale = i18n.global.locale.value;
+    const contentPages = ['features', 'docs', 'help', 'about', 'contact', 'privacy', 'terms', 'blog'] as const;
+
+    try {
+      for (const locale of ['en', 'zh-Hant'] as const) {
+        i18n.global.locale.value = locale;
+        const keywords = Object.values(publicSeoKeywordKeys).map((keywordKey) => String(i18n.global.t(keywordKey)));
+
+        expect(keywords).toHaveLength(10);
+        expect(new Set(keywords).size).toBe(keywords.length);
+        expect(keywords.every((keyword, index) => keyword !== Object.values(publicSeoKeywordKeys)[index])).toBe(true);
+
+        for (const page of contentPages) {
+          const keyword = String(i18n.global.t(publicSeoKeywordKeys[page])).toLocaleLowerCase();
+          expect(String(i18n.global.t(`publicPages.${page}.title`)).toLocaleLowerCase()).toContain(keyword);
+          expect(String(i18n.global.t(`publicPages.${page}.body`)).toLocaleLowerCase()).toContain(keyword);
+        }
+
+        const homeKeyword = String(i18n.global.t(publicSeoKeywordKeys.home)).toLocaleLowerCase();
+        expect(String(i18n.global.t('marketing.homeTitle')).toLocaleLowerCase()).toContain(homeKeyword);
+        expect(String(i18n.global.t('marketing.headline')).toLocaleLowerCase()).toContain(homeKeyword);
+        expect(String(i18n.global.t('marketing.homeDescription')).toLocaleLowerCase()).toContain(homeKeyword);
+
+        const pricingKeyword = String(i18n.global.t(publicSeoKeywordKeys.pricing)).toLocaleLowerCase();
+        expect(String(i18n.global.t('pricing.title')).toLocaleLowerCase()).toContain(pricingKeyword);
+        expect(String(i18n.global.t('pricing.body')).toLocaleLowerCase()).toContain(pricingKeyword);
+        expect(String(i18n.global.t('marketing.pricingDescription')).toLocaleLowerCase()).toContain(pricingKeyword);
+      }
+
+      i18n.global.locale.value = 'zh-Hant';
+      expect(i18n.global.t(publicSeoKeywordKeys.home)).toBe('SEO 教學');
+    } finally {
+      i18n.global.locale.value = originalLocale;
+    }
   });
 });

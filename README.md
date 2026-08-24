@@ -3272,3 +3272,53 @@ Vue 3、Vue Router、Vue I18n、TypeScript、Vite、Schema.org JSON-LD、Open Gr
 - 已使用既有 `scripts/deploy-production.sh` 以乾淨 Git ref `4b766d2` 完成手動部署；部署前配置與資料庫備份均已建立，migration 全部為已套用狀態。
 - 生產驗證通過：`https://api.rankwoven.com/health`、受保護 API smoke check、Web／API／Worker／Postgres／Redis 容器狀態；`/login`、`/register`、`/app` 回傳 `X-Robots-Tag: noindex, nofollow, noarchive`，首頁維持可索引。
 - 生產入口仍是 Vite SPA；Blog 與公開子頁的完整初始 HTML metadata／正文 SSR/SSG 仍列在後續行動清單，不宣稱已完成。
+
+## 會話總結（2026-08-24）— 公開頁面長尾關鍵詞配置
+
+### 會話主要目的
+
+以首頁 `SEO 教學` 為主關鍵詞，為每個可索引公開頁分配唯一長尾關鍵詞，並讓關鍵詞自然出現在頁面 H1、title、description 和 SEO head。
+
+### 完成的主要任務
+
+1. 建立 10 個公開入口的中英文關鍵詞映射；登入、客戶後台和管理後台不配置 SEO 關鍵詞。
+2. 路由新增 `keywordKey`，語言切換時同步更新 `meta[name="keywords"]`；進入私有頁或無關鍵詞頁時會移除舊值。
+3. 更新首頁、功能、文件、支援、品牌、聯絡、法律、Blog 和定價頁文案，讓 H1／title／description 自然包含對應關鍵詞。
+4. Blog 文章以各自標題作長尾關鍵詞，並同步到 BlogPosting schema。
+5. 增加測試，檢查中英文關鍵詞唯一性、首頁主詞、可見文案覆蓋及私有頁清理行為。
+
+### 關鍵決策和解決方案
+
+- `meta keywords` 僅作其他搜尋引擎與內部稽核用途；主要 SEO 信號仍由可見 H1、title、description、正文與內部連結承載。
+- 每個靜態公開頁只指定一個 focus keyword，避免把「SEO 教學」重複塞入所有頁面造成搜尋意圖競爭。
+- Blog 正文維持人工審校的繁體中文，文章長尾詞不建立未經審校的英文假翻譯。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Vue Router、Vue I18n、Vitest、Schema.org BlogPosting。
+
+### 新增或修改文件
+
+- `apps/web/src/constants/publicSeo.ts`
+- `apps/web/src/utils/seoHead.ts`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/views/BlogArticleView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/i18n/publicPages.ts`
+- `apps/web/index.html`
+- `apps/web/tests/smoke.test.ts`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證與下一步
+
+- 針對性 Web 測試通過，8 tests；全量 lint、test、build 和安全審計於提交前執行。
+- 本次只提交到目前 `main` 分支，不推送、不部署；如需上線，需再次明確授權推送 `main`。
+- 後續仍建議把公開層遷移至 SSG／SSR，讓所有子頁的 H1、正文與獨立 metadata 出現在初始 HTML。
+
+### 會話補記（2026-08-24）
+
+- 新增 `apps/web/scripts/generate-seo-pages.mjs`，在 Vite build 後為 10 個公開入口和 86 篇 Blog 文章輸出 96 個路由專屬 `dist/**/index.html`；每個檔案含對應 title、description、keywords、canonical、Open Graph，文章另含 BlogPosting JSON-LD。
+- `apps/web/nginx.conf` 的公開 fallback 會優先返回路由專屬 `index.html`；登入、認證和後台路由仍使用 noindex fallback。
+- 這是 metadata fallback，不是完整 SSR/SSG：公開頁面的 H1 和正文仍由 Vue runtime 渲染，完整內容索引仍列為後續架構工作。
+- 驗證：`npm run lint`、`npm run test`（43 passed、4 skipped API；8 passed Web；4 passed Worker；7 passed ai-providers；1 passed cms-adapters）、`npm run build`、`npm run security:audit` 和 `git diff --check` 均通過；獨立腳本核對 96 個輸出頁與 96 個唯一 keywords 一致。Nginx 容器語法檢查因本機 Docker containerd read-only 而未完成，本機亦沒有 nginx CLI。

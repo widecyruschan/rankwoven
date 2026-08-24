@@ -57,10 +57,12 @@ const messages = {
     },
     marketing: {
       homeTitle: 'SEO Tutorials | Website SEO and AI Optimization',
+      homeKeyword: 'SEO tutorials',
       homeDescription:
         'Practical SEO tutorials for website SEO, technical optimization, content strategy, and AI-powered workflows with RankWoven.',
-      pricingTitle: 'Pricing',
-      pricingDescription: 'Compare RankWoven plans for website SEO audits, AI optimization, content workflows, and multi-site teams.',
+      pricingTitle: 'AI SEO Website Optimization Pricing',
+      pricingKeyword: 'AI SEO website optimization pricing',
+      pricingDescription: 'Compare AI SEO website optimization pricing for audits, content workflows, image tasks, and multi-site teams.',
       eyebrow: 'RankWoven AI SEO',
       headline: 'SEO tutorials for website SEO and AI optimization',
       subheadline:
@@ -170,8 +172,8 @@ const messages = {
     },
     pricing: {
       eyebrow: 'Simple pricing',
-      title: 'Plans for sites, teams, and agencies',
-      body: 'Choose a plan that matches your connected sites, audit volume, and review workflow.',
+      title: 'AI SEO Website Optimization Pricing',
+      body: 'Compare AI SEO website optimization pricing and choose a plan that matches your connected sites, audit volume, and review workflow.',
       action: 'Choose plan',
       recommended: 'Recommended',
       starter: {
@@ -1140,10 +1142,12 @@ const messages = {
     },
     marketing: {
       homeTitle: 'SEO 教學｜網站 SEO 整合 AI 優化教程',
+      homeKeyword: 'SEO 教學',
       homeDescription:
         'RankWoven SEO 教學，整理網站 SEO、技術 SEO、內容優化與 AI 優化教程，幫助你建立可審核、可持續的搜尋增長流程。',
-      pricingTitle: '定價',
-      pricingDescription: '比較 RankWoven 網站 SEO 審計、AI 優化、內容流程與多站點團隊方案，選擇適合的 SEO 工具套餐。',
+      pricingTitle: 'AI SEO 網站優化工具價格',
+      pricingKeyword: 'AI SEO 網站優化工具價格',
+      pricingDescription: '比較 RankWoven AI SEO 網站優化工具價格、審計用量、內容流程、圖片任務與多站點團隊方案。',
       eyebrow: 'RankWoven AI SEO',
       headline: 'SEO 教學與網站 SEO 整合 AI 優化教程',
       subheadline:
@@ -1253,8 +1257,8 @@ const messages = {
     },
     pricing: {
       eyebrow: '清晰定價',
-      title: '面向網站、團隊與代理商的套餐',
-      body: '按連接站點、審計量與審核流程選擇合適套餐，後續可接入帳單與用量限制。',
+      title: 'AI SEO 網站優化工具價格',
+      body: '比較 AI SEO 網站優化工具價格，按連接站點、審計量與審核流程選擇合適套餐。',
       action: '選擇套餐',
       recommended: '推薦',
       starter: {

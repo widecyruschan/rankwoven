@@ -2,8 +2,9 @@ export const publicPageMessages = {
   en: {
     features: {
       eyebrow: 'Product capabilities',
-      title: 'Reviewable SEO workflows for every content surface',
-      body: 'RankWoven connects your CMS, finds practical opportunities, and keeps every AI-assisted change reviewable before it reaches production.',
+      keyword: 'AI SEO website optimization tools',
+      title: 'Reviewable AI SEO Website Optimization Tools',
+      body: 'Explore AI SEO website optimization tools that connect your CMS, find practical opportunities, and keep every assisted change reviewable before production.',
       screenshotLabel: 'Product screenshot placeholder',
       cta: 'Open the workspace',
       items: [
@@ -21,8 +22,9 @@ export const publicPageMessages = {
     },
     blog: {
       eyebrow: 'RankWoven journal',
-      title: 'SEO Tutorials & AI Optimization',
-      body: 'A structured Traditional Chinese SEO tutorial covering website SEO, technical SEO, content, local search, analytics, and AI optimization.',
+      keyword: 'website SEO and AI optimization tutorials',
+      title: 'Website SEO and AI Optimization Tutorials',
+      body: 'Website SEO and AI optimization tutorials covering technical SEO, content, local search, analytics, and practical optimization workflows.',
       readArticle: 'Read article',
       articleCount: '{count} articles',
       languageNote: 'Articles are written in Traditional Chinese',
@@ -72,8 +74,9 @@ export const publicPageMessages = {
     },
     docs: {
       eyebrow: 'Product documentation',
-      title: 'Connect a site and start an auditable optimization workflow',
-      body: 'Use this quick path to connect a CMS, sync content, review suggestions, and apply approved changes safely.',
+      keyword: 'WordPress AI SEO optimization tutorial',
+      title: 'WordPress AI SEO Optimization Tutorial',
+      body: 'Follow this WordPress AI SEO optimization tutorial to connect your CMS, sync content, review suggestions, and apply approved changes safely.',
       navigation: ['Quick start', 'Connect WordPress', 'Review suggestions', 'Apply and roll back'],
       steps: [
         { title: 'Connect your site', body: 'Create a site connection, select the CMS adapter, and keep the generated token in your plugin configuration.' },
@@ -87,8 +90,9 @@ export const publicPageMessages = {
     },
     help: {
       eyebrow: 'Help centre',
-      title: 'Answers before you connect a site',
-      body: 'Browse common questions about reviewable AI, CMS connections, permissions, and safe writeback.',
+      keyword: 'AI SEO website optimization FAQ',
+      title: 'AI SEO Website Optimization FAQ',
+      body: 'Browse this AI SEO website optimization FAQ for answers about reviewable AI, CMS connections, permissions, and safe writeback.',
       contactCta: 'Contact support',
       faqs: [
         { question: 'Does RankWoven publish AI content automatically?', answer: 'No. Suggestions remain editable and require approval before a writeback task can be created.' },
@@ -100,8 +104,9 @@ export const publicPageMessages = {
     },
     about: {
       eyebrow: 'About RankWoven',
-      title: 'Make SEO improvement understandable and reviewable',
-      body: 'RankWoven helps teams improve the content they already own, with enough context for people to make the final call.',
+      keyword: 'reviewable AI SEO optimization platform',
+      title: 'A Reviewable AI SEO Optimization Platform',
+      body: 'RankWoven is a reviewable AI SEO optimization platform that helps teams improve existing content while people retain the final decision.',
       missionTitle: 'Our working principle',
       missionBody: 'AI should surface useful options, explain why they matter, and leave a reliable record of what changed. It should not turn publishing into a black box.',
       valuesTitle: 'What we value',
@@ -114,8 +119,9 @@ export const publicPageMessages = {
     },
     contact: {
       eyebrow: 'Contact RankWoven',
-      title: 'Tell us where your SEO workflow gets stuck',
-      body: 'Share your site type, team workflow, or integration question. The form is ready for a backend handoff and does not send data from this prototype.',
+      keyword: 'website SEO optimization support',
+      title: 'Website SEO Optimization Support',
+      body: 'Contact website SEO optimization support about your site type, team workflow, or integration question. This prototype form does not send data.',
       name: 'Name',
       email: 'Work email',
       message: 'What would you like to improve?',
@@ -125,8 +131,9 @@ export const publicPageMessages = {
     },
     privacy: {
       eyebrow: 'Legal',
-      title: 'Privacy policy',
-      body: 'This page is a product-ready placeholder. Replace the sections below with the approved policy before production launch.',
+      keyword: 'AI SEO tool privacy policy',
+      title: 'AI SEO Tool Privacy Policy',
+      body: 'Read the AI SEO tool privacy policy framework covering account data, connected sites, audits, usage events, retention, and deletion.',
       sections: [
         { title: 'Information we process', body: 'Account details, connected site metadata, content supplied for audit, usage events, and support messages may be processed to provide the service.' },
         { title: 'How we use information', body: 'We use information to authenticate users, run requested audits, show workflow history, improve reliability, and respond to support requests.' },
@@ -136,8 +143,9 @@ export const publicPageMessages = {
     },
     terms: {
       eyebrow: 'Legal',
-      title: 'Terms of service',
-      body: 'This page is a product-ready placeholder. Replace the sections below with approved terms before accepting paid subscriptions.',
+      keyword: 'AI SEO tool terms of service',
+      title: 'AI SEO Tool Terms of Service',
+      body: 'Read the AI SEO tool terms of service framework for connected sites, AI-assisted suggestions, plans, limits, and termination.',
       sections: [
         { title: 'Using the service', body: 'Customers are responsible for the sites they connect, the permissions they grant, and the content they approve for writeback.' },
         { title: 'AI-assisted suggestions', body: 'Suggestions are provided for review and do not guarantee traffic, rankings, conversions, or legal compliance for a specific industry.' },
@@ -149,8 +157,9 @@ export const publicPageMessages = {
   'zh-Hant': {
     features: {
       eyebrow: '產品能力',
-      title: '覆蓋每個內容表面的可審核 SEO 流程',
-      body: 'RankWoven 連接你的 CMS，找出可執行的優化機會，並在變更進入正式站前保留完整人工審核。',
+      keyword: 'AI SEO 網站優化工具功能',
+      title: '可審核 AI SEO 網站優化工具功能',
+      body: '了解 RankWoven 的 AI SEO 網站優化工具功能：連接 CMS、找出優化機會，並在變更進入正式站前保留人工審核。',
       screenshotLabel: '產品截圖預留位置',
       cta: '進入工作台',
       items: [
@@ -168,8 +177,9 @@ export const publicPageMessages = {
     },
     blog: {
       eyebrow: 'RankWoven 專欄',
-      title: 'SEO 教學專欄｜網站 SEO 與 AI 優化',
-      body: '一套有結構的繁體中文 SEO 教學，涵蓋網站 SEO 基礎、技術 SEO、內容、在地搜尋、數據分析與 AI 優化教程。',
+      keyword: '網站 SEO 整合 AI 優化教程',
+      title: '網站 SEO 整合 AI 優化教程',
+      body: '網站 SEO 整合 AI 優化教程，涵蓋 SEO 基礎、技術 SEO、內容、在地搜尋、數據分析與可執行的 AI 優化流程。',
       readArticle: '閱讀文章',
       articleCount: '共 {count} 篇文章',
       languageNote: '文章正文以繁體中文撰寫',
@@ -219,8 +229,9 @@ export const publicPageMessages = {
     },
     docs: {
       eyebrow: '產品文件',
-      title: '連接站點，開始可審核的優化流程',
-      body: '按這條快速路徑連接 CMS、同步內容、審核建議，再安全地套用已批准變更。',
+      keyword: 'WordPress AI SEO 優化教學',
+      title: 'WordPress AI SEO 優化教學',
+      body: '按照 WordPress AI SEO 優化教學連接 CMS、同步內容、審核建議，再安全套用已批准的變更。',
       navigation: ['快速開始', '連接 WordPress', '審核建議', '套用與回滾'],
       steps: [
         { title: '連接站點', body: '建立站點連接、選擇 CMS 適配器，並把生成的 Token 保存到插件設定。' },
@@ -234,8 +245,9 @@ export const publicPageMessages = {
     },
     help: {
       eyebrow: '支援中心',
-      title: '連接站點前先找到答案',
-      body: '查看可審核 AI、CMS 連接、權限和安全寫回的常見問題。',
+      keyword: 'AI SEO 網站優化常見問題',
+      title: 'AI SEO 網站優化常見問題',
+      body: '查看 AI SEO 網站優化常見問題，了解人工審核、CMS 連接、團隊權限和安全寫回流程。',
       contactCta: '聯絡支援',
       faqs: [
         { question: 'RankWoven 會自動發布 AI 內容嗎？', answer: '不會。所有建議都可以編輯，並且必須批准後才會建立寫回任務。' },
@@ -247,8 +259,9 @@ export const publicPageMessages = {
     },
     about: {
       eyebrow: '關於 RankWoven',
-      title: '讓 SEO 優化變得易懂、可審核',
-      body: 'RankWoven 幫助團隊改善自己已經擁有的內容，提供足夠上下文，讓人做最後決定。',
+      keyword: '可審核 AI SEO 優化平台',
+      title: '可審核 AI SEO 優化平台',
+      body: 'RankWoven 是可審核 AI SEO 優化平台，協助團隊改善現有內容，同時保留足夠上下文與人工最終決定。',
       missionTitle: '我們的工作原則',
       missionBody: 'AI 應該提出有用選項、解釋它們為什麼重要，並留下可靠的變更記錄；發布不應變成黑盒。',
       valuesTitle: '我們重視的事',
@@ -261,8 +274,9 @@ export const publicPageMessages = {
     },
     contact: {
       eyebrow: '聯絡 RankWoven',
-      title: '告訴我們你的 SEO 流程卡在哪裡',
-      body: '分享你的站點類型、團隊流程或整合問題。表單已預留後端接入，目前不會從這個原型發送資料。',
+      keyword: '網站 SEO 優化技術支援',
+      title: '網站 SEO 優化技術支援',
+      body: '聯絡網站 SEO 優化技術支援，說明你的站點類型、團隊流程或整合問題；目前此原型表單不會發送資料。',
       name: '姓名',
       email: '工作電郵',
       message: '你想改善什麼？',
@@ -272,8 +286,9 @@ export const publicPageMessages = {
     },
     privacy: {
       eyebrow: '法律文件',
-      title: '私隱政策',
-      body: '這是可直接放入產品的文件骨架。正式上線前請替換成已批准的政策內容。',
+      keyword: 'AI SEO 工具私隱政策',
+      title: 'AI SEO 工具私隱政策',
+      body: 'AI SEO 工具私隱政策框架，說明帳戶資料、已連接站點、審計內容、使用事件、資料保留與刪除。',
       sections: [
         { title: '我們處理的資料', body: '為提供服務，可能會處理帳戶資料、已連接站點資訊、用於審計的內容、用量事件和支援訊息。' },
         { title: '資料用途', body: '資料用於驗證用戶、執行請求的審計、展示流程歷史、改善可靠性和回覆支援請求。' },
@@ -283,8 +298,9 @@ export const publicPageMessages = {
     },
     terms: {
       eyebrow: '法律文件',
-      title: '服務條款',
-      body: '這是可直接放入產品的文件骨架。接受付費訂閱前請替換成已批准的條款內容。',
+      keyword: 'AI SEO 工具服務條款',
+      title: 'AI SEO 工具服務條款',
+      body: 'AI SEO 工具服務條款框架，說明連接站點、AI 輔助建議、套餐限制、服務變更與終止安排。',
       sections: [
         { title: '使用服務', body: '客戶需對自己連接的站點、授予的權限，以及批准寫回的內容負責。' },
         { title: 'AI 輔助建議', body: '建議只供審核，不保證流量、排名、轉化或特定行業的法律合規。' },

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalizedLoaded, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { i18n } from '../i18n';
+import { publicSeoKeywordKeys } from '../constants/publicSeo';
 import { updateSeoHead } from '../utils/seoHead';
 
 const routes: RouteRecordRaw[] = [
@@ -14,7 +15,8 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: false,
       indexable: true,
       canonicalPath: '/',
-      descriptionKey: 'marketing.homeDescription'
+      descriptionKey: 'marketing.homeDescription',
+      keywordKey: publicSeoKeywordKeys.home
     }
   },
   ...(['features', 'docs', 'help', 'about', 'contact', 'privacy', 'terms'] as const).map((page) => ({
@@ -28,7 +30,8 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: false,
       indexable: true,
       canonicalPath: `/${page}`,
-      descriptionKey: `publicPages.${page}.body`
+      descriptionKey: `publicPages.${page}.body`,
+      keywordKey: publicSeoKeywordKeys[page]
     }
   })),
   {
@@ -41,7 +44,8 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: false,
       indexable: true,
       canonicalPath: '/blog',
-      descriptionKey: 'publicPages.blog.body'
+      descriptionKey: 'publicPages.blog.body',
+      keywordKey: publicSeoKeywordKeys.blog
     }
   },
   {
@@ -53,7 +57,8 @@ const routes: RouteRecordRaw[] = [
       layout: 'marketing',
       requiresAuth: false,
       indexable: true,
-      descriptionKey: 'publicPages.blog.body'
+      descriptionKey: 'publicPages.blog.body',
+      keywordKey: publicSeoKeywordKeys.blog
     }
   },
   {
@@ -66,7 +71,8 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: false,
       indexable: true,
       canonicalPath: '/pricing',
-      descriptionKey: 'marketing.pricingDescription'
+      descriptionKey: 'marketing.pricingDescription',
+      keywordKey: publicSeoKeywordKeys.pricing
     }
   },
   {
@@ -355,6 +361,8 @@ function updateRouteSeo(to: RouteLocationNormalizedLoaded) {
   const title = `${String(i18n.global.t(titleKey))} | RankWoven`;
   const descriptionKey = typeof to.meta.descriptionKey === 'string' ? to.meta.descriptionKey : '';
   const description = descriptionKey ? String(i18n.global.t(descriptionKey)) : '';
+  const keywordKey = typeof to.meta.keywordKey === 'string' ? to.meta.keywordKey : '';
+  const keyword = keywordKey ? String(i18n.global.t(keywordKey)) : '';
   const canonicalUrl = new URL(String(to.meta.canonicalPath ?? to.path), window.location.origin).toString();
   const locale = String(i18n.global.locale.value).replace('-', '_');
 
@@ -363,6 +371,7 @@ function updateRouteSeo(to: RouteLocationNormalizedLoaded) {
     description,
     canonicalUrl,
     indexable: to.meta.indexable === true,
+    keywords: keyword ? [keyword] : undefined,
     type: to.path.startsWith('/blog/') ? 'article' : 'website',
     locale
   });

@@ -1,0 +1,92 @@
+{
+  "home": {
+    "path": "/",
+    "keywordKey": "marketing.homeKeyword",
+    "seo": {
+      "keyword": "SEO 教學",
+      "title": "SEO 教學｜網站 SEO 整合 AI 優化教程",
+      "description": "RankWoven SEO 教學，整理網站 SEO、技術 SEO、內容優化與 AI 優化教程，幫助你建立可審核、可持續的搜尋增長流程。"
+    }
+  },
+  "features": {
+    "path": "/features",
+    "keywordKey": "publicPages.features.keyword",
+    "seo": {
+      "keyword": "AI SEO 網站優化工具功能",
+      "title": "可審核 AI SEO 網站優化工具功能",
+      "description": "了解 RankWoven 的 AI SEO 網站優化工具功能：連接 CMS、找出優化機會，並在變更進入正式站前保留人工審核。"
+    }
+  },
+  "docs": {
+    "path": "/docs",
+    "keywordKey": "publicPages.docs.keyword",
+    "seo": {
+      "keyword": "WordPress AI SEO 優化教學",
+      "title": "WordPress AI SEO 優化教學",
+      "description": "按照 WordPress AI SEO 優化教學連接 CMS、同步內容、審核建議，再安全套用已批准的變更。"
+    }
+  },
+  "help": {
+    "path": "/help",
+    "keywordKey": "publicPages.help.keyword",
+    "seo": {
+      "keyword": "AI SEO 網站優化常見問題",
+      "title": "AI SEO 網站優化常見問題",
+      "description": "查看 AI SEO 網站優化常見問題，了解人工審核、CMS 連接、團隊權限和安全寫回流程。"
+    }
+  },
+  "about": {
+    "path": "/about",
+    "keywordKey": "publicPages.about.keyword",
+    "seo": {
+      "keyword": "可審核 AI SEO 優化平台",
+      "title": "可審核 AI SEO 優化平台",
+      "description": "RankWoven 是可審核 AI SEO 優化平台，協助團隊改善現有內容，同時保留足夠上下文與人工最終決定。"
+    }
+  },
+  "contact": {
+    "path": "/contact",
+    "keywordKey": "publicPages.contact.keyword",
+    "seo": {
+      "keyword": "網站 SEO 優化技術支援",
+      "title": "網站 SEO 優化技術支援",
+      "description": "聯絡網站 SEO 優化技術支援，說明你的站點類型、團隊流程或整合問題；目前此原型表單不會發送資料。"
+    }
+  },
+  "privacy": {
+    "path": "/privacy",
+    "keywordKey": "publicPages.privacy.keyword",
+    "seo": {
+      "keyword": "AI SEO 工具私隱政策",
+      "title": "AI SEO 工具私隱政策",
+      "description": "AI SEO 工具私隱政策框架，說明帳戶資料、已連接站點、審計內容、使用事件、資料保留與刪除。"
+    }
+  },
+  "terms": {
+    "path": "/terms",
+    "keywordKey": "publicPages.terms.keyword",
+    "seo": {
+      "keyword": "AI SEO 工具服務條款",
+      "title": "AI SEO 工具服務條款",
+      "description": "AI SEO 工具服務條款框架，說明連接站點、AI 輔助建議、套餐限制、服務變更與終止安排。"
+    }
+  },
+  "blog": {
+    "path": "/blog",
+    "keywordKey": "publicPages.blog.keyword",
+    "seo": {
+      "keyword": "網站 SEO 整合 AI 優化教程",
+      "title": "網站 SEO 整合 AI 優化教程",
+      "description": "網站 SEO 整合 AI 優化教程，涵蓋 SEO 基礎、技術 SEO、內容、在地搜尋、數據分析與可執行的 AI 優化流程。"
+    }
+  },
+  "pricing": {
+    "path": "/pricing",
+    "keywordKey": "marketing.pricingKeyword",
+    "seo": {
+      "keyword": "AI SEO 網站優化工具價格",
+      "title": "AI SEO 網站優化工具價格",
+      "description": "比較 RankWoven AI SEO 網站優化工具價格、審計用量、內容流程、圖片任務與多站點團隊方案。"
+    }
+  }
+}

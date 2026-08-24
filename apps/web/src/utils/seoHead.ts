@@ -3,6 +3,7 @@ export interface SeoHeadOptions {
   description: string;
   canonicalUrl: string;
   indexable: boolean;
+  keywords?: readonly string[];
   type?: 'website' | 'article';
   imageUrl?: string;
   locale?: string;
@@ -38,6 +39,12 @@ export function updateSeoHead(options: SeoHeadOptions) {
   document.title = options.title;
   setMeta('name', 'description', options.description);
   setMeta('name', 'robots', options.indexable ? 'index, follow' : 'noindex, nofollow');
+  const keywords = options.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? [];
+  if (options.indexable && keywords.length > 0) {
+    setMeta('name', 'keywords', [...new Set(keywords)].join(', '));
+  } else {
+    removeMeta('name', 'keywords');
+  }
   setMeta('property', 'og:title', options.title);
   setMeta('property', 'og:description', options.description);
   setMeta('property', 'og:url', options.canonicalUrl);

@@ -24,6 +24,7 @@ function updateArticleSeo(currentArticle: BlogArticle) {
     description: currentArticle.excerpt,
     canonicalUrl,
     indexable: true,
+    keywords: [currentArticle.title],
     type: 'article',
     imageUrl: new window.URL(currentArticle.coverImage, window.location.origin).toString(),
     // Article content is authored in Traditional Chinese; keep social metadata aligned
@@ -41,6 +42,7 @@ function updateStructuredData(currentArticle: BlogArticle) {
     '@type': 'BlogPosting',
     headline: currentArticle.title,
     description: currentArticle.excerpt,
+    keywords: currentArticle.title,
     image: new window.URL(currentArticle.coverImage, window.location.origin).toString(),
     articleSection: t(`publicPages.blog.categories.${currentArticle.categoryId}`),
     inLanguage: 'zh-Hant',
