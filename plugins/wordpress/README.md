@@ -99,6 +99,8 @@ RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 S
 
 `網站地圖` 頁籤會動態輸出 `sitemap.xml`，包含已發佈的文章、頁面、Portfolio 和商品。管理員也可在同頁手動保存 `robots.txt` 內容；留空時使用 WordPress 預設 robots 輸出。RankWoven 會在 WordPress 動態 `robots.txt` 中自動補上 `Sitemap:` 行，避免手動內容漏掉 `sitemap.xml`；啟用 RSS Sitemap 後也會補上 `sitemap.rss` 行。輸出會排在常見 SEO 插件的 robots filter 之後，避免被 AIOSEO 等插件覆蓋。`Submit to Google` 會透過 SaaS 後端的 Google Search Console API 將 `sitemap.xml` 提交給 Google。
 
+網站地圖頁新增「提交 Sitemap 到搜尋引擎」區塊，提供 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 的官方站長工具或收錄入口。每個連結都會在新分頁開啟，並自動帶入本站的網站屬性（Google）或 Sitemap URL（Brave）。這些連結只負責開啟第三方平台，不會在未經授權的情況下提交資料；需要網站驗證或登入的服務會在其平台內完成。沒有獨立 Sitemap 表單的搜尋引擎會顯示對應說明，並導向可用的 Bing／官方收錄入口。
+
 ## LLMs.txt 與 RSS Sitemap
 
 後台路徑：

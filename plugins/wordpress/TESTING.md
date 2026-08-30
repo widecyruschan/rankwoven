@@ -190,6 +190,9 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] `RankWoven SEO -> 網站地圖` 頁籤可正常顯示 `sitemap.xml` URL 和最近生成 / 提交狀態。
 - [ ] 點擊 `Generate sitemap.xml` 後，`/sitemap.xml` 可在前台直接開啟，且 XML 內容包含已發佈的 Posts、Pages、Portfolio 和 Products。
 - [ ] 點擊 `Submit to Google` 後，插件會調用 SaaS 後端 `POST /api/v1/site-connections/:siteId/search-console/sitemaps`，並使用 Google Search Console API 提交 `sitemap.xml`。
+- [ ] `網站地圖` 頁籤顯示 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 的 Sitemap／站長工具連結。
+- [ ] 每個搜尋引擎連結會在新分頁開啟並帶有 `noopener noreferrer`；Google 連結帶入本站屬性，Brave 連結帶入當前 `sitemap.xml` URL。
+- [ ] 沒有獨立 Sitemap 提交工具的搜尋引擎，卡片會顯示透過 Bing、robots.txt 或官方收錄入口發現內容的說明，不誤標為直接提交。
 - [ ] `網站地圖` 頁籤的 `RSS Sitemap` 區塊可顯示 `/sitemap.rss` URL、啟用開關、貼文數量和 Post Types。
 - [ ] 啟用 RSS Sitemap 後，`/sitemap.rss` 返回 `application/rss+xml` 和合法 RSS 2.0，包含最新已發佈內容的標題、連結、發佈時間、摘要和正文。
 - [ ] 在瀏覽器開啟 `/sitemap.rss` 時會套用 `assets/rss-sitemap.xsl`，顯示藍色可點擊文章標題、發佈時間、摘要、縮略圖／站點圖標和分隔線。

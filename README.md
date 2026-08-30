@@ -3567,3 +3567,46 @@ WordPress PHP 8、WordPress Hooks、robots.txt、前台 meta／hreflang、原生
 
 - 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 13 驗證後台 GEO 分頁、`/robots.txt`、前台 robots meta 和 `hreflang="x-default"`。
 - 通過 PHP 語法檢查後，只提交本次四個插件／文檔文件，再按用戶授權推送 GitHub；WordPress 插件生產部署仍需獨立的 Hosting／主機流程。
+
+## 會話總結（2026-08-31）— Sitemap 搜尋引擎提交入口
+
+### 會話主要目的
+
+在 WordPress 插件的 `網站地圖` 頁面加入各主要搜尋引擎的 Sitemap／站長工具提交連結，方便管理員完成索引提交。
+
+### 完成的主要任務
+
+- 新增 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 提交／收錄入口卡片。
+- Google 連結自動帶入本站首頁作為 Search Console property，Brave 連結自動帶入當前 `sitemap.xml` URL。
+- 所有第三方連結使用新分頁、`noopener noreferrer` 和可訪問性標籤。
+- 對沒有穩定獨立 Sitemap 提交表單的搜尋引擎顯示實際限制及替代發現方式。
+- 插件版本更新至 `0.5.1`，同步更新插件 README 和 WordPress 測試清單。
+
+### 關鍵決策和解決方案
+
+- 不在插件內直接向第三方搜尋引擎提交資料；連結只開啟官方平台，登入、網站驗證和提交由管理員在對方平台完成。
+- 保留既有 SaaS Google Search Console API 提交流程，新增入口只補充 Bing、Baidu、Yandex、Naver、Sogou、Brave 等平台。
+- Yahoo、DuckDuckGo、Ask、AOL 和 Qwant 沒有穩定的獨立 Sitemap 表單，因此使用官方入口或 Bing Webmaster Tools 並在 UI 顯示說明。
+
+### 使用的技術棧
+
+WordPress PHP 8、原生後台 HTML、CSS Grid、官方搜尋引擎站長工具連結。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/admin.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- `git diff --check` 通過；Google property 和 Brave Sitemap URL 參數已使用 URL 編碼。
+- 尚未執行 WordPress runtime 冒煙測試；此前本地 Docker daemon 曾回報 read-only filesystem，需恢復後驗證後台卡片和外部連結。
+- 本次未修改 `.env`、憑據或任何敏感設定。
+
+### 下一步行動清單
+
+- 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 11 驗證所有連結、Sitemap URL 參數及手機版排版。
+- 通過插件 PHP 語法檢查後，只提交本次相關文件並推送到 GitHub `main`。

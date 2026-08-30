@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RankWoven SEO
  * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes GEO controls, LLMs.txt, and RSS Sitemap output.
- * Version: 0.5.0
+ * Version: 0.5.1
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.5.0';
+    private const VERSION = '0.5.1';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -2142,6 +2142,8 @@ final class RankWoven_SEO_Plugin
             <?php $this->render_admin_post_button('rankwoven_submit_sitemap_google', 'rankwoven_submit_sitemap_google', __('Submit to Google', 'rankwoven-seo'), 'secondary'); ?>
         </p>
 
+        <?php $this->render_search_engine_submission_links($sitemap_url); ?>
+
         <h3><?php echo esc_html__('robots.txt 手動設定', 'rankwoven-seo'); ?></h3>
         <p>
             <?php echo esc_html__('在此保存要輸出的 robots.txt 內容。留空時使用 WordPress 預設 robots.txt；RankWoven 會自動保留 Sitemap 行，避免搜尋引擎漏讀 sitemap.xml。', 'rankwoven-seo'); ?>
@@ -2375,6 +2377,112 @@ final class RankWoven_SEO_Plugin
             <?php submit_button(__('保存 GEO 設定', 'rankwoven-seo')); ?>
         </form>
         <?php
+    }
+
+    private function render_search_engine_submission_links(string $sitemap_url): void
+    {
+        $search_engines = $this->get_search_engine_submission_links($sitemap_url);
+        ?>
+        <section class="rankwoven-search-engine-submissions" aria-labelledby="rankwoven-search-engine-submissions-title">
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Search Discovery', 'rankwoven-seo'); ?></span>
+                <h3 id="rankwoven-search-engine-submissions-title"><?php echo esc_html__('提交 Sitemap 到搜尋引擎', 'rankwoven-seo'); ?></h3>
+                <p><?php echo esc_html__('先生成並確認 sitemap.xml，再按需要開啟各搜尋引擎的官方站長工具。需要驗證網站所有權的服務，會在其平台內要求登入及完成驗證。', 'rankwoven-seo'); ?></p>
+            </div>
+            <div class="rankwoven-search-engine-grid">
+                <?php foreach ($search_engines as $engine) : ?>
+                    <article class="rankwoven-search-engine-card">
+                        <div>
+                            <h4><?php echo esc_html((string) $engine['name']); ?></h4>
+                            <p><?php echo esc_html((string) $engine['description']); ?></p>
+                        </div>
+                        <a
+                            class="rankwoven-external-link"
+                            href="<?php echo esc_url((string) $engine['url']); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="<?php echo esc_attr(sprintf(__('在 %s 開啟官方入口', 'rankwoven-seo'), (string) $engine['name'])); ?>"
+                        >
+                            <span aria-hidden="true">&#8599;</span>
+                            <?php echo esc_html__('開啟', 'rankwoven-seo'); ?>
+                        </a>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+            <p class="description">
+                <?php echo esc_html__('提示：Yahoo、DuckDuckGo、Ask、AOL 和 Qwant 沒有穩定的獨立 Sitemap 提交表單；可透過 Bing Webmaster Tools、robots.txt 或其官方抓取／收錄入口發現內容。', 'rankwoven-seo'); ?>
+            </p>
+        </section>
+        <?php
+    }
+
+    private function get_search_engine_submission_links(string $sitemap_url): array
+    {
+        $encoded_site_url = rawurlencode(home_url('/'));
+        $encoded_sitemap_url = rawurlencode($sitemap_url);
+
+        return [
+            [
+                'name' => 'Google',
+                'url' => 'https://search.google.com/search-console/sitemaps?resource_id=' . $encoded_site_url,
+                'description' => __('Search Console Sitemap 報告；需登入並驗證網站。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Bing',
+                'url' => 'https://www.bing.com/webmasters/sitemaps',
+                'description' => __('Bing Webmaster Tools Sitemap 提交工具。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Yahoo',
+                'url' => 'https://www.bing.com/webmasters/sitemaps',
+                'description' => __('Yahoo 搜尋收錄主要透過 Bing Webmaster Tools 管理。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Baidu',
+                'url' => 'https://ziyuan.baidu.com/site/index',
+                'description' => __('百度站長平台網站管理及 Sitemap 提交入口。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Yandex',
+                'url' => 'https://webmaster.yandex.com/sites/',
+                'description' => __('Yandex Webmaster 網站及 Sitemap 管理入口。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'DuckDuckGo',
+                'url' => 'https://www.bing.com/webmasters/sitemaps',
+                'description' => __('沒有獨立 Sitemap 表單；可透過 Bing 及公開 Sitemap 發現。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Ask',
+                'url' => 'https://www.bing.com/webmasters/sitemaps',
+                'description' => __('沒有穩定的獨立提交工具；可透過 Bing 公開 Sitemap 發現。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'AOL',
+                'url' => 'https://www.bing.com/webmasters/sitemaps',
+                'description' => __('沒有穩定的獨立提交工具；可透過 Bing 公開 Sitemap 發現。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Naver',
+                'url' => 'https://searchadvisor.naver.com/',
+                'description' => __('Naver Search Advisor 的 Sitemap／RSS 提交入口。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Qwant',
+                'url' => 'https://help.qwant.com/en/docs/qwant-search/survey-monkey/how-to-get-my-website-listed-on-qwant/',
+                'description' => __('Qwant 官方收錄說明及網站回報入口。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Sogou',
+                'url' => 'https://zhanzhang.sogou.com/',
+                'description' => __('搜狗站長平台網站管理入口。', 'rankwoven-seo')
+            ],
+            [
+                'name' => 'Brave',
+                'url' => 'https://search.brave.com/submit-url?url=' . $encoded_sitemap_url,
+                'description' => __('Brave Search 官方 URL 提交入口；可提交 Sitemap URL。', 'rankwoven-seo')
+            ]
+        ];
     }
 
     private function render_rss_sitemap_page(): void
