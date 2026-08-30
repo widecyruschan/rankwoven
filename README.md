@@ -3699,8 +3699,10 @@ WordPress PHP 8、WooCommerce Post Meta、TypeScript、Fastify、Zod、Vitest、
 - `php-parser` 解析插件 PHP 通過；JavaScript 語法和 `git diff --check` 通過。
 - 已同步插件文件到本地 WordPress 測試站；Docker daemon 因 `/var/lib/docker/containers/...` 唯讀，無法啟動 `cyruschan-wp` 執行 `php -l` 或後台 runtime 驗證。
 - `code-review` 雙軸審查已完成，發現的關鍵詞、商品、空正文和寬度問題均已修正；未提交任何 `.env` 或敏感憑據。
+- 功能提交 `ae03b26` 已推送至 GitHub `main`；`Production Deploy` run `33323877321` 的 Verify 和 Hostinger VPS Deploy 均成功。
+- 部署後 `https://api.rankwoven.com/health` 返回 API 服務正常，`https://rankwoven.com` 返回 `200 OK`。
 
 ### 下一步行動清單
 
 - Docker Desktop 恢復後，重新啟動 `cyruschan-wp`，依 `plugins/wordpress/TESTING.md` 清單 9 驗證文章、頁面和商品的 19 項狀態及圖片圖庫。
-- 本次分支完成後才提交；WordPress 測試站插件已同步，生產插件仍需獨立發布流程。
+- WordPress 測試站插件已同步；生產 WordPress 插件仍需獨立發布流程，不由 VPS GitHub Actions 自動更新。
