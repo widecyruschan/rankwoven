@@ -3370,3 +3370,119 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vitest、Schema.org BlogPosting。
 - 修正前確定性回歸測試失敗，實際取得 `targetCmsId: '904'`；修正後同一命令通過並正確對文章 `404` 執行批准與套用。
 - 強制媒體優先排序的回歸測試連續 20/20 次通過；`npm run lint`、`npm run test`（API 43 passed／4 skipped、Web 8 passed、Worker 4 passed、共享包 8 passed）、`npm run build`、`npm run security:audit` 和 `git diff --check` 均通過。
 - 推送 `main` 後確認新的 Production Deploy workflow，並在 workflow 完成後檢查公開 API health。
+
+## 會話總結（2026-08-29）— WordPress LLMs.txt 設定
+
+### 會話主要目的
+
+為 `rankwoven-seo` WordPress 插件加入可控的 `llms.txt` 內容輸出與 Markdown 文章地址，參考常見 SEO 插件的設定方式。
+
+### 完成的主要任務
+
+- 新增 `LLMs.txt` 後台分頁和 nonce 保護的設定保存流程。
+- 新增 `llms.txt`、`llms-full.txt` 動態純文字輸出，以及可選的文章 `.md` Markdown 輸出。
+- 支援標題／描述模板、公開文章類型和分類法選擇、每種 URL 上限、排除文章 ID 和排除分類項 ID。
+- 僅讀取已發佈且可公開訪問的內容，並對正文 HTML 做基本 Markdown 轉換。
+- 偵測網站根目錄實體 `llms.txt` 文件並在後台提示其可能覆蓋動態輸出。
+
+### 關鍵決策和解決方案
+
+- 所有 LLMs.txt 開關預設關閉，避免升級插件後意外公開內容。
+- `llms-full.txt` 和 `.md` 都要求主 `llms.txt` 開關啟用；未啟用時不接管 WordPress 路由。
+- 文章和分類法範圍沿用 WordPress 公開／可查詢設定，排除附件等非內容類型；輸出不包含任何插件憑據或環境設定。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、`get_posts`／`get_terms`、純文字 Markdown。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證與下一步
+
+- Docker PHP 8.2 `php -l` 已通過；本機未安裝 PHP CLI。
+- 測試站已同步插件源文件；站點根目錄現有實體 `llms.txt`，因此動態輸出需先移除或更新該文件後再做完整前台驗證。
+- 尚未提交、推送 GitHub 或部署；下一步應先完成 WordPress 後台和三個公開地址的手動冒煙測試，再按授權提交。
+
+## 會話總結（2026-08-30）— 將 LLMs.txt 移入網站地圖並新增 RSS Sitemap
+
+### 會話主要目的
+
+依據後台 Sitemap 設定頁的使用方式，將 LLMs.txt 設定集中到「網站地圖」目錄，並加入可提交給搜尋引擎的 RSS Sitemap。
+
+### 完成的主要任務
+
+- 移除獨立的 `LLMs.txt` 子選單，將原有設定區塊放入 `網站地圖` 頁面；舊的 `rankwoven-seo-llms-txt` URL 會回到 Sitemap 頁，保持相容。
+- 新增 RSS Sitemap 設定：啟用開關、最新貼文數量、Post Types 選擇。
+- 新增 `/sitemap.rss` 動態 RSS 2.0 輸出，包含最新已發佈內容的標題、連結、發佈時間、摘要和正文。
+- 新增 `rankwoven_rss_settings` option、保存提示、canonical redirect 排除與測試清單。
+- 插件版本更新至 `0.4.0`。
+
+### 關鍵決策和解決方案
+
+- RSS Sitemap 預設關閉，避免升級後自動公開內容；數量限制套用整個 RSS feed，預設 50 篇。
+- RSS 與完整 `sitemap.xml` 保持不同用途：前者只提供最新更新，後者仍提供全量 URL。
+- LLMs.txt 原有開關與輸出路由保持不變，只調整後台歸類和保存後返回的分頁。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、RSS 2.0 XML、`get_posts`、Docker PHP 8.2。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證與下一步
+
+- Docker PHP 8.2 語法檢查、RSS XML 冒煙和標準 `/sitemap.xml` 輸出驗證均通過；RSS 回應為 `application/rss+xml` 且可由 `xmllint` 解析。
+- 已確認測試站根目錄的實體 `llms.txt` 在測試後恢復；未建立實體 `sitemap.rss` 文件。
+- 尚未提交、推送 GitHub 或部署；提交前需再次確認工作區中沒有 `.env`、密碼、Token 或 API Key。
+
+## 會話總結（2026-08-30）— RSS 可讀樣式與公開內容純文字清理
+
+### 會話主要目的
+
+將 RSS Sitemap 改為接近 MySitemapGenerator 示例的瀏覽器可讀格式，並清理 `llms.txt`、RSS 及相關文章輸出中的編輯器代碼；文章順序維持現有排序。
+
+### 完成的主要任務
+
+- 新增 `assets/rss-sitemap.xsl`，以 `xml-stylesheet` 讓瀏覽器顯示藍色文章標題、發佈時間、摘要、縮略圖／站點圖標與分隔線。
+- RSS 項目加入特色圖片／站點圖標 `enclosure`，並保留標準 RSS 2.0、Atom self link、`content:encoded`。
+- RSS 正文改用共用純文字清理，移除 HTML、Script／Style 和 WordPress／Visual Composer shortcode 代碼。
+- `llms.txt`、`llms-full.txt`、文章 `.md` 與 RSS 共用 shortcode 清理規則，避免輸出 `[vc_row]`、`[vc_column]`、`font_container` 等編輯器片段。
+- RSS 繼續使用 `get_posts` 的 `modified DESC`，XSL 不重新排序，確保與現有文章順序一致。
+
+### 關鍵決策和解決方案
+
+- 不硬編碼外部示例 URL，只參考其 RSS + XSL 展示方式；樣式文件由插件本地提供，避免第三方依賴。
+- 對不規範 shortcode 引號不嘗試猜測屬性正文，直接移除完整 shortcode 標籤與屬性，確保公開文件不洩露樣式／編輯器代碼。
+
+### 使用的技術棧
+
+WordPress PHP 8、RSS 2.0 XML、XSLT 1.0、WordPress `get_posts`／內容清理 API、Docker PHP 8.2。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/rss-sitemap.xsl`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- 測試站插件同步後，Docker PHP 8.2 語法檢查通過。
+- 純文字清理已用包含 `[vc_row]`、`[vc_column]` 和 Visual Composer 屬性的樣本驗證，輸出不再含 shortcode 代碼。
+- 尚未在啟用 RSS 的測試站公開路由上完成完整瀏覽器截圖驗證；測試站根目錄仍存在實體 `llms.txt`，會優先於 WordPress 動態路由返回。
+
+### 下一步行動清單
+
+- 暫時移開測試站實體 `llms.txt`，啟用 RSS 設定後驗證 `/sitemap.rss`、XSL 載入、XML 解析和文章排序。
+- 完成前台驗證後，只提交本次相關文件，再按用戶授權推送 GitHub／部署。

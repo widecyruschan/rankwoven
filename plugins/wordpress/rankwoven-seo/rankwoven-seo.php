@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: RankWoven SEO
- * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization.
- * Version: 0.1.2
+ * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes LLMs.txt and RSS Sitemap output.
+ * Version: 0.4.0
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.1.2';
+    private const VERSION = '0.4.0';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -29,6 +29,9 @@ final class RankWoven_SEO_Plugin
     private const OPTION_LAST_ERROR = 'rankwoven_last_error';
     private const OPTION_LAST_SITEMAP_RESULT = 'rankwoven_last_sitemap_result';
     private const OPTION_LAST_SITEMAP_SUBMISSION_RESULT = 'rankwoven_last_sitemap_submission_result';
+    private const OPTION_ROBOTS_TXT_CONTENT = 'rankwoven_robots_txt_content';
+    private const OPTION_LLMS_SETTINGS = 'rankwoven_llms_settings';
+    private const OPTION_RSS_SETTINGS = 'rankwoven_rss_settings';
     private const OPTION_CONTENT_META_SETTINGS = 'rankwoven_content_meta_settings';
     private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
@@ -68,11 +71,14 @@ final class RankWoven_SEO_Plugin
         add_action('wp_ajax_rankwoven_editor_seo', [$this, 'handle_editor_seo_ajax']);
         add_action('add_attachment', [$this, 'handle_new_attachment']);
         add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
-        add_action('template_redirect', [$this, 'maybe_render_sitemap_xml']);
+        add_action('parse_request', [$this, 'maybe_render_custom_sitemap_request'], -100, 1);
+        add_action('template_redirect', [$this, 'maybe_render_sitemap_xml'], 0);
+        add_action('template_redirect', [$this, 'maybe_render_rss_sitemap_xml'], 0);
+        add_action('template_redirect', [$this, 'maybe_render_llms_content'], 0);
         add_filter('the_content', [$this, 'add_image_title_attributes_to_content']);
         add_filter('sanitize_file_name', [$this, 'filter_uploaded_image_filename'], 20);
         add_filter('redirect_canonical', [$this, 'disable_core_sitemap_redirect'], 10, 2);
-        add_filter('robots_txt', [$this, 'append_sitemap_to_robots_txt'], 20, 2);
+        add_filter('robots_txt', [$this, 'append_sitemap_to_robots_txt'], 20000, 2);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
     }
 
@@ -100,6 +106,16 @@ final class RankWoven_SEO_Plugin
                 [$this, 'render_admin_page']
             );
         }
+
+        // 保留舊的 LLMs.txt 設定 URL，讓既有書籤回到整合後的網站地圖頁。
+        add_submenu_page(
+            null,
+            __('LLMs.txt', 'rankwoven-seo'),
+            __('LLMs.txt', 'rankwoven-seo'),
+            'manage_options',
+            'rankwoven-seo-llms-txt',
+            [$this, 'render_admin_page']
+        );
 
         add_options_page(
             __('RankWoven SEO', 'rankwoven-seo'),
@@ -512,6 +528,21 @@ final class RankWoven_SEO_Plugin
         $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:url', 'content' => $url]);
     }
 
+    public function maybe_render_custom_sitemap_request($wp): void
+    {
+        if ($this->is_sitemap_request()) {
+            $this->maybe_render_sitemap_xml();
+        }
+
+        if ($this->is_rss_sitemap_request()) {
+            $this->maybe_render_rss_sitemap_xml();
+        }
+
+        if ($this->get_llms_request_kind() !== '') {
+            $this->maybe_render_llms_content();
+        }
+    }
+
     public function maybe_render_sitemap_xml(): void
     {
         if (!$this->is_sitemap_request()) {
@@ -527,26 +558,94 @@ final class RankWoven_SEO_Plugin
         exit;
     }
 
+    public function maybe_render_rss_sitemap_xml(): void
+    {
+        if (!$this->is_rss_sitemap_request()) {
+            return;
+        }
+
+        $settings = $this->get_rss_settings();
+        if (empty($settings['enabled'])) {
+            return;
+        }
+
+        nocache_headers();
+        status_header(200);
+        header('Content-Type: application/rss+xml; charset=UTF-8');
+        echo $this->build_rss_sitemap_xml($settings);
+        exit;
+    }
+
+    public function maybe_render_llms_content(): void
+    {
+        $request_kind = $this->get_llms_request_kind();
+        if ($request_kind === '') {
+            return;
+        }
+
+        $settings = $this->get_llms_settings();
+        if ($request_kind === 'llms' && empty($settings['enabled'])) {
+            return;
+        }
+
+        if ($request_kind === 'llms-full' && (empty($settings['enabled']) || empty($settings['full_enabled']))) {
+            return;
+        }
+
+        if ($request_kind === 'markdown') {
+            if (empty($settings['enabled']) || empty($settings['convert_posts_to_markdown'])) {
+                return;
+            }
+
+            $this->maybe_render_markdown_post($settings);
+            return;
+        }
+
+        $content = $request_kind === 'llms-full'
+            ? $this->build_llms_full_txt($settings)
+            : $this->build_llms_txt($settings);
+
+        nocache_headers();
+        status_header(200);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo $content;
+        exit;
+    }
+
     public function append_sitemap_to_robots_txt(string $output, bool $public): string
     {
         if (!$public) {
             return $output;
         }
 
+        $custom_output = $this->get_custom_robots_txt_content();
+        $robots_output = $custom_output !== '' ? $custom_output : $output;
+
+        return $this->append_sitemap_to_robots_content($robots_output);
+    }
+
+    private function append_sitemap_to_robots_content(string $output): string
+    {
         $sitemap_url = $this->get_sitemap_url();
-        if (str_contains($output, $sitemap_url)) {
-            return $output;
+        $trimmed_output = rtrim($output);
+        $lines = $trimmed_output === '' ? [] : [$trimmed_output];
+
+        if (!str_contains($output, $sitemap_url)) {
+            $lines[] = 'Sitemap: ' . $sitemap_url;
         }
 
-        $trimmed_output = rtrim($output);
-        $suffix = $trimmed_output === '' ? '' : "\n";
+        $rss_settings = $this->get_rss_settings();
+        $rss_sitemap_url = $this->get_rss_sitemap_url();
+        if (!empty($rss_settings['enabled']) && !str_contains($output, $rss_sitemap_url)) {
+            $lines[] = 'Sitemap: ' . $rss_sitemap_url;
+        }
 
-        return $trimmed_output . $suffix . 'Sitemap: ' . $sitemap_url . "\n";
+        return implode("\n", $lines) . "\n";
     }
 
     public function disable_core_sitemap_redirect($redirect_url, $requested_url)
     {
-        if ($this->is_sitemap_request()) {
+        if ($this->is_sitemap_request() || $this->is_rss_sitemap_request() || $this->get_llms_request_kind() !== '') {
             return false;
         }
 
@@ -1887,6 +1986,15 @@ final class RankWoven_SEO_Plugin
     private function render_sitemap_page(): void
     {
         $sitemap_url = home_url('/sitemap.xml');
+        $robots_txt_url = home_url('/robots.txt');
+        $custom_robots_txt_content = $this->get_custom_robots_txt_content();
+        $robots_txt_placeholder = implode("\n", [
+            'User-agent: *',
+            'Allow: /',
+            '',
+            'Disallow: /wp-admin/',
+            'Allow: /wp-admin/admin-ajax.php'
+        ]);
         $last_sitemap_result = get_option(self::OPTION_LAST_SITEMAP_RESULT, []);
         $last_sitemap_result = is_array($last_sitemap_result) ? $last_sitemap_result : [];
         $last_submission_result = get_option(self::OPTION_LAST_SITEMAP_SUBMISSION_RESULT, []);
@@ -1895,6 +2003,9 @@ final class RankWoven_SEO_Plugin
         $sitemap_post_types = is_array($sitemap_post_types) ? $sitemap_post_types : [];
         $sitemap_post_types = array_map(static fn ($post_type): string => sanitize_text_field((string) $post_type), $sitemap_post_types);
         ?>
+        <?php $this->render_rss_sitemap_page(); ?>
+        <?php $this->render_llms_txt_page(); ?>
+
         <h2><?php echo esc_html__('Sitemap.xml', 'rankwoven-seo'); ?></h2>
         <p>
             <?php echo esc_html__('This sitemap is generated dynamically from published Posts, Pages, Portfolio items, and Products.', 'rankwoven-seo'); ?>
@@ -1909,6 +2020,50 @@ final class RankWoven_SEO_Plugin
             <?php $this->render_admin_post_button('rankwoven_generate_sitemap', 'rankwoven_generate_sitemap', __('Generate sitemap.xml', 'rankwoven-seo'), 'primary'); ?>
             <?php $this->render_admin_post_button('rankwoven_submit_sitemap_google', 'rankwoven_submit_sitemap_google', __('Submit to Google', 'rankwoven-seo'), 'secondary'); ?>
         </p>
+
+        <h3><?php echo esc_html__('robots.txt 手動設定', 'rankwoven-seo'); ?></h3>
+        <p>
+            <?php echo esc_html__('在此保存要輸出的 robots.txt 內容。留空時使用 WordPress 預設 robots.txt；RankWoven 會自動保留 Sitemap 行，避免搜尋引擎漏讀 sitemap.xml。', 'rankwoven-seo'); ?>
+        </p>
+        <p>
+            <code><?php echo esc_html($robots_txt_url); ?></code>
+            <a href="<?php echo esc_url($robots_txt_url); ?>" target="_blank" rel="noopener noreferrer" style="margin-left:12px;">
+                <?php echo esc_html__('Open robots.txt', 'rankwoven-seo'); ?>
+            </a>
+        </p>
+        <?php if ($this->has_physical_robots_txt_file()) : ?>
+            <div class="notice notice-warning inline">
+                <p>
+                    <?php echo esc_html__('偵測到網站根目錄存在實體 robots.txt。部分主機會優先輸出該文件，令 WordPress 動態 robots.txt 設定不生效；如保存後前台未變更，請檢查主機上的實體文件。', 'rankwoven-seo'); ?>
+                </p>
+            </div>
+        <?php endif; ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('rankwoven_save_settings'); ?>
+            <input type="hidden" name="action" value="rankwoven_save_settings" />
+            <input type="hidden" name="rankwoven_settings_scope" value="sitemap" />
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row">
+                        <label for="rankwoven_robots_txt_content"><?php echo esc_html__('robots.txt Content', 'rankwoven-seo'); ?></label>
+                    </th>
+                    <td>
+                        <textarea
+                            id="rankwoven_robots_txt_content"
+                            name="rankwoven_robots_txt_content"
+                            class="large-text code"
+                            rows="12"
+                            spellcheck="false"
+                            placeholder="<?php echo esc_attr($robots_txt_placeholder); ?>"
+                        ><?php echo esc_textarea($custom_robots_txt_content); ?></textarea>
+                        <p class="description">
+                            <?php echo esc_html__('支援標準 robots.txt 指令，例如 User-agent、Allow、Disallow、Crawl-delay 和 Sitemap。保存後會即時影響 WordPress 動態 /robots.txt。', 'rankwoven-seo'); ?>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(__('Save robots.txt', 'rankwoven-seo')); ?>
+        </form>
 
         <h3><?php echo esc_html__('Last Sitemap Build', 'rankwoven-seo'); ?></h3>
         <table class="widefat striped">
@@ -1949,6 +2104,220 @@ final class RankWoven_SEO_Plugin
                 </tr>
             </tbody>
         </table>
+        <?php
+    }
+
+    private function render_rss_sitemap_page(): void
+    {
+        $settings = $this->get_rss_settings();
+        $post_types = $this->get_llms_public_post_types();
+        $rss_url = $this->get_rss_sitemap_url();
+        $selected_post_types = $settings['post_types'];
+        $all_post_types_selected = empty($selected_post_types);
+        ?>
+        <h2><?php echo esc_html__('RSS Sitemap', 'rankwoven-seo'); ?></h2>
+        <p>
+            <?php echo esc_html__('此選項會生成獨立 RSS Sitemap，供 Google、Bing 和支援 RSS Sitemap 的搜尋引擎提交。它只包含網站最新內容，不是全部內容的完整 Sitemap。', 'rankwoven-seo'); ?>
+        </p>
+        <p>
+            <code><?php echo esc_html($rss_url); ?></code>
+            <a href="<?php echo esc_url($rss_url); ?>" target="_blank" rel="noopener noreferrer" style="margin-left:12px;">
+                <?php echo esc_html__('開啟 RSS Sitemap', 'rankwoven-seo'); ?>
+            </a>
+        </p>
+
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('rankwoven_save_settings'); ?>
+            <input type="hidden" name="action" value="rankwoven_save_settings" />
+            <input type="hidden" name="rankwoven_settings_scope" value="rss_sitemap" />
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php echo esc_html__('啟用 RSS Sitemap', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="rankwoven_rss_settings[enabled]" value="1" <?php checked($settings['enabled']); ?> />
+                            <?php echo esc_html__('啟用 RSS Sitemap', 'rankwoven-seo'); ?>
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_rss_posts_per_page"><?php echo esc_html__('貼文數量', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_rss_posts_per_page" name="rankwoven_rss_settings[posts_per_page]" type="number" class="small-text" min="1" max="500" value="<?php echo esc_attr((string) $settings['posts_per_page']); ?>" />
+                        <p class="description"><?php echo esc_html__('RSS Sitemap 會輸出最新更新內容；建議使用 50 篇以內。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Post Types', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <?php if (empty($post_types)) : ?>
+                            <p class="description"><?php echo esc_html__('目前沒有可用的公開文章類型。', 'rankwoven-seo'); ?></p>
+                        <?php else : ?>
+                            <?php foreach ($post_types as $post_type => $post_type_object) : ?>
+                                <label style="display:block;margin-bottom:6px;">
+                                    <input type="checkbox" name="rankwoven_rss_settings[post_types][]" value="<?php echo esc_attr($post_type); ?>" <?php checked($all_post_types_selected || in_array($post_type, $selected_post_types, true)); ?> />
+                                    <?php echo esc_html((string) ($post_type_object->labels->name ?? $post_type)); ?>
+                                    <code><?php echo esc_html($post_type); ?></code>
+                                </label>
+                            <?php endforeach; ?>
+                            <p class="description"><?php echo esc_html__('全部勾選時會保存為預設範圍；輸出僅包含已發布且可公開訪問的內容。', 'rankwoven-seo'); ?></p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(__('保存 RSS Sitemap 設定', 'rankwoven-seo')); ?>
+        </form>
+        <?php
+    }
+
+    private function render_llms_txt_page(): void
+    {
+        $settings = $this->get_llms_settings();
+        $post_types = $this->get_llms_public_post_types();
+        $taxonomies = $this->get_llms_public_taxonomies();
+        $llms_url = home_url('/llms.txt');
+        $llms_full_url = home_url('/llms-full.txt');
+        $selected_post_types = $settings['post_types'];
+        $selected_taxonomies = $settings['taxonomies'];
+        $all_post_types_selected = empty($selected_post_types);
+        $all_taxonomies_selected = empty($selected_taxonomies);
+        ?>
+        <h2><?php echo esc_html__('LLMs.txt 設定', 'rankwoven-seo'); ?></h2>
+        <p>
+            <?php echo esc_html__('生成面向大型語言模型的網站摘要文件。預設關閉，啟用後才會公開輸出網站內容。', 'rankwoven-seo'); ?>
+        </p>
+        <p>
+            <code><?php echo esc_html($llms_url); ?></code>
+            <a href="<?php echo esc_url($llms_url); ?>" target="_blank" rel="noopener noreferrer" style="margin-left:12px;">
+                <?php echo esc_html__('開啟 llms.txt', 'rankwoven-seo'); ?>
+            </a>
+            <br />
+            <code><?php echo esc_html($llms_full_url); ?></code>
+            <a href="<?php echo esc_url($llms_full_url); ?>" target="_blank" rel="noopener noreferrer" style="margin-left:12px;">
+                <?php echo esc_html__('開啟 llms-full.txt', 'rankwoven-seo'); ?>
+            </a>
+        </p>
+        <?php if ($this->has_physical_llms_file('llms.txt') || $this->has_physical_llms_file('llms-full.txt')) : ?>
+            <div class="notice notice-warning inline">
+                <p>
+                    <?php echo esc_html__('偵測到網站根目錄存在實體 llms.txt 文件。部分主機會優先輸出實體文件，令這裡的動態設定不生效；如保存後前台未變化，請檢查並移除或更新實體文件。', 'rankwoven-seo'); ?>
+                </p>
+            </div>
+        <?php endif; ?>
+
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('rankwoven_save_settings'); ?>
+            <input type="hidden" name="action" value="rankwoven_save_settings" />
+            <input type="hidden" name="rankwoven_settings_scope" value="llms_txt" />
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php echo esc_html__('輸出文件', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="rankwoven_llms_settings[enabled]" value="1" <?php checked($settings['enabled']); ?> />
+                            <?php echo esc_html__('啟用 llms.txt', 'rankwoven-seo'); ?>
+                        </label>
+                        <br />
+                        <label>
+                            <input type="checkbox" name="rankwoven_llms_settings[full_enabled]" value="1" <?php checked($settings['full_enabled']); ?> />
+                            <?php echo esc_html__('啟用 llms-full.txt（包含文章正文）', 'rankwoven-seo'); ?>
+                        </label>
+                        <p class="description">
+                            <?php echo esc_html__('llms-full.txt 需要同時啟用 llms.txt；關閉主開關時兩個文件都不會輸出。', 'rankwoven-seo'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Markdown 轉換', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="rankwoven_llms_settings[convert_posts_to_markdown]" value="1" <?php checked($settings['convert_posts_to_markdown']); ?> />
+                            <?php echo esc_html__('為公開文章提供 .md 地址', 'rankwoven-seo'); ?>
+                        </label>
+                        <p class="description">
+                            <?php echo esc_html__('啟用後，可在文章固定連結後追加 .md 獲取 Markdown 內容，例如 /sample-post.md。', 'rankwoven-seo'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_llms_title"><?php echo esc_html__('標題', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_llms_title" name="rankwoven_llms_settings[title]" type="text" class="regular-text" value="<?php echo esc_attr($settings['title']); ?>" />
+                        <p class="description"><?php echo esc_html__('支援 {{site_title}}、{{site_description}}、{{site_url}} 佔位符。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_llms_description"><?php echo esc_html__('描述', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <textarea id="rankwoven_llms_description" name="rankwoven_llms_settings[description]" class="large-text" rows="4"><?php echo esc_textarea($settings['description']); ?></textarea>
+                        <p class="description"><?php echo esc_html__('支援 {{site_title}}、{{site_description}}、{{site_url}} 佔位符。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_llms_urls_per_post_type"><?php echo esc_html__('每種文章類型的 URL 上限', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_llms_urls_per_post_type" name="rankwoven_llms_settings[urls_per_post_type]" type="number" class="small-text" min="1" max="10000" value="<?php echo esc_attr((string) $settings['urls_per_post_type']); ?>" />
+                        <p class="description"><?php echo esc_html__('每種公開文章類型最多輸出多少條內容連結。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_llms_urls_per_taxonomy"><?php echo esc_html__('每種分類法的 URL 上限', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_llms_urls_per_taxonomy" name="rankwoven_llms_settings[urls_per_taxonomy]" type="number" class="small-text" min="1" max="10000" value="<?php echo esc_attr((string) $settings['urls_per_taxonomy']); ?>" />
+                        <p class="description"><?php echo esc_html__('每種公開分類法最多輸出多少條分類連結。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('文章类型', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <?php if (empty($post_types)) : ?>
+                            <p class="description"><?php echo esc_html__('目前沒有可用的公開文章類型。', 'rankwoven-seo'); ?></p>
+                        <?php else : ?>
+                            <?php foreach ($post_types as $post_type => $post_type_object) : ?>
+                                <label style="display:block;margin-bottom:6px;">
+                                    <input type="checkbox" name="rankwoven_llms_settings[post_types][]" value="<?php echo esc_attr($post_type); ?>" <?php checked($all_post_types_selected || in_array($post_type, $selected_post_types, true)); ?> />
+                                    <?php echo esc_html((string) ($post_type_object->labels->name ?? $post_type)); ?>
+                                    <code><?php echo esc_html($post_type); ?></code>
+                                </label>
+                            <?php endforeach; ?>
+                            <p class="description"><?php echo esc_html__('全部勾選時會保存為預設範圍；輸出僅包含已發布且可公開訪問的內容。', 'rankwoven-seo'); ?></p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('分类法', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <?php if (empty($taxonomies)) : ?>
+                            <p class="description"><?php echo esc_html__('目前沒有可用的公開分類法。', 'rankwoven-seo'); ?></p>
+                        <?php else : ?>
+                            <?php foreach ($taxonomies as $taxonomy => $taxonomy_object) : ?>
+                                <label style="display:block;margin-bottom:6px;">
+                                    <input type="checkbox" name="rankwoven_llms_settings[taxonomies][]" value="<?php echo esc_attr($taxonomy); ?>" <?php checked($all_taxonomies_selected || in_array($taxonomy, $selected_taxonomies, true)); ?> />
+                                    <?php echo esc_html((string) ($taxonomy_object->labels->name ?? $taxonomy)); ?>
+                                    <code><?php echo esc_html($taxonomy); ?></code>
+                                </label>
+                            <?php endforeach; ?>
+                            <p class="description"><?php echo esc_html__('僅輸出有公開連結且至少關聯一篇已發布內容的分類項。', 'rankwoven-seo'); ?></p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_llms_excluded_posts"><?php echo esc_html__('排除文章 ID', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <textarea id="rankwoven_llms_excluded_posts" name="rankwoven_llms_settings[excluded_posts]" class="large-text code" rows="3" placeholder="12, 34, 56"><?php echo esc_textarea(implode(', ', $settings['excluded_posts'])); ?></textarea>
+                        <p class="description"><?php echo esc_html__('使用逗號或換行分隔 WordPress 文章、頁面或自訂文章 ID。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_llms_excluded_terms"><?php echo esc_html__('排除分类项 ID', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <textarea id="rankwoven_llms_excluded_terms" name="rankwoven_llms_settings[excluded_terms]" class="large-text code" rows="3" placeholder="12, 34, 56"><?php echo esc_textarea(implode(', ', $settings['excluded_terms'])); ?></textarea>
+                        <p class="description"><?php echo esc_html__('使用逗號或換行分隔分類項 term ID。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(__('保存 LLMs.txt 設定', 'rankwoven-seo')); ?>
+        </form>
         <?php
     }
 
@@ -2074,6 +2443,32 @@ final class RankWoven_SEO_Plugin
             update_option(self::OPTION_CONTENT_META_SETTINGS, $content_meta_settings);
             delete_option(self::OPTION_LAST_ERROR);
             $this->redirect_with_status('settings_saved', 'content_meta');
+        }
+
+        if ($scope === 'sitemap') {
+            $robots_txt_content = $this->sanitize_robots_txt_content(wp_unslash($_POST['rankwoven_robots_txt_content'] ?? ''));
+            if ($robots_txt_content === '') {
+                delete_option(self::OPTION_ROBOTS_TXT_CONTENT);
+            } else {
+                update_option(self::OPTION_ROBOTS_TXT_CONTENT, $robots_txt_content);
+            }
+
+            delete_option(self::OPTION_LAST_ERROR);
+            $this->redirect_with_status('robots_txt_saved', 'sitemap');
+        }
+
+        if ($scope === 'llms_txt') {
+            $llms_settings = $this->sanitize_llms_settings(wp_unslash($_POST['rankwoven_llms_settings'] ?? []));
+            update_option(self::OPTION_LLMS_SETTINGS, $llms_settings);
+            delete_option(self::OPTION_LAST_ERROR);
+            $this->redirect_with_status('llms_settings_saved', 'sitemap');
+        }
+
+        if ($scope === 'rss_sitemap') {
+            $rss_settings = $this->sanitize_rss_settings(wp_unslash($_POST['rankwoven_rss_settings'] ?? []));
+            update_option(self::OPTION_RSS_SETTINGS, $rss_settings);
+            delete_option(self::OPTION_LAST_ERROR);
+            $this->redirect_with_status('rss_sitemap_settings_saved', 'sitemap');
         }
 
         update_option(
@@ -3294,13 +3689,24 @@ final class RankWoven_SEO_Plugin
 
     private function extract_plain_text_content(string $content): string
     {
+        $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, get_bloginfo('charset') ?: 'UTF-8');
+        $content = preg_replace('/<script\b[^>]*>.*?<\/script>|<style\b[^>]*>.*?<\/style>/is', ' ', $content) ?? $content;
         $content = strip_shortcodes($content);
+        $content = $this->strip_shortcode_markup($content);
         $content = wp_strip_all_tags($content);
-        $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, get_bloginfo('charset'));
-        $content = preg_replace('/\[[^\]]*\]/', ' ', $content) ?? $content;
-        $content = preg_replace('/\s+/', ' ', $content) ?? $content;
+        $content = preg_replace('/#(?:post_excerpt|post_content)\b/iu', ' ', $content) ?? $content;
+        $content = preg_replace('/\s+/u', ' ', $content) ?? $content;
 
         return trim($content);
+    }
+
+    private function strip_shortcode_markup(string $content): string
+    {
+        return preg_replace(
+            '/\[\/[a-zA-Z][\w-]*\]|\[(?:\/?)((?:vc|wpb|et|fusion|elementor|su)[\w-]*|[a-zA-Z][\w-]*\s+[^\]]+)\]/iu',
+            ' ',
+            $content
+        ) ?? $content;
     }
 
     private function get_post_date_value(WP_Post $post, bool $modified): string
@@ -3349,6 +3755,10 @@ final class RankWoven_SEO_Plugin
         $page = sanitize_key(wp_unslash($_GET['page'] ?? 'rankwoven-seo'));
         if (in_array($page, ['rankwoven-seo-settings', 'rankwoven-seo-connection'], true)) {
             return 'connection';
+        }
+
+        if ($page === 'rankwoven-seo-llms-txt') {
+            return 'sitemap';
         }
 
         foreach ($tabs as $tab => $tab_config) {
@@ -3961,6 +4371,41 @@ final class RankWoven_SEO_Plugin
         return home_url('/sitemap.xml');
     }
 
+    private function get_rss_sitemap_url(): string
+    {
+        return home_url('/sitemap.rss');
+    }
+
+    private function get_rss_stylesheet_url(): string
+    {
+        return plugins_url('assets/rss-sitemap.xsl', __FILE__);
+    }
+
+    private function get_custom_robots_txt_content(): string
+    {
+        return $this->sanitize_robots_txt_content((string) get_option(self::OPTION_ROBOTS_TXT_CONTENT, ''));
+    }
+
+    private function sanitize_robots_txt_content($content): string
+    {
+        $content = is_string($content) ? wp_check_invalid_utf8($content) : '';
+        $content = str_replace(["\r\n", "\r"], "\n", $content);
+        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content) ?? $content;
+        $lines = array_map(static fn ($line): string => rtrim((string) $line), explode("\n", $content));
+        $content = trim(implode("\n", $lines));
+
+        if (strlen($content) > 20000) {
+            $content = substr($content, 0, 20000);
+        }
+
+        return $content;
+    }
+
+    private function has_physical_robots_txt_file(): bool
+    {
+        return file_exists(ABSPATH . 'robots.txt');
+    }
+
     private function build_sitemap_generation_result(): array
     {
         $entries = $this->get_sitemap_entries();
@@ -4050,6 +4495,91 @@ final class RankWoven_SEO_Plugin
         return implode("\n", $lines) . "\n";
     }
 
+    private function build_rss_sitemap_xml(array $settings): string
+    {
+        $post_types = empty($settings['post_types'])
+            ? array_keys($this->get_llms_public_post_types())
+            : $settings['post_types'];
+        $posts = [];
+        if (!empty($post_types)) {
+            $posts = get_posts([
+                'post_type' => $post_types,
+                'post_status' => 'publish',
+                'posts_per_page' => (int) $settings['posts_per_page'],
+                'orderby' => 'modified',
+                'order' => 'DESC',
+                'no_found_rows' => true,
+                'ignore_sticky_posts' => true
+            ]);
+        }
+        $posts = is_array($posts) ? $posts : [];
+        $posts = array_values(array_filter($posts, static fn ($post): bool => $post instanceof WP_Post));
+        $site_name = sanitize_text_field((string) get_bloginfo('name'));
+        $site_description = sanitize_textarea_field((string) get_bloginfo('description'));
+        $site_url = esc_url_raw(home_url('/'));
+        $rss_url = esc_url_raw($this->get_rss_sitemap_url());
+        $stylesheet_url = esc_url_raw($this->get_rss_stylesheet_url());
+        $site_icon_url = function_exists('get_site_icon_url') ? esc_url_raw((string) get_site_icon_url(512)) : '';
+        $lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<?xml-stylesheet type="text/xsl" href="' . esc_url($stylesheet_url) . '"?>',
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">',
+            '  <channel>',
+            '    <title>' . esc_html($site_name) . '</title>',
+            '    <link>' . esc_url($site_url) . '</link>',
+            '    <description>' . esc_html($site_description) . '</description>',
+            '    <atom:link href="' . esc_url($rss_url) . '" rel="self" type="application/rss+xml" />',
+            '    <lastBuildDate>' . esc_html(gmdate('D, d M Y H:i:s +0000')) . '</lastBuildDate>'
+        ];
+        if ($site_icon_url !== '') {
+            $lines[] = '    <image>';
+            $lines[] = '      <url>' . esc_url($site_icon_url) . '</url>';
+            $lines[] = '      <title>' . esc_html($site_name) . '</title>';
+            $lines[] = '      <link>' . esc_url($site_url) . '</link>';
+            $lines[] = '    </image>';
+        }
+
+        foreach ($posts as $post) {
+            $permalink = get_permalink($post);
+            if (!is_string($permalink) || $permalink === '') {
+                continue;
+            }
+
+            $title = $this->normalize_llms_inline_text((string) get_the_title($post));
+            $description = $this->normalize_llms_inline_text($this->get_post_meta_description($post, wp_trim_words($this->extract_plain_text_content((string) $post->post_content), 40, '')));
+            $content = $this->extract_plain_text_content((string) apply_filters('the_content', $post->post_content));
+            $content = preg_replace('/(?:\*\*|__|`)/u', '', $content) ?? $content;
+            $published_at = get_post_time('D, d M Y H:i:s +0000', true, $post);
+            $preview_image = $this->get_post_preview_image($post);
+            $lines[] = '    <item>';
+            $lines[] = '      <title>' . esc_html($title !== '' ? $title : __('Untitled', 'rankwoven-seo')) . '</title>';
+            $lines[] = '      <link>' . esc_url($permalink) . '</link>';
+            $lines[] = '      <guid isPermaLink="true">' . esc_url($permalink) . '</guid>';
+            if (is_string($published_at) && $published_at !== '') {
+                $lines[] = '      <pubDate>' . esc_html($published_at) . '</pubDate>';
+            }
+            if ($preview_image['url'] !== '') {
+                $lines[] = '      <enclosure url="' . esc_url($preview_image['url']) . '" length="0" type="image/*" />';
+            }
+            if ($description !== '') {
+                $lines[] = '      <description><![CDATA[' . $this->escape_rss_cdata($description) . ']]></description>';
+            }
+            if ($content !== '') {
+                $lines[] = '      <content:encoded><![CDATA[' . $this->escape_rss_cdata($content) . ']]></content:encoded>';
+            }
+            $lines[] = '    </item>';
+        }
+
+        $lines[] = '  </channel>';
+        $lines[] = '</rss>';
+        return implode("\n", $lines) . "\n";
+    }
+
+    private function escape_rss_cdata(string $value): string
+    {
+        return str_replace(']]>', ']]]]><![CDATA[>', $value);
+    }
+
     private function is_sitemap_request(): bool
     {
         $request_uri = sanitize_text_field((string) ($_SERVER['REQUEST_URI'] ?? ''));
@@ -4064,6 +4594,474 @@ final class RankWoven_SEO_Plugin
 
         $normalized_path = rtrim($path, '/');
         return $normalized_path === 'sitemap.xml' || str_ends_with($normalized_path, '/sitemap.xml');
+    }
+
+    private function is_rss_sitemap_request(): bool
+    {
+        $request_uri = sanitize_text_field((string) ($_SERVER['REQUEST_URI'] ?? ''));
+        if ($request_uri === '') {
+            return false;
+        }
+
+        $path = wp_parse_url($request_uri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return false;
+        }
+
+        $normalized_path = rtrim($path, '/');
+        return in_array($normalized_path, ['sitemap.rss', 'sitemap.latest.rss', 'rss-sitemap.xml'], true)
+            || str_ends_with($normalized_path, '/sitemap.rss')
+            || str_ends_with($normalized_path, '/sitemap.latest.rss')
+            || str_ends_with($normalized_path, '/rss-sitemap.xml');
+    }
+
+    private function get_default_llms_settings(): array
+    {
+        return [
+            'enabled' => false,
+            'full_enabled' => false,
+            'convert_posts_to_markdown' => false,
+            'title' => '{{site_title}}',
+            'description' => '{{site_description}}',
+            'urls_per_post_type' => 1000,
+            'urls_per_taxonomy' => 1000,
+            'post_types' => [],
+            'taxonomies' => [],
+            'excluded_posts' => [],
+            'excluded_terms' => []
+        ];
+    }
+
+    private function get_default_rss_settings(): array
+    {
+        return [
+            'enabled' => false,
+            'posts_per_page' => 50,
+            'post_types' => []
+        ];
+    }
+
+    private function get_rss_settings(): array
+    {
+        $saved_settings = get_option(self::OPTION_RSS_SETTINGS, []);
+        return $this->sanitize_rss_settings(is_array($saved_settings) ? $saved_settings : []);
+    }
+
+    private function sanitize_rss_settings($input): array
+    {
+        $input = is_array($input) ? $input : [];
+        $defaults = $this->get_default_rss_settings();
+        $posts_per_page = absint($input['posts_per_page'] ?? $defaults['posts_per_page']);
+
+        return [
+            'enabled' => !empty($input['enabled']),
+            'posts_per_page' => min(500, max(1, $posts_per_page)),
+            'post_types' => $this->sanitize_llms_object_selection($input['post_types'] ?? [], array_keys($this->get_llms_public_post_types()))
+        ];
+    }
+
+    private function get_llms_settings(): array
+    {
+        $saved_settings = get_option(self::OPTION_LLMS_SETTINGS, []);
+        return $this->sanitize_llms_settings(is_array($saved_settings) ? $saved_settings : []);
+    }
+
+    private function sanitize_llms_settings($input): array
+    {
+        $input = is_array($input) ? $input : [];
+        $defaults = $this->get_default_llms_settings();
+        $post_types = $this->sanitize_llms_object_selection($input['post_types'] ?? [], array_keys($this->get_llms_public_post_types()));
+        $taxonomies = $this->sanitize_llms_object_selection($input['taxonomies'] ?? [], array_keys($this->get_llms_public_taxonomies()));
+        $title = sanitize_text_field((string) ($input['title'] ?? $defaults['title']));
+        $description = sanitize_textarea_field((string) ($input['description'] ?? $defaults['description']));
+        $urls_per_post_type = absint($input['urls_per_post_type'] ?? $defaults['urls_per_post_type']);
+        $urls_per_taxonomy = absint($input['urls_per_taxonomy'] ?? $defaults['urls_per_taxonomy']);
+
+        return [
+            'enabled' => !empty($input['enabled']),
+            'full_enabled' => !empty($input['full_enabled']),
+            'convert_posts_to_markdown' => !empty($input['convert_posts_to_markdown']),
+            'title' => $title !== '' ? $title : $defaults['title'],
+            'description' => $description !== '' ? $description : $defaults['description'],
+            'urls_per_post_type' => min(10000, max(1, $urls_per_post_type)),
+            'urls_per_taxonomy' => min(10000, max(1, $urls_per_taxonomy)),
+            'post_types' => $post_types,
+            'taxonomies' => $taxonomies,
+            'excluded_posts' => $this->sanitize_llms_id_list($input['excluded_posts'] ?? []),
+            'excluded_terms' => $this->sanitize_llms_id_list($input['excluded_terms'] ?? [])
+        ];
+    }
+
+    private function sanitize_llms_object_selection($value, array $allowed): array
+    {
+        $values = is_array($value) ? $value : (preg_split('/[\s,，]+/', (string) $value) ?: []);
+        $selected = [];
+
+        foreach ($values as $item) {
+            $name = sanitize_key((string) $item);
+            if ($name !== '' && in_array($name, $allowed, true) && !in_array($name, $selected, true)) {
+                $selected[] = $name;
+            }
+        }
+
+        return $selected;
+    }
+
+    private function sanitize_llms_id_list($value): array
+    {
+        $values = is_array($value) ? $value : (preg_split('/[\s,，]+/', (string) $value) ?: []);
+        $ids = [];
+
+        foreach ($values as $value_item) {
+            $id = absint($value_item);
+            if ($id > 0 && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    private function get_llms_public_post_types(): array
+    {
+        $post_types = get_post_types(['public' => true], 'objects');
+        if (!is_array($post_types)) {
+            return [];
+        }
+
+        $excluded_types = ['attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset', 'oembed_cache', 'user_request'];
+        foreach ($excluded_types as $excluded_type) {
+            unset($post_types[$excluded_type]);
+        }
+
+        foreach ($post_types as $post_type => $post_type_object) {
+            if (!is_object($post_type_object) || empty($post_type_object->publicly_queryable)) {
+                unset($post_types[$post_type]);
+            }
+        }
+
+        return $post_types;
+    }
+
+    private function get_llms_public_taxonomies(): array
+    {
+        $taxonomies = get_taxonomies(['public' => true], 'objects');
+        if (!is_array($taxonomies)) {
+            return [];
+        }
+
+        unset($taxonomies['nav_menu'], $taxonomies['link_category']);
+        foreach ($taxonomies as $taxonomy => $taxonomy_object) {
+            if (!is_object($taxonomy_object) || empty($taxonomy_object->publicly_queryable)) {
+                unset($taxonomies[$taxonomy]);
+            }
+        }
+
+        return $taxonomies;
+    }
+
+    private function has_physical_llms_file(string $filename): bool
+    {
+        return in_array($filename, ['llms.txt', 'llms-full.txt'], true) && file_exists(ABSPATH . $filename);
+    }
+
+    private function get_llms_request_kind(): string
+    {
+        $request_uri = sanitize_text_field((string) ($_SERVER['REQUEST_URI'] ?? ''));
+        if ($request_uri === '') {
+            return '';
+        }
+
+        $path = wp_parse_url($request_uri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return '';
+        }
+
+        $normalized_path = rtrim($path, '/');
+        if ($normalized_path === 'llms.txt' || str_ends_with($normalized_path, '/llms.txt')) {
+            return 'llms';
+        }
+
+        if ($normalized_path === 'llms-full.txt' || str_ends_with($normalized_path, '/llms-full.txt')) {
+            return 'llms-full';
+        }
+
+        if (str_ends_with($normalized_path, '.md')) {
+            return 'markdown';
+        }
+
+        return '';
+    }
+
+    private function build_llms_txt(array $settings): string
+    {
+        return $this->build_llms_document($settings, false);
+    }
+
+    private function build_llms_full_txt(array $settings): string
+    {
+        return $this->build_llms_document($settings, true);
+    }
+
+    private function build_llms_document(array $settings, bool $include_content): string
+    {
+        $title = $this->render_llms_template((string) $settings['title']);
+        $description = $this->render_llms_template((string) $settings['description']);
+        $lines = ['# ' . ($title !== '' ? $title : sanitize_text_field((string) get_bloginfo('name')))];
+
+        if ($description !== '') {
+            foreach (preg_split('/\R/', $description) ?: [] as $description_line) {
+                $description_line = trim((string) $description_line);
+                if ($description_line !== '') {
+                    $lines[] = '> ' . $description_line;
+                }
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = 'Source: ' . esc_url_raw(home_url('/'));
+        $lines[] = '';
+        $has_content = false;
+        $post_types = $this->get_llms_public_post_types();
+        foreach ($post_types as $post_type => $post_type_object) {
+            if (!$this->is_llms_post_type_enabled($post_type, $settings)) {
+                continue;
+            }
+
+            $posts = get_posts([
+                'post_type' => $post_type,
+                'post_status' => 'publish',
+                'posts_per_page' => (int) $settings['urls_per_post_type'],
+                'orderby' => 'modified',
+                'order' => 'DESC',
+                'no_found_rows' => true,
+                'ignore_sticky_posts' => true
+            ]);
+            $posts = is_array($posts) ? $posts : [];
+            $filtered_posts = array_values(array_filter($posts, function ($post) use ($settings): bool {
+                return $post instanceof WP_Post && !in_array((int) $post->ID, $settings['excluded_posts'], true);
+            }));
+            if (empty($filtered_posts)) {
+                continue;
+            }
+
+            $label = is_object($post_type_object) ? (string) ($post_type_object->labels->name ?? $post_type) : $post_type;
+            $lines[] = '## ' . $this->normalize_llms_inline_text($label);
+            foreach ($filtered_posts as $post) {
+                $permalink = get_permalink($post);
+                if (!is_string($permalink) || $permalink === '') {
+                    continue;
+                }
+
+                $post_title = $this->normalize_llms_inline_text((string) get_the_title($post));
+                $excerpt = $this->normalize_llms_inline_text($this->get_post_meta_description($post, wp_trim_words($this->extract_plain_text_content((string) $post->post_content), 40, '')));
+                if ($include_content) {
+                    $lines[] = '';
+                    $lines[] = '### ' . ($post_title !== '' ? $post_title : __('Untitled', 'rankwoven-seo'));
+                    $lines[] = 'URL: ' . esc_url_raw($permalink);
+                    if ($excerpt !== '') {
+                        $lines[] = '> ' . $excerpt;
+                    }
+                    $markdown = $this->convert_html_to_markdown((string) apply_filters('the_content', $post->post_content));
+                    if ($markdown !== '') {
+                        $lines[] = '';
+                        $lines[] = $markdown;
+                    }
+                } else {
+                    $line = '- [' . ($post_title !== '' ? $post_title : __('Untitled', 'rankwoven-seo')) . '](' . esc_url_raw($permalink) . ')';
+                    if ($excerpt !== '') {
+                        $line .= ': ' . $excerpt;
+                    }
+                    $lines[] = $line;
+                }
+                $has_content = true;
+            }
+            $lines[] = '';
+        }
+
+        $taxonomy_lines = $this->build_llms_taxonomy_lines($settings);
+        if (!empty($taxonomy_lines)) {
+            $lines[] = '## Taxonomies';
+            $lines = array_merge($lines, $taxonomy_lines);
+            $lines[] = '';
+            $has_content = true;
+        }
+
+        if (!$has_content) {
+            $lines[] = __('No public content is available.', 'rankwoven-seo');
+            $lines[] = '';
+        }
+
+        return rtrim(implode("\n", $lines)) . "\n";
+    }
+
+    private function build_llms_taxonomy_lines(array $settings): array
+    {
+        $lines = [];
+        foreach ($this->get_llms_public_taxonomies() as $taxonomy => $taxonomy_object) {
+            if (!$this->is_llms_taxonomy_enabled($taxonomy, $settings)) {
+                continue;
+            }
+
+            $terms = get_terms([
+                'taxonomy' => $taxonomy,
+                'hide_empty' => true,
+                'number' => (int) $settings['urls_per_taxonomy'],
+                'orderby' => 'count',
+                'order' => 'DESC'
+            ]);
+            if (is_wp_error($terms) || !is_array($terms) || empty($terms)) {
+                continue;
+            }
+
+            $taxonomy_term_lines = [];
+            foreach ($terms as $term) {
+                if (!($term instanceof WP_Term) || in_array((int) $term->term_id, $settings['excluded_terms'], true)) {
+                    continue;
+                }
+
+                $term_link = get_term_link($term);
+                if (is_wp_error($term_link) || !is_string($term_link) || $term_link === '') {
+                    continue;
+                }
+
+                $term_name = $this->normalize_llms_inline_text((string) $term->name);
+                $line = '- [' . ($term_name !== '' ? $term_name : __('Untitled', 'rankwoven-seo')) . '](' . esc_url_raw($term_link) . ')';
+                $term_description = $this->normalize_llms_inline_text((string) term_description($term->term_id, $taxonomy));
+                if ($term_description !== '') {
+                    $line .= ': ' . $term_description;
+                }
+                $taxonomy_term_lines[] = $line;
+            }
+
+            if (!empty($taxonomy_term_lines)) {
+                $label = is_object($taxonomy_object) ? (string) ($taxonomy_object->labels->name ?? $taxonomy) : $taxonomy;
+                $lines[] = '';
+                $lines[] = '### ' . $this->normalize_llms_inline_text($label);
+                $lines = array_merge($lines, $taxonomy_term_lines);
+            }
+        }
+
+        return $lines;
+    }
+
+    private function maybe_render_markdown_post(array $settings): void
+    {
+        $request_uri = sanitize_text_field((string) ($_SERVER['REQUEST_URI'] ?? ''));
+        $path = wp_parse_url($request_uri, PHP_URL_PATH);
+        if (!is_string($path) || !str_ends_with(rtrim($path, '/'), '.md')) {
+            return;
+        }
+
+        $post_path = substr(rtrim($path, '/'), 0, -3);
+        if ($post_path === '') {
+            return;
+        }
+
+        $home_path = wp_parse_url(home_url('/'), PHP_URL_PATH);
+        $home_path = is_string($home_path) ? rtrim($home_path, '/') : '';
+        $relative_path = $home_path !== '' && str_starts_with($post_path, $home_path . '/')
+            ? substr($post_path, strlen($home_path))
+            : $post_path;
+        $post_id = url_to_postid(home_url('/' . ltrim($relative_path, '/')));
+        if ($post_id <= 0) {
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!($post instanceof WP_Post) || $post->post_status !== 'publish' || !$this->is_llms_post_type_enabled($post->post_type, $settings)) {
+            return;
+        }
+
+        if (in_array($post_id, $settings['excluded_posts'], true)) {
+            return;
+        }
+
+        $permalink = get_permalink($post);
+        if (!is_string($permalink) || $permalink === '') {
+            return;
+        }
+
+        $title = $this->normalize_llms_inline_text((string) get_the_title($post));
+        $description = $this->normalize_llms_inline_text($this->get_post_meta_description($post, wp_trim_words($this->extract_plain_text_content((string) $post->post_content), 40, '')));
+        $content = $this->convert_html_to_markdown((string) apply_filters('the_content', $post->post_content));
+        $lines = ['# ' . ($title !== '' ? $title : __('Untitled', 'rankwoven-seo')), ''];
+        if ($description !== '') {
+            $lines[] = '> ' . $description;
+            $lines[] = '';
+        }
+        $lines[] = 'Source: ' . esc_url_raw($permalink);
+        if ($content !== '') {
+            $lines[] = '';
+            $lines[] = $content;
+        }
+
+        nocache_headers();
+        status_header(200);
+        header('Content-Type: text/markdown; charset=UTF-8');
+        echo rtrim(implode("\n", $lines)) . "\n";
+        exit;
+    }
+
+    private function convert_html_to_markdown(string $html): string
+    {
+        $html = strip_shortcodes($html);
+        $html = $this->strip_shortcode_markup($html);
+        $html = preg_replace('/<script\b[^>]*>.*?<\/script>|<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $html = preg_replace_callback('/<img\b[^>]*>/i', static function (array $matches): string {
+            $tag = $matches[0];
+            preg_match('/\bsrc=["\']([^"\']+)["\']/i', $tag, $src_match);
+            preg_match('/\balt=["\']([^"\']*)["\']/i', $tag, $alt_match);
+            $src = isset($src_match[1]) ? esc_url_raw(html_entity_decode($src_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
+            $alt = isset($alt_match[1]) ? trim(wp_strip_all_tags(html_entity_decode($alt_match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'))) : '';
+            return $src !== '' ? '![' . $alt . '](' . $src . ')' : '';
+        }, $html) ?? $html;
+        $html = preg_replace_callback('/<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)<\/a>/is', static function (array $matches): string {
+            $url = esc_url_raw(html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            $text = trim(wp_strip_all_tags($matches[2]));
+            return $url !== '' && $text !== '' ? '[' . $text . '](' . $url . ')' : $text;
+        }, $html) ?? $html;
+        $html = preg_replace('/<h([1-6])\b[^>]*>(.*?)<\/h\1>/is', "\n\n#$1 $2\n\n", $html) ?? $html;
+        $html = preg_replace('/<li\b[^>]*>(.*?)<\/li>/is', "\n- $1", $html) ?? $html;
+        $html = preg_replace('/<br\s*\/?\s*>/i', "\n", $html) ?? $html;
+        $html = preg_replace('/<\/(p|div|section|article|blockquote|pre|ul|ol|table|tr)>/i', "\n\n", $html) ?? $html;
+        $html = preg_replace('/<(strong|b)\b[^>]*>(.*?)<\/\1>/is', '**$2**', $html) ?? $html;
+        $html = preg_replace('/<(em|i)\b[^>]*>(.*?)<\/\1>/is', '*$2*', $html) ?? $html;
+        $markdown = html_entity_decode(wp_strip_all_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $markdown = preg_replace('/#(?:post_excerpt|post_content)\b/iu', ' ', $markdown) ?? $markdown;
+        $markdown = preg_replace('/[ \t]+/', ' ', $markdown) ?? $markdown;
+        $markdown = preg_replace('/\n[ \t]+/', "\n", $markdown) ?? $markdown;
+        $markdown = preg_replace('/\n{3,}/', "\n\n", $markdown) ?? $markdown;
+
+        return trim($markdown);
+    }
+
+    private function render_llms_template(string $template): string
+    {
+        $replacements = [
+            '{{site_title}}' => sanitize_text_field((string) get_bloginfo('name')),
+            '{{site_name}}' => sanitize_text_field((string) get_bloginfo('name')),
+            '{{site_description}}' => sanitize_textarea_field((string) get_bloginfo('description')),
+            '{{site_url}}' => esc_url_raw(home_url('/'))
+        ];
+
+        return trim(strtr($template, $replacements));
+    }
+
+    private function normalize_llms_inline_text(string $value): string
+    {
+        $value = $this->extract_plain_text_content($value);
+        return trim((string) preg_replace('/\s+/', ' ', $value));
+    }
+
+    private function is_llms_post_type_enabled(string $post_type, array $settings): bool
+    {
+        return empty($settings['post_types']) || in_array($post_type, $settings['post_types'], true);
+    }
+
+    private function is_llms_taxonomy_enabled(string $taxonomy, array $settings): bool
+    {
+        return empty($settings['taxonomies']) || in_array($taxonomy, $settings['taxonomies'], true);
     }
 
     private function update_image_attachment_attributes(int $attachment_id): string
@@ -5067,6 +6065,9 @@ final class RankWoven_SEO_Plugin
             'sync_completed' => ['updated', __('Content sync completed.', 'rankwoven-seo')],
             'sitemap_generated' => ['updated', __('Sitemap.xml generated successfully.', 'rankwoven-seo')],
             'sitemap_submitted' => ['updated', __('Sitemap.xml submitted to Google Search Console.', 'rankwoven-seo')],
+            'robots_txt_saved' => ['updated', __('robots.txt settings saved.', 'rankwoven-seo')],
+            'llms_settings_saved' => ['updated', __('LLMs.txt settings saved.', 'rankwoven-seo')],
+            'rss_sitemap_settings_saved' => ['updated', __('RSS Sitemap settings saved.', 'rankwoven-seo')],
             'seo_audit_completed' => ['updated', __('SEO Analysis completed.', 'rankwoven-seo')],
             'internal_links_rescan_completed' => ['updated', __('Internal links rescanned. Deleted content was removed from candidates and new suggestions were generated.', 'rankwoven-seo')],
             'internal_links_rescan_failed' => ['error', __('Internal link rescan failed. Please check the SaaS API service and Site Token.', 'rankwoven-seo')],

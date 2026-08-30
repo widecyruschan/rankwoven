@@ -185,12 +185,35 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 單篇文章若已保存自己的 SEO title / Meta description / Keywords，仍優先使用單篇值，不會被內容類型預設蓋掉。
 - [ ] 未保存單篇 SEO 欄位時，前台 `<head>` 會使用對應內容類型的預設模板輸出 meta。
 
-### 11. Sitemap 與 Google 提交
+### 11. Sitemap、RSS Sitemap 與 Google 提交
 
 - [ ] `RankWoven SEO -> 網站地圖` 頁籤可正常顯示 `sitemap.xml` URL 和最近生成 / 提交狀態。
 - [ ] 點擊 `Generate sitemap.xml` 後，`/sitemap.xml` 可在前台直接開啟，且 XML 內容包含已發佈的 Posts、Pages、Portfolio 和 Products。
 - [ ] 點擊 `Submit to Google` 後，插件會調用 SaaS 後端 `POST /api/v1/site-connections/:siteId/search-console/sitemaps`，並使用 Google Search Console API 提交 `sitemap.xml`。
-- [ ] `robots.txt` 動態輸出包含 `Sitemap: <URL>` 行。
+- [ ] `網站地圖` 頁籤的 `RSS Sitemap` 區塊可顯示 `/sitemap.rss` URL、啟用開關、貼文數量和 Post Types。
+- [ ] 啟用 RSS Sitemap 後，`/sitemap.rss` 返回 `application/rss+xml` 和合法 RSS 2.0，包含最新已發佈內容的標題、連結、發佈時間、摘要和正文。
+- [ ] 在瀏覽器開啟 `/sitemap.rss` 時會套用 `assets/rss-sitemap.xsl`，顯示藍色可點擊文章標題、發佈時間、摘要、縮略圖／站點圖標和分隔線。
+- [ ] RSS 項目順序與 Sitemap／現有文章的 `modified DESC` 順序一致；XSL 不會自行排序。
+- [ ] RSS 的 `description`、`content:encoded` 不含 HTML、Script／Style、`[vc_row]`、`[vc_column]`、`font_container` 等代碼。
+- [ ] 修改帖子數量和 Post Types 後，RSS Sitemap 只返回指定數量及類型；草稿、私密文章和附件不會出現。
+- [ ] 關閉 RSS Sitemap 後，插件不會接管 `/sitemap.rss`；如網站有實體同名文件，應確認主機文件優先級。
+- [ ] `網站地圖` 頁籤可手動輸入並保存 `robots.txt` 內容，例如 `User-agent: *`、`Disallow: /private/`。
+- [ ] 保存後打開 `/robots.txt`，內容包含手動輸入的 robots 指令，並自動保留 `Sitemap: <URL>` 行。
+- [ ] 清空 `robots.txt` textarea 並保存後，`/robots.txt` 恢復 WordPress 預設輸出，同時仍包含 `Sitemap: <URL>` 行。
+- [ ] 啟用 AIOSEO 等也會管理 robots 的插件時，RankWoven 的手動 `robots.txt` 內容和 `Sitemap:` 行仍出現在最終輸出。
+- [ ] 若網站根目錄存在實體 `robots.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
+
+### 12. LLMs.txt
+
+- [ ] `RankWoven SEO -> LLMs.txt` 頁籤可正常顯示 `llms.txt`、`llms-full.txt` URL 和開關狀態。
+- [ ] 預設設定全部關閉；未啟用時訪問 `/llms.txt` 和 `/llms-full.txt` 不會被插件接管。
+- [ ] 啟用 `llms.txt` 後，前台輸出純文字 Markdown，包含網站標題、描述、已發佈文章連結和公開分類項連結。
+- [ ] 啟用 `llms-full.txt` 後，文件包含已選文章的正文；只啟用 `llms-full.txt` 而未啟用主開關時不輸出。
+- [ ] `post_types`、`taxonomies`、每種 URL 上限、排除文章 ID 和排除分類項 ID 保存後會影響輸出；草稿、私密文章、附件和排除項不會出現。
+- [ ] 啟用 Markdown 轉換後，公開文章固定連結追加 `.md` 可返回 `text/markdown`，正文中的標題、連結、圖片和列表能轉換為基本 Markdown。
+- [ ] `llms.txt`、`llms-full.txt` 和 `.md` 輸出不含 HTML、Script／Style 或 WordPress／Visual Composer shortcode 及樣式屬性，只保留可讀文字／Markdown 文字。
+- [ ] 關閉 Markdown 轉換或排除文章後，對應 `.md` 地址不會被插件輸出內容。
+- [ ] 若網站根目錄存在實體 `llms.txt` 或 `llms-full.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
 
 ## 回歸重點
 
@@ -206,7 +229,8 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | 內部連結生成 / 多選套用 | 清單 3、7、8 |
 | 前台 SEO meta 輸出 | 清單 9 |
 | 內容類型 Meta 預設 | 清單 10 |
-| Sitemap 與 Google 提交 | 清單 11 |
+| Sitemap、RSS Sitemap 與 Google 提交 | 清單 11 |
+| LLMs.txt 與 Markdown 輸出 | 清單 12 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯
