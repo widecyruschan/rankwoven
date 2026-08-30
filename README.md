@@ -3610,3 +3610,97 @@ WordPress PHP 8、原生後台 HTML、CSS Grid、官方搜尋引擎站長工具�
 
 - 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 11 驗證所有連結、Sitemap URL 參數及手機版排版。
 - 通過插件 PHP 語法檢查後，只提交本次相關文件並推送到 GitHub `main`。
+
+## 會話總結（2026-08-31）— WordPress 內容 SEO 逐項評分
+
+### 會話主要目的
+
+按參考畫面的每個 SEO 檢查項完善 WordPress 文章、頁面和商品評分，讓管理員能看見具體問題、警告及通過項目，而不只是一個總分。
+
+### 完成的主要任務
+
+- 將編輯器 SEO 評分擴充為 19 項、總權重 100 的完整清單，涵蓋關鍵詞、標題／描述、正文、連結、圖片及可讀性。
+- 在 WordPress SEO 面板新增 `Problems`、`Warnings`、`Success` 三組狀態清單，保存或 AI 生成後即時更新。
+- 文章、頁面、Portfolio 和商品共用同一套本地評分；SaaS `/editor-seo` API 也回傳一致的 19 項 `scoreChecks`。
+- 新增中英文混合內容單位計算、內外鏈網域判斷、圖片 Alt Text、首段關鍵詞、關鍵詞密度和其他內容重複關鍵詞檢查。
+- 新增文章／頁面／商品 API 測試，驗證檢查鍵完整且權重合計為 100；插件版本更新至 `0.6.0`。
+
+### 關鍵決策和解決方案
+
+- 每項結果統一使用 `pass`、`warning`、`fail`，總分按固定權重累加；警告取得該項約一半分數，問題不給分。
+- 中文內容按漢字逐字、其他語言按詞組計算，避免英文專用字數函式造成誤判。
+- 可讀性檢查採可解釋的規則式判斷，不使用 AI 猜測；圖片主題相關性目前以 Alt Text 是否包含完整 Focus keyphrase 作為可重現標準。
+- 不新增資料表；逐項結果按當前內容即時計算，既有自訂欄位只保存總分和分析摘要。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Post Meta／AJAX、原生 JavaScript DOM、CSS Grid、TypeScript、Zod、Fastify、Vitest。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- API TypeScript build、ESLint、JavaScript 語法、`git diff --check` 和指定 API 測試通過；`siteConnections.test.ts` 共 34 項測試成功。
+- 插件主 PHP 文件已通過 `php-parser` 靜態解析。
+- WordPress Docker 容器 runtime 檢查未完成：本機 Docker daemon 回報容器 `resolv.conf` 唯讀並令容器停止，無法執行容器內 `php -l` 或後台視覺驗證。
+- 未新增或提交 `.env`、密碼、Token、API Key、Application Password 或私鑰。
+
+### 下一步行動清單
+
+- Docker Desktop 恢復後，按 `plugins/wordpress/TESTING.md` 清單 9 驗證三種內容類型的 19 項狀態、AJAX 更新和桌面／窄螢幕排版。
+- WordPress 生產站需另行更新 `rankwoven-seo` 插件；推送主倉庫只會觸發 RankWoven API／Web 的既有部署流程。
+
+## 會話總結（2026-08-31）— SEO 評分審查修正
+
+### 會話主要目的
+
+修正逐項 SEO 評分實作在關鍵詞邊界、商品資料、空正文及標題顯示寬度方面的誤判，並完成提交前審查。
+
+### 完成的主要任務
+
+- 關鍵詞檢查改為完整詞匹配；多詞 Focus keyphrase 可按所有詞判斷，不會把 `AI` 誤算入 `email`。
+- SEO title width 改用中文字元雙寬單位計算，避免只按字符數判斷。
+- 評分把文章摘要納入正文上下文；商品額外讀取 WooCommerce 特色圖片和商品圖庫的 Alt Text。
+- 空正文不再從連續句子、子標題、段落、語態和句長項目取得虛假成功分；無圖片時 Image keyphrase 保持警告但不加分。
+- 補充 API 測試覆蓋空正文、關鍵詞邊界、多詞關鍵詞及商品摘要，並同步更新插件測試流程包含 `editor-seo.css`。
+
+### 關鍵決策和解決方案
+
+- PHP 插件與 SaaS API 保持同一套規則和檢查鍵，兩端分別在本地執行以支援 WordPress 離線 fallback。
+- 不引入同義詞資料庫或外部 NLP 服務；圖片主題相關性以 Focus keyphrase 的完整詞／所有詞匹配作為可重現規則。
+
+### 使用的技術棧
+
+WordPress PHP 8、WooCommerce Post Meta、TypeScript、Fastify、Zod、Vitest、CSS、原生 JavaScript。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過；測試為 46 項成功、4 項 PostgreSQL 整合測試跳過。
+- `php-parser` 解析插件 PHP 通過；JavaScript 語法和 `git diff --check` 通過。
+- 已同步插件文件到本地 WordPress 測試站；Docker daemon 因 `/var/lib/docker/containers/...` 唯讀，無法啟動 `cyruschan-wp` 執行 `php -l` 或後台 runtime 驗證。
+- `code-review` 雙軸審查已完成，發現的關鍵詞、商品、空正文和寬度問題均已修正；未提交任何 `.env` 或敏感憑據。
+
+### 下一步行動清單
+
+- Docker Desktop 恢復後，重新啟動 `cyruschan-wp`，依 `plugins/wordpress/TESTING.md` 清單 9 驗證文章、頁面和商品的 19 項狀態及圖片圖庫。
+- 本次分支完成後才提交；WordPress 測試站插件已同步，生產插件仍需獨立發布流程。

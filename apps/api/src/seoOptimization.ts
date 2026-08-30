@@ -214,6 +214,8 @@ const editorSeoGenerationSchema = z.object({
   excerpt: z.string().max(2000).optional().default(''),
   contentHtml: z.string().max(500_000).optional().default(''),
   currentMetaDescription: z.string().max(500).optional().default(''),
+  currentUrl: z.url().or(z.literal('')).optional().default(''),
+  hasPreviouslyUsedKeyphrase: z.boolean().optional().default(false),
   locale: z.string().trim().min(2).max(20).default('zh-Hant')
 });
 
@@ -1324,6 +1326,8 @@ interface EditorSeoGenerationInput {
   excerpt: string;
   contentHtml: string;
   currentMetaDescription: string;
+  currentUrl: string;
+  hasPreviouslyUsedKeyphrase: boolean;
   locale: string;
 }
 
@@ -1409,6 +1413,74 @@ function buildEditorSeoScoreCheck(
   };
 }
 
+function buildWeightedEditorSeoScoreCheck(
+  key: string,
+  label: string,
+  status: EditorSeoScoreStatus,
+  maxPoints: number,
+  message: string,
+  pointsOverride?: number
+) {
+  return buildEditorSeoScoreCheck(
+    key,
+    label,
+    status,
+    pointsOverride ?? (status === 'pass' ? maxPoints : status === 'warning' ? Math.round(maxPoints / 2) : 0),
+    maxPoints,
+    message
+  );
+}
+
+function countEditorSeoTextUnits(value: string) {
+  return normalizePlainText(value).match(/\p{Script=Han}|[\p{L}\p{N}]+/gu)?.length ?? 0;
+}
+
+function getEditorSeoKeywordTokens(value: string): string[] {
+  return normalizePlainText(value).toLowerCase().match(/\p{Script=Han}|[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function editorSeoTextContainsKeyphrase(text: string, keyphrase: string) {
+  if (text === '' || keyphrase === '') {
+    return false;
+  }
+
+  if (/^[\p{L}\p{N}]+$/u.test(keyphrase) && !/\p{Script=Han}/u.test(keyphrase)) {
+    return getEditorSeoKeywordTokens(text).includes(keyphrase);
+  }
+
+  if (text.includes(keyphrase)) {
+    return true;
+  }
+
+  const keyphraseTokens = getEditorSeoKeywordTokens(keyphrase);
+  if (keyphraseTokens.length < 2 || !/\s/u.test(keyphrase)) {
+    return false;
+  }
+
+  const textTokens = new Set(getEditorSeoKeywordTokens(text));
+  return keyphraseTokens.every((token) => textTokens.has(token));
+}
+
+function getEditorSeoDisplayWidth(value: string) {
+  return Array.from(value).reduce((width, character) => width + (/\p{Script=Han}/u.test(character) ? 2 : 1), 0);
+}
+
+function countEditorSeoKeyphraseOccurrences(text: string, keyphrase: string) {
+  if (text === '' || keyphrase === '') {
+    return 0;
+  }
+
+  if (/^[\p{L}\p{N}]+$/u.test(keyphrase) && !/\p{Script=Han}/u.test(keyphrase)) {
+    return getEditorSeoKeywordTokens(text).filter((token) => token === keyphrase).length;
+  }
+
+  return text.split(keyphrase).length - 1;
+}
+
+function editorSeoSlugContainsKeyphrase(slug: string, keyphraseSlug: string) {
+  return slug !== '' && keyphraseSlug !== '' && `_${slug}_`.includes(`_${keyphraseSlug}_`);
+}
+
 function buildEditorSeoScore(
   input: EditorSeoGenerationInput,
   fields: Pick<EditorSeoGenerationResult, 'seoTitle' | 'slug' | 'metaDescription'>
@@ -1418,83 +1490,252 @@ function buildEditorSeoScore(
   const seoTitle = normalizePlainText(fields.seoTitle);
   const metaDescription = normalizePlainText(fields.metaDescription);
   const slug = normalizeEditorSeoSlug(fields.slug);
-  const contentText = normalizePlainText(input.contentHtml).toLowerCase();
-  const h1Count = (input.contentHtml.match(/<h1\b/gi) ?? []).length;
-  const internalLinkCount = (input.contentHtml.match(/<a\s+[^>]*href=["'][^"']+["']/gi) ?? []).length;
+  const scoringContentHtml = [input.excerpt ? `<p>${input.excerpt}</p>` : '', input.contentHtml].filter(Boolean).join('');
+  const contentText = normalizePlainText(scoringContentHtml).toLowerCase();
+  const contentUnits = countEditorSeoTextUnits(scoringContentHtml);
+  const keyphraseOccurrences = countEditorSeoKeyphraseOccurrences(contentText, keyphrase);
+  const recommendedKeyphraseOccurrences = Math.max(1, Math.ceil(contentUnits / 200));
+  const keyphraseDensity = contentUnits > 0 ? (keyphraseOccurrences / contentUnits) * 100 : 0;
+
+  const siteHost = (() => {
+    try {
+      return input.currentUrl ? new URL(input.currentUrl).hostname.toLowerCase() : '';
+    } catch {
+      return '';
+    }
+  })();
+
+  let internalLinkCount = 0;
+  let outboundLinkCount = 0;
+  for (const match of scoringContentHtml.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)) {
+    const href = String(match[1] ?? '').trim();
+    if (href === '' || href.startsWith('#') || /^(?:mailto|tel|javascript):/i.test(href)) {
+      continue;
+    }
+
+    try {
+      const linkUrl = new URL(href, input.currentUrl || 'https://rankwoven.local');
+      const linkHost = linkUrl.hostname.toLowerCase();
+      const isRelativeLink = !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('//');
+      if (isRelativeLink || linkHost === siteHost || (siteHost !== '' && linkHost.endsWith(`.${siteHost}`))) {
+        internalLinkCount += 1;
+      } else {
+        outboundLinkCount += 1;
+      }
+    } catch {
+      internalLinkCount += 1;
+    }
+  }
+
+  const imageTags = Array.from(scoringContentHtml.matchAll(/<img\b[^>]*>/gi), (match) => match[0]);
+  const imageKeyphraseCount = imageTags.filter((imageTag) => {
+    const altText = normalizePlainText(imageTag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1] ?? '').toLowerCase();
+    return editorSeoTextContainsKeyphrase(altText, keyphrase);
+  }).length;
+
+  const paragraphs = Array.from(
+    scoringContentHtml.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi),
+    (match) => normalizePlainText(match[1] ?? '').toLowerCase()
+  ).filter(Boolean);
+  if (paragraphs.length === 0 && contentText !== '') {
+    paragraphs.push(contentText);
+  }
+  const introduction = paragraphs[0] ?? '';
+  const longestParagraph = Math.max(0, ...paragraphs.map(countEditorSeoTextUnits));
+  const sentences = contentText.split(/[.!?。！？]+/u).map((sentence) => sentence.trim()).filter(Boolean);
+  const longSentenceLimit = /\p{Script=Han}/u.test(contentText) ? 45 : 25;
+  const longSentenceRatio = sentences.length === 0
+    ? 0
+    : sentences.filter((sentence) => countEditorSeoTextUnits(sentence) > longSentenceLimit).length / sentences.length;
+  const passiveSentenceRatio = sentences.length === 0
+    ? 0
+    : sentences.filter((sentence) => /(?:\b(?:is|are|was|were|be|been|being)\s+[a-z]+(?:ed|en)\b|被|受到|由[^，。！？]{1,20}(?:進行|完成|建立|使用|處理))/iu.test(sentence)).length / sentences.length;
+  const sentenceStarts = sentences.map((sentence) => (
+    sentence.match(/^\s*(\p{Script=Han}{1,4}|(?:[\p{L}\p{N}]+\s*){1,3})/u)?.[1]?.trim().toLowerCase() ?? ''
+  ));
+  const hasConsecutiveSentences = sentenceStarts.some((start, index) => (
+    index >= 2 && start !== '' && start === sentenceStarts[index - 1] && start === sentenceStarts[index - 2]
+  ));
+  const subheadingCount = (scoringContentHtml.match(/<h[2-4]\b/gi) ?? []).length;
+  const seoTitleDisplayWidth = getEditorSeoDisplayWidth(seoTitle);
+  const longestHeadingSection = Math.max(
+    0,
+    ...scoringContentHtml
+      .split(/<h[2-4]\b[^>]*>[\s\S]*?<\/h[2-4]>/gi)
+      .map(countEditorSeoTextUnits)
+  );
 
   const checks: EditorSeoScoreCheck[] = [];
 
   checks.push(
-    seoTitle.length >= 25 && seoTitle.length <= 65
-      ? buildEditorSeoScoreCheck('title-length', 'SEO title 長度', 'pass', 15, 15, 'SEO title 長度落在建議範圍 25-65 字。')
-      : seoTitle.length >= 15 && seoTitle.length <= 80
-        ? buildEditorSeoScoreCheck('title-length', 'SEO title 長度', 'warning', 8, 15, 'SEO title 可再調整到 25-65 字之間。')
-        : buildEditorSeoScoreCheck('title-length', 'SEO title 長度', 'fail', 0, 15, 'SEO title 過短或過長，建議調整到 25-65 字。')
-  );
-
-  if (keyphrase === '') {
-    checks.push(buildEditorSeoScoreCheck('focus-in-title', '焦點關鍵詞在標題中', 'warning', 0, 15, '尚未設定 Focus keyphrase，無法檢查標題關鍵詞相關性。'));
-  } else if (seoTitle.toLowerCase().includes(keyphrase)) {
-    checks.push(buildEditorSeoScoreCheck('focus-in-title', '焦點關鍵詞在標題中', 'pass', 15, 15, 'SEO title 已包含 Focus keyphrase。'));
-  } else {
-    checks.push(buildEditorSeoScoreCheck('focus-in-title', '焦點關鍵詞在標題中', 'fail', 0, 15, 'SEO title 尚未包含 Focus keyphrase。'));
-  }
-
-  checks.push(
-    metaDescription.length >= 70 && metaDescription.length <= 160
-      ? buildEditorSeoScoreCheck('meta-length', 'Meta description 長度', 'pass', 15, 15, 'Meta description 長度落在建議範圍 70-160 字。')
-      : metaDescription.length >= 50 && metaDescription.length <= 180
-        ? buildEditorSeoScoreCheck('meta-length', 'Meta description 長度', 'warning', 8, 15, 'Meta description 可再調整到 70-160 字之間。')
-        : buildEditorSeoScoreCheck('meta-length', 'Meta description 長度', 'fail', 0, 15, 'Meta description 過短、缺失或過長。')
-  );
-
-  if (keyphrase === '') {
-    checks.push(buildEditorSeoScoreCheck('focus-in-meta', '焦點關鍵詞在描述中', 'warning', 0, 10, '尚未設定 Focus keyphrase，無法檢查描述關鍵詞相關性。'));
-  } else if (metaDescription.toLowerCase().includes(keyphrase)) {
-    checks.push(buildEditorSeoScoreCheck('focus-in-meta', '焦點關鍵詞在描述中', 'pass', 10, 10, 'Meta description 已包含 Focus keyphrase。'));
-  } else {
-    checks.push(buildEditorSeoScoreCheck('focus-in-meta', '焦點關鍵詞在描述中', 'fail', 0, 10, 'Meta description 尚未包含 Focus keyphrase。'));
-  }
-
-  if (slug !== '' && slug.length <= 75 && (keyphraseSlug === '' || slug.includes(keyphraseSlug))) {
-    checks.push(buildEditorSeoScoreCheck('slug-quality', 'Slug 品質', 'pass', 10, 10, 'Slug 簡潔且與主題相關。'));
-  } else if (slug !== '') {
-    checks.push(buildEditorSeoScoreCheck('slug-quality', 'Slug 品質', 'warning', 5, 10, 'Slug 已存在，但可再縮短或更貼近 Focus keyphrase。'));
-  } else {
-    checks.push(buildEditorSeoScoreCheck('slug-quality', 'Slug 品質', 'fail', 0, 10, 'Slug 為空或不利於 SEO。'));
-  }
-
-  checks.push(
-    contentText.length >= 300
-      ? buildEditorSeoScoreCheck('content-length', '內容長度', 'pass', 10, 10, '內容長度足夠，可支撐主題完整性。')
-      : contentText.length >= 150
-        ? buildEditorSeoScoreCheck('content-length', '內容長度', 'warning', 5, 10, '內容略短，建議補充更多主題細節。')
-        : buildEditorSeoScoreCheck('content-length', '內容長度', 'fail', 0, 10, '內容過短，難以支撐主要關鍵詞排名。')
+    buildWeightedEditorSeoScoreCheck(
+      'focus-keyphrase',
+      'Focus keyphrase',
+      keyphrase !== '' ? 'pass' : 'fail',
+      5,
+      keyphrase !== '' ? '已設定 Focus keyphrase。' : '尚未設定 Focus keyphrase。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'title-length',
+      'SEO title width',
+      seoTitleDisplayWidth >= 30 && seoTitleDisplayWidth <= 60
+        ? 'pass'
+        : seoTitleDisplayWidth >= 24 && seoTitleDisplayWidth <= 70 ? 'warning' : 'fail',
+      7,
+      seoTitleDisplayWidth >= 30 && seoTitleDisplayWidth <= 60
+        ? `SEO title 顯示寬度約 ${seoTitleDisplayWidth} 單位，符合建議。`
+        : `SEO title 顯示寬度約 ${seoTitleDisplayWidth} 單位，建議調整至 30-60 單位。`
+    )
   );
 
   checks.push(
-    h1Count === 1
-      ? buildEditorSeoScoreCheck('h1-count', 'H1 結構', 'pass', 10, 10, '內容保留單一 H1，結構清晰。')
-      : h1Count === 0
-        ? buildEditorSeoScoreCheck('h1-count', 'H1 結構', 'fail', 0, 10, '內容缺少 H1，建議保留一個主標題。')
-        : buildEditorSeoScoreCheck('h1-count', 'H1 結構', 'warning', 5, 10, '內容有多個 H1，建議只保留一個。')
+    buildWeightedEditorSeoScoreCheck(
+      'focus-in-title',
+      'Keyphrase in SEO title',
+      editorSeoTextContainsKeyphrase(seoTitle, keyphrase) ? 'pass' : 'fail',
+      7,
+      editorSeoTextContainsKeyphrase(seoTitle, keyphrase)
+        ? 'SEO title 已包含完整 Focus keyphrase。'
+        : 'SEO title 尚未包含完整 Focus keyphrase。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'meta-length',
+      'Meta description length',
+      metaDescription.length >= 120 && metaDescription.length <= 156
+        ? 'pass'
+        : metaDescription.length >= 70 && metaDescription.length <= 160 ? 'warning' : 'fail',
+      6,
+      metaDescription.length >= 120 && metaDescription.length <= 156
+        ? `Meta description 長度為 ${metaDescription.length} 字，符合建議。`
+        : `Meta description 長度為 ${metaDescription.length} 字，建議調整至 120-156 字。`
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'focus-in-meta',
+      'Keyphrase in meta description',
+      editorSeoTextContainsKeyphrase(metaDescription, keyphrase) ? 'pass' : 'fail',
+      6,
+      editorSeoTextContainsKeyphrase(metaDescription, keyphrase)
+        ? 'Meta description 已包含 Focus keyphrase。'
+        : 'Meta description 尚未包含 Focus keyphrase。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'slug-keyphrase',
+      'Keyphrase in slug',
+      editorSeoSlugContainsKeyphrase(slug, keyphraseSlug) ? 'pass' : slug !== '' ? 'warning' : 'fail',
+      5,
+      editorSeoSlugContainsKeyphrase(slug, keyphraseSlug)
+        ? 'Slug 已包含 Focus keyphrase 的英文格式。'
+        : 'Slug 應加入與 Focus keyphrase 對應的英文詞組。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'content-length',
+      'Text length',
+      contentUnits >= 300 ? 'pass' : contentUnits >= 150 ? 'warning' : 'fail',
+      10,
+      contentUnits >= 300
+        ? `正文包含約 ${contentUnits} 個中英文文字單位，長度充足。`
+        : `正文只有約 ${contentUnits} 個中英文文字單位，建議至少補充至 300。`
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'keyphrase-density',
+      'Keyphrase density',
+      keyphrase === '' || keyphraseOccurrences < recommendedKeyphraseOccurrences
+        ? 'fail'
+        : keyphraseDensity > 3.5 ? 'warning' : 'pass',
+      7,
+      `Focus keyphrase 出現 ${keyphraseOccurrences} 次；此長度建議至少 ${recommendedKeyphraseOccurrences} 次，並避免過度重複。`
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'keyphrase-introduction',
+      'Keyphrase in introduction',
+      editorSeoTextContainsKeyphrase(introduction, keyphrase) ? 'pass' : 'fail',
+      6,
+      editorSeoTextContainsKeyphrase(introduction, keyphrase) ? '首段已包含 Focus keyphrase。' : '首段尚未包含 Focus keyphrase。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'outbound-links',
+      'Outbound links',
+      outboundLinkCount > 0 ? 'pass' : 'fail',
+      5,
+      outboundLinkCount > 0 ? `正文包含 ${outboundLinkCount} 條外部連結。` : '正文尚未包含外部連結。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'images',
+      'Images',
+      imageTags.length > 0 ? 'pass' : 'fail',
+      5,
+      imageTags.length > 0 ? `正文包含 ${imageTags.length} 張圖片。` : '正文尚未包含圖片。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'image-keyphrase',
+      'Image keyphrase',
+      imageTags.length > 0 && keyphrase !== '' && imageKeyphraseCount >= Math.max(1, Math.ceil(imageTags.length / 2)) ? 'pass' : 'warning',
+      5,
+      `共 ${imageTags.length} 張圖片，其中 ${imageKeyphraseCount} 張的 Alt Text 包含 Focus keyphrase；建議至少覆蓋一半相關圖片。`,
+      imageTags.length === 0 ? 0 : undefined
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'internal-links',
+      'Internal links',
+      internalLinkCount >= 2 ? 'pass' : internalLinkCount === 1 ? 'warning' : 'fail',
+      5,
+      internalLinkCount >= 2 ? `正文包含 ${internalLinkCount} 條內部連結。` : '建議正文至少加入兩條相關內部連結。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'consecutive-sentences',
+      'Consecutive sentences',
+      sentences.length === 0 ? 'fail' : hasConsecutiveSentences ? 'warning' : 'pass',
+      4,
+      sentences.length === 0 ? '正文為空，無法評估連續句子。' : hasConsecutiveSentences ? '有三個連續句子使用相同開頭，建議增加句式變化。' : '連續句子的開頭有足夠變化。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'subheading-distribution',
+      'Subheading distribution',
+      contentUnits === 0
+        ? 'fail'
+        : contentUnits < 300 || (subheadingCount > 0 && longestHeadingSection <= 300)
+        ? 'pass'
+        : longestHeadingSection <= 450 ? 'warning' : 'fail',
+      4,
+      subheadingCount > 0 && longestHeadingSection <= 300
+        ? `正文使用 ${subheadingCount} 個 H2-H4 子標題，分佈合理。`
+        : contentUnits === 0
+          ? '正文為空，無法評估子標題分佈。'
+          : contentUnits < 300
+            ? '短內容暫不需要額外子標題。'
+          : subheadingCount > 0 ? '部分章節過長，建議增加或重新分配 H2-H4 子標題。' : '內容較長，建議加入 H2-H4 子標題。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'paragraph-length',
+      'Paragraph length',
+      longestParagraph === 0 ? 'fail' : longestParagraph <= 150 ? 'pass' : longestParagraph <= 250 ? 'warning' : 'fail',
+      4,
+      longestParagraph === 0 ? '正文為空，無法評估段落長度。' : longestParagraph <= 150 ? '段落長度易於閱讀。' : `最長段落約 ${longestParagraph} 個文字單位，建議拆短。`
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'passive-voice',
+      'Passive voice',
+      sentences.length === 0 ? 'fail' : passiveSentenceRatio <= 0.1 ? 'pass' : passiveSentenceRatio <= 0.2 ? 'warning' : 'fail',
+      3,
+      sentences.length === 0 ? '正文為空，無法評估語態。' : passiveSentenceRatio <= 0.1 ? '主動語態比例良好。' : '被動語態句子偏多，建議改用更直接的主動語態。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'sentence-length',
+      'Sentence length',
+      sentences.length === 0 ? 'fail' : longSentenceRatio <= 0.25 ? 'pass' : longSentenceRatio <= 0.4 ? 'warning' : 'fail',
+      4,
+      sentences.length === 0 ? '正文為空，無法評估句子長度。' : longSentenceRatio <= 0.25 ? '大部分句子長度適中。' : '過長句子比例偏高，建議拆分以改善可讀性。'
+    ),
+    buildWeightedEditorSeoScoreCheck(
+      'previously-used-keyphrase',
+      'Previously used keyphrase',
+      keyphrase === '' || input.hasPreviouslyUsedKeyphrase ? 'warning' : 'pass',
+      2,
+      keyphrase === ''
+        ? '設定 Focus keyphrase 後才可檢查重複使用。'
+        : input.hasPreviouslyUsedKeyphrase ? '其他內容已使用相同 Focus keyphrase，可能造成關鍵詞競爭。' : '此 Focus keyphrase 尚未被其他內容使用。'
+    )
   );
-
-  checks.push(
-    internalLinkCount >= 2
-      ? buildEditorSeoScoreCheck('internal-links', '內部連結', 'pass', 5, 5, '內容已包含足夠的內部連結。')
-      : internalLinkCount === 1
-        ? buildEditorSeoScoreCheck('internal-links', '內部連結', 'warning', 3, 5, '建議再補至少一條內部連結。')
-        : buildEditorSeoScoreCheck('internal-links', '內部連結', 'fail', 0, 5, '內容尚未包含內部連結。')
-  );
-
-  if (keyphrase === '') {
-    checks.push(buildEditorSeoScoreCheck('focus-in-content', '焦點關鍵詞在內容中', 'warning', 0, 10, '尚未設定 Focus keyphrase，無法檢查正文相關性。'));
-  } else if (contentText.includes(keyphrase)) {
-    checks.push(buildEditorSeoScoreCheck('focus-in-content', '焦點關鍵詞在內容中', 'pass', 10, 10, '內容正文已包含 Focus keyphrase。'));
-  } else {
-    checks.push(buildEditorSeoScoreCheck('focus-in-content', '焦點關鍵詞在內容中', 'fail', 0, 10, '內容正文尚未包含 Focus keyphrase。'));
-  }
 
   const score = checks.reduce((total, check) => total + check.points, 0);
   const maxScore = checks.reduce((total, check) => total + check.maxPoints, 0);

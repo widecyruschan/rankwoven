@@ -1712,7 +1712,7 @@ describe('site connection routes', () => {
         analysis: string;
         seoScore: number;
         scoreSummary: string;
-        scoreChecks: Array<{ key: string; status: string }>;
+        scoreChecks: Array<{ key: string; status: string; maxPoints: number }>;
         mode: string;
       };
     }>();
@@ -1734,9 +1734,145 @@ describe('site connection routes', () => {
       expect.arrayContaining([
         expect.objectContaining({ key: 'title-length' }),
         expect.objectContaining({ key: 'meta-length' }),
-        expect.objectContaining({ key: 'content-length' })
+        expect.objectContaining({ key: 'content-length' }),
+        expect.objectContaining({ key: 'outbound-links' }),
+        expect.objectContaining({ key: 'keyphrase-density' }),
+        expect.objectContaining({ key: 'image-keyphrase' }),
+        expect.objectContaining({ key: 'previously-used-keyphrase' })
       ])
     );
+    expect(responseBody.data.scoreChecks).toHaveLength(19);
+    expect(responseBody.data.scoreChecks.reduce((total, check) => total + check.maxPoints, 0)).toBe(100);
+  });
+
+  it('uses the complete SEO checklist for posts, pages, and products', async () => {
+    const { server, body } = await createWordPressConnection();
+    const expectedCheckKeys = [
+      'focus-keyphrase',
+      'title-length',
+      'focus-in-title',
+      'meta-length',
+      'focus-in-meta',
+      'slug-keyphrase',
+      'content-length',
+      'keyphrase-density',
+      'keyphrase-introduction',
+      'outbound-links',
+      'images',
+      'image-keyphrase',
+      'internal-links',
+      'consecutive-sentences',
+      'subheading-distribution',
+      'paragraph-length',
+      'passive-voice',
+      'sentence-length',
+      'previously-used-keyphrase'
+    ];
+
+    for (const postType of ['post', 'page', 'product'] as const) {
+      const response = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/editor-seo`,
+        headers: {
+          authorization: `Bearer ${body.data.apiToken}`
+        },
+        payload: {
+          mode: 'analyze',
+          postType,
+          currentTitle: 'WordPress SEO 教學與內容評分完整指南',
+          currentSeoTitle: 'WordPress SEO 教學與內容評分完整指南',
+          currentSlug: 'wordpress_seo_guide',
+          focusKeyphrase: 'WordPress SEO',
+          currentMetaDescription: 'WordPress SEO 教學涵蓋內容評分、關鍵詞配置、內部連結、圖片 Alt Text 與可讀性，協助網站管理員逐項改善文章、頁面和商品的搜尋表現。',
+          currentUrl: `https://example.com/${postType}/wordpress-seo-guide/`,
+          hasPreviouslyUsedKeyphrase: false,
+          contentHtml: '<p>WordPress SEO 能協助網站改善內容結構與搜尋曝光。</p><h2>內容評分</h2><p>WordPress SEO 檢查標題、描述與內部連結。</p><a href="/related/">延伸閱讀</a><a href="https://wordpress.org/">WordPress</a><img src="seo.jpg" alt="WordPress SEO 教學">'
+        }
+      });
+
+      expect(response.statusCode).toBe(200);
+      const responseBody = response.json<{
+        data: {
+          postType: string;
+          scoreChecks: Array<{ key: string; status: string; maxPoints: number }>;
+        };
+      }>();
+      expect(responseBody.data.postType).toBe(postType);
+      expect(responseBody.data.scoreChecks.map((check) => check.key)).toEqual(expectedCheckKeys);
+      expect(responseBody.data.scoreChecks.reduce((total, check) => total + check.maxPoints, 0)).toBe(100);
+    }
+  });
+
+  it('does not award readability points to empty content or match keyphrases inside other words', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/editor-seo`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        mode: 'analyze',
+        postType: 'page',
+        currentSeoTitle: 'Email marketing workflow for editorial teams',
+        currentSlug: 'email_marketing_workflow',
+        focusKeyphrase: 'AI',
+        currentMetaDescription: 'Email marketing workflow for editorial teams.',
+        currentUrl: 'https://example.com/email-marketing-workflow/',
+        contentHtml: ''
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const responseBody = response.json<{
+      data: {
+        scoreChecks: Array<{ key: string; status: string; points: number }>;
+      };
+    }>();
+    const checksByKey = new Map(responseBody.data.scoreChecks.map((check) => [check.key, check]));
+
+    expect(checksByKey.get('focus-in-title')?.status).toBe('fail');
+    expect(checksByKey.get('focus-in-meta')?.status).toBe('fail');
+    expect(checksByKey.get('slug-keyphrase')?.status).toBe('warning');
+    expect(checksByKey.get('keyphrase-density')?.status).toBe('fail');
+    expect(checksByKey.get('image-keyphrase')).toMatchObject({ status: 'warning', points: 0 });
+    for (const key of ['consecutive-sentences', 'subheading-distribution', 'paragraph-length', 'passive-voice', 'sentence-length']) {
+      expect(checksByKey.get(key)).toMatchObject({ status: 'fail', points: 0 });
+    }
+  });
+
+  it('accepts every keyphrase word in a different order and analyzes product excerpts', async () => {
+    const { server, body } = await createWordPressConnection();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/editor-seo`,
+      headers: {
+        authorization: `Bearer ${body.data.apiToken}`
+      },
+      payload: {
+        mode: 'analyze',
+        postType: 'product',
+        currentSeoTitle: 'SEO workflow powered by AI for online shops',
+        currentSlug: 'ai_seo_product',
+        focusKeyphrase: 'AI SEO',
+        currentMetaDescription: 'This product applies SEO checks with AI guidance for online shops and content teams.',
+        currentUrl: 'https://example.com/product/ai-seo-product/',
+        excerpt: 'AI SEO helps product teams improve store content and search visibility.',
+        contentHtml: ''
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const responseBody = response.json<{
+      data: {
+        scoreChecks: Array<{ key: string; status: string }>;
+      };
+    }>();
+    const checksByKey = new Map(responseBody.data.scoreChecks.map((check) => [check.key, check]));
+    expect(checksByKey.get('focus-in-title')?.status).toBe('pass');
+    expect(checksByKey.get('focus-in-meta')?.status).toBe('pass');
+    expect(checksByKey.get('keyphrase-introduction')?.status).toBe('pass');
+    expect(checksByKey.get('paragraph-length')?.status).toBe('pass');
   });
 
   it('normalizes editor SEO slugs to lowercase English letters and underscores', async () => {

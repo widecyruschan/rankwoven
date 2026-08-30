@@ -54,6 +54,9 @@ cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwoven-
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.js" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.js"
 
+cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.css" \
+   "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.css"
+
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/admin.css" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/admin.css"
 ```
@@ -167,6 +170,12 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 輸入 `Focus keyphrase` 後，點擊 `Generate & Apply SEO` 能生成並套用 SEO title、Slug 和 Meta description。
 - [ ] 無論 AI 回傳、手動輸入或 WordPress 原有 slug 是否包含中文、URL encode、數字、空格或連字號，保存後 Slug 都只包含英文小寫字母與下劃線，例如 `wordpress_seo_settings`。
 - [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
+- [ ] 文章、頁面和商品使用相同的 19 項檢查，總權重為 100；面板按紅色 `Problems`、黃色 `Warnings`、綠色 `Success` 分組顯示每項名稱與說明。
+- [ ] 檢查清單包含 Focus keyphrase、SEO title width、Keyphrase in SEO title、Meta description length、Keyphrase in meta description、Keyphrase in slug、Text length、Keyphrase density 和 Keyphrase in introduction。
+- [ ] 檢查清單包含 Outbound links、Internal links、Images、Image keyphrase、Consecutive sentences、Subheading distribution、Paragraph length、Passive voice、Sentence length 和 Previously used keyphrase。
+- [ ] 中文正文能按中文字元計算 Text length 和 Keyphrase density，不會因 `str_word_count()` 返回 0 而被誤判為空內容。
+- [ ] 本站相對 URL／同網域 URL 計入 Internal links，其他網域計入 Outbound links；`mailto:`、`tel:`、錨點和 `javascript:` 不計分。
+- [ ] 圖片 Alt Text 包含 Focus keyphrase 時更新 Image keyphrase 統計；在其他文章、頁面或商品使用相同 Focus keyphrase 時，Previously used keyphrase 顯示警告。
 - [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
 - [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。
 - [ ] 直接點擊 WordPress 原生 `Update` / `Publish` 後重新打開編輯頁，Keywords 仍能正確回顯。

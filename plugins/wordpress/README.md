@@ -93,7 +93,18 @@ http://host.docker.internal:3011
 - WordPress 原生 `Update` / `Publish`：也會保存 RankWoven 面板中的 SEO title、Meta description 和 Keywords，避免刷新後欄位變空。
 - 若 WordPress AJAX 返回 nonce 過期、未登入、插件 action 未載入或 PHP 非 JSON 錯誤，面板會顯示可讀原因，避免只顯示泛化的 `SEO request failed`。
 
-RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。內容分數會根據當前標題、Meta description、Slug、正文長度、H1、內部連結與 Focus keyphrase 覆蓋情況即時計算。
+RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。
+
+內容分數使用文章、頁面、Portfolio 和商品共用的 100 分制，面板按 `Problems`、`Warnings`、`Success` 即時列出以下 19 項檢查：
+
+- Focus keyphrase、SEO title width、Keyphrase in SEO title。
+- Meta description length、Keyphrase in meta description、Keyphrase in slug。
+- Text length、Keyphrase density、Keyphrase in introduction。
+- Outbound links、Internal links、Images、Image keyphrase。
+- Consecutive sentences、Subheading distribution、Paragraph length、Passive voice、Sentence length。
+- Previously used keyphrase。
+
+中文內容長度不使用只適合英文的 `str_word_count()`，而是按中文字元及其他語言的詞組計算。SEO title width 會把中文字元按較寬的顯示單位計算；外部／內部連結會按本站網域分類；圖片檢查會讀取正文 `<img>` 和 Alt Text，商品另會納入短描述、特色圖片及商品圖庫；重複 Focus keyphrase 會排除當前內容後查詢其他文章、頁面、Portfolio 和商品。可讀性項目屬規則式提示，用於找出明顯問題，不取代人工編輯判斷。
 
 `搜尋外觀` 頁籤可為不同內容類型設定預設模板。每個 SEO Title、Meta Description 和 Meta Keywords 欄位都提供可點擊標籤，客戶可直接插入 `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}` 和 `{{post_type_label}}`，不需要手動輸入 placeholder 代碼；早期單括號格式也會兼容。單篇文章若已保存自訂 SEO 欄位，仍會優先使用單篇值。
 

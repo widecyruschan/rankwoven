@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RankWoven SEO
  * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes GEO controls, LLMs.txt, and RSS Sitemap output.
- * Version: 0.5.1
+ * Version: 0.6.0
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.5.1';
+    private const VERSION = '0.6.0';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -289,11 +289,28 @@ final class RankWoven_SEO_Plugin
             true
         );
 
+        $editor_seo_style_path = plugin_dir_path(__FILE__) . 'assets/editor-seo.css';
+        $editor_seo_style_version = self::VERSION;
+        if (file_exists($editor_seo_style_path)) {
+            $editor_seo_style_version .= '.' . (string) filemtime($editor_seo_style_path);
+        }
+        wp_enqueue_style(
+            'rankwoven-editor-seo',
+            plugin_dir_url(__FILE__) . 'assets/editor-seo.css',
+            [],
+            $editor_seo_style_version
+        );
+
         wp_localize_script('rankwoven-editor-seo', 'rankwovenEditorSeoConfig', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('rankwoven_editor_seo'),
             'postType' => (string) ($screen->post_type ?? ''),
-            'supportedPostTypes' => $this->get_supported_editor_post_types()
+            'supportedPostTypes' => $this->get_supported_editor_post_types(),
+            'scoreGroupLabels' => [
+                'fail' => __('Problems', 'rankwoven-seo'),
+                'warning' => __('Warnings', 'rankwoven-seo'),
+                'pass' => __('Success', 'rankwoven-seo')
+            ]
         ]);
     }
 
@@ -308,9 +325,19 @@ final class RankWoven_SEO_Plugin
 
         $meta_description = sanitize_textarea_field($this->get_post_meta_description($post, wp_strip_all_tags((string) $post->post_excerpt)));
         $meta_keywords = $this->get_post_meta_keywords($post);
-        $seo_score = max(0, min(100, (int) get_post_meta($post->ID, self::META_EDITOR_SEO_SCORE, true)));
-        $analysis = sanitize_textarea_field((string) get_post_meta($post->ID, self::META_EDITOR_ANALYSIS, true));
         $slug = $this->normalize_editor_seo_slug((string) $post->post_name, (string) $post->post_title);
+        $score_data = $this->calculate_local_editor_seo_score(
+            $focus_keyphrase,
+            $seo_title,
+            $slug,
+            $meta_description,
+            (string) $post->post_content,
+            $post->ID,
+            (string) $post->post_excerpt
+        );
+        $seo_score = max(0, min(100, (int) ($score_data['seoScore'] ?? 0)));
+        $analysis = sanitize_textarea_field((string) ($score_data['analysis'] ?? get_post_meta($post->ID, self::META_EDITOR_ANALYSIS, true)));
+        $score_checks = is_array($score_data['scoreChecks'] ?? null) ? $score_data['scoreChecks'] : [];
         $api_ready = $this->get_api_base_url() !== ''
             && sanitize_text_field(get_option(self::OPTION_SITE_ID, '')) !== ''
             && sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, '')) !== '';
@@ -376,6 +403,29 @@ final class RankWoven_SEO_Plugin
                 </label>
                 <textarea id="rankwoven_seo_analysis" class="widefat" rows="4" readonly><?php echo esc_textarea($analysis); ?></textarea>
             </p>
+            <div class="rankwoven-editor-seo-checks" data-rankwoven-seo-checks>
+                <?php foreach ([
+                    'fail' => __('Problems', 'rankwoven-seo'),
+                    'warning' => __('Warnings', 'rankwoven-seo'),
+                    'pass' => __('Success', 'rankwoven-seo')
+                ] as $status => $heading) : ?>
+                    <section class="rankwoven-editor-seo-check-group" data-rankwoven-score-group="<?php echo esc_attr($status); ?>">
+                        <h3><?php echo esc_html($heading); ?></h3>
+                        <ul>
+                            <?php foreach ($score_checks as $check) : ?>
+                                <?php if (($check['status'] ?? '') !== $status) : continue; endif; ?>
+                                <li>
+                                    <span class="rankwoven-editor-seo-check-dot" aria-hidden="true"></span>
+                                    <div>
+                                        <strong><?php echo esc_html((string) ($check['label'] ?? '')); ?></strong>
+                                        <span><?php echo esc_html((string) ($check['message'] ?? '')); ?></span>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                <?php endforeach; ?>
+            </div>
             <p class="rankwoven-editor-seo-actions">
                 <button type="button" class="button button-primary" data-rankwoven-editor-seo-action="generate"<?php echo $api_ready ? '' : ' disabled'; ?>>
                     <?php echo esc_html__('Generate & Apply SEO', 'rankwoven-seo'); ?>
@@ -932,7 +982,9 @@ final class RankWoven_SEO_Plugin
             $seo_title,
             $slug,
             $meta_description,
-            $content_html
+            $content_html,
+            0,
+            $normalized_excerpt
         );
 
         $analysis = (string) ($score_data['analysis'] ?? '');
@@ -957,9 +1009,176 @@ final class RankWoven_SEO_Plugin
             'slug' => $slug,
             'seoScore' => max(0, min(100, (int) ($score_data['seoScore'] ?? 0))),
             'scoreSummary' => (string) ($score_data['analysis'] ?? ''),
+            'scoreChecks' => is_array($score_data['scoreChecks'] ?? null) ? $score_data['scoreChecks'] : [],
             'metaDescription' => $meta_description,
             'analysis' => trim($analysis)
         ];
+    }
+
+    private function normalize_editor_seo_comparable_text(string $value): string
+    {
+        $plain_text = html_entity_decode(wp_strip_all_tags(strip_shortcodes($value)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $normalized = (string) preg_replace('/\s+/u', ' ', trim($plain_text));
+
+        return function_exists('mb_strtolower') ? mb_strtolower($normalized) : strtolower($normalized);
+    }
+
+    private function get_editor_seo_text_units(string $value): int
+    {
+        $plain_text = $this->normalize_editor_seo_comparable_text($value);
+        if ($plain_text === '') {
+            return 0;
+        }
+
+        $match_count = preg_match_all('/\p{Han}|[\p{L}\p{N}]+/u', $plain_text, $matches);
+
+        return $match_count === false ? 0 : $match_count;
+    }
+
+    private function count_editor_seo_keyphrase_occurrences(string $text, string $keyphrase): int
+    {
+        if ($text === '' || $keyphrase === '') {
+            return 0;
+        }
+
+        if (preg_match('/^[\p{L}\p{N}]+$/u', $keyphrase) && !preg_match('/\p{Han}/u', $keyphrase)) {
+            preg_match_all('/\p{Han}|[\p{L}\p{N}]+/u', $text, $matches);
+
+            return count(array_filter($matches[0] ?? [], static fn ($token): bool => $token === $keyphrase));
+        }
+
+        return substr_count($text, $keyphrase);
+    }
+
+    private function editor_seo_text_contains_keyphrase(string $text, string $keyphrase): bool
+    {
+        if ($text === '' || $keyphrase === '') {
+            return false;
+        }
+
+        if (preg_match('/^[\p{L}\p{N}]+$/u', $keyphrase) && !preg_match('/\p{Han}/u', $keyphrase)) {
+            preg_match_all('/\p{Han}|[\p{L}\p{N}]+/u', $text, $matches);
+
+            return in_array($keyphrase, $matches[0] ?? [], true);
+        }
+
+        if (str_contains($text, $keyphrase)) {
+            return true;
+        }
+
+        $keyphrase_tokens = preg_match_all('/\p{Han}|[\p{L}\p{N}]+/u', $keyphrase, $keyphrase_matches);
+        if ($keyphrase_tokens === false || $keyphrase_tokens < 2 || !preg_match('/\s/u', $keyphrase)) {
+            return false;
+        }
+
+        preg_match_all('/\p{Han}|[\p{L}\p{N}]+/u', $text, $text_matches);
+        $text_tokens = array_fill_keys($text_matches[0] ?? [], true);
+        foreach ($keyphrase_matches[0] ?? [] as $token) {
+            if (!isset($text_tokens[$token])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function get_editor_seo_display_width(string $value): int
+    {
+        $length = function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
+        preg_match_all('/\p{Han}/u', $value, $han_matches);
+
+        return $length + count($han_matches[0] ?? []);
+    }
+
+    private function editor_seo_slug_contains_keyphrase(string $slug, string $keyphrase_slug): bool
+    {
+        return $slug !== '' && $keyphrase_slug !== '' && str_contains('_' . $slug . '_', '_' . $keyphrase_slug . '_');
+    }
+
+    private function get_editor_seo_product_media_html(int $post_id): string
+    {
+        if ($post_id <= 0 || get_post_type($post_id) !== 'product') {
+            return '';
+        }
+
+        $attachment_ids = [];
+        $thumbnail_id = (int) get_post_thumbnail_id($post_id);
+        if ($thumbnail_id > 0) {
+            $attachment_ids[] = $thumbnail_id;
+        }
+
+        foreach (explode(',', (string) get_post_meta($post_id, '_product_image_gallery', true)) as $gallery_id) {
+            $gallery_id = (int) trim($gallery_id);
+            if ($gallery_id > 0) {
+                $attachment_ids[] = $gallery_id;
+            }
+        }
+
+        $media_html = '';
+        foreach (array_values(array_unique($attachment_ids)) as $attachment_id) {
+            $alt_text = (string) get_post_meta($attachment_id, '_wp_attachment_image_alt', true);
+            $media_html .= sprintf('<img alt="%s">', esc_attr($alt_text));
+        }
+
+        return $media_html;
+    }
+
+    private function build_editor_seo_scoring_content(string $content_html, string $excerpt, int $post_id): string
+    {
+        $parts = [];
+        if (trim($excerpt) !== '') {
+            $parts[] = '<p>' . wp_kses_post($excerpt) . '</p>';
+        }
+        if (trim($content_html) !== '') {
+            $parts[] = $content_html;
+        }
+        $product_media_html = $this->get_editor_seo_product_media_html($post_id);
+        if ($product_media_html !== '') {
+            $parts[] = $product_media_html;
+        }
+
+        return implode('', $parts);
+    }
+
+    private function build_editor_seo_score_check(
+        string $key,
+        string $label,
+        string $status,
+        int $max_points,
+        string $message,
+        ?int $points_override = null
+    ): array {
+        $points = $points_override ?? ($status === 'pass' ? $max_points : ($status === 'warning' ? (int) round($max_points / 2) : 0));
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'status' => $status,
+            'points' => $points,
+            'maxPoints' => $max_points,
+            'message' => $message
+        ];
+    }
+
+    private function is_editor_seo_keyphrase_used_elsewhere(string $focus_keyphrase, int $post_id): bool
+    {
+        if ($focus_keyphrase === '') {
+            return false;
+        }
+
+        $matching_posts = get_posts([
+            'post_type' => $this->get_supported_editor_post_types(),
+            'post_status' => ['publish', 'draft', 'pending', 'future', 'private'],
+            'post__not_in' => $post_id > 0 ? [$post_id] : [],
+            'meta_key' => self::META_EDITOR_FOCUS_KEYPHRASE,
+            'meta_value' => $focus_keyphrase,
+            'fields' => 'ids',
+            'numberposts' => 1,
+            'no_found_rows' => true,
+            'suppress_filters' => false
+        ]);
+
+        return $matching_posts !== [];
     }
 
     private function calculate_local_editor_seo_score(
@@ -967,101 +1186,283 @@ final class RankWoven_SEO_Plugin
         string $seo_title,
         string $slug,
         string $meta_description,
-        string $content_html
+        string $content_html,
+        int $post_id = 0,
+        string $excerpt = ''
     ): array {
-        $normalized_keyphrase = function_exists('mb_strtolower')
-            ? mb_strtolower(trim(wp_strip_all_tags($focus_keyphrase)))
-            : strtolower(trim(wp_strip_all_tags($focus_keyphrase)));
+        $normalized_keyphrase = $this->normalize_editor_seo_comparable_text($focus_keyphrase);
         $normalized_title = trim(wp_strip_all_tags($seo_title));
         $normalized_meta_description = trim(wp_strip_all_tags($meta_description));
-        $normalized_content = trim(wp_strip_all_tags($content_html));
-        $lower_title = function_exists('mb_strtolower') ? mb_strtolower($normalized_title) : strtolower($normalized_title);
-        $lower_meta_description = function_exists('mb_strtolower') ? mb_strtolower($normalized_meta_description) : strtolower($normalized_meta_description);
-        $lower_content = function_exists('mb_strtolower') ? mb_strtolower($normalized_content) : strtolower($normalized_content);
-        $title_length = function_exists('mb_strlen') ? mb_strlen($normalized_title) : strlen($normalized_title);
+        $lower_title = $this->normalize_editor_seo_comparable_text($normalized_title);
+        $lower_meta_description = $this->normalize_editor_seo_comparable_text($normalized_meta_description);
+        $scoring_content_html = $this->build_editor_seo_scoring_content($content_html, $excerpt, $post_id);
+        $lower_content = $this->normalize_editor_seo_comparable_text($scoring_content_html);
+        $title_display_width = $this->get_editor_seo_display_width($normalized_title);
         $meta_length = function_exists('mb_strlen') ? mb_strlen($normalized_meta_description) : strlen($normalized_meta_description);
-        $content_length = function_exists('mb_strlen') ? mb_strlen($normalized_content) : strlen($normalized_content);
-        $h1_count = preg_match_all('/<h1\b/i', $content_html, $matches);
-        $internal_link_count = preg_match_all('/<a\s+[^>]*href=["\'][^"\']+["\']/i', $content_html, $matches);
+        $content_units = $this->get_editor_seo_text_units($scoring_content_html);
+        $keyphrase_occurrences = $this->count_editor_seo_keyphrase_occurrences($lower_content, $normalized_keyphrase);
+        $recommended_keyphrase_occurrences = max(1, (int) ceil($content_units / 200));
+        $keyphrase_density = $content_units > 0 ? ($keyphrase_occurrences / $content_units) * 100 : 0;
+        $keyphrase_slug = $this->normalize_editor_seo_slug_candidate($normalized_keyphrase);
 
-        $score = 0;
-        $messages = [];
-
-        if ($title_length >= 25 && $title_length <= 65) {
-            $score += 15;
-        } elseif ($title_length >= 15 && $title_length <= 80) {
-            $score += 8;
-            $messages[] = __('SEO title 可再調整到 25-65 字之間。', 'rankwoven-seo');
-        } else {
-            $messages[] = __('SEO title 過短或過長，建議調整到 25-65 字。', 'rankwoven-seo');
-        }
-
-        if ($normalized_keyphrase === '') {
-            $messages[] = __('尚未設定 Focus keyphrase，無法評估關鍵詞相關性。', 'rankwoven-seo');
-        } else {
-            if ($lower_title !== '' && str_contains($lower_title, $normalized_keyphrase)) {
-                $score += 15;
-            } else {
-                $messages[] = __('SEO title 尚未包含 Focus keyphrase。', 'rankwoven-seo');
+        preg_match_all('/<a\b[^>]*\bhref\s*=\s*["\']([^"\']+)["\']/i', $scoring_content_html, $link_matches);
+        $site_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $internal_link_count = 0;
+        $outbound_link_count = 0;
+        foreach ($link_matches[1] ?? [] as $href) {
+            $href = trim(html_entity_decode((string) $href, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($href === '' || str_starts_with($href, '#') || preg_match('/^(?:mailto|tel|javascript):/i', $href)) {
+                continue;
             }
 
-            if ($lower_meta_description !== '' && str_contains($lower_meta_description, $normalized_keyphrase)) {
-                $score += 10;
+            $link_host = strtolower((string) wp_parse_url($href, PHP_URL_HOST));
+            if ($link_host === '' || $link_host === $site_host || str_ends_with($link_host, '.' . $site_host)) {
+                $internal_link_count++;
             } else {
-                $messages[] = __('Meta description 尚未包含 Focus keyphrase。', 'rankwoven-seo');
-            }
-
-            if ($lower_content !== '' && str_contains($lower_content, $normalized_keyphrase)) {
-                $score += 10;
-            } else {
-                $messages[] = __('內容正文尚未包含 Focus keyphrase。', 'rankwoven-seo');
+                $outbound_link_count++;
             }
         }
 
-        if ($meta_length >= 70 && $meta_length <= 160) {
-            $score += 15;
-        } elseif ($meta_length >= 50 && $meta_length <= 180) {
-            $score += 8;
-            $messages[] = __('Meta description 可再調整到 70-160 字之間。', 'rankwoven-seo');
-        } else {
-            $messages[] = __('Meta description 過短、缺失或過長。', 'rankwoven-seo');
+        preg_match_all('/<img\b[^>]*>/i', $scoring_content_html, $image_matches);
+        $image_count = count($image_matches[0] ?? []);
+        $image_keyphrase_count = 0;
+        foreach ($image_matches[0] ?? [] as $image_tag) {
+            preg_match('/\balt\s*=\s*["\']([^"\']*)["\']/i', (string) $image_tag, $alt_match);
+            $alt_text = $this->normalize_editor_seo_comparable_text((string) ($alt_match[1] ?? ''));
+            if ($this->editor_seo_text_contains_keyphrase($alt_text, $normalized_keyphrase)) {
+                $image_keyphrase_count++;
+            }
         }
 
-        if ($slug !== '') {
-            $score += 10;
-        } else {
-            $messages[] = __('Slug 為空或不利於 SEO。', 'rankwoven-seo');
+        preg_match_all('/<p\b[^>]*>([\s\S]*?)<\/p>/i', $scoring_content_html, $paragraph_matches);
+        $paragraphs = array_values(array_filter(array_map(
+            fn ($paragraph): string => $this->normalize_editor_seo_comparable_text((string) $paragraph),
+            $paragraph_matches[1] ?? []
+        )));
+        if ($paragraphs === [] && $lower_content !== '') {
+            $paragraphs = [$lower_content];
+        }
+        $introduction = $paragraphs[0] ?? '';
+        $paragraph_lengths = array_map(fn ($paragraph): int => $this->get_editor_seo_text_units((string) $paragraph), $paragraphs);
+        $longest_paragraph = $paragraph_lengths === [] ? 0 : max($paragraph_lengths);
+
+        $sentences = array_values(array_filter(array_map('trim', preg_split('/[.!?。！？]+/u', $lower_content) ?: [])));
+        $sentence_count = count($sentences);
+        $long_sentence_limit = preg_match('/\p{Han}/u', $lower_content) ? 45 : 25;
+        $long_sentence_count = count(array_filter(
+            $sentences,
+            fn ($sentence): bool => $this->get_editor_seo_text_units((string) $sentence) > $long_sentence_limit
+        ));
+        $long_sentence_ratio = $sentence_count > 0 ? $long_sentence_count / $sentence_count : 0;
+        $passive_sentence_count = count(array_filter($sentences, static function ($sentence): bool {
+            return preg_match('/(?:\b(?:is|are|was|were|be|been|being)\s+[a-z]+(?:ed|en)\b|被|受到|由[^，。！？]{1,20}(?:進行|完成|建立|使用|處理))/iu', (string) $sentence) === 1;
+        }));
+        $passive_sentence_ratio = $sentence_count > 0 ? $passive_sentence_count / $sentence_count : 0;
+
+        $sentence_starts = array_map(static function ($sentence): string {
+            preg_match('/^\s*(\p{Han}{1,4}|(?:[\p{L}\p{N}]+\s*){1,3})/u', (string) $sentence, $matches);
+            return function_exists('mb_strtolower') ? mb_strtolower(trim((string) ($matches[1] ?? ''))) : strtolower(trim((string) ($matches[1] ?? '')));
+        }, $sentences);
+        $has_consecutive_sentences = false;
+        for ($index = 2; $index < count($sentence_starts); $index++) {
+            if ($sentence_starts[$index] !== '' && $sentence_starts[$index] === $sentence_starts[$index - 1] && $sentence_starts[$index] === $sentence_starts[$index - 2]) {
+                $has_consecutive_sentences = true;
+                break;
+            }
         }
 
-        if ($content_length >= 300) {
-            $score += 10;
-        } elseif ($content_length >= 150) {
-            $score += 5;
-            $messages[] = __('內容略短，建議補充更多主題細節。', 'rankwoven-seo');
-        } else {
-            $messages[] = __('內容過短，難以支撐主要關鍵詞排名。', 'rankwoven-seo');
-        }
+        preg_match_all('/<h[2-4]\b[^>]*>/i', $scoring_content_html, $subheading_matches, PREG_OFFSET_CAPTURE);
+        $subheading_count = count($subheading_matches[0] ?? []);
+        $heading_sections = preg_split('/<h[2-4]\b[^>]*>[\s\S]*?<\/h[2-4]>/i', $scoring_content_html) ?: [];
+        $heading_section_lengths = array_map(
+            fn ($section): int => $this->get_editor_seo_text_units((string) $section),
+            $heading_sections
+        );
+        $longest_heading_section = $heading_section_lengths === [] ? 0 : max($heading_section_lengths);
+        $previous_keyphrase_used = $this->is_editor_seo_keyphrase_used_elsewhere($focus_keyphrase, $post_id);
 
-        if ($h1_count === 1) {
-            $score += 10;
-        } elseif ($h1_count === 0) {
-            $messages[] = __('內容缺少 H1，建議保留一個主標題。', 'rankwoven-seo');
-        } else {
-            $score += 5;
-            $messages[] = __('內容有多個 H1，建議只保留一個。', 'rankwoven-seo');
-        }
+        $checks = [];
+        $checks[] = $this->build_editor_seo_score_check(
+            'focus-keyphrase',
+            __('Focus keyphrase', 'rankwoven-seo'),
+            $normalized_keyphrase !== '' ? 'pass' : 'fail',
+            5,
+            $normalized_keyphrase !== '' ? __('已設定 Focus keyphrase。', 'rankwoven-seo') : __('尚未設定 Focus keyphrase。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'title-length',
+            __('SEO title width', 'rankwoven-seo'),
+            $title_display_width >= 30 && $title_display_width <= 60 ? 'pass' : ($title_display_width >= 24 && $title_display_width <= 70 ? 'warning' : 'fail'),
+            7,
+            $title_display_width >= 30 && $title_display_width <= 60
+                ? sprintf(__('SEO title 顯示寬度約 %d 單位，符合建議。', 'rankwoven-seo'), $title_display_width)
+                : sprintf(__('SEO title 顯示寬度約 %d 單位，建議調整至 30-60 單位。', 'rankwoven-seo'), $title_display_width)
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'focus-in-title',
+            __('Keyphrase in SEO title', 'rankwoven-seo'),
+            $this->editor_seo_text_contains_keyphrase($lower_title, $normalized_keyphrase) ? 'pass' : 'fail',
+            7,
+            $this->editor_seo_text_contains_keyphrase($lower_title, $normalized_keyphrase)
+                ? __('SEO title 已包含完整 Focus keyphrase。', 'rankwoven-seo')
+                : __('SEO title 尚未包含完整 Focus keyphrase。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'meta-length',
+            __('Meta description length', 'rankwoven-seo'),
+            $meta_length >= 120 && $meta_length <= 156 ? 'pass' : ($meta_length >= 70 && $meta_length <= 160 ? 'warning' : 'fail'),
+            6,
+            $meta_length >= 120 && $meta_length <= 156
+                ? sprintf(__('Meta description 長度為 %d 字，符合建議。', 'rankwoven-seo'), $meta_length)
+                : sprintf(__('Meta description 長度為 %d 字，建議調整至 120-156 字。', 'rankwoven-seo'), $meta_length)
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'focus-in-meta',
+            __('Keyphrase in meta description', 'rankwoven-seo'),
+            $this->editor_seo_text_contains_keyphrase($lower_meta_description, $normalized_keyphrase) ? 'pass' : 'fail',
+            6,
+            $this->editor_seo_text_contains_keyphrase($lower_meta_description, $normalized_keyphrase)
+                ? __('Meta description 已包含 Focus keyphrase。', 'rankwoven-seo')
+                : __('Meta description 尚未包含 Focus keyphrase。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'slug-keyphrase',
+            __('Keyphrase in slug', 'rankwoven-seo'),
+            $this->editor_seo_slug_contains_keyphrase($slug, $keyphrase_slug) ? 'pass' : ($slug !== '' ? 'warning' : 'fail'),
+            5,
+            $this->editor_seo_slug_contains_keyphrase($slug, $keyphrase_slug)
+                ? __('Slug 已包含 Focus keyphrase 的英文格式。', 'rankwoven-seo')
+                : __('Slug 應加入與 Focus keyphrase 對應的英文詞組。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'content-length',
+            __('Text length', 'rankwoven-seo'),
+            $content_units >= 300 ? 'pass' : ($content_units >= 150 ? 'warning' : 'fail'),
+            10,
+            $content_units >= 300
+                ? sprintf(__('正文包含約 %d 個中英文文字單位，長度充足。', 'rankwoven-seo'), $content_units)
+                : sprintf(__('正文只有約 %d 個中英文文字單位，建議至少補充至 300。', 'rankwoven-seo'), $content_units)
+        );
+        $density_status = $normalized_keyphrase === '' || $keyphrase_occurrences < $recommended_keyphrase_occurrences
+            ? 'fail'
+            : ($keyphrase_density > 3.5 ? 'warning' : 'pass');
+        $checks[] = $this->build_editor_seo_score_check(
+            'keyphrase-density',
+            __('Keyphrase density', 'rankwoven-seo'),
+            $density_status,
+            7,
+            sprintf(
+                __('Focus keyphrase 出現 %1$d 次；此長度建議至少 %2$d 次，並避免過度重複。', 'rankwoven-seo'),
+                $keyphrase_occurrences,
+                $recommended_keyphrase_occurrences
+            )
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'keyphrase-introduction',
+            __('Keyphrase in introduction', 'rankwoven-seo'),
+            $this->editor_seo_text_contains_keyphrase($introduction, $normalized_keyphrase) ? 'pass' : 'fail',
+            6,
+            $this->editor_seo_text_contains_keyphrase($introduction, $normalized_keyphrase)
+                ? __('首段已包含 Focus keyphrase。', 'rankwoven-seo')
+                : __('首段尚未包含 Focus keyphrase。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'outbound-links',
+            __('Outbound links', 'rankwoven-seo'),
+            $outbound_link_count > 0 ? 'pass' : 'fail',
+            5,
+            $outbound_link_count > 0
+                ? sprintf(__('正文包含 %d 條外部連結。', 'rankwoven-seo'), $outbound_link_count)
+                : __('正文尚未包含外部連結。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'images',
+            __('Images', 'rankwoven-seo'),
+            $image_count > 0 ? 'pass' : 'fail',
+            5,
+            $image_count > 0 ? sprintf(__('正文包含 %d 張圖片。', 'rankwoven-seo'), $image_count) : __('正文尚未包含圖片。', 'rankwoven-seo')
+        );
+        $image_keyphrase_status = $image_count > 0 && $normalized_keyphrase !== '' && $image_keyphrase_count >= max(1, (int) ceil($image_count / 2)) ? 'pass' : 'warning';
+        $checks[] = $this->build_editor_seo_score_check(
+            'image-keyphrase',
+            __('Image keyphrase', 'rankwoven-seo'),
+            $image_keyphrase_status,
+            5,
+            sprintf(__('共 %1$d 張圖片，其中 %2$d 張的 Alt Text 包含 Focus keyphrase；建議至少覆蓋一半相關圖片。', 'rankwoven-seo'), $image_count, $image_keyphrase_count),
+            $image_count === 0 ? 0 : null
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'internal-links',
+            __('Internal links', 'rankwoven-seo'),
+            $internal_link_count >= 2 ? 'pass' : ($internal_link_count === 1 ? 'warning' : 'fail'),
+            5,
+            $internal_link_count >= 2
+                ? sprintf(__('正文包含 %d 條內部連結。', 'rankwoven-seo'), $internal_link_count)
+                : __('建議正文至少加入兩條相關內部連結。', 'rankwoven-seo')
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'consecutive-sentences',
+            __('Consecutive sentences', 'rankwoven-seo'),
+            $sentence_count === 0 ? 'fail' : ($has_consecutive_sentences ? 'warning' : 'pass'),
+            4,
+            $sentence_count === 0 ? __('正文為空，無法評估連續句子。', 'rankwoven-seo') : ($has_consecutive_sentences ? __('有三個連續句子使用相同開頭，建議增加句式變化。', 'rankwoven-seo') : __('連續句子的開頭有足夠變化。', 'rankwoven-seo'))
+        );
+        $subheading_status = $content_units === 0
+            ? 'fail'
+            : ($content_units < 300 || ($subheading_count > 0 && $longest_heading_section <= 300)
+            ? 'pass'
+            : ($longest_heading_section <= 450 ? 'warning' : 'fail'));
+        $checks[] = $this->build_editor_seo_score_check(
+            'subheading-distribution',
+            __('Subheading distribution', 'rankwoven-seo'),
+            $subheading_status,
+            4,
+            $subheading_count > 0 && $longest_heading_section <= 300
+                ? sprintf(__('正文使用 %d 個 H2-H4 子標題，分佈合理。', 'rankwoven-seo'), $subheading_count)
+                : ($content_units === 0
+                    ? __('正文為空，無法評估子標題分佈。', 'rankwoven-seo')
+                    : ($content_units < 300
+                    ? __('短內容暫不需要額外子標題。', 'rankwoven-seo')
+                    : ($subheading_count > 0 ? __('部分章節過長，建議增加或重新分配 H2-H4 子標題。', 'rankwoven-seo') : __('內容較長，建議加入 H2-H4 子標題。', 'rankwoven-seo'))))
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'paragraph-length',
+            __('Paragraph length', 'rankwoven-seo'),
+            $longest_paragraph === 0 ? 'fail' : ($longest_paragraph <= 150 ? 'pass' : ($longest_paragraph <= 250 ? 'warning' : 'fail')),
+            4,
+            $longest_paragraph === 0 ? __('正文為空，無法評估段落長度。', 'rankwoven-seo') : ($longest_paragraph <= 150 ? __('段落長度易於閱讀。', 'rankwoven-seo') : sprintf(__('最長段落約 %d 個文字單位，建議拆短。', 'rankwoven-seo'), $longest_paragraph))
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'passive-voice',
+            __('Passive voice', 'rankwoven-seo'),
+            $sentence_count === 0 ? 'fail' : ($passive_sentence_ratio <= 0.1 ? 'pass' : ($passive_sentence_ratio <= 0.2 ? 'warning' : 'fail')),
+            3,
+            $sentence_count === 0 ? __('正文為空，無法評估語態。', 'rankwoven-seo') : ($passive_sentence_ratio <= 0.1 ? __('主動語態比例良好。', 'rankwoven-seo') : __('被動語態句子偏多，建議改用更直接的主動語態。', 'rankwoven-seo'))
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'sentence-length',
+            __('Sentence length', 'rankwoven-seo'),
+            $sentence_count === 0 ? 'fail' : ($long_sentence_ratio <= 0.25 ? 'pass' : ($long_sentence_ratio <= 0.4 ? 'warning' : 'fail')),
+            4,
+            $sentence_count === 0 ? __('正文為空，無法評估句子長度。', 'rankwoven-seo') : ($long_sentence_ratio <= 0.25 ? __('大部分句子長度適中。', 'rankwoven-seo') : __('過長句子比例偏高，建議拆分以改善可讀性。', 'rankwoven-seo'))
+        );
+        $checks[] = $this->build_editor_seo_score_check(
+            'previously-used-keyphrase',
+            __('Previously used keyphrase', 'rankwoven-seo'),
+            $normalized_keyphrase === '' ? 'warning' : ($previous_keyphrase_used ? 'warning' : 'pass'),
+            2,
+            $normalized_keyphrase === ''
+                ? __('設定 Focus keyphrase 後才可檢查重複使用。', 'rankwoven-seo')
+                : ($previous_keyphrase_used ? __('其他內容已使用相同 Focus keyphrase，可能造成關鍵詞競爭。', 'rankwoven-seo') : __('此 Focus keyphrase 尚未被其他內容使用。', 'rankwoven-seo'))
+        );
 
-        if ($internal_link_count >= 2) {
-            $score += 5;
-        } elseif ($internal_link_count === 1) {
-            $score += 3;
-            $messages[] = __('建議再補至少一條內部連結。', 'rankwoven-seo');
-        } else {
-            $messages[] = __('內容尚未包含內部連結。', 'rankwoven-seo');
-        }
-
-        $summary = empty($messages)
-            ? __('目前內容 SEO 分數 100/100。主要 SEO 檢查項均已達標。', 'rankwoven-seo')
+        $score = array_reduce($checks, static fn (int $total, array $check): int => $total + (int) $check['points'], 0);
+        $messages = array_map(
+            static fn (array $check): string => (string) $check['message'],
+            array_filter($checks, static fn (array $check): bool => $check['status'] !== 'pass')
+        );
+        $summary = $messages === []
+            ? __('目前內容 SEO 分數 100/100。全部 SEO 檢查項均已達標。', 'rankwoven-seo')
             : sprintf(
                 /* translators: 1: SEO score, 2: optimization hints */
                 __('目前內容 SEO 分數 %1$d/100。待優化：%2$s', 'rankwoven-seo'),
@@ -1071,7 +1472,8 @@ final class RankWoven_SEO_Plugin
 
         return [
             'seoScore' => max(0, min(100, $score)),
-            'analysis' => $summary
+            'analysis' => $summary,
+            'scoreChecks' => $checks
         ];
     }
 
@@ -1136,6 +1538,7 @@ final class RankWoven_SEO_Plugin
         $seo_score = max(0, min(100, (int) ($data['seoScore'] ?? 0)));
         $score_summary = sanitize_textarea_field((string) ($data['scoreSummary'] ?? ''));
         $analysis = sanitize_textarea_field((string) ($data['analysis'] ?? ''));
+        $score_checks = is_array($data['scoreChecks'] ?? null) ? $data['scoreChecks'] : [];
 
         if ($seo_title === '') {
             $seo_title = sanitize_text_field((string) ($payload['currentSeoTitle'] ?? $payload['currentTitle'] ?? ''));
@@ -1156,6 +1559,7 @@ final class RankWoven_SEO_Plugin
             'slug' => $slug,
             'seoScore' => $seo_score,
             'scoreSummary' => $score_summary,
+            'scoreChecks' => $score_checks,
             'metaDescription' => $meta_description,
             'metaKeywords' => $meta_keywords,
             'analysis' => $analysis
@@ -1199,6 +1603,7 @@ final class RankWoven_SEO_Plugin
         $meta_keywords = $this->sanitize_editor_meta_keywords(wp_unslash($_POST['metaKeywords'] ?? ''));
         $seo_score = max(0, min(100, (int) ($_POST['seoScore'] ?? 0)));
         $analysis = sanitize_textarea_field(wp_unslash($_POST['analysis'] ?? ''));
+        $score_checks = [];
         $current_title = sanitize_text_field(wp_unslash($_POST['currentTitle'] ?? $post->post_title));
         $current_seo_title = sanitize_text_field(wp_unslash($_POST['currentSeoTitle'] ?? $seo_title));
         $current_slug = $this->normalize_editor_seo_slug((string) wp_unslash($_POST['currentSlug'] ?? $post->post_name), (string) $post->post_title);
@@ -1215,9 +1620,11 @@ final class RankWoven_SEO_Plugin
                 'currentSlug' => $current_slug,
                 'focusKeyphrase' => $focus_keyphrase,
                 'excerpt' => $excerpt,
-                'contentHtml' => $content_html,
+                'contentHtml' => $content_html . $this->get_editor_seo_product_media_html($post_id),
                 'currentMetaDescription' => $meta_description,
                 'currentMetaKeywords' => $meta_keywords,
+                'currentUrl' => (string) get_permalink($post_id),
+                'hasPreviouslyUsedKeyphrase' => $this->is_editor_seo_keyphrase_used_elsewhere($focus_keyphrase, $post_id),
                 'locale' => $locale
             ]);
 
@@ -1242,16 +1649,22 @@ final class RankWoven_SEO_Plugin
             $analysis = sanitize_textarea_field((string) ($generated['analysis'] ?? ''));
         }
 
-        if ($mode === 'save') {
-            $local_analysis = $this->calculate_local_editor_seo_score(
-                $focus_keyphrase,
-                $seo_title !== '' ? $seo_title : $current_seo_title,
-                $slug !== '' ? $slug : $current_slug,
-                $meta_description,
-                $content_html
-            );
-            $seo_score = max(0, min(100, (int) ($local_analysis['seoScore'] ?? 0)));
-            $analysis = sanitize_textarea_field((string) ($local_analysis['analysis'] ?? $analysis));
+        $local_analysis = $this->calculate_local_editor_seo_score(
+            $focus_keyphrase,
+            $seo_title !== '' ? $seo_title : $current_seo_title,
+            $slug !== '' ? $slug : $current_slug,
+            $meta_description,
+            $content_html,
+            $post_id,
+            $excerpt
+        );
+        $seo_score = max(0, min(100, (int) ($local_analysis['seoScore'] ?? 0)));
+        $score_checks = is_array($local_analysis['scoreChecks'] ?? null) ? $local_analysis['scoreChecks'] : [];
+        $local_summary = sanitize_textarea_field((string) ($local_analysis['analysis'] ?? ''));
+        if ($mode === 'save' || $analysis === '') {
+            $analysis = $local_summary;
+        } elseif ($local_summary !== '' && !str_contains($analysis, $local_summary)) {
+            $analysis = sanitize_textarea_field($analysis . "\n" . $local_summary);
         }
 
         $saved_slug = $slug !== '' ? $slug : $current_slug;
@@ -1286,6 +1699,7 @@ final class RankWoven_SEO_Plugin
             'metaDescription' => $meta_description,
             'metaKeywords' => $meta_keywords,
             'analysis' => $analysis,
+            'scoreChecks' => $score_checks,
             'mode' => $mode
         ]);
     }
@@ -1333,7 +1747,9 @@ final class RankWoven_SEO_Plugin
             $seo_title !== '' ? $seo_title : sanitize_text_field((string) get_the_title($post_id)),
             $slug !== '' ? $slug : $current_post_slug,
             $meta_description,
-            (string) $post->post_content
+            (string) $post->post_content,
+            $post_id,
+            (string) $post->post_excerpt
         );
 
         $this->save_editor_seo_meta_value($post_id, self::META_EDITOR_FOCUS_KEYPHRASE, $focus_keyphrase);
