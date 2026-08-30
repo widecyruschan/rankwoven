@@ -86,7 +86,7 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 ### 1. 啟用與基礎設定
 
 - [ ] 後台 `Plugins` 頁能看到並啟用 `RankWoven SEO`，無 PHP 警告或白屏。
-- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
+- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`GEO 優化`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
 - [ ] `RankWoven SEO` 後台頁載入卡片化 UI：頂部 hero、連線狀態 pill、圓角 tabs、儀表板指標卡與快速操作按鈕樣式正常。
 - [ ] 插件主容器會自動鋪滿 WordPress 後台可用寬度；各頁列表、表單和設定卡會按內容區自適應，桌面寬螢幕不應留下大面積空白，小螢幕長文字可換行不撐破版面。
 - [ ] `Settings -> RankWoven SEO` 舊入口仍可打開並導向一般設定頁。
@@ -216,6 +216,15 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 關閉 Markdown 轉換或排除文章後，對應 `.md` 地址不會被插件輸出內容。
 - [ ] 若網站根目錄存在實體 `llms.txt` 或 `llms-full.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
 
+### 13. GEO 優化
+
+- [ ] `RankWoven SEO -> GEO 優化` 顯示 GEO readiness、`AI Crawler Access` 和 `Machine Readability` 動態分數。
+- [ ] 三組 AI 爬蟲開關保存後，`/robots.txt` 會對應輸出 `Allow: /` 或 `Disallow: /`，並包含 GPTBot、OAI-SearchBot 和 ChatGPT-User 等 User-agent。
+- [ ] 關閉 `Indexability` 後，前台 `<head>` 輸出 `meta name="robots" content="noindex, nofollow"`；重新開啟後該標籤不再輸出。
+- [ ] 關閉 `Snippet Controls` 後，前台 `<head>` 輸出 `nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
+- [ ] 啟用 `Language Declaration` 並保存 `x-default URL` 後，前台 `<head>` 包含當前語言與 `hreflang="x-default"`；無效 URL 會被忽略，無效語言代碼會回退到 WordPress 網站語言。
+- [ ] `GEO 優化` 和 `診斷` 頁不顯示任何 Site Token、Application Password 或其他敏感憑據。
+
 ## 回歸重點
 
 改動以下區域時必測對應項目：
@@ -232,6 +241,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | 內容類型 Meta 預設 | 清單 10 |
 | Sitemap、RSS Sitemap 與 Google 提交 | 清單 11 |
 | LLMs.txt 與 Markdown 輸出 | 清單 12 |
+| GEO 優化設定與前台控制 | 清單 13 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯

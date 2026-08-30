@@ -379,6 +379,108 @@ body.folded .rankwoven-admin-wrap {
   margin-top: 12px;
 }
 
+.rankwoven-geo-assessment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.rankwoven-geo-assessment-group {
+  overflow: hidden;
+  border: 1px solid var(--rankwoven-border);
+  border-radius: 14px;
+  background: var(--rankwoven-surface);
+}
+
+.rankwoven-geo-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--rankwoven-border);
+  background: var(--rankwoven-primary-soft);
+  padding: 14px 16px;
+}
+
+.rankwoven-geo-group-heading h3 {
+  margin: 0;
+  color: var(--rankwoven-ink);
+  font-size: 16px;
+}
+
+.rankwoven-geo-group-heading strong {
+  color: var(--rankwoven-primary-dark);
+  white-space: nowrap;
+}
+
+.rankwoven-geo-check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rankwoven-geo-check {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border-bottom: 1px solid var(--rankwoven-border);
+  padding: 14px 16px;
+}
+
+.rankwoven-geo-check:last-child {
+  border-bottom: 0;
+}
+
+.rankwoven-geo-check-icon {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rankwoven-geo-check[data-status='info'] .rankwoven-geo-check-icon {
+  background: var(--rankwoven-primary-soft);
+  color: var(--rankwoven-primary-dark);
+}
+
+.rankwoven-geo-check[data-status='warning'] .rankwoven-geo-check-icon {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.rankwoven-geo-check-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rankwoven-geo-check-title strong {
+  color: var(--rankwoven-ink);
+  font-size: 14px;
+}
+
+.rankwoven-geo-check-title span {
+  color: var(--rankwoven-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rankwoven-geo-check p {
+  margin: 5px 0 0;
+  color: var(--rankwoven-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .rankwoven-image-settings {
   overflow: hidden;
   border: 1px solid var(--rankwoven-border);
@@ -510,6 +612,10 @@ body.folded .rankwoven-admin-wrap {
   .rankwoven-image-tab {
     flex: 1 1 50%;
     border-bottom-width: 2px;
+  }
+
+  .rankwoven-geo-assessment-grid {
+    grid-template-columns: 1fr;
   }
 
   .rankwoven-checkbox-grid {

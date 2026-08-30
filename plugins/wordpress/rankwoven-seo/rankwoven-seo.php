@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: RankWoven SEO
- * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes LLMs.txt and RSS Sitemap output.
- * Version: 0.4.0
+ * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes GEO controls, LLMs.txt, and RSS Sitemap output.
+ * Version: 0.5.0
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.4.0';
+    private const VERSION = '0.5.0';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -32,6 +32,7 @@ final class RankWoven_SEO_Plugin
     private const OPTION_ROBOTS_TXT_CONTENT = 'rankwoven_robots_txt_content';
     private const OPTION_LLMS_SETTINGS = 'rankwoven_llms_settings';
     private const OPTION_RSS_SETTINGS = 'rankwoven_rss_settings';
+    private const OPTION_GEO_SETTINGS = 'rankwoven_geo_settings';
     private const OPTION_CONTENT_META_SETTINGS = 'rankwoven_content_meta_settings';
     private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
@@ -71,6 +72,7 @@ final class RankWoven_SEO_Plugin
         add_action('wp_ajax_rankwoven_editor_seo', [$this, 'handle_editor_seo_ajax']);
         add_action('add_attachment', [$this, 'handle_new_attachment']);
         add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
+        add_action('wp_head', [$this, 'render_geo_meta_tags'], 2);
         add_action('parse_request', [$this, 'maybe_render_custom_sitemap_request'], -100, 1);
         add_action('template_redirect', [$this, 'maybe_render_sitemap_xml'], 0);
         add_action('template_redirect', [$this, 'maybe_render_rss_sitemap_xml'], 0);
@@ -146,6 +148,10 @@ final class RankWoven_SEO_Plugin
             'sitemap' => [
                 'label' => __('網站地圖', 'rankwoven-seo'),
                 'slug' => 'rankwoven-seo-sitemap'
+            ],
+            'geo' => [
+                'label' => __('GEO 優化', 'rankwoven-seo'),
+                'slug' => 'rankwoven-seo-geo'
             ],
             'link_assistant' => [
                 'label' => __('Link Assistant', 'rankwoven-seo'),
@@ -530,6 +536,95 @@ final class RankWoven_SEO_Plugin
         $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:url', 'content' => $url]);
     }
 
+    public function render_geo_meta_tags(): void
+    {
+        if (is_admin()) {
+            return;
+        }
+
+        $settings = $this->get_geo_settings();
+        $robots_directives = [];
+
+        if (empty($settings['indexable'])) {
+            $robots_directives[] = 'noindex';
+            $robots_directives[] = 'nofollow';
+        }
+
+        if (empty($settings['allow_snippets'])) {
+            $robots_directives[] = 'nosnippet';
+            $robots_directives[] = 'max-snippet:0';
+            $robots_directives[] = 'max-image-preview:none';
+        }
+
+        if ($robots_directives !== []) {
+            $this->render_head_meta_tag([
+                'name' => 'robots',
+                'content' => implode(', ', $robots_directives)
+            ]);
+        }
+
+        if (empty($settings['language_declaration'])) {
+            return;
+        }
+
+        $current_url = home_url('/');
+        if (is_singular()) {
+            $permalink = get_permalink();
+            if (is_string($permalink) && $permalink !== '') {
+                $current_url = $permalink;
+            }
+        }
+
+        $links = [];
+        $language_code = (string) $settings['language_code'];
+        if ($language_code !== '') {
+            $links[$language_code . '|' . $current_url] = [
+                'code' => $language_code,
+                'url' => $current_url
+            ];
+        }
+
+        foreach ($settings['alternate_languages'] as $alternate) {
+            $code = (string) ($alternate['code'] ?? '');
+            $url = (string) ($alternate['url'] ?? '');
+            if ($code === '' || $url === '') {
+                continue;
+            }
+
+            $links[$code . '|' . $url] = [
+                'code' => $code,
+                'url' => $url
+            ];
+        }
+
+        foreach ($links as $link) {
+            $this->render_geo_hreflang_link((string) $link['code'], (string) $link['url']);
+        }
+
+        $x_default_url = (string) $settings['x_default_url'];
+        if ($x_default_url !== '') {
+            $this->render_geo_hreflang_link('x-default', $x_default_url);
+        }
+    }
+
+    private function render_geo_hreflang_link(string $language_code, string $url): void
+    {
+        $language_code = $language_code === 'x-default'
+            ? 'x-default'
+            : $this->sanitize_geo_language_code($language_code);
+        $url = esc_url_raw($url);
+        if ($language_code === '' || $url === '') {
+            return;
+        }
+
+        printf(
+            '<link rel="alternate" hreflang="%1$s" href="%2$s" />%3$s',
+            esc_attr($language_code),
+            esc_url($url),
+            "\n"
+        );
+    }
+
     public function maybe_render_custom_sitemap_request($wp): void
     {
         if ($this->is_sitemap_request()) {
@@ -642,7 +737,23 @@ final class RankWoven_SEO_Plugin
             $lines[] = 'Sitemap: ' . $rss_sitemap_url;
         }
 
-        return implode("\n", $lines) . "\n";
+        return $this->append_geo_robots_rules(implode("\n", $lines) . "\n");
+    }
+
+    private function append_geo_robots_rules(string $output): string
+    {
+        $settings = $this->get_geo_settings();
+        $lines = [rtrim($output), '', '# RankWoven GEO AI crawler rules'];
+
+        foreach ($this->get_geo_crawler_groups() as $key => $group) {
+            foreach ($group['user_agents'] as $user_agent) {
+                $lines[] = 'User-agent: ' . $user_agent;
+                $lines[] = !empty($settings[$key]) ? 'Allow: /' : 'Disallow: /';
+            }
+            $lines[] = '';
+        }
+
+        return rtrim(implode("\n", $lines)) . "\n";
     }
 
     public function disable_core_sitemap_redirect($redirect_url, $requested_url)
@@ -1295,6 +1406,12 @@ final class RankWoven_SEO_Plugin
 
             <?php if ($active_tab === 'sitemap') : ?>
                 <?php $this->render_sitemap_page(); ?>
+        </div>
+                <?php return; ?>
+            <?php endif; ?>
+
+            <?php if ($active_tab === 'geo') : ?>
+                <?php $this->render_geo_page(); ?>
         </div>
                 <?php return; ?>
             <?php endif; ?>
@@ -1962,6 +2079,7 @@ final class RankWoven_SEO_Plugin
         $last_error = get_option(self::OPTION_LAST_ERROR, []);
         $last_error = is_array($last_error) ? $last_error : [];
         $image_settings = $this->get_image_attribute_settings();
+        $geo_assessment = $this->get_geo_assessment($this->get_geo_settings());
         ?>
         <h2><?php echo esc_html__('Read-only Diagnostics', 'rankwoven-seo'); ?></h2>
         <p><?php echo esc_html__('Use this page to inspect the local RankWoven plugin connection state without changing settings.', 'rankwoven-seo'); ?></p>
@@ -1978,6 +2096,7 @@ final class RankWoven_SEO_Plugin
                 <?php $this->render_diagnostic_row(__('Token last local use', 'rankwoven-seo'), $this->get_last_token_used_label()); ?>
                 <?php $this->render_diagnostic_row(__('Last sync', 'rankwoven-seo'), $this->get_last_sync_label($last_sync_result)); ?>
                 <?php $this->render_diagnostic_row(__('Image attribute settings', 'rankwoven-seo'), $this->get_image_attribute_settings_label($image_settings)); ?>
+                <?php $this->render_diagnostic_row(__('GEO readiness', 'rankwoven-seo'), sprintf('%d/100', (int) $geo_assessment['overall_score'])); ?>
                 <?php $this->render_diagnostic_row(__('Application Password', 'rankwoven-seo'), $this->get_application_password_status_label($wp_credentials)); ?>
                 <?php $this->render_diagnostic_row(__('Last error', 'rankwoven-seo'), $this->get_last_error_label($last_error)); ?>
             </tbody>
@@ -2106,6 +2225,155 @@ final class RankWoven_SEO_Plugin
                 </tr>
             </tbody>
         </table>
+        <?php
+    }
+
+    private function render_geo_page(): void
+    {
+        $settings = $this->get_geo_settings();
+        $assessment = $this->get_geo_assessment($settings);
+        $crawler_groups = $this->get_geo_crawler_groups();
+        ?>
+        <section class="rankwoven-panel">
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Generative Engine Optimization', 'rankwoven-seo'); ?></span>
+                <h2><?php echo esc_html__('GEO 優化', 'rankwoven-seo'); ?></h2>
+                <p><?php echo esc_html__('控制 AI 爬蟲存取、內容索引、摘要引用和語言聲明，讓搜尋引擎與生成式 AI 更容易正確理解及引用網站內容。', 'rankwoven-seo'); ?></p>
+            </div>
+
+            <div class="rankwoven-stat-grid">
+                <?php $this->render_admin_metric_card(__('GEO readiness', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['overall_score']), $assessment['overall_score'] >= 80 ? 'ready' : 'warning'); ?>
+                <?php $this->render_admin_metric_card(__('AI Crawler Access', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['crawler_score']), $assessment['crawler_score'] >= 80 ? 'ready' : 'warning'); ?>
+                <?php $this->render_admin_metric_card(__('Machine Readability', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['machine_score']), $assessment['machine_score'] >= 80 ? 'ready' : 'warning'); ?>
+            </div>
+
+            <div class="rankwoven-geo-assessment-grid">
+                <?php foreach ($assessment['groups'] as $group) : ?>
+                    <article class="rankwoven-geo-assessment-group">
+                        <div class="rankwoven-geo-group-heading">
+                            <h3><?php echo esc_html((string) $group['title']); ?></h3>
+                            <strong><?php echo esc_html(sprintf('%d/100', (int) $group['score'])); ?></strong>
+                        </div>
+                        <ul class="rankwoven-geo-check-list">
+                            <?php foreach ($group['checks'] as $check) : ?>
+                                <?php
+                                $status = (string) $check['status'];
+                                $status_label = $status === 'pass'
+                                    ? __('通過', 'rankwoven-seo')
+                                    : ($status === 'info' ? __('提示', 'rankwoven-seo') : __('注意', 'rankwoven-seo'));
+                                ?>
+                                <li class="rankwoven-geo-check" data-status="<?php echo esc_attr($status); ?>">
+                                    <span class="rankwoven-geo-check-icon" aria-hidden="true"><?php echo esc_html($status === 'pass' ? 'OK' : ($status === 'info' ? 'i' : '!')); ?></span>
+                                    <div>
+                                        <div class="rankwoven-geo-check-title">
+                                            <strong><?php echo esc_html((string) $check['label']); ?></strong>
+                                            <span><?php echo esc_html($status_label); ?></span>
+                                        </div>
+                                        <p><?php echo esc_html((string) $check['description']); ?></p>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <form class="rankwoven-panel" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('rankwoven_save_settings'); ?>
+            <input type="hidden" name="action" value="rankwoven_save_settings" />
+            <input type="hidden" name="rankwoven_settings_scope" value="geo" />
+
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Access Policy', 'rankwoven-seo'); ?></span>
+                <h2><?php echo esc_html__('AI 爬蟲存取', 'rankwoven-seo'); ?></h2>
+            </div>
+            <table class="form-table" role="presentation">
+                <?php foreach ($crawler_groups as $key => $group) : ?>
+                    <tr>
+                        <th scope="row"><?php echo esc_html((string) $group['label']); ?></th>
+                        <td>
+                            <label class="rankwoven-toggle-row">
+                                <input type="checkbox" name="rankwoven_geo_settings[<?php echo esc_attr($key); ?>]" value="1" <?php checked(!empty($settings[$key])); ?> />
+                                <?php echo esc_html__('允許存取', 'rankwoven-seo'); ?>
+                            </label>
+                            <p class="description">
+                                <?php echo esc_html((string) $group['description']); ?>
+                                <br />
+                                <code><?php echo esc_html(implode(', ', $group['user_agents'])); ?></code>
+                            </p>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Index & Snippets', 'rankwoven-seo'); ?></span>
+                <h2><?php echo esc_html__('索引與摘要控制', 'rankwoven-seo'); ?></h2>
+            </div>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Indexability', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[indexable]" value="1" <?php checked(!empty($settings['indexable'])); ?> />
+                            <?php echo esc_html__('允許搜尋引擎與 AI 引擎索引公開頁面', 'rankwoven-seo'); ?>
+                        </label>
+                        <p class="description"><?php echo esc_html__('取消後會在前台輸出 noindex, nofollow；請只在整站暫停索引時使用。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Snippet Controls', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[allow_snippets]" value="1" <?php checked(!empty($settings['allow_snippets'])); ?> />
+                            <?php echo esc_html__('允許 AI 和搜尋引擎引用頁面摘要', 'rankwoven-seo'); ?>
+                        </label>
+                        <p class="description"><?php echo esc_html__('取消後會輸出 nosnippet、max-snippet:0 和 max-image-preview:none。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Language Declaration', 'rankwoven-seo'); ?></span>
+                <h2><?php echo esc_html__('語言與 hreflang', 'rankwoven-seo'); ?></h2>
+            </div>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Language Declaration', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[language_declaration]" value="1" <?php checked(!empty($settings['language_declaration'])); ?> />
+                            <?php echo esc_html__('輸出語言聲明與 hreflang 標籤', 'rankwoven-seo'); ?>
+                        </label>
+                        <p class="description"><?php echo esc_html__('WordPress 會繼續輸出 html lang；此選項會額外輸出當前語言、替代語言和 x-default 連結。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_language_code"><?php echo esc_html__('當前語言代碼', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_geo_language_code" name="rankwoven_geo_settings[language_code]" type="text" class="regular-text" value="<?php echo esc_attr((string) $settings['language_code']); ?>" placeholder="zh-Hant" />
+                        <p class="description"><?php echo esc_html__('使用 BCP 47 語言標籤，例如 zh-Hant、zh-TW 或 en。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_x_default_url"><?php echo esc_html__('x-default URL', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_geo_x_default_url" name="rankwoven_geo_settings[x_default_url]" type="url" class="regular-text" value="<?php echo esc_attr((string) $settings['x_default_url']); ?>" placeholder="https://example.com/" />
+                        <p class="description"><?php echo esc_html__('建議保留一個不限定語言的入口，避免 AI 引擎引用錯誤語言版本。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_alternate_languages"><?php echo esc_html__('替代語言 URL', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <textarea id="rankwoven_geo_alternate_languages" name="rankwoven_geo_settings[alternate_languages]" class="large-text code" rows="5" placeholder="en=https://example.com/en/\nzh-Hant=https://example.com/zh-hant/"><?php echo esc_textarea($this->format_geo_alternate_languages($settings['alternate_languages'])); ?></textarea>
+                        <p class="description"><?php echo esc_html__('每行一組 language=URL，例如 en=https://example.com/en/；只接受 http 或 https 地址。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+            </table>
+
+            <?php submit_button(__('保存 GEO 設定', 'rankwoven-seo')); ?>
+        </form>
         <?php
     }
 
@@ -2471,6 +2739,13 @@ final class RankWoven_SEO_Plugin
             update_option(self::OPTION_RSS_SETTINGS, $rss_settings);
             delete_option(self::OPTION_LAST_ERROR);
             $this->redirect_with_status('rss_sitemap_settings_saved', 'sitemap');
+        }
+
+        if ($scope === 'geo') {
+            $geo_settings = $this->sanitize_geo_settings(wp_unslash($_POST['rankwoven_geo_settings'] ?? []));
+            update_option(self::OPTION_GEO_SETTINGS, $geo_settings);
+            delete_option(self::OPTION_LAST_ERROR);
+            $this->redirect_with_status('geo_settings_saved', 'geo');
         }
 
         update_option(
@@ -4705,6 +4980,234 @@ final class RankWoven_SEO_Plugin
             || str_ends_with($normalized_path, '/rss-sitemap.xml');
     }
 
+    private function get_geo_crawler_groups(): array
+    {
+        return [
+            'training_crawlers' => [
+                'label' => __('AI Training Crawlers', 'rankwoven-seo'),
+                'description' => __('允許模型訓練爬蟲讀取公開內容，內容可能用於未來模型知識。', 'rankwoven-seo'),
+                'user_agents' => ['GPTBot', 'Google-Extended', 'CCBot', 'ClaudeBot', 'Bytespider']
+            ],
+            'search_crawlers' => [
+                'label' => __('AI Search Crawlers', 'rankwoven-seo'),
+                'description' => __('允許需要引用來源的 AI 搜尋爬蟲存取頁面。', 'rankwoven-seo'),
+                'user_agents' => ['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'Googlebot', 'Bingbot']
+            ],
+            'assistant_fetchers' => [
+                'label' => __('AI Assistant Fetchers', 'rankwoven-seo'),
+                'description' => __('允許用戶主動觸發的 AI 助手抓取即時頁面內容。', 'rankwoven-seo'),
+                'user_agents' => ['ChatGPT-User', 'Claude-User', 'Perplexity-User']
+            ]
+        ];
+    }
+
+    private function get_default_geo_language(): string
+    {
+        $language = sanitize_text_field((string) get_bloginfo('language'));
+        return $this->sanitize_geo_language_code($language) ?: 'en';
+    }
+
+    private function get_default_geo_settings(): array
+    {
+        return [
+            'training_crawlers' => true,
+            'search_crawlers' => true,
+            'assistant_fetchers' => true,
+            'indexable' => true,
+            'allow_snippets' => true,
+            'language_declaration' => true,
+            'language_code' => $this->get_default_geo_language(),
+            'x_default_url' => esc_url_raw(home_url('/')),
+            'alternate_languages' => []
+        ];
+    }
+
+    private function get_geo_settings(): array
+    {
+        $saved_settings = get_option(self::OPTION_GEO_SETTINGS, []);
+        return $this->sanitize_geo_settings(is_array($saved_settings) ? $saved_settings : []);
+    }
+
+    private function sanitize_geo_settings($input): array
+    {
+        $input = is_array($input) ? $input : [];
+        $defaults = $this->get_default_geo_settings();
+        $language_code = array_key_exists('language_code', $input)
+            ? $this->sanitize_geo_language_code((string) $input['language_code'])
+            : $defaults['language_code'];
+        $x_default_url = array_key_exists('x_default_url', $input)
+            ? $this->sanitize_geo_url($input['x_default_url'])
+            : $defaults['x_default_url'];
+
+        return [
+            'training_crawlers' => !empty($input['training_crawlers']),
+            'search_crawlers' => !empty($input['search_crawlers']),
+            'assistant_fetchers' => !empty($input['assistant_fetchers']),
+            'indexable' => !empty($input['indexable']),
+            'allow_snippets' => !empty($input['allow_snippets']),
+            'language_declaration' => !empty($input['language_declaration']),
+            'language_code' => $language_code !== '' ? $language_code : $defaults['language_code'],
+            'x_default_url' => $x_default_url,
+            'alternate_languages' => $this->sanitize_geo_alternate_languages($input['alternate_languages'] ?? [])
+        ];
+    }
+
+    private function sanitize_geo_language_code(string $language_code): string
+    {
+        $language_code = trim($language_code);
+        if ($language_code === '' || !preg_match('/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})*$/', $language_code)) {
+            return '';
+        }
+
+        return $language_code;
+    }
+
+    private function sanitize_geo_url($url): string
+    {
+        $url = esc_url_raw(trim((string) $url));
+        $scheme = strtolower((string) wp_parse_url($url, PHP_URL_SCHEME));
+        $host = (string) wp_parse_url($url, PHP_URL_HOST);
+        return in_array($scheme, ['http', 'https'], true) && $host !== '' ? $url : '';
+    }
+
+    private function sanitize_geo_alternate_languages($value): array
+    {
+        $lines = [];
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    $lines[] = (string) ($item['code'] ?? '') . '=' . (string) ($item['url'] ?? '');
+                } else {
+                    $lines[] = (string) $item;
+                }
+            }
+        } else {
+            $lines = preg_split('/\R/', (string) $value) ?: [];
+        }
+
+        $alternates = [];
+        foreach ($lines as $line) {
+            $parts = preg_split('/\s*=\s*/', trim((string) $line), 2);
+            if (!is_array($parts) || count($parts) !== 2) {
+                continue;
+            }
+
+            $code = $this->sanitize_geo_language_code((string) $parts[0]);
+            $url = $this->sanitize_geo_url($parts[1]);
+            if ($code === '' || $url === '') {
+                continue;
+            }
+
+            $key = $code . '|' . $url;
+            $alternates[$key] = [
+                'code' => $code,
+                'url' => $url
+            ];
+        }
+
+        return array_values($alternates);
+    }
+
+    private function format_geo_alternate_languages(array $alternates): string
+    {
+        $lines = [];
+        foreach ($alternates as $alternate) {
+            $code = $this->sanitize_geo_language_code((string) ($alternate['code'] ?? ''));
+            $url = $this->sanitize_geo_url($alternate['url'] ?? '');
+            if ($code !== '' && $url !== '') {
+                $lines[] = $code . '=' . $url;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function get_geo_assessment(array $settings): array
+    {
+        $crawler_checks = [
+            [
+                'label' => __('AI Training Crawlers', 'rankwoven-seo'),
+                'status' => !empty($settings['training_crawlers']) ? 'info' : 'warning',
+                'ok' => !empty($settings['training_crawlers']),
+                'description' => !empty($settings['training_crawlers'])
+                    ? __('訓練爬蟲可讀取公開內容。', 'rankwoven-seo')
+                    : __('訓練爬蟲被禁止讀取公開內容。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('AI Search Crawlers', 'rankwoven-seo'),
+                'status' => !empty($settings['search_crawlers']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['search_crawlers']),
+                'description' => !empty($settings['search_crawlers'])
+                    ? __('OpenAI、Anthropic、Perplexity、Google 和 Bing 可存取頁面。', 'rankwoven-seo')
+                    : __('引用關鍵的 AI 搜尋爬蟲被禁止存取頁面。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('AI Assistant Fetchers', 'rankwoven-seo'),
+                'status' => !empty($settings['assistant_fetchers']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['assistant_fetchers']),
+                'description' => !empty($settings['assistant_fetchers'])
+                    ? __('ChatGPT-User、Claude-User 和 Perplexity-User 可取得即時內容。', 'rankwoven-seo')
+                    : __('用戶主動觸發的 AI 助手抓取器被禁止存取。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Indexability', 'rankwoven-seo'),
+                'status' => !empty($settings['indexable']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['indexable']),
+                'description' => !empty($settings['indexable'])
+                    ? __('未輸出 noindex，公開頁面可出現在 AI 搜尋結果。', 'rankwoven-seo')
+                    : __('前台會輸出 noindex，AI 搜尋引擎不應收錄公開頁面。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Snippet Controls', 'rankwoven-seo'),
+                'status' => !empty($settings['allow_snippets']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['allow_snippets']),
+                'description' => !empty($settings['allow_snippets'])
+                    ? __('未限制摘要，AI 引擎可在回答中引用頁面內容。', 'rankwoven-seo')
+                    : __('前台會輸出 nosnippet，限制 AI 引擎引用頁面內容。', 'rankwoven-seo')
+            ]
+        ];
+        $language_ready = !empty($settings['language_declaration'])
+            && (string) $settings['language_code'] !== ''
+            && (string) $settings['x_default_url'] !== '';
+        $machine_checks = [
+            [
+                'label' => __('Language Declaration', 'rankwoven-seo'),
+                'status' => $language_ready ? 'pass' : 'warning',
+                'ok' => $language_ready,
+                'description' => $language_ready
+                    ? __('已輸出語言 hreflang 及 x-default，降低錯誤語言引用風險。', 'rankwoven-seo')
+                    : __('請啟用語言聲明並設定 x-default URL，避免錯誤語言引用。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Server-Rendered Content', 'rankwoven-seo'),
+                'status' => 'pass',
+                'ok' => true,
+                'description' => __('WordPress 在伺服器端輸出內容，非 JavaScript AI 爬蟲可讀取完整頁面。', 'rankwoven-seo')
+            ]
+        ];
+
+        $crawler_score = (int) round((count(array_filter($crawler_checks, static fn (array $check): bool => $check['ok'])) / count($crawler_checks)) * 100);
+        $machine_score = (int) round((count(array_filter($machine_checks, static fn (array $check): bool => $check['ok'])) / count($machine_checks)) * 100);
+
+        return [
+            'crawler_score' => $crawler_score,
+            'machine_score' => $machine_score,
+            'overall_score' => (int) round(($crawler_score + $machine_score) / 2),
+            'groups' => [
+                [
+                    'title' => __('AI Crawler Access', 'rankwoven-seo'),
+                    'score' => $crawler_score,
+                    'checks' => $crawler_checks
+                ],
+                [
+                    'title' => __('Machine Readability', 'rankwoven-seo'),
+                    'score' => $machine_score,
+                    'checks' => $machine_checks
+                ]
+            ]
+        ];
+    }
+
     private function get_default_llms_settings(): array
     {
         return [
@@ -6158,6 +6661,7 @@ final class RankWoven_SEO_Plugin
             'robots_txt_saved' => ['updated', __('robots.txt settings saved.', 'rankwoven-seo')],
             'llms_settings_saved' => ['updated', __('LLMs.txt settings saved.', 'rankwoven-seo')],
             'rss_sitemap_settings_saved' => ['updated', __('RSS Sitemap settings saved.', 'rankwoven-seo')],
+            'geo_settings_saved' => ['updated', __('GEO 設定已保存。', 'rankwoven-seo')],
             'seo_audit_completed' => ['updated', __('SEO Analysis completed.', 'rankwoven-seo')],
             'internal_links_rescan_completed' => ['updated', __('Internal links rescanned. Deleted content was removed from candidates and new suggestions were generated.', 'rankwoven-seo')],
             'internal_links_rescan_failed' => ['error', __('Internal link rescan failed. Please check the SaaS API service and Site Token.', 'rankwoven-seo')],

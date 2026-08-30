@@ -26,6 +26,7 @@ Settings -> RankWoven SEO
 當前後台支援：
 
 - 以接近 AIOSEO 的方式提供 `儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`圖片屬性`、`工具類` 和 `診斷` 管理入口。
+- 提供 `GEO 優化` 分頁，管理 AI 爬蟲存取、索引／摘要控制與語言 hreflang 聲明。
 - 後台 UI 使用 WordPress 原生 admin 元件加 RankWoven 輕量樣式，提供卡片化儀表板、連線狀態、快速操作與更清楚的設定分區；插件主容器會自動鋪滿 WordPress 後台可用寬度，並兼容側欄收合與手機版，不額外載入前端 SPA 框架。
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
@@ -119,6 +120,25 @@ LLMs.txt 設定預設全部關閉，避免插件升級後自動公開網站內�
 網站地圖頁同時提供 `RSS Sitemap` 區塊：啟用後，插件會在 `/sitemap.rss` 輸出 RSS 2.0 文件，並透過插件內置的 `rss-sitemap.xsl` 提供瀏覽器可讀的文章列表。文章仍按現有 `modified DESC` 順序輸出，不由 XSL 重新排序；每項包含標題、連結、發佈時間、摘要、純文字正文和特色圖片／站點圖標。`貼文數量`限制整個 RSS Sitemap 的最新項目數，預設為 50；關閉開關時不接管該地址。
 
 `llms.txt`、`llms-full.txt`、文章 `.md` 和 RSS 內容在輸出前會移除 HTML、Script／Style 和 WordPress／Visual Composer shortcode 標籤及屬性，只保留可讀文字，避免 `[vc_row]`、`font_container` 等編輯器代碼出現在公開文件中。
+
+## GEO 優化
+
+後台路徑：
+
+```text
+RankWoven SEO -> GEO 優化
+```
+
+GEO 設定會按照 AI 搜尋引擎實際讀取頁面的方式，集中管理以下項目：
+
+- `AI Training Crawlers`：GPTBot、Google-Extended、CCBot、ClaudeBot 和 Bytespider。
+- `AI Search Crawlers`：OAI-SearchBot、Claude-SearchBot、PerplexityBot、Googlebot 和 Bingbot。
+- `AI Assistant Fetchers`：ChatGPT-User、Claude-User 和 Perplexity-User。
+- `Indexability`：控制是否輸出 `noindex, nofollow`。
+- `Snippet Controls`：控制是否輸出 `nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
+- `Language Declaration`：輸出當前語言、替代語言和 `x-default` hreflang 連結。
+
+三組 AI 爬蟲、索引和摘要選項預設允許，語言代碼會自動使用 WordPress 網站語言，`x-default` 預設指向網站首頁。替代語言使用每行一組 `language=URL` 格式，例如 `en=https://example.com/en/`。保存後，設定會同時影響動態 `/robots.txt` 和前台頁面的 `<head>`；GEO readiness 分數與兩個分組分數會根據當前設定即時計算，不會硬編碼第三方審計結果。
 
 Twitter/X Username 與 Facebook App ID 可在 `Settings -> RankWoven SEO` 保存；留空時不輸出 `@username` 或 `APP ID` 這類 placeholder。需要由主題或自訂代碼覆寫時，也可使用 `rankwoven_seo_twitter_username` 和 `rankwoven_seo_facebook_app_id` filter 返回正式值。
 

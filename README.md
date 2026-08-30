@@ -3524,3 +3524,46 @@ WordPress PHP 8、WordPress Hooks、Hostinger LLMs.txt 產生器、Docker PHP 8.
 
 - 上傳已驗證的 RankWoven 插件至 `cyruschan.com` WordPress。
 - 以文章完整內容生成並替換網站根目錄實體 `llms.txt`，清除快取後再次檢查文章 URL／摘要一一對應。
+
+## 會話總結（2026-08-30）— 新增 WordPress GEO 優化設定
+
+### 會話主要目的
+
+根據 GEO 審計截圖，為 RankWoven SEO WordPress 插件加入 AI 爬蟲存取、索引／摘要控制，以及語言 hreflang 聲明設定。
+
+### 完成的主要任務
+
+- 新增 `GEO 優化` 後台分頁和 `rankwoven_geo_settings` 選項，提供 AI Training Crawlers、AI Search Crawlers、AI Assistant Fetchers 三組 User-agent 控制。
+- 將 `Indexability` 和 `Snippet Controls` 接到前台 `robots` meta，支持 `noindex`、`nofollow`、`nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
+- 新增語言代碼、替代語言 URL、`x-default URL` 設定，前台輸出 hreflang 標籤；GEO readiness、AI Crawler Access 和 Machine Readability 分數按設定動態計算。
+- 動態 `/robots.txt` 會追加對應 AI User-agent 的 `Allow`／`Disallow` 規則；診斷頁增加 GEO readiness 分數。
+- 更新插件 README、WordPress 測試清單與插件版本至 `0.5.0`。
+
+### 關鍵決策和解決方案
+
+- 預設允許三組 AI 爬蟲、公開索引和摘要引用，語言代碼回退到 WordPress 網站語言，`x-default` 回退到首頁；不硬編碼第三方審計分數。
+- 替代語言採用每行 `language=URL` 的簡單格式，只接受 http／https URL；無效語言代碼回退到網站語言，無效 URL 會被忽略。
+- 不新增資料庫表或外部 API，沿用既有 nonce、`manage_options` 權限和設定保存流程。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、robots.txt、前台 meta／hreflang、原生後台表單、CSS Grid。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/admin.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- `git diff --check` 通過；工作區沒有新增 `.env`、密碼、Token、API Key 或私鑰。
+- 已將插件 PHP／CSS 同步到本地 WordPress 測試站目錄，但 Docker daemon 在重啟時回報 read-only filesystem，容器目前無法提供 `php -l`、WP-CLI 或前台 smoke check。
+- 本機 MAMP PHP CLI 路徑不存在；完整 PHP 語法檢查需待 Docker daemon 恢復後重跑。
+
+### 下一步行動清單
+
+- 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 13 驗證後台 GEO 分頁、`/robots.txt`、前台 robots meta 和 `hreflang="x-default"`。
+- 通過 PHP 語法檢查後，只提交本次四個插件／文檔文件，再按用戶授權推送 GitHub；WordPress 插件生產部署仍需獨立的 Hosting／主機流程。
