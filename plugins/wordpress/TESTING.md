@@ -212,6 +212,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] `post_types`、`taxonomies`、每種 URL 上限、排除文章 ID 和排除分類項 ID 保存後會影響輸出；草稿、私密文章、附件和排除項不會出現。
 - [ ] 啟用 Markdown 轉換後，公開文章固定連結追加 `.md` 可返回 `text/markdown`，正文中的標題、連結、圖片和列表能轉換為基本 Markdown。
 - [ ] `llms.txt`、`llms-full.txt` 和 `.md` 輸出不含 HTML、Script／Style 或 WordPress／Visual Composer shortcode 及樣式屬性，只保留可讀文字／Markdown 文字。
+- [ ] 每篇文章的 `URL` 與摘要內容來自同一篇文章；不應出現跨文章重複的「內容目錄／Toggle」摘要。
 - [ ] 關閉 Markdown 轉換或排除文章後，對應 `.md` 地址不會被插件輸出內容。
 - [ ] 若網站根目錄存在實體 `llms.txt` 或 `llms-full.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
 

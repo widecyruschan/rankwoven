@@ -76,6 +76,8 @@ final class RankWoven_SEO_Plugin
         add_action('template_redirect', [$this, 'maybe_render_rss_sitemap_xml'], 0);
         add_action('template_redirect', [$this, 'maybe_render_llms_content'], 0);
         add_filter('the_content', [$this, 'add_image_title_attributes_to_content']);
+        // Hostinger 的 llms.txt 產生器透過 wp_trim_excerpt() 套用 the_content；只在該堆疊中移除 TOC，避免影響前台文章顯示。
+        add_filter('the_content', [$this, 'filter_llms_excerpt_content'], 9999);
         add_filter('sanitize_file_name', [$this, 'filter_uploaded_image_filename'], 20);
         add_filter('redirect_canonical', [$this, 'disable_core_sitemap_redirect'], 10, 2);
         add_filter('robots_txt', [$this, 'append_sitemap_to_robots_txt'], 20000, 2);
@@ -3700,6 +3702,94 @@ final class RankWoven_SEO_Plugin
         return trim($content);
     }
 
+    /**
+     * Remove generated table-of-contents markup without removing article headings.
+     */
+    private function strip_llms_navigation_markup(string $content): string
+    {
+        $opening_pattern = '/<div\b(?=[^>]*(?:\bid\s*=\s*["\'][^"\']*(?:ez-toc-container|toc_container)[^"\']*["\']|\bclass\s*=\s*["\'][^"\']*\b(?:ez-toc|toc-container|toc_container)\b[^"\']*["\']))[^>]*>/iu';
+        $tag_pattern = '/<\/?div\b[^>]*>/iu';
+
+        while (preg_match($opening_pattern, $content, $opening_match, PREG_OFFSET_CAPTURE) === 1) {
+            $start = (int) $opening_match[0][1];
+            $opening_end = $start + strlen((string) $opening_match[0][0]);
+            $depth = 1;
+            $closing_end = null;
+
+            preg_match_all($tag_pattern, $content, $tags, PREG_OFFSET_CAPTURE, $opening_end);
+            foreach ($tags[0] as $tag_match) {
+                $tag = (string) $tag_match[0];
+                if (str_starts_with($tag, '</')) {
+                    $depth--;
+                    if ($depth === 0) {
+                        $closing_end = (int) $tag_match[1] + strlen($tag);
+                        break;
+                    }
+                } elseif (!str_ends_with(trim($tag), '/>')) {
+                    $depth++;
+                }
+            }
+
+            if ($closing_end === null) {
+                break;
+            }
+
+            $content = substr($content, 0, $start) . substr($content, $closing_end);
+        }
+
+        return $content;
+    }
+
+    private function get_llms_rendered_content(WP_Post $post): string
+    {
+        $content = (string) apply_filters('the_content', (string) $post->post_content);
+        return $this->strip_llms_navigation_markup($content);
+    }
+
+    private function get_llms_plain_text_content(WP_Post $post): string
+    {
+        return $this->extract_plain_text_content($this->get_llms_rendered_content($post));
+    }
+
+    private function get_llms_post_excerpt(WP_Post $post): string
+    {
+        $plain_content = $this->get_llms_plain_text_content($post);
+        $fallback = $plain_content !== '' ? wp_trim_words($plain_content, 40, '') : '';
+        $description = $this->normalize_llms_inline_text($this->get_post_meta_description($post, $fallback));
+
+        if ($description === '' || $this->is_llms_navigation_excerpt($description)) {
+            return $this->normalize_llms_inline_text($fallback);
+        }
+
+        return $description;
+    }
+
+    private function is_llms_navigation_excerpt(string $value): bool
+    {
+        return preg_match('/^\s*(?:內容目錄|table\s+of\s+contents)\b/iu', $value) === 1;
+    }
+
+    public function filter_llms_excerpt_content(string $content): string
+    {
+        if (!$this->is_excerpt_generation_context()) {
+            return $content;
+        }
+
+        $content = $this->strip_llms_navigation_markup($content);
+        return $this->strip_shortcode_markup($content);
+    }
+
+    private function is_excerpt_generation_context(): bool
+    {
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+            if (($frame['function'] ?? '') === 'wp_trim_excerpt') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function strip_shortcode_markup(string $content): string
     {
         return preg_replace(
@@ -4546,8 +4636,8 @@ final class RankWoven_SEO_Plugin
             }
 
             $title = $this->normalize_llms_inline_text((string) get_the_title($post));
-            $description = $this->normalize_llms_inline_text($this->get_post_meta_description($post, wp_trim_words($this->extract_plain_text_content((string) $post->post_content), 40, '')));
-            $content = $this->extract_plain_text_content((string) apply_filters('the_content', $post->post_content));
+            $description = $this->get_llms_post_excerpt($post);
+            $content = $this->get_llms_plain_text_content($post);
             $content = preg_replace('/(?:\*\*|__|`)/u', '', $content) ?? $content;
             $published_at = get_post_time('D, d M Y H:i:s +0000', true, $post);
             $preview_image = $this->get_post_preview_image($post);
@@ -4854,7 +4944,7 @@ final class RankWoven_SEO_Plugin
                 }
 
                 $post_title = $this->normalize_llms_inline_text((string) get_the_title($post));
-                $excerpt = $this->normalize_llms_inline_text($this->get_post_meta_description($post, wp_trim_words($this->extract_plain_text_content((string) $post->post_content), 40, '')));
+                $excerpt = $this->get_llms_post_excerpt($post);
                 if ($include_content) {
                     $lines[] = '';
                     $lines[] = '### ' . ($post_title !== '' ? $post_title : __('Untitled', 'rankwoven-seo'));
@@ -4862,7 +4952,7 @@ final class RankWoven_SEO_Plugin
                     if ($excerpt !== '') {
                         $lines[] = '> ' . $excerpt;
                     }
-                    $markdown = $this->convert_html_to_markdown((string) apply_filters('the_content', $post->post_content));
+                    $markdown = $this->convert_html_to_markdown($this->get_llms_rendered_content($post));
                     if ($markdown !== '') {
                         $lines[] = '';
                         $lines[] = $markdown;
@@ -4983,8 +5073,8 @@ final class RankWoven_SEO_Plugin
         }
 
         $title = $this->normalize_llms_inline_text((string) get_the_title($post));
-        $description = $this->normalize_llms_inline_text($this->get_post_meta_description($post, wp_trim_words($this->extract_plain_text_content((string) $post->post_content), 40, '')));
-        $content = $this->convert_html_to_markdown((string) apply_filters('the_content', $post->post_content));
+        $description = $this->get_llms_post_excerpt($post);
+        $content = $this->convert_html_to_markdown($this->get_llms_rendered_content($post));
         $lines = ['# ' . ($title !== '' ? $title : __('Untitled', 'rankwoven-seo')), ''];
         if ($description !== '') {
             $lines[] = '> ' . $description;

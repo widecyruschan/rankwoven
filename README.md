@@ -3486,3 +3486,41 @@ WordPress PHP 8、RSS 2.0 XML、XSLT 1.0、WordPress `get_posts`／內容清理 
 
 - 暫時移開測試站實體 `llms.txt`，啟用 RSS 設定後驗證 `/sitemap.rss`、XSL 載入、XML 解析和文章排序。
 - 完成前台驗證後，只提交本次相關文件，再按用戶授權推送 GitHub／部署。
+
+## 會話總結（2026-08-30）— 修正 LLMs.txt 文章摘要對應錯誤
+
+### 會話主要目的
+
+修正 WordPress 實體 `llms.txt` 將 EZ TOC「內容目錄」誤當成多篇文章摘要，導致每個 URL 後面的內容重複且與文章不符。
+
+### 完成的主要任務
+
+- RankWoven SEO 插件新增 LLMs 專用內容清理：移除 EZ TOC／TOC 容器與未註冊 Visual Composer shortcode。
+- `llms.txt`、`llms-full.txt`、文章 `.md` 與 RSS 共用每篇文章的乾淨正文／摘要來源；只有偵測到內容目錄型 Meta 摘要時才回退到該文章正文。
+- 在 `wp_trim_excerpt()` 呼叫堆疊中加入限定過濾器，讓 Hostinger 日後重建實體 `llms.txt` 時不再輸出 TOC 或 shortcode。
+
+### 關鍵決策和解決方案
+
+- 不改變前台文章的 TOC 顯示，只在摘要產生堆疊和 LLMs 輸出路徑清理導覽標記。
+- 自訂且有效的 SEO Meta Description 仍保留；只有空值或以「內容目錄／Table of Contents」開頭的摘要才使用文章正文回退。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、Hostinger LLMs.txt 產生器、Docker PHP 8.2。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- Docker WordPress 容器 `php -l` 通過。
+- 本地實際文章摘要已確認各自回傳自身正文；合成 EZ TOC 樣本可正確移除導覽容器。
+- 本地 LLMs 文件生成結果不含 `內容目錄`、`Toggle`、`[vc_row]` 或 `font_container`；重複摘要只存在於測試站原本刻意重複的商品／分類資料。
+- 線上 `cyruschan.com/llms.txt` 的靜態文件替換尚待 Hostinger 網站 API 恢復後完成。
+
+### 下一步行動清單
+
+- 上傳已驗證的 RankWoven 插件至 `cyruschan.com` WordPress。
+- 以文章完整內容生成並替換網站根目錄實體 `llms.txt`，清除快取後再次檢查文章 URL／摘要一一對應。
