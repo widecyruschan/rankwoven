@@ -2,7 +2,7 @@
 
 WordPress 外掛：連接 RankWoven SaaS，同步文章／頁面／作品／商品與圖片媒體，並在後台管理搜尋外觀、Sitemap、SEO 分析與圖片屬性。
 
-目前版本為 **0.7.0**。自 **0.2.0** 起，原 `webp-image-optimizer` 的功能已合併進來。
+目前版本為 **0.8.0**。自 **0.2.0** 起，原 `webp-image-optimizer` 的功能已合併進來。
 
 ## SEO 評分與 GEO 優化
 
@@ -37,6 +37,12 @@ GEO 設定亦包含可獨立關閉的 JSON-LD、Entity Schema、Content Schema �
 同一頁的 `RSS Sitemap` 區塊可啟用 `/sitemap.rss`，設定最新文章數量和 Post Types。輸出為 RSS 2.0 文件，包含最新已發布內容的標題、連結、發佈時間、摘要、純文字正文和特色圖片／站點圖標；瀏覽器會透過 `assets/rss-sitemap.xsl` 顯示可讀的文章列表。文章按 `modified DESC` 輸出，與現有文章排序一致；預設關閉，並不取代完整 `sitemap.xml`。啟用後，動態 `robots.txt` 會同步加入 RSS Sitemap URL。
 
 `llms.txt`、`llms-full.txt`、文章 `.md` 和 RSS 文章內容會在輸出前移除 HTML、Script／Style、WordPress／Visual Composer shortcode 及其樣式屬性，只保留可讀文字，避免公開文件出現 `[vc_row]`、`font_container` 等編輯器代碼。
+
+## IndexNow 即時提交
+
+後台路徑：**RankWoven SEO -> 網站地圖 -> IndexNow**。
+
+啟用後，插件會在支援的文章、頁面、Portfolio 或商品發佈／更新／移除時，向 `api.indexnow.org` 提交本站 URL。插件會自動生成公開驗證 Key，並透過 `/{key}.txt` 輸出 Key 文件；也可在同一頁手動逐行提交最多 10,000 個本站 URL。IndexNow Key 只用於驗證網站擁有權，不是 WordPress 登入密碼；插件不會把任何密碼或 Token 寫入文件。
 
 ---
 
@@ -86,3 +92,13 @@ GEO 設定亦包含可獨立關閉的 JSON-LD、Entity Schema、Content Schema �
 - **修改文件**：`rankwoven-seo/rankwoven-seo.php`、本 README。
 - **驗證結果**：測試站 Docker WordPress PHP 8.2 parser 通過；JavaScript 語法與 `git diff --check` 通過。尚未執行完整 npm lint／test／build。
 - **下一步行動**：在測試站後台保存 GEO 設定，逐頁檢查 JSON-LD，並用 Rich Results Test／Search Console 驗證 Schema。
+
+### 2026-08-31：加入 IndexNow 即時提交
+
+- **會話目的**：為網站新增 IndexNow URL 變更通知功能。
+- **完成任務**：新增 IndexNow 啟用、自動提交、內容類型和 API Key 設定；支援公開 Key 文件路由、手動批量 URL 提交，以及文章／頁面／Portfolio／商品發佈、更新、移除時的自動通知；後台顯示最近一次提交狀態。
+- **關鍵決策**：Key 只允許 8 至 128 位英數字與連字號；提交 URL 必須使用本站 http／https 網域；批量上限 10,000 個 URL；自動通知加入 60 秒短暫鎖定，避免同一 URL 重複請求。
+- **技術棧**：WordPress Hooks、WordPress HTTP API、IndexNow JSON API、動態純文字驗證文件。
+- **修改文件**：`rankwoven-seo/rankwoven-seo.php`、本 README。
+- **驗證結果**：Docker WordPress PHP 8.2 parser 通過；本地測試站的 `/{key}.txt` 返回 `200` 及正確純文字 Key。尚待完成 API mock 與完整 npm 驗證。
+- **下一步行動**：在測試站以攔截 HTTP 請求方式驗證提交 JSON，再執行完整 lint／test／build。

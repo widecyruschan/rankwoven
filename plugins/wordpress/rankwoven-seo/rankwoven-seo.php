@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RankWoven SEO
  * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes GEO controls, LLMs.txt, RSS Sitemap output, and WebP/AVIF image optimization.
- * Version: 0.7.0
+ * Version: 0.8.0
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.7.0';
+    private const VERSION = '0.8.0';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -33,6 +33,8 @@ final class RankWoven_SEO_Plugin
     private const OPTION_LLMS_SETTINGS = 'rankwoven_llms_settings';
     private const OPTION_RSS_SETTINGS = 'rankwoven_rss_settings';
     private const OPTION_GEO_SETTINGS = 'rankwoven_geo_settings';
+    private const OPTION_INDEXNOW_SETTINGS = 'rankwoven_indexnow_settings';
+    private const OPTION_INDEXNOW_LAST_RESULT = 'rankwoven_indexnow_last_result';
     private const OPTION_CONTENT_META_SETTINGS = 'rankwoven_content_meta_settings';
     private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
@@ -67,6 +69,7 @@ final class RankWoven_SEO_Plugin
         add_action('admin_post_rankwoven_rescan_internal_links', [$this, 'handle_rescan_internal_links']);
         add_action('admin_post_rankwoven_generate_sitemap', [$this, 'handle_generate_sitemap']);
         add_action('admin_post_rankwoven_submit_sitemap_google', [$this, 'handle_submit_sitemap_google']);
+        add_action('admin_post_rankwoven_submit_indexnow', [$this, 'handle_submit_indexnow']);
         add_action('admin_post_rankwoven_run_seo_audit', [$this, 'handle_run_seo_audit']);
         add_action('admin_post_rankwoven_apply_audit_issue', [$this, 'handle_apply_audit_issue']);
         add_action('admin_post_rankwoven_manage_suggestions', [$this, 'handle_manage_suggestions']);
@@ -76,6 +79,9 @@ final class RankWoven_SEO_Plugin
         add_action('admin_post_rankwoven_reset_image_bulk_counter', [$this, 'handle_reset_image_bulk_counter']);
         add_action('wp_ajax_rankwoven_editor_seo', [$this, 'handle_editor_seo_ajax']);
         add_action('add_attachment', [$this, 'handle_new_attachment']);
+        add_action('save_post', [$this, 'handle_indexnow_post_save'], 20, 3);
+        add_action('trashed_post', [$this, 'handle_indexnow_trashed_post']);
+        add_action('before_delete_post', [$this, 'handle_indexnow_deleted_post']);
         add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
         add_action('wp_head', [$this, 'render_geo_meta_tags'], 2);
         add_action('wp_head', [$this, 'render_geo_structured_data'], 3);
@@ -870,6 +876,10 @@ final class RankWoven_SEO_Plugin
 
     public function maybe_render_custom_sitemap_request($wp): void
     {
+        if ($this->maybe_render_indexnow_key()) {
+            return;
+        }
+
         if ($this->is_sitemap_request()) {
             $this->maybe_render_sitemap_xml();
         }
@@ -1001,7 +1011,7 @@ final class RankWoven_SEO_Plugin
 
     public function disable_core_sitemap_redirect($redirect_url, $requested_url)
     {
-        if ($this->is_sitemap_request() || $this->is_rss_sitemap_request() || $this->get_llms_request_kind() !== '') {
+        if ($this->is_sitemap_request() || $this->is_rss_sitemap_request() || $this->get_llms_request_kind() !== '' || $this->is_indexnow_key_request()) {
             return false;
         }
 
@@ -2747,6 +2757,7 @@ final class RankWoven_SEO_Plugin
         ?>
         <?php $this->render_rss_sitemap_page(); ?>
         <?php $this->render_llms_txt_page(); ?>
+        <?php $this->render_indexnow_page(); ?>
 
         <h2><?php echo esc_html__('Sitemap.xml', 'rankwoven-seo'); ?></h2>
         <p>
@@ -2848,6 +2859,99 @@ final class RankWoven_SEO_Plugin
                 </tr>
             </tbody>
         </table>
+        <?php
+    }
+
+    private function render_indexnow_page(): void
+    {
+        $settings = $this->get_indexnow_settings();
+        $last_result = get_option(self::OPTION_INDEXNOW_LAST_RESULT, []);
+        $last_result = is_array($last_result) ? $last_result : [];
+        $key = (string) ($settings['key'] ?? '');
+        $key_url = $key !== '' ? home_url('/' . rawurlencode($key) . '.txt') : '';
+        $selected_post_types = is_array($settings['post_types'] ?? null) ? $settings['post_types'] : [];
+        $available_post_types = $this->get_supported_editor_post_types();
+        ?>
+        <section class="rankwoven-panel rankwoven-indexnow-panel">
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Instant Indexing', 'rankwoven-seo'); ?></span>
+                <h2><?php echo esc_html__('IndexNow', 'rankwoven-seo'); ?></h2>
+                <p><?php echo esc_html__('在內容新增、更新或刪除後，即時通知支援 IndexNow 的搜尋引擎，縮短搜尋結果反映變更的時間。', 'rankwoven-seo'); ?></p>
+            </div>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <?php wp_nonce_field('rankwoven_save_settings'); ?>
+                <input type="hidden" name="action" value="rankwoven_save_settings" />
+                <input type="hidden" name="rankwoven_settings_scope" value="indexnow" />
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><?php echo esc_html__('啟用 IndexNow', 'rankwoven-seo'); ?></th>
+                        <td>
+                            <label class="rankwoven-toggle-row">
+                                <input type="checkbox" name="rankwoven_indexnow_settings[enabled]" value="1" <?php checked(!empty($settings['enabled'])); ?> />
+                                <?php echo esc_html__('允許插件通知 IndexNow API', 'rankwoven-seo'); ?>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php echo esc_html__('自動提交', 'rankwoven-seo'); ?></th>
+                        <td>
+                            <label class="rankwoven-toggle-row">
+                                <input type="checkbox" name="rankwoven_indexnow_settings[auto_submit]" value="1" <?php checked(!empty($settings['auto_submit'])); ?> />
+                                <?php echo esc_html__('文章、頁面、Portfolio 或商品發佈／更新／移除時自動通知', 'rankwoven-seo'); ?>
+                            </label>
+                            <p class="description"><?php echo esc_html__('通知只會傳送公開內容 URL，並以短暫鎖定避免同一內容重複提交。', 'rankwoven-seo'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php echo esc_html__('內容類型', 'rankwoven-seo'); ?></th>
+                        <td>
+                            <div class="rankwoven-checkbox-grid">
+                                <?php foreach ($available_post_types as $post_type) : ?>
+                                    <label>
+                                        <input type="checkbox" name="rankwoven_indexnow_settings[post_types][]" value="<?php echo esc_attr($post_type); ?>" <?php checked($selected_post_types === [] || in_array($post_type, $selected_post_types, true)); ?> />
+                                        <?php echo esc_html(post_type_exists($post_type) ? get_post_type_object($post_type)->labels->name : $post_type); ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="description"><?php echo esc_html__('未選擇時會套用所有支援的公開內容類型。', 'rankwoven-seo'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="rankwoven_indexnow_key"><?php echo esc_html__('IndexNow API Key', 'rankwoven-seo'); ?></label></th>
+                        <td>
+                            <input id="rankwoven_indexnow_key" name="rankwoven_indexnow_settings[key]" type="text" class="regular-text code" value="<?php echo esc_attr($key); ?>" pattern="[A-Za-z0-9-]{8,128}" placeholder="保存時自動生成 32 位 Key" />
+                            <p class="description"><?php echo esc_html__('這是公開驗證 Key，不是網站登入密碼。留空並啟用時，保存設定會自動生成。', 'rankwoven-seo'); ?></p>
+                            <?php if ($key_url !== '') : ?>
+                                <p><span><?php echo esc_html__('Key 文件：', 'rankwoven-seo'); ?></span><code><?php echo esc_html($key_url); ?></code> <a href="<?php echo esc_url($key_url); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__('檢查', 'rankwoven-seo'); ?></a></p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(__('保存 IndexNow 設定', 'rankwoven-seo')); ?>
+            </form>
+
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Manual Ping', 'rankwoven-seo'); ?></span>
+                <h3><?php echo esc_html__('手動提交 URL', 'rankwoven-seo'); ?></h3>
+                <p><?php echo esc_html__('每行輸入一個本站 URL，最多提交 10,000 個地址。', 'rankwoven-seo'); ?></p>
+            </div>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <?php wp_nonce_field('rankwoven_submit_indexnow'); ?>
+                <input type="hidden" name="action" value="rankwoven_submit_indexnow" />
+                <textarea name="rankwoven_indexnow_urls" class="large-text code" rows="5" placeholder="https://example.com/article/1\nhttps://example.com/article/2"></textarea>
+                <?php submit_button(__('立即提交到 IndexNow', 'rankwoven-seo'), 'secondary'); ?>
+            </form>
+
+            <h3><?php echo esc_html__('最近一次提交', 'rankwoven-seo'); ?></h3>
+            <table class="widefat striped">
+                <tbody>
+                    <tr><th><?php echo esc_html__('時間', 'rankwoven-seo'); ?></th><td><?php echo esc_html((string) ($last_result['submittedAt'] ?? __('尚未提交', 'rankwoven-seo'))); ?></td></tr>
+                    <tr><th><?php echo esc_html__('狀態', 'rankwoven-seo'); ?></th><td><?php echo esc_html((string) ($last_result['status'] ?? '')); ?></td></tr>
+                    <tr><th><?php echo esc_html__('URL 數量', 'rankwoven-seo'); ?></th><td><?php echo esc_html((string) ($last_result['urlCount'] ?? 0)); ?></td></tr>
+                    <tr><th><?php echo esc_html__('訊息', 'rankwoven-seo'); ?></th><td><?php echo esc_html((string) ($last_result['message'] ?? '')); ?></td></tr>
+                </tbody>
+            </table>
+        </section>
         <?php
     }
 
@@ -3562,6 +3666,16 @@ final class RankWoven_SEO_Plugin
             $this->redirect_with_status('rss_sitemap_settings_saved', 'sitemap');
         }
 
+        if ($scope === 'indexnow') {
+            $indexnow_settings = $this->sanitize_indexnow_settings(wp_unslash($_POST['rankwoven_indexnow_settings'] ?? []));
+            if (!empty($indexnow_settings['enabled']) && $indexnow_settings['key'] === '') {
+                $indexnow_settings['key'] = $this->generate_indexnow_key();
+            }
+            update_option(self::OPTION_INDEXNOW_SETTINGS, $indexnow_settings);
+            delete_option(self::OPTION_LAST_ERROR);
+            $this->redirect_with_status('indexnow_settings_saved', 'sitemap');
+        }
+
         if ($scope === 'geo') {
             $geo_settings = $this->sanitize_geo_settings(wp_unslash($_POST['rankwoven_geo_settings'] ?? []));
             update_option(self::OPTION_GEO_SETTINGS, $geo_settings);
@@ -3608,6 +3722,25 @@ final class RankWoven_SEO_Plugin
 
         delete_option(self::OPTION_LAST_ERROR);
         $this->redirect_with_status('settings_saved');
+    }
+
+    public function handle_submit_indexnow(): void
+    {
+        $this->assert_admin_action('rankwoven_submit_indexnow');
+
+        $urls = preg_split('/\R/', (string) wp_unslash($_POST['rankwoven_indexnow_urls'] ?? '')) ?: [];
+        $result = $this->submit_indexnow_urls($urls, 'manual');
+        if (is_wp_error($result)) {
+            update_option(self::OPTION_INDEXNOW_LAST_RESULT, [
+                'submittedAt' => gmdate('c'),
+                'status' => 'error',
+                'urlCount' => 0,
+                'message' => $result->get_error_message()
+            ]);
+            $this->redirect_with_status('indexnow_submit_failed', 'sitemap');
+        }
+
+        $this->redirect_with_status('indexnow_submitted', 'sitemap');
     }
 
     public function handle_connect_site(): void
@@ -4005,6 +4138,141 @@ final class RankWoven_SEO_Plugin
         }
 
         $this->update_image_attachment_attributes($attachment_id);
+    }
+
+    public function handle_indexnow_post_save(int $post_id, WP_Post $post, bool $update): void
+    {
+        if (wp_is_post_revision($post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)) {
+            return;
+        }
+
+        $settings = $this->get_indexnow_settings();
+        if (empty($settings['enabled']) || empty($settings['auto_submit']) || $post->post_status !== 'publish' || !in_array($post->post_type, $this->get_supported_editor_post_types(), true)) {
+            return;
+        }
+
+        $post_types = is_array($settings['post_types'] ?? null) ? $settings['post_types'] : [];
+        if ($post_types !== [] && !in_array($post->post_type, $post_types, true)) {
+            return;
+        }
+
+        $this->notify_indexnow_post($post_id, 'updated');
+    }
+
+    public function handle_indexnow_trashed_post(int $post_id): void
+    {
+        $this->notify_indexnow_post($post_id, 'deleted');
+    }
+
+    public function handle_indexnow_deleted_post(int $post_id): void
+    {
+        $this->notify_indexnow_post($post_id, 'deleted');
+    }
+
+    private function notify_indexnow_post(int $post_id, string $change_type): void
+    {
+        $settings = $this->get_indexnow_settings();
+        if (empty($settings['enabled']) || empty($settings['auto_submit']) || empty($settings['key'])) {
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!($post instanceof WP_Post)) {
+            return;
+        }
+
+        if (!in_array($post->post_type, $this->get_supported_editor_post_types(), true)) {
+            return;
+        }
+
+        $post_types = is_array($settings['post_types'] ?? null) ? $settings['post_types'] : [];
+        if ($post_types !== [] && !in_array($post->post_type, $post_types, true)) {
+            return;
+        }
+
+        $url = get_permalink($post_id);
+        if (!is_string($url) || $url === '') {
+            return;
+        }
+
+        $lock_key = 'rankwoven_indexnow_' . md5($change_type . '|' . $url);
+        if (get_transient($lock_key)) {
+            return;
+        }
+        set_transient($lock_key, 1, 60);
+        $this->submit_indexnow_urls([$url], $change_type);
+    }
+
+    private function submit_indexnow_urls(array $urls, string $source = 'manual')
+    {
+        $settings = $this->get_indexnow_settings();
+        $key = (string) ($settings['key'] ?? '');
+        if (empty($settings['enabled']) && $source === 'manual') {
+            return new WP_Error('rankwoven_indexnow_disabled', __('請先啟用 IndexNow。', 'rankwoven-seo'));
+        }
+        if ($key === '') {
+            return new WP_Error('rankwoven_indexnow_key_missing', __('IndexNow API Key 尚未設定，請先保存 IndexNow 設定。', 'rankwoven-seo'));
+        }
+
+        $host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $normalized_urls = [];
+        foreach ($urls as $url) {
+            $url = esc_url_raw(trim((string) $url));
+            $url_host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
+            $scheme = strtolower((string) wp_parse_url($url, PHP_URL_SCHEME));
+            if ($url === '' || !in_array($scheme, ['http', 'https'], true) || $url_host === '' || $url_host !== $host) {
+                continue;
+            }
+            $normalized_urls[$url] = $url;
+            if (count($normalized_urls) >= 10000) {
+                break;
+            }
+        }
+
+        if ($normalized_urls === []) {
+            return new WP_Error('rankwoven_indexnow_urls_missing', __('沒有找到可提交的本站 URL。', 'rankwoven-seo'));
+        }
+
+        $response = wp_remote_post('https://api.indexnow.org/indexnow', [
+            'timeout' => 8,
+            'headers' => ['Content-Type' => 'application/json; charset=utf-8'],
+            'body' => wp_json_encode([
+                'host' => $host,
+                'key' => $key,
+                'keyLocation' => $this->get_indexnow_key_url(),
+                'urlList' => array_values($normalized_urls)
+            ])
+        ]);
+
+        if (is_wp_error($response)) {
+            $error = new WP_Error('rankwoven_indexnow_request_failed', $response->get_error_message());
+            update_option(self::OPTION_INDEXNOW_LAST_RESULT, [
+                'submittedAt' => gmdate('c'),
+                'status' => 'error',
+                'urlCount' => count($normalized_urls),
+                'message' => $error->get_error_message(),
+                'source' => $source
+            ]);
+            return $error;
+        }
+
+        $status_code = (int) wp_remote_retrieve_response_code($response);
+        $success = $status_code >= 200 && $status_code < 300;
+        $message = $success
+            ? sprintf(__('IndexNow 已接受 %d 個 URL。', 'rankwoven-seo'), count($normalized_urls))
+            : sprintf(__('IndexNow 回應 HTTP %d，請檢查 API Key 文件及網站 URL。', 'rankwoven-seo'), $status_code);
+        update_option(self::OPTION_INDEXNOW_LAST_RESULT, [
+            'submittedAt' => gmdate('c'),
+            'status' => $success ? 'success' : 'error',
+            'statusCode' => $status_code,
+            'urlCount' => count($normalized_urls),
+            'message' => $message,
+            'source' => $source
+        ]);
+
+        return $success
+            ? ['statusCode' => $status_code, 'urlCount' => count($normalized_urls)]
+            : new WP_Error('rankwoven_indexnow_api_error', $message);
     }
 
     public function filter_uploaded_image_filename(string $filename): string
@@ -5802,6 +6070,46 @@ final class RankWoven_SEO_Plugin
             || str_ends_with($normalized_path, '/rss-sitemap.xml');
     }
 
+    private function maybe_render_indexnow_key(): bool
+    {
+        if (!$this->is_indexnow_key_request()) {
+            return false;
+        }
+
+        $key = (string) ($this->get_indexnow_settings()['key'] ?? '');
+        if ($key === '') {
+            return false;
+        }
+
+        nocache_headers();
+        status_header(200);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo esc_html($key);
+        exit;
+    }
+
+    private function is_indexnow_key_request(): bool
+    {
+        $key = (string) ($this->get_indexnow_settings()['key'] ?? '');
+        if ($key === '') {
+            return false;
+        }
+
+        $request_uri = sanitize_text_field((string) ($_SERVER['REQUEST_URI'] ?? ''));
+        $path = wp_parse_url($request_uri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return false;
+        }
+
+        return basename(rtrim($path, '/')) === $key . '.txt';
+    }
+
+    private function get_indexnow_key_url(): string
+    {
+        $key = (string) ($this->get_indexnow_settings()['key'] ?? '');
+        return $key !== '' ? esc_url_raw(home_url('/' . rawurlencode($key) . '.txt')) : '';
+    }
+
     private function get_geo_crawler_groups(): array
     {
         return [
@@ -6367,6 +6675,56 @@ final class RankWoven_SEO_Plugin
             'posts_per_page' => 50,
             'post_types' => []
         ];
+    }
+
+    private function get_default_indexnow_settings(): array
+    {
+        return [
+            'enabled' => false,
+            'auto_submit' => true,
+            'key' => '',
+            'post_types' => $this->get_supported_editor_post_types()
+        ];
+    }
+
+    private function get_indexnow_settings(): array
+    {
+        $saved_settings = get_option(self::OPTION_INDEXNOW_SETTINGS, []);
+        return $this->sanitize_indexnow_settings(is_array($saved_settings) ? $saved_settings : []);
+    }
+
+    private function sanitize_indexnow_settings($input): array
+    {
+        $input = is_array($input) ? $input : [];
+        $defaults = $this->get_default_indexnow_settings();
+        $key = sanitize_text_field((string) ($input['key'] ?? $defaults['key']));
+        if (!preg_match('/^[A-Za-z0-9-]{8,128}$/', $key)) {
+            $key = '';
+        }
+
+        $post_types = [];
+        if (isset($input['post_types']) && is_array($input['post_types'])) {
+            $post_types = array_values(array_intersect(
+                $this->get_supported_editor_post_types(),
+                array_map('sanitize_key', $input['post_types'])
+            ));
+        }
+
+        return [
+            'enabled' => !empty($input['enabled']),
+            'auto_submit' => array_key_exists('auto_submit', $input) ? !empty($input['auto_submit']) : (bool) $defaults['auto_submit'],
+            'key' => $key,
+            'post_types' => $post_types
+        ];
+    }
+
+    private function generate_indexnow_key(): string
+    {
+        try {
+            return bin2hex(random_bytes(16));
+        } catch (Throwable $error) {
+            return strtolower(wp_generate_password(32, false, false));
+        }
     }
 
     private function get_rss_settings(): array
@@ -7761,6 +8119,7 @@ final class RankWoven_SEO_Plugin
             'sync_failed' => __('Content sync failed. Please check the Site Token and API service.', 'rankwoven-seo'),
             'google_credentials_not_configured' => __('Google credentials are not configured on the SaaS service.', 'rankwoven-seo'),
             'sitemap_submit_failed' => __('Sitemap submission failed. Please check the SaaS API and Google credentials.', 'rankwoven-seo'),
+            'indexnow_submit_failed' => __('IndexNow submission failed. Please check the API Key and website URL.', 'rankwoven-seo'),
             'seo_audit_failed' => __('SEO Analysis failed. Please sync content, then check the SaaS API service.', 'rankwoven-seo'),
             'internal_links_rescan_failed' => __('Internal link rescan failed. Please check the SaaS API service and run sync again.', 'rankwoven-seo'),
             'audit_issue_apply_failed' => __('Audit issue could not be applied automatically. Please edit the content manually.', 'rankwoven-seo'),
@@ -7804,6 +8163,8 @@ final class RankWoven_SEO_Plugin
             'robots_txt_saved' => ['updated', __('robots.txt settings saved.', 'rankwoven-seo')],
             'llms_settings_saved' => ['updated', __('LLMs.txt settings saved.', 'rankwoven-seo')],
             'rss_sitemap_settings_saved' => ['updated', __('RSS Sitemap settings saved.', 'rankwoven-seo')],
+            'indexnow_settings_saved' => ['updated', __('IndexNow settings saved.', 'rankwoven-seo')],
+            'indexnow_submitted' => ['updated', __('URLs submitted to IndexNow successfully.', 'rankwoven-seo')],
             'geo_settings_saved' => ['updated', __('GEO 設定已保存。', 'rankwoven-seo')],
             'seo_audit_completed' => ['updated', __('SEO Analysis completed.', 'rankwoven-seo')],
             'internal_links_rescan_completed' => ['updated', __('Internal links rescanned. Deleted content was removed from candidates and new suggestions were generated.', 'rankwoven-seo')],
@@ -7827,6 +8188,7 @@ final class RankWoven_SEO_Plugin
             'sync_failed' => ['error', __('Content sync failed. Please check the Site Token and API service.', 'rankwoven-seo')],
             'google_credentials_not_configured' => ['error', __('Google credentials are not configured on the SaaS service.', 'rankwoven-seo')],
             'sitemap_submit_failed' => ['error', __('Sitemap submission failed. Please check the SaaS API and Google credentials.', 'rankwoven-seo')],
+            'indexnow_submit_failed' => ['error', __('IndexNow submission failed. Please check the API Key and website URL.', 'rankwoven-seo')],
             'seo_audit_failed' => ['error', __('SEO Analysis failed. Please sync content, then check the SaaS API service.', 'rankwoven-seo')],
             'suggestions_missing_selection' => ['error', __('Please select at least one suggestion first.', 'rankwoven-seo')],
             'suggestions_action_failed' => ['error', __('Suggestion action failed. Please check the SaaS API service and Site Token.', 'rankwoven-seo')]
