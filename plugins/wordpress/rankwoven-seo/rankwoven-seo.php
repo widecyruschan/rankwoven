@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RankWoven SEO
  * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes GEO controls, LLMs.txt, RSS Sitemap output, and WebP/AVIF image optimization.
- * Version: 0.6.0
+ * Version: 0.7.0
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.6.0';
+    private const VERSION = '0.7.0';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
@@ -78,6 +78,7 @@ final class RankWoven_SEO_Plugin
         add_action('add_attachment', [$this, 'handle_new_attachment']);
         add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
         add_action('wp_head', [$this, 'render_geo_meta_tags'], 2);
+        add_action('wp_head', [$this, 'render_geo_structured_data'], 3);
         add_action('parse_request', [$this, 'maybe_render_custom_sitemap_request'], -100, 1);
         add_action('template_redirect', [$this, 'maybe_render_sitemap_xml'], 0);
         add_action('template_redirect', [$this, 'maybe_render_rss_sitemap_xml'], 0);
@@ -684,9 +685,169 @@ final class RankWoven_SEO_Plugin
         }
 
         $x_default_url = (string) $settings['x_default_url'];
-        if ($x_default_url !== '') {
-            $this->render_geo_hreflang_link('x-default', $x_default_url);
+        $this->render_geo_hreflang_link('x-default', $x_default_url !== '' ? $x_default_url : home_url('/'));
+    }
+
+    /**
+     * Output a small JSON-LD graph that gives search and AI crawlers stable
+     * entity, content, author, and breadcrumb references.
+     */
+    public function render_geo_structured_data(): void
+    {
+        if (is_admin()) {
+            return;
         }
+
+        $settings = $this->get_geo_settings();
+        if (empty($settings['structured_data'])) {
+            return;
+        }
+
+        $site_url = esc_url_raw(home_url('/'));
+        $site_name = sanitize_text_field((string) ($settings['organization_name'] ?: get_bloginfo('name')));
+        $site_description = sanitize_textarea_field((string) ($settings['organization_description'] ?: get_bloginfo('description')));
+        $logo_url = esc_url_raw((string) $settings['organization_logo']);
+        $organization_id = $site_url . '#rankwoven-organization';
+        $website_id = $site_url . '#rankwoven-website';
+        $graph = [];
+
+        if (!empty($settings['entity_schema'])) {
+            $organization = [
+                '@type' => 'Organization',
+                '@id' => $organization_id,
+                'name' => $site_name,
+                'url' => $site_url
+            ];
+            if ($site_description !== '') {
+                $organization['description'] = $site_description;
+            }
+            if ($logo_url !== '') {
+                $organization['logo'] = [
+                    '@type' => 'ImageObject',
+                    'url' => $logo_url
+                ];
+            }
+            if (!empty($settings['organization_same_as'])) {
+                $organization['sameAs'] = array_values(array_filter(array_map('esc_url_raw', $settings['organization_same_as'])));
+            }
+            $graph[] = $organization;
+            $graph[] = [
+                '@type' => 'WebSite',
+                '@id' => $website_id,
+                'url' => $site_url,
+                'name' => $site_name,
+                'publisher' => ['@id' => $organization_id],
+                'inLanguage' => $this->get_default_geo_language()
+            ];
+        }
+
+        $post = get_queried_object();
+        $current_url = $site_url;
+        $title = $site_name;
+        $description = $site_description;
+        $image = '';
+        $content_entity_id = '';
+        $author_id = '';
+        $post_type = '';
+        if ($post instanceof WP_Post && is_singular()) {
+            $permalink = get_permalink($post);
+            $current_url = is_string($permalink) && $permalink !== '' ? esc_url_raw($permalink) : $site_url;
+            $title = sanitize_text_field((string) ($this->get_post_seo_title($post) ?: get_the_title($post)));
+            if (preg_match('/#(?:post|separator|site)_[a-z_]+/i', $title) === 1) {
+                $title = sanitize_text_field((string) get_the_title($post));
+            }
+            $description = $this->get_post_meta_description($post, wp_strip_all_tags((string) $post->post_excerpt));
+            $preview_image = $this->get_post_preview_image($post);
+            $image = (string) ($preview_image['url'] ?? '');
+            $post_type = (string) $post->post_type;
+
+            if (!empty($settings['author_date_schema'])) {
+                $author_name = sanitize_text_field((string) get_the_author_meta('display_name', (int) $post->post_author));
+                if ($author_name !== '') {
+                    $author_id = $site_url . '#rankwoven-author-' . (int) $post->post_author;
+                    $graph[] = [
+                        '@type' => 'Person',
+                        '@id' => $author_id,
+                        'name' => $author_name,
+                        'url' => esc_url_raw((string) get_author_posts_url((int) $post->post_author))
+                    ];
+                }
+            }
+        }
+
+        if (!empty($settings['content_schema']) && $post instanceof WP_Post && is_singular()) {
+            $entity_type = $post_type === 'product' ? 'Product' : ($post_type === 'page' ? 'WebPage' : 'Article');
+            $content_entity_id = $current_url . ($entity_type === 'Product' ? '#rankwoven-product' : ($entity_type === 'WebPage' ? '#rankwoven-webpage' : '#rankwoven-article'));
+            $entity = [
+                '@type' => $entity_type,
+                '@id' => $content_entity_id,
+                'url' => $current_url,
+                'name' => $title,
+                'description' => $description,
+                'isPartOf' => ['@id' => $website_id]
+            ];
+            if ($image !== '') {
+                $entity['image'] = [$image];
+            }
+            if ($author_id !== '' && $entity_type === 'Article') {
+                $entity['author'] = ['@id' => $author_id];
+            }
+            if ($entity_type === 'Article') {
+                $published_at = $this->get_post_date_value($post, false);
+                $modified_at = $this->get_post_date_value($post, true);
+                if ($published_at !== '') {
+                    $entity['datePublished'] = $published_at;
+                }
+                if ($modified_at !== '') {
+                    $entity['dateModified'] = $modified_at;
+                }
+                $entity['mainEntityOfPage'] = ['@type' => 'WebPage', '@id' => $current_url];
+            }
+            if ($entity_type === 'Product') {
+                $sku = sanitize_text_field((string) get_post_meta($post->ID, '_sku', true));
+                $price = sanitize_text_field((string) get_post_meta($post->ID, '_price', true));
+                if ($sku !== '') {
+                    $entity['sku'] = $sku;
+                }
+                if ($price !== '' && is_numeric($price)) {
+                    $offer = [
+                        '@type' => 'Offer',
+                        'url' => $current_url,
+                        'price' => (float) $price,
+                        'availability' => 'https://schema.org/' . (get_post_meta($post->ID, '_stock_status', true) === 'outofstock' ? 'OutOfStock' : 'InStock')
+                    ];
+                    $currency = sanitize_text_field((string) get_option('woocommerce_currency', ''));
+                    if ($currency !== '') {
+                        $offer['priceCurrency'] = $currency;
+                    }
+                    $entity['offers'] = $offer;
+                }
+            }
+            $graph[] = $entity;
+        }
+
+        if (!empty($settings['content_schema'])) {
+            $breadcrumb_items = [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => $site_name, 'item' => $site_url]
+            ];
+            if ($current_url !== $site_url) {
+                $breadcrumb_items[] = ['@type' => 'ListItem', 'position' => 2, 'name' => $title, 'item' => $current_url];
+            }
+            $graph[] = [
+                '@type' => 'BreadcrumbList',
+                '@id' => $current_url . '#rankwoven-breadcrumb',
+                'itemListElement' => $breadcrumb_items
+            ];
+        }
+
+        if ($graph === []) {
+            return;
+        }
+
+        echo '<script type="application/ld+json">' . wp_json_encode([
+            '@context' => 'https://schema.org',
+            '@graph' => $graph
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
     }
 
     private function render_geo_hreflang_link(string $language_code, string $url): void
@@ -2707,6 +2868,9 @@ final class RankWoven_SEO_Plugin
                 <?php $this->render_admin_metric_card(__('GEO readiness', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['overall_score']), $assessment['overall_score'] >= 80 ? 'ready' : 'warning'); ?>
                 <?php $this->render_admin_metric_card(__('AI Crawler Access', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['crawler_score']), $assessment['crawler_score'] >= 80 ? 'ready' : 'warning'); ?>
                 <?php $this->render_admin_metric_card(__('Machine Readability', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['machine_score']), $assessment['machine_score'] >= 80 ? 'ready' : 'warning'); ?>
+                <?php $this->render_admin_metric_card(__('Structured Data', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['structured_data_score']), $assessment['structured_data_score'] >= 80 ? 'ready' : 'warning'); ?>
+                <?php $this->render_admin_metric_card(__('Content & Citability', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['content_score']), $assessment['content_score'] >= 80 ? 'ready' : 'warning'); ?>
+                <?php $this->render_admin_metric_card(__('Trust & E-E-A-T', 'rankwoven-seo'), sprintf('%d/100', (int) $assessment['trust_score']), $assessment['trust_score'] >= 80 ? 'ready' : 'warning'); ?>
             </div>
 
             <div class="rankwoven-geo-assessment-grid">
@@ -2830,6 +2994,75 @@ final class RankWoven_SEO_Plugin
                     <td>
                         <textarea id="rankwoven_geo_alternate_languages" name="rankwoven_geo_settings[alternate_languages]" class="large-text code" rows="5" placeholder="en=https://example.com/en/\nzh-Hant=https://example.com/zh-hant/"><?php echo esc_textarea($this->format_geo_alternate_languages($settings['alternate_languages'])); ?></textarea>
                         <p class="description"><?php echo esc_html__('每行一組 language=URL，例如 en=https://example.com/en/；只接受 http 或 https 地址。', 'rankwoven-seo'); ?></p>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Structured Data', 'rankwoven-seo'); ?></span>
+                <h2><?php echo esc_html__('JSON-LD 與網站實體', 'rankwoven-seo'); ?></h2>
+                <p><?php echo esc_html__('用結構化資料標示網站、作者、文章與商品，提升搜尋引擎及生成式 AI 對內容來源、日期和上下文的理解。', 'rankwoven-seo'); ?></p>
+            </div>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php echo esc_html__('JSON-LD Markup', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[structured_data]" value="1" <?php checked(!empty($settings['structured_data'])); ?> />
+                            <?php echo esc_html__('輸出 JSON-LD 結構化資料', 'rankwoven-seo'); ?>
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Entity Schema', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[entity_schema]" value="1" <?php checked(!empty($settings['entity_schema'])); ?> />
+                            <?php echo esc_html__('輸出 Organization、WebSite 與 sameAs 實體資料', 'rankwoven-seo'); ?>
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Content Schema', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[content_schema]" value="1" <?php checked(!empty($settings['content_schema'])); ?> />
+                            <?php echo esc_html__('輸出 Article、WebPage、Product 和 BreadcrumbList 資料', 'rankwoven-seo'); ?>
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php echo esc_html__('Author & Date Markup', 'rankwoven-seo'); ?></th>
+                    <td>
+                        <label class="rankwoven-toggle-row">
+                            <input type="checkbox" name="rankwoven_geo_settings[author_date_schema]" value="1" <?php checked(!empty($settings['author_date_schema'])); ?> />
+                            <?php echo esc_html__('在文章結構化資料中加入作者、發佈日期與更新日期', 'rankwoven-seo'); ?>
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_organization_name"><?php echo esc_html__('Organization Name', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_geo_organization_name" name="rankwoven_geo_settings[organization_name]" type="text" class="regular-text" value="<?php echo esc_attr((string) $settings['organization_name']); ?>" />
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_organization_description"><?php echo esc_html__('Organization Description', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <textarea id="rankwoven_geo_organization_description" name="rankwoven_geo_settings[organization_description]" class="large-text" rows="3"><?php echo esc_textarea((string) $settings['organization_description']); ?></textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_organization_logo"><?php echo esc_html__('Organization Logo URL', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <input id="rankwoven_geo_organization_logo" name="rankwoven_geo_settings[organization_logo]" type="url" class="regular-text" value="<?php echo esc_attr((string) $settings['organization_logo']); ?>" placeholder="https://example.com/logo.png" />
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="rankwoven_geo_organization_same_as"><?php echo esc_html__('sameAs 社交連結', 'rankwoven-seo'); ?></label></th>
+                    <td>
+                        <textarea id="rankwoven_geo_organization_same_as" name="rankwoven_geo_settings[organization_same_as]" class="large-text code" rows="4" placeholder="https://www.linkedin.com/company/example/"><?php echo esc_textarea(implode("\n", $settings['organization_same_as'])); ?></textarea>
+                        <p class="description"><?php echo esc_html__('每行一個官方社交或品牌頁面 URL，只接受 http 或 https 地址。', 'rankwoven-seo'); ?></p>
                     </td>
                 </tr>
             </table>
@@ -5598,6 +5831,7 @@ final class RankWoven_SEO_Plugin
 
     private function get_default_geo_settings(): array
     {
+        $site_url = esc_url_raw(home_url('/'));
         return [
             'training_crawlers' => true,
             'search_crawlers' => true,
@@ -5606,8 +5840,16 @@ final class RankWoven_SEO_Plugin
             'allow_snippets' => true,
             'language_declaration' => true,
             'language_code' => $this->get_default_geo_language(),
-            'x_default_url' => esc_url_raw(home_url('/')),
-            'alternate_languages' => []
+            'x_default_url' => $site_url,
+            'alternate_languages' => [],
+            'structured_data' => true,
+            'entity_schema' => true,
+            'content_schema' => true,
+            'author_date_schema' => true,
+            'organization_name' => sanitize_text_field((string) get_bloginfo('name')),
+            'organization_description' => sanitize_textarea_field((string) get_bloginfo('description')),
+            'organization_logo' => function_exists('get_site_icon_url') ? esc_url_raw((string) get_site_icon_url(512)) : '',
+            'organization_same_as' => []
         ];
     }
 
@@ -5636,9 +5878,31 @@ final class RankWoven_SEO_Plugin
             'allow_snippets' => !empty($input['allow_snippets']),
             'language_declaration' => !empty($input['language_declaration']),
             'language_code' => $language_code !== '' ? $language_code : $defaults['language_code'],
-            'x_default_url' => $x_default_url,
-            'alternate_languages' => $this->sanitize_geo_alternate_languages($input['alternate_languages'] ?? [])
+            'x_default_url' => $x_default_url !== '' ? $x_default_url : $defaults['x_default_url'],
+            'alternate_languages' => $this->sanitize_geo_alternate_languages($input['alternate_languages'] ?? []),
+            'structured_data' => array_key_exists('structured_data', $input) ? !empty($input['structured_data']) : (bool) $defaults['structured_data'],
+            'entity_schema' => array_key_exists('entity_schema', $input) ? !empty($input['entity_schema']) : (bool) $defaults['entity_schema'],
+            'content_schema' => array_key_exists('content_schema', $input) ? !empty($input['content_schema']) : (bool) $defaults['content_schema'],
+            'author_date_schema' => array_key_exists('author_date_schema', $input) ? !empty($input['author_date_schema']) : (bool) $defaults['author_date_schema'],
+            'organization_name' => sanitize_text_field((string) ($input['organization_name'] ?? $defaults['organization_name'])),
+            'organization_description' => sanitize_textarea_field((string) ($input['organization_description'] ?? $defaults['organization_description'])),
+            'organization_logo' => $this->sanitize_geo_url($input['organization_logo'] ?? $defaults['organization_logo']),
+            'organization_same_as' => $this->sanitize_geo_social_urls($input['organization_same_as'] ?? [])
         ];
+    }
+
+    private function sanitize_geo_social_urls($value): array
+    {
+        $lines = is_array($value) ? $value : (preg_split('/\R/', (string) $value) ?: []);
+        $urls = [];
+        foreach ($lines as $line) {
+            $url = $this->sanitize_geo_url($line);
+            if ($url !== '') {
+                $urls[$url] = $url;
+            }
+        }
+
+        return array_values($urls);
     }
 
     private function sanitize_geo_language_code(string $language_code): string
@@ -5756,8 +6020,10 @@ final class RankWoven_SEO_Plugin
             ]
         ];
         $language_ready = !empty($settings['language_declaration'])
-            && (string) $settings['language_code'] !== ''
-            && (string) $settings['x_default_url'] !== '';
+            && (string) ($settings['language_code'] ?? '') !== ''
+            && (string) ($settings['x_default_url'] ?? '') !== '';
+        $llms_settings = $this->get_llms_settings();
+        $sitemap_ready = $this->get_sitemap_entries() !== [];
         $machine_checks = [
             [
                 'label' => __('Language Declaration', 'rankwoven-seo'),
@@ -5772,16 +6038,248 @@ final class RankWoven_SEO_Plugin
                 'status' => 'pass',
                 'ok' => true,
                 'description' => __('WordPress 在伺服器端輸出內容，非 JavaScript AI 爬蟲可讀取完整頁面。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Title, H1 & Description in HTML', 'rankwoven-seo'),
+                'status' => sanitize_text_field((string) get_bloginfo('name')) !== '' && sanitize_textarea_field((string) get_bloginfo('description')) !== '' ? 'pass' : 'warning',
+                'ok' => sanitize_text_field((string) get_bloginfo('name')) !== '' && sanitize_textarea_field((string) get_bloginfo('description')) !== '',
+                'description' => sanitize_text_field((string) get_bloginfo('name')) !== '' && sanitize_textarea_field((string) get_bloginfo('description')) !== ''
+                    ? __('網站標題、H1 和描述具備伺服器端 HTML 來源。', 'rankwoven-seo')
+                    : __('請確保網站標題與描述已設定，並在頁面 HTML 中提供清晰 H1。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('llms.txt', 'rankwoven-seo'),
+                'status' => !empty($llms_settings['enabled']) ? 'pass' : 'warning',
+                'ok' => !empty($llms_settings['enabled']),
+                'description' => !empty($llms_settings['enabled'])
+                    ? __('已啟用 llms.txt，AI 系統可取得整理後的公開內容索引。', 'rankwoven-seo')
+                    : __('建議啟用 llms.txt，提供 AI 系統可讀的內容入口。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('XML Sitemap', 'rankwoven-seo'),
+                'status' => $sitemap_ready ? 'pass' : 'warning',
+                'ok' => $sitemap_ready,
+                'description' => $sitemap_ready
+                    ? __('Sitemap 已包含首頁及已發佈內容，方便 AI 爬蟲發現頁面。', 'rankwoven-seo')
+                    : __('尚未建立可供抓取的 Sitemap 項目。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Canonical URL', 'rankwoven-seo'),
+                'status' => 'pass',
+                'ok' => true,
+                'description' => __('前台輸出自我指向 canonical URL，降低重複頁面引用風險。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('URL Structure', 'rankwoven-seo'),
+                'status' => $this->is_pretty_permalink_structure() ? 'pass' : 'warning',
+                'ok' => $this->is_pretty_permalink_structure(),
+                'description' => $this->is_pretty_permalink_structure()
+                    ? __('網站使用穩定、可讀的永久連結結構。', 'rankwoven-seo')
+                    : __('建議使用可讀的永久連結，避免以查詢參數作為主要內容 URL。', 'rankwoven-seo')
             ]
         ];
 
-        $crawler_score = (int) round((count(array_filter($crawler_checks, static fn (array $check): bool => $check['ok'])) / count($crawler_checks)) * 100);
-        $machine_score = (int) round((count(array_filter($machine_checks, static fn (array $check): bool => $check['ok'])) / count($machine_checks)) * 100);
+        $assessment_post = $this->get_geo_assessment_post();
+        $content_html = $assessment_post instanceof WP_Post ? $this->get_llms_rendered_content($assessment_post) : '';
+        $plain_content = $assessment_post instanceof WP_Post ? $this->get_llms_plain_text_content($assessment_post) : '';
+        $content_units = $plain_content !== '' ? $this->get_editor_seo_text_units($plain_content) : 0;
+        preg_match_all('/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/i', $content_html, $heading_matches);
+        $heading_levels = array_map('intval', $heading_matches[1] ?? []);
+        $heading_titles = array_map(static fn ($heading): string => trim(wp_strip_all_tags((string) $heading)), $heading_matches[2] ?? []);
+        $h1_count = count(array_filter($heading_levels, static fn (int $level): bool => $level === 1));
+        $heading_jump = false;
+        $previous_level = 0;
+        foreach ($heading_levels as $level) {
+            if ($previous_level > 0 && $level > $previous_level + 1) {
+                $heading_jump = true;
+                break;
+            }
+            $previous_level = $level;
+        }
+        $first_paragraph = '';
+        if (preg_match('/<p\b[^>]*>([\s\S]*?)<\/p>/i', $content_html, $paragraph_match) === 1) {
+            $first_paragraph = trim(wp_strip_all_tags((string) $paragraph_match[1]));
+        }
+        $question_heading_count = count(array_filter($heading_titles, static function (string $heading): bool {
+            return preg_match('/[?？]$|^(?:what|why|how|when|where|who|which|是否|如何|為什麼|什麼|怎樣|何時|哪個)\b/iu', $heading) === 1;
+        }));
+        $has_list_or_table = preg_match('/<(?:ul|ol|table)\b/i', $content_html) === 1;
+        $has_statistics = preg_match('/(?:\b\d+(?:\.\d+)?\s*%|\b\d{2,}\b|\$\s*\d+)/u', $plain_content) === 1;
+        $site_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $outbound_links = 0;
+        if (preg_match_all('/<a\b[^>]*\bhref\s*=\s*["\']([^"\']+)["\']/i', $content_html, $link_matches)) {
+            foreach ($link_matches[1] as $href) {
+                $host = strtolower((string) wp_parse_url(html_entity_decode((string) $href, ENT_QUOTES | ENT_HTML5, 'UTF-8'), PHP_URL_HOST));
+                if ($host !== '' && $host !== $site_host && !str_ends_with($host, '.' . $site_host)) {
+                    $outbound_links++;
+                }
+            }
+        }
+        $section_lengths = [];
+        if ($heading_levels !== []) {
+            $sections = preg_split('/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/i', $content_html) ?: [];
+            foreach ($sections as $section) {
+                $section_lengths[] = $this->get_editor_seo_text_units(wp_strip_all_tags((string) $section));
+            }
+        }
+        $average_section_length = $section_lengths !== [] ? (int) round(array_sum($section_lengths) / count($section_lengths)) : 0;
+        $content_checks = [
+            [
+                'label' => __('Heading Hierarchy', 'rankwoven-seo'),
+                'status' => $heading_levels !== [] && !$heading_jump ? 'pass' : 'warning',
+                'ok' => $heading_levels !== [] && !$heading_jump,
+                'description' => $heading_levels !== [] && !$heading_jump
+                    ? __('標題層級按順序排列，便於 AI 擷取章節上下文。', 'rankwoven-seo')
+                    : __('標題層級存在跳級或沒有標題，建議按 H1、H2、H3 順序整理。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Answer-First Structure', 'rankwoven-seo'),
+                'status' => $first_paragraph !== '' && $this->get_editor_seo_text_units($first_paragraph) <= 320 ? 'pass' : 'warning',
+                'ok' => $first_paragraph !== '' && $this->get_editor_seo_text_units($first_paragraph) <= 320,
+                'description' => $first_paragraph !== '' && $this->get_editor_seo_text_units($first_paragraph) <= 320
+                    ? __('首段提供短而直接的答案，適合生成式搜尋擷取。', 'rankwoven-seo')
+                    : __('建議在首段用一至兩句直接回答頁面主題。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('H1 Heading', 'rankwoven-seo'),
+                'status' => $h1_count === 1 ? 'pass' : 'warning',
+                'ok' => $h1_count === 1,
+                'description' => $h1_count === 1 ? __('頁面有且只有一個 H1。', 'rankwoven-seo') : sprintf(__('目前偵測到 %d 個 H1，建議保留一個清晰主標題。', 'rankwoven-seo'), $h1_count)
+            ],
+            [
+                'label' => __('Question-Style Headings', 'rankwoven-seo'),
+                'status' => $question_heading_count > 0 ? 'pass' : 'warning',
+                'ok' => $question_heading_count > 0,
+                'description' => $question_heading_count > 0 ? sprintf(__('偵測到 %d 個問題式標題，可對應使用者查詢。', 'rankwoven-seo'), $question_heading_count) : __('建議加入問題式 H2／H3，讓 AI 更容易匹配查詢意圖。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Lists & Tables', 'rankwoven-seo'),
+                'status' => $has_list_or_table ? 'pass' : 'warning',
+                'ok' => $has_list_or_table,
+                'description' => $has_list_or_table ? __('內容包含清單或表格，方便 AI 讀取結構化資訊。', 'rankwoven-seo') : __('建議用清單或表格整理步驟、比較和重點。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Statistics & Data Points', 'rankwoven-seo'),
+                'status' => $has_statistics ? 'pass' : 'warning',
+                'ok' => $has_statistics,
+                'description' => $has_statistics ? __('內容包含可驗證的數字或統計資料。', 'rankwoven-seo') : __('加入來源清楚的數字、比例或日期，可提高內容可引用性。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Citations & Quotations', 'rankwoven-seo'),
+                'status' => $outbound_links > 0 || preg_match('/<blockquote\b/i', $content_html) === 1 ? 'pass' : 'warning',
+                'ok' => $outbound_links > 0 || preg_match('/<blockquote\b/i', $content_html) === 1,
+                'description' => $outbound_links > 0 || preg_match('/<blockquote\b/i', $content_html) === 1 ? __('內容包含外部引用連結或引文。', 'rankwoven-seo') : __('建議加入權威外部來源或標示引文出處。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Content Depth', 'rankwoven-seo'),
+                'status' => $content_units >= 300 && $content_units <= 3000 ? 'pass' : 'warning',
+                'ok' => $content_units >= 300 && $content_units <= 3000,
+                'description' => $content_units >= 300 && $content_units <= 3000 ? sprintf(__('可引用正文約 %d 個文字單位，深度適中。', 'rankwoven-seo'), $content_units) : sprintf(__('目前正文約 %d 個文字單位，建議維持 300 至 3,000 個單位。', 'rankwoven-seo'), $content_units)
+            ],
+            [
+                'label' => __('Section Sizing', 'rankwoven-seo'),
+                'status' => $average_section_length > 0 && $average_section_length <= 400 ? 'pass' : 'warning',
+                'ok' => $average_section_length > 0 && $average_section_length <= 400,
+                'description' => $average_section_length > 0 && $average_section_length <= 400 ? __('各章節長度適合分段擷取。', 'rankwoven-seo') : __('建議以短章節和清晰子標題分割長段落。', 'rankwoven-seo')
+            ]
+        ];
+        $about_contact_ready = $this->has_geo_public_page(['about', '關於']) && $this->has_geo_public_page(['contact', '聯絡']);
+        $privacy_terms_ready = $this->has_geo_public_page(['privacy', '私隱', '隱私']) && $this->has_geo_public_page(['terms', '條款']);
+        $trust_checks = [
+            [
+                'label' => __('Author Signals', 'rankwoven-seo'),
+                'status' => $assessment_post instanceof WP_Post && get_the_author_meta('display_name', (int) $assessment_post->post_author) !== '' ? 'pass' : 'warning',
+                'ok' => $assessment_post instanceof WP_Post && get_the_author_meta('display_name', (int) $assessment_post->post_author) !== '',
+                'description' => $assessment_post instanceof WP_Post ? __('內容有可識別作者，可在 JSON-LD 中建立 Person 實體。', 'rankwoven-seo') : __('發佈文章後加入作者名稱，建立可追溯的內容來源。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Freshness Signals', 'rankwoven-seo'),
+                'status' => $assessment_post instanceof WP_Post && $this->get_post_date_value($assessment_post, false) !== '' ? 'pass' : 'warning',
+                'ok' => $assessment_post instanceof WP_Post && $this->get_post_date_value($assessment_post, false) !== '',
+                'description' => $assessment_post instanceof WP_Post ? __('內容具備 datePublished 和 dateModified，可傳達更新時效。', 'rankwoven-seo') : __('發佈內容後會自動加入機器可讀日期。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('About & Contact', 'rankwoven-seo'),
+                'status' => $about_contact_ready ? 'pass' : 'warning',
+                'ok' => $about_contact_ready,
+                'description' => $about_contact_ready ? __('網站提供 About 與 Contact 公開入口。', 'rankwoven-seo') : __('建議在導覽或頁尾加入 About 與 Contact 頁面。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Brand Consistency', 'rankwoven-seo'),
+                'status' => (string) ($settings['organization_name'] ?? '') !== '' && (string) ($settings['organization_name'] ?? '') === sanitize_text_field((string) get_bloginfo('name')) ? 'pass' : 'warning',
+                'ok' => (string) ($settings['organization_name'] ?? '') !== '' && (string) ($settings['organization_name'] ?? '') === sanitize_text_field((string) get_bloginfo('name')),
+                'description' => __('Organization、網站標題和 Open Graph 會使用同一品牌名稱。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Privacy & Terms', 'rankwoven-seo'),
+                'status' => $privacy_terms_ready ? 'pass' : 'warning',
+                'ok' => $privacy_terms_ready,
+                'description' => $privacy_terms_ready ? __('網站提供 Privacy 與 Terms 公開入口。', 'rankwoven-seo') : __('建議在頁尾同時連結 Privacy 和 Terms，補足信任訊號。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('HTTPS', 'rankwoven-seo'),
+                'status' => strtolower((string) wp_parse_url(home_url('/'), PHP_URL_SCHEME)) === 'https' ? 'pass' : 'warning',
+                'ok' => strtolower((string) wp_parse_url(home_url('/'), PHP_URL_SCHEME)) === 'https',
+                'description' => strtolower((string) wp_parse_url(home_url('/'), PHP_URL_SCHEME)) === 'https' ? __('網站使用 HTTPS 傳輸。', 'rankwoven-seo') : __('正式網站應使用 HTTPS，保障使用者和爬蟲連線。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Social & OG Metadata', 'rankwoven-seo'),
+                'status' => sanitize_text_field((string) get_bloginfo('name')) !== '' && sanitize_textarea_field((string) get_bloginfo('description')) !== '' ? 'pass' : 'warning',
+                'ok' => sanitize_text_field((string) get_bloginfo('name')) !== '' && sanitize_textarea_field((string) get_bloginfo('description')) !== '',
+                'description' => sanitize_text_field((string) get_bloginfo('name')) !== '' && sanitize_textarea_field((string) get_bloginfo('description')) !== ''
+                    ? __('前台會輸出 Open Graph 和 Twitter Card 標籤，保持社交分享與 AI 預覽一致。', 'rankwoven-seo')
+                    : __('請設定網站名稱和描述，確保 Open Graph／Twitter Card 有完整內容。', 'rankwoven-seo')
+            ]
+        ];
+
+        $structured_data_checks = [
+            [
+                'label' => __('JSON-LD Markup', 'rankwoven-seo'),
+                'status' => !empty($settings['structured_data']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['structured_data']),
+                'description' => !empty($settings['structured_data']) ? __('前台會輸出 JSON-LD 結構化資料。', 'rankwoven-seo') : __('啟用 JSON-LD，讓 AI 引擎理解頁面實體和事實。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Entity Schema', 'rankwoven-seo'),
+                'status' => !empty($settings['structured_data']) && !empty($settings['entity_schema']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['structured_data']) && !empty($settings['entity_schema']),
+                'description' => __('Organization、Person 和 WebSite schema 錨定品牌與作者實體。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Content Schema', 'rankwoven-seo'),
+                'status' => !empty($settings['structured_data']) && !empty($settings['content_schema']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['structured_data']) && !empty($settings['content_schema']),
+                'description' => __('Article、WebPage、Product 和 BreadcrumbList schema 提供內容上下文。', 'rankwoven-seo')
+            ],
+            [
+                'label' => __('Author & Date Markup', 'rankwoven-seo'),
+                'status' => !empty($settings['structured_data']) && !empty($settings['author_date_schema']) ? 'pass' : 'warning',
+                'ok' => !empty($settings['structured_data']) && !empty($settings['author_date_schema']),
+                'description' => __('作者、datePublished 和 dateModified 可提升引用可信度。', 'rankwoven-seo')
+            ]
+        ];
+
+        $score_group = static function (array $checks): int {
+            if ($checks === []) {
+                return 0;
+            }
+
+            $passed = count(array_filter($checks, static fn (array $check): bool => !empty($check['ok'])));
+            return (int) round(($passed / count($checks)) * 100);
+        };
+        $crawler_score = $score_group($crawler_checks);
+        $machine_score = $score_group($machine_checks);
+        $structured_data_score = $score_group($structured_data_checks);
+        $content_score = $score_group($content_checks);
+        $trust_score = $score_group($trust_checks);
 
         return [
             'crawler_score' => $crawler_score,
             'machine_score' => $machine_score,
-            'overall_score' => (int) round(($crawler_score + $machine_score) / 2),
+            'structured_data_score' => $structured_data_score,
+            'content_score' => $content_score,
+            'trust_score' => $trust_score,
+            'overall_score' => (int) round(($crawler_score + $machine_score + $structured_data_score + $content_score + $trust_score) / 5),
             'groups' => [
                 [
                     'title' => __('AI Crawler Access', 'rankwoven-seo'),
@@ -5792,9 +6290,57 @@ final class RankWoven_SEO_Plugin
                     'title' => __('Machine Readability', 'rankwoven-seo'),
                     'score' => $machine_score,
                     'checks' => $machine_checks
+                ],
+                [
+                    'title' => __('Structured Data', 'rankwoven-seo'),
+                    'score' => $structured_data_score,
+                    'checks' => $structured_data_checks
+                ],
+                [
+                    'title' => __('Content & Citability', 'rankwoven-seo'),
+                    'score' => $content_score,
+                    'checks' => $content_checks
+                ],
+                [
+                    'title' => __('Trust & E-E-A-T', 'rankwoven-seo'),
+                    'score' => $trust_score,
+                    'checks' => $trust_checks
                 ]
             ]
         ];
+    }
+
+    private function get_geo_assessment_post(): ?WP_Post
+    {
+        $posts = get_posts([
+            'post_type' => $this->get_supported_editor_post_types(),
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'orderby' => 'modified',
+            'order' => 'DESC',
+            'no_found_rows' => true,
+            'ignore_sticky_posts' => true
+        ]);
+
+        return isset($posts[0]) && $posts[0] instanceof WP_Post ? $posts[0] : null;
+    }
+
+    private function has_geo_public_page(array $slugs): bool
+    {
+        foreach ($slugs as $slug) {
+            $page = get_page_by_path(sanitize_title((string) $slug), OBJECT, 'page');
+            if ($page instanceof WP_Post && $page->post_status === 'publish') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function is_pretty_permalink_structure(): bool
+    {
+        $structure = (string) get_option('permalink_structure', '');
+        return $structure !== '' && strpos($structure, '?') === false;
     }
 
     private function get_default_llms_settings(): array
