@@ -2,13 +2,15 @@
 
 WordPress 外掛：連接 RankWoven SaaS，同步文章／頁面／作品／商品與圖片媒體，並在後台管理搜尋外觀、Sitemap、SEO 分析與圖片屬性。
 
-目前版本為 **0.6.0**。自 **0.2.0** 起，原 `webp-image-optimizer` 的功能已合併進來。
+目前版本為 **0.7.0**。自 **0.2.0** 起，原 `webp-image-optimizer` 的功能已合併進來。
 
 ## SEO 評分與 GEO 優化
 
 文章、頁面、Portfolio 與 WooCommerce 商品編輯器會顯示 19 項 SEO 檢查，按 100 分權重計算，並分為 Problems、Warnings、Success 三組。評分會檢查關鍵詞、標題與描述長度、Slug、正文長度與密度、首段、連結、圖片 Alt Text、段落與句子可讀性、子標題分佈，以及關鍵詞重複使用；商品特色圖與圖片庫亦會納入分析。
 
 「GEO 優化」分頁提供 AI 爬蟲存取、索引與摘要控制，以及 BCP 47 語言聲明、替代語言和 `x-default` hreflang 設定。啟用後會同步輸出 GEO robots 規則與前台 robots meta，協助搜尋引擎及生成式 AI 正確抓取和引用內容。
+
+GEO 設定亦包含可獨立關閉的 JSON-LD、Entity Schema、Content Schema 及 Author & Date Markup。前台會按頁面類型輸出 Organization、WebSite、Person、Article、WebPage、Product 和 BreadcrumbList；Organization 名稱、描述、Logo 與 `sameAs` 社交連結可在後台調整。GEO readiness 現以 AI Crawler Access、Machine Readability、Structured Data、Content & Citability 和 Trust & E-E-A-T 五組評分，並檢查標題層級、首段答案、引用、內容深度、作者日期、法律頁面和 HTTPS 等訊號。`x-default` 留空時會自動回退到網站首頁。
 
 ## 圖片優化（合併自 WebP Image Optimizer）
 
@@ -74,3 +76,13 @@ WordPress 外掛：連接 RankWoven SaaS，同步文章／頁面／作品／商�
 - **會話目的**：將插件同步至 `0.6.0` SEO 評分與 GEO 優化版本，同時保留圖片優化及公開文件純文字輸出。
 - **完成任務**：恢復 19 項 SEO 檢查與 100 分權重清單、GEO 爬蟲與 hreflang 設定、搜尋引擎 Sitemap 提交入口；合併 WebP／AVIF 圖片優化模組及編輯器評分樣式。
 - **驗證**：PHP parser、JavaScript 語法、`npm run lint`、`npm run test` 和 `npm run build` 均通過；本機沒有 PHP CLI，未執行原生 `php -l`。
+
+### 2026-08-31：完善 GEO 結構化資料與審計
+
+- **會話目的**：根據 GEO 審計缺口，補齊結構化資料、可引用內容和 E-E-A-T 設定。
+- **完成任務**：新增 JSON-LD 圖譜輸出（Organization、WebSite、Person、Article、WebPage、Product、BreadcrumbList）；新增 Organization 名稱、描述、Logo、`sameAs` 及四項結構化資料開關；`x-default` 空值回退首頁；GEO 評分擴展為五組並加入標題層級、首段答案、問題式標題、清單／表格、統計數據、引用、內容深度、作者、日期、品牌一致性、法律頁面和 HTTPS 檢查。
+- **關鍵決策**：保留所有設定可獨立停用；商品 Schema 只在存在 `_price`／`_sku` 時輸出對應欄位；內容評估取最近更新的公開內容作為站點代表樣本，避免載入全部文章。
+- **技術棧**：WordPress Hooks、PHP 8、Schema.org JSON-LD、`get_posts`／`get_page_by_path`。
+- **修改文件**：`rankwoven-seo/rankwoven-seo.php`、本 README。
+- **驗證結果**：測試站 Docker WordPress PHP 8.2 parser 通過；JavaScript 語法與 `git diff --check` 通過。尚未執行完整 npm lint／test／build。
+- **下一步行動**：在測試站後台保存 GEO 設定，逐頁檢查 JSON-LD，並用 Rich Results Test／Search Console 驗證 Schema。
