@@ -20,6 +20,7 @@
   const metaDescriptionInput = root.querySelector('#rankwoven_meta_description');
   const metaKeywordsInput = root.querySelector('#rankwoven_meta_keywords');
   const analysisInput = root.querySelector('#rankwoven_seo_analysis');
+  const scoreChecksRoot = root.querySelector('[data-rankwoven-seo-checks]');
 
   function setStatus(message, isError) {
     if (!statusEl) {
@@ -200,6 +201,51 @@
     }
   }
 
+  function renderScoreChecks(scoreChecks) {
+    if (!scoreChecksRoot || !Array.isArray(scoreChecks)) {
+      return;
+    }
+
+    const groupLabels = config.scoreGroupLabels || {
+      fail: 'Problems',
+      warning: 'Warnings',
+      pass: 'Success'
+    };
+    scoreChecksRoot.replaceChildren();
+
+    ['fail', 'warning', 'pass'].forEach((status) => {
+      const group = document.createElement('section');
+      group.className = 'rankwoven-editor-seo-check-group';
+      group.dataset.rankwovenScoreGroup = status;
+
+      const heading = document.createElement('h3');
+      heading.textContent = groupLabels[status] || status;
+      group.appendChild(heading);
+
+      const list = document.createElement('ul');
+      scoreChecks
+        .filter((check) => check && check.status === status)
+        .forEach((check) => {
+          const item = document.createElement('li');
+          const dot = document.createElement('span');
+          dot.className = 'rankwoven-editor-seo-check-dot';
+          dot.setAttribute('aria-hidden', 'true');
+
+          const content = document.createElement('div');
+          const label = document.createElement('strong');
+          label.textContent = String(check.label || '');
+          const message = document.createElement('span');
+          message.textContent = String(check.message || '');
+          content.append(label, message);
+          item.append(dot, content);
+          list.appendChild(item);
+        });
+
+      group.appendChild(list);
+      scoreChecksRoot.appendChild(group);
+    });
+  }
+
   function bindEditorMetaSync(field) {
     if (!field || typeof field.addEventListener !== 'function') {
       return;
@@ -228,6 +274,7 @@
     if (analysisInput) {
       analysisInput.value = data.analysis || '';
     }
+    renderScoreChecks(data.scoreChecks);
 
     if (window.wp && wp.data && typeof wp.data.dispatch === 'function') {
       try {

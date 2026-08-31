@@ -1,0 +1,83 @@
+.rankwoven-editor-seo-metabox {
+  --rankwoven-score-problem: #d63638;
+  --rankwoven-score-warning: #dba617;
+  --rankwoven-score-success: #00a32a;
+  --rankwoven-score-border: #dcdcde;
+  --rankwoven-score-muted: #646970;
+}
+
+.rankwoven-editor-seo-checks {
+  display: grid;
+  gap: 18px;
+  margin: 22px 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--rankwoven-score-border);
+}
+
+.rankwoven-editor-seo-check-group h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.rankwoven-editor-seo-check-group ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rankwoven-editor-seo-check-group li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 0;
+}
+
+.rankwoven-editor-seo-check-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--rankwoven-score-muted);
+}
+
+.rankwoven-editor-seo-check-group[data-rankwoven-score-group='fail'] .rankwoven-editor-seo-check-dot {
+  background: var(--rankwoven-score-problem);
+}
+
+.rankwoven-editor-seo-check-group[data-rankwoven-score-group='warning'] .rankwoven-editor-seo-check-dot {
+  background: var(--rankwoven-score-warning);
+}
+
+.rankwoven-editor-seo-check-group[data-rankwoven-score-group='pass'] .rankwoven-editor-seo-check-dot {
+  background: var(--rankwoven-score-success);
+}
+
+.rankwoven-editor-seo-check-group li div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rankwoven-editor-seo-check-group li strong,
+.rankwoven-editor-seo-check-group li span {
+  overflow-wrap: anywhere;
+}
+
+.rankwoven-editor-seo-check-group li strong {
+  color: #1d2327;
+}
+
+.rankwoven-editor-seo-check-group li div > span {
+  color: var(--rankwoven-score-muted);
+  line-height: 1.55;
+}
+
+@media (min-width: 960px) {
+  .rankwoven-editor-seo-checks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
