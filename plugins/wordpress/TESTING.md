@@ -54,6 +54,9 @@ cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwoven-
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.js" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.js"
 
+cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.css" \
+   "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.css"
+
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/admin.css" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/admin.css"
 ```
@@ -86,7 +89,7 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 ### 1. 啟用與基礎設定
 
 - [ ] 後台 `Plugins` 頁能看到並啟用 `RankWoven SEO`，無 PHP 警告或白屏。
-- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
+- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`GEO 優化`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
 - [ ] `RankWoven SEO` 後台頁載入卡片化 UI：頂部 hero、連線狀態 pill、圓角 tabs、儀表板指標卡與快速操作按鈕樣式正常。
 - [ ] 插件主容器會自動鋪滿 WordPress 後台可用寬度；各頁列表、表單和設定卡會按內容區自適應，桌面寬螢幕不應留下大面積空白，小螢幕長文字可換行不撐破版面。
 - [ ] `Settings -> RankWoven SEO` 舊入口仍可打開並導向一般設定頁。
@@ -167,6 +170,12 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 輸入 `Focus keyphrase` 後，點擊 `Generate & Apply SEO` 能生成並套用 SEO title、Slug 和 Meta description。
 - [ ] 無論 AI 回傳、手動輸入或 WordPress 原有 slug 是否包含中文、URL encode、數字、空格或連字號，保存後 Slug 都只包含英文小寫字母與下劃線，例如 `wordpress_seo_settings`。
 - [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
+- [ ] 文章、頁面和商品使用相同的 19 項檢查，總權重為 100；面板按紅色 `Problems`、黃色 `Warnings`、綠色 `Success` 分組顯示每項名稱與說明。
+- [ ] 檢查清單包含 Focus keyphrase、SEO title width、Keyphrase in SEO title、Meta description length、Keyphrase in meta description、Keyphrase in slug、Text length、Keyphrase density 和 Keyphrase in introduction。
+- [ ] 檢查清單包含 Outbound links、Internal links、Images、Image keyphrase、Consecutive sentences、Subheading distribution、Paragraph length、Passive voice、Sentence length 和 Previously used keyphrase。
+- [ ] 中文正文能按中文字元計算 Text length 和 Keyphrase density，不會因 `str_word_count()` 返回 0 而被誤判為空內容。
+- [ ] 本站相對 URL／同網域 URL 計入 Internal links，其他網域計入 Outbound links；`mailto:`、`tel:`、錨點和 `javascript:` 不計分。
+- [ ] 圖片 Alt Text 包含 Focus keyphrase 時更新 Image keyphrase 統計；在其他文章、頁面或商品使用相同 Focus keyphrase 時，Previously used keyphrase 顯示警告。
 - [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
 - [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。
 - [ ] 直接點擊 WordPress 原生 `Update` / `Publish` 後重新打開編輯頁，Keywords 仍能正確回顯。
@@ -185,12 +194,48 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 單篇文章若已保存自己的 SEO title / Meta description / Keywords，仍優先使用單篇值，不會被內容類型預設蓋掉。
 - [ ] 未保存單篇 SEO 欄位時，前台 `<head>` 會使用對應內容類型的預設模板輸出 meta。
 
-### 11. Sitemap 與 Google 提交
+### 11. Sitemap、RSS Sitemap 與 Google 提交
 
 - [ ] `RankWoven SEO -> 網站地圖` 頁籤可正常顯示 `sitemap.xml` URL 和最近生成 / 提交狀態。
 - [ ] 點擊 `Generate sitemap.xml` 後，`/sitemap.xml` 可在前台直接開啟，且 XML 內容包含已發佈的 Posts、Pages、Portfolio 和 Products。
 - [ ] 點擊 `Submit to Google` 後，插件會調用 SaaS 後端 `POST /api/v1/site-connections/:siteId/search-console/sitemaps`，並使用 Google Search Console API 提交 `sitemap.xml`。
-- [ ] `robots.txt` 動態輸出包含 `Sitemap: <URL>` 行。
+- [ ] `網站地圖` 頁籤顯示 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 的 Sitemap／站長工具連結。
+- [ ] 每個搜尋引擎連結會在新分頁開啟並帶有 `noopener noreferrer`；Google 連結帶入本站屬性，Brave 連結帶入當前 `sitemap.xml` URL。
+- [ ] 沒有獨立 Sitemap 提交工具的搜尋引擎，卡片會顯示透過 Bing、robots.txt 或官方收錄入口發現內容的說明，不誤標為直接提交。
+- [ ] `網站地圖` 頁籤的 `RSS Sitemap` 區塊可顯示 `/sitemap.rss` URL、啟用開關、貼文數量和 Post Types。
+- [ ] 啟用 RSS Sitemap 後，`/sitemap.rss` 返回 `application/rss+xml` 和合法 RSS 2.0，包含最新已發佈內容的標題、連結、發佈時間、摘要和正文。
+- [ ] 在瀏覽器開啟 `/sitemap.rss` 時會套用 `assets/rss-sitemap.xsl`，顯示藍色可點擊文章標題、發佈時間、摘要、縮略圖／站點圖標和分隔線。
+- [ ] RSS 項目順序與 Sitemap／現有文章的 `modified DESC` 順序一致；XSL 不會自行排序。
+- [ ] RSS 的 `description`、`content:encoded` 不含 HTML、Script／Style、`[vc_row]`、`[vc_column]`、`font_container` 等代碼。
+- [ ] 修改帖子數量和 Post Types 後，RSS Sitemap 只返回指定數量及類型；草稿、私密文章和附件不會出現。
+- [ ] 關閉 RSS Sitemap 後，插件不會接管 `/sitemap.rss`；如網站有實體同名文件，應確認主機文件優先級。
+- [ ] `網站地圖` 頁籤可手動輸入並保存 `robots.txt` 內容，例如 `User-agent: *`、`Disallow: /private/`。
+- [ ] 保存後打開 `/robots.txt`，內容包含手動輸入的 robots 指令，並自動保留 `Sitemap: <URL>` 行。
+- [ ] 清空 `robots.txt` textarea 並保存後，`/robots.txt` 恢復 WordPress 預設輸出，同時仍包含 `Sitemap: <URL>` 行。
+- [ ] 啟用 AIOSEO 等也會管理 robots 的插件時，RankWoven 的手動 `robots.txt` 內容和 `Sitemap:` 行仍出現在最終輸出。
+- [ ] 若網站根目錄存在實體 `robots.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
+
+### 12. LLMs.txt
+
+- [ ] `RankWoven SEO -> LLMs.txt` 頁籤可正常顯示 `llms.txt`、`llms-full.txt` URL 和開關狀態。
+- [ ] 預設設定全部關閉；未啟用時訪問 `/llms.txt` 和 `/llms-full.txt` 不會被插件接管。
+- [ ] 啟用 `llms.txt` 後，前台輸出純文字 Markdown，包含網站標題、描述、已發佈文章連結和公開分類項連結。
+- [ ] 啟用 `llms-full.txt` 後，文件包含已選文章的正文；只啟用 `llms-full.txt` 而未啟用主開關時不輸出。
+- [ ] `post_types`、`taxonomies`、每種 URL 上限、排除文章 ID 和排除分類項 ID 保存後會影響輸出；草稿、私密文章、附件和排除項不會出現。
+- [ ] 啟用 Markdown 轉換後，公開文章固定連結追加 `.md` 可返回 `text/markdown`，正文中的標題、連結、圖片和列表能轉換為基本 Markdown。
+- [ ] `llms.txt`、`llms-full.txt` 和 `.md` 輸出不含 HTML、Script／Style 或 WordPress／Visual Composer shortcode 及樣式屬性，只保留可讀文字／Markdown 文字。
+- [ ] 每篇文章的 `URL` 與摘要內容來自同一篇文章；不應出現跨文章重複的「內容目錄／Toggle」摘要。
+- [ ] 關閉 Markdown 轉換或排除文章後，對應 `.md` 地址不會被插件輸出內容。
+- [ ] 若網站根目錄存在實體 `llms.txt` 或 `llms-full.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
+
+### 13. GEO 優化
+
+- [ ] `RankWoven SEO -> GEO 優化` 顯示 GEO readiness、`AI Crawler Access` 和 `Machine Readability` 動態分數。
+- [ ] 三組 AI 爬蟲開關保存後，`/robots.txt` 會對應輸出 `Allow: /` 或 `Disallow: /`，並包含 GPTBot、OAI-SearchBot 和 ChatGPT-User 等 User-agent。
+- [ ] 關閉 `Indexability` 後，前台 `<head>` 輸出 `meta name="robots" content="noindex, nofollow"`；重新開啟後該標籤不再輸出。
+- [ ] 關閉 `Snippet Controls` 後，前台 `<head>` 輸出 `nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
+- [ ] 啟用 `Language Declaration` 並保存 `x-default URL` 後，前台 `<head>` 包含當前語言與 `hreflang="x-default"`；無效 URL 會被忽略，無效語言代碼會回退到 WordPress 網站語言。
+- [ ] `GEO 優化` 和 `診斷` 頁不顯示任何 Site Token、Application Password 或其他敏感憑據。
 
 ## 回歸重點
 
@@ -206,7 +251,9 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | 內部連結生成 / 多選套用 | 清單 3、7、8 |
 | 前台 SEO meta 輸出 | 清單 9 |
 | 內容類型 Meta 預設 | 清單 10 |
-| Sitemap 與 Google 提交 | 清單 11 |
+| Sitemap、RSS Sitemap 與 Google 提交 | 清單 11 |
+| LLMs.txt 與 Markdown 輸出 | 清單 12 |
+| GEO 優化設定與前台控制 | 清單 13 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯

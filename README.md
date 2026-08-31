@@ -3370,3 +3370,339 @@ Vue 3、TypeScript、Vue Router、Vue I18n、Vitest、Schema.org BlogPosting。
 - 修正前確定性回歸測試失敗，實際取得 `targetCmsId: '904'`；修正後同一命令通過並正確對文章 `404` 執行批准與套用。
 - 強制媒體優先排序的回歸測試連續 20/20 次通過；`npm run lint`、`npm run test`（API 43 passed／4 skipped、Web 8 passed、Worker 4 passed、共享包 8 passed）、`npm run build`、`npm run security:audit` 和 `git diff --check` 均通過。
 - 推送 `main` 後確認新的 Production Deploy workflow，並在 workflow 完成後檢查公開 API health。
+
+## 會話總結（2026-08-29）— WordPress LLMs.txt 設定
+
+### 會話主要目的
+
+為 `rankwoven-seo` WordPress 插件加入可控的 `llms.txt` 內容輸出與 Markdown 文章地址，參考常見 SEO 插件的設定方式。
+
+### 完成的主要任務
+
+- 新增 `LLMs.txt` 後台分頁和 nonce 保護的設定保存流程。
+- 新增 `llms.txt`、`llms-full.txt` 動態純文字輸出，以及可選的文章 `.md` Markdown 輸出。
+- 支援標題／描述模板、公開文章類型和分類法選擇、每種 URL 上限、排除文章 ID 和排除分類項 ID。
+- 僅讀取已發佈且可公開訪問的內容，並對正文 HTML 做基本 Markdown 轉換。
+- 偵測網站根目錄實體 `llms.txt` 文件並在後台提示其可能覆蓋動態輸出。
+
+### 關鍵決策和解決方案
+
+- 所有 LLMs.txt 開關預設關閉，避免升級插件後意外公開內容。
+- `llms-full.txt` 和 `.md` 都要求主 `llms.txt` 開關啟用；未啟用時不接管 WordPress 路由。
+- 文章和分類法範圍沿用 WordPress 公開／可查詢設定，排除附件等非內容類型；輸出不包含任何插件憑據或環境設定。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、`get_posts`／`get_terms`、純文字 Markdown。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證與下一步
+
+- Docker PHP 8.2 `php -l` 已通過；本機未安裝 PHP CLI。
+- 測試站已同步插件源文件；站點根目錄現有實體 `llms.txt`，因此動態輸出需先移除或更新該文件後再做完整前台驗證。
+- 尚未提交、推送 GitHub 或部署；下一步應先完成 WordPress 後台和三個公開地址的手動冒煙測試，再按授權提交。
+
+## 會話總結（2026-08-30）— 將 LLMs.txt 移入網站地圖並新增 RSS Sitemap
+
+### 會話主要目的
+
+依據後台 Sitemap 設定頁的使用方式，將 LLMs.txt 設定集中到「網站地圖」目錄，並加入可提交給搜尋引擎的 RSS Sitemap。
+
+### 完成的主要任務
+
+- 移除獨立的 `LLMs.txt` 子選單，將原有設定區塊放入 `網站地圖` 頁面；舊的 `rankwoven-seo-llms-txt` URL 會回到 Sitemap 頁，保持相容。
+- 新增 RSS Sitemap 設定：啟用開關、最新貼文數量、Post Types 選擇。
+- 新增 `/sitemap.rss` 動態 RSS 2.0 輸出，包含最新已發佈內容的標題、連結、發佈時間、摘要和正文。
+- 新增 `rankwoven_rss_settings` option、保存提示、canonical redirect 排除與測試清單。
+- 插件版本更新至 `0.4.0`。
+
+### 關鍵決策和解決方案
+
+- RSS Sitemap 預設關閉，避免升級後自動公開內容；數量限制套用整個 RSS feed，預設 50 篇。
+- RSS 與完整 `sitemap.xml` 保持不同用途：前者只提供最新更新，後者仍提供全量 URL。
+- LLMs.txt 原有開關與輸出路由保持不變，只調整後台歸類和保存後返回的分頁。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、RSS 2.0 XML、`get_posts`、Docker PHP 8.2。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證與下一步
+
+- Docker PHP 8.2 語法檢查、RSS XML 冒煙和標準 `/sitemap.xml` 輸出驗證均通過；RSS 回應為 `application/rss+xml` 且可由 `xmllint` 解析。
+- 已確認測試站根目錄的實體 `llms.txt` 在測試後恢復；未建立實體 `sitemap.rss` 文件。
+- 尚未提交、推送 GitHub 或部署；提交前需再次確認工作區中沒有 `.env`、密碼、Token 或 API Key。
+
+## 會話總結（2026-08-30）— RSS 可讀樣式與公開內容純文字清理
+
+### 會話主要目的
+
+將 RSS Sitemap 改為接近 MySitemapGenerator 示例的瀏覽器可讀格式，並清理 `llms.txt`、RSS 及相關文章輸出中的編輯器代碼；文章順序維持現有排序。
+
+### 完成的主要任務
+
+- 新增 `assets/rss-sitemap.xsl`，以 `xml-stylesheet` 讓瀏覽器顯示藍色文章標題、發佈時間、摘要、縮略圖／站點圖標與分隔線。
+- RSS 項目加入特色圖片／站點圖標 `enclosure`，並保留標準 RSS 2.0、Atom self link、`content:encoded`。
+- RSS 正文改用共用純文字清理，移除 HTML、Script／Style 和 WordPress／Visual Composer shortcode 代碼。
+- `llms.txt`、`llms-full.txt`、文章 `.md` 與 RSS 共用 shortcode 清理規則，避免輸出 `[vc_row]`、`[vc_column]`、`font_container` 等編輯器片段。
+- RSS 繼續使用 `get_posts` 的 `modified DESC`，XSL 不重新排序，確保與現有文章順序一致。
+
+### 關鍵決策和解決方案
+
+- 不硬編碼外部示例 URL，只參考其 RSS + XSL 展示方式；樣式文件由插件本地提供，避免第三方依賴。
+- 對不規範 shortcode 引號不嘗試猜測屬性正文，直接移除完整 shortcode 標籤與屬性，確保公開文件不洩露樣式／編輯器代碼。
+
+### 使用的技術棧
+
+WordPress PHP 8、RSS 2.0 XML、XSLT 1.0、WordPress `get_posts`／內容清理 API、Docker PHP 8.2。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/rss-sitemap.xsl`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- 測試站插件同步後，Docker PHP 8.2 語法檢查通過。
+- 純文字清理已用包含 `[vc_row]`、`[vc_column]` 和 Visual Composer 屬性的樣本驗證，輸出不再含 shortcode 代碼。
+- 尚未在啟用 RSS 的測試站公開路由上完成完整瀏覽器截圖驗證；測試站根目錄仍存在實體 `llms.txt`，會優先於 WordPress 動態路由返回。
+
+### 下一步行動清單
+
+- 暫時移開測試站實體 `llms.txt`，啟用 RSS 設定後驗證 `/sitemap.rss`、XSL 載入、XML 解析和文章排序。
+- 完成前台驗證後，只提交本次相關文件，再按用戶授權推送 GitHub／部署。
+
+## 會話總結（2026-08-30）— 修正 LLMs.txt 文章摘要對應錯誤
+
+### 會話主要目的
+
+修正 WordPress 實體 `llms.txt` 將 EZ TOC「內容目錄」誤當成多篇文章摘要，導致每個 URL 後面的內容重複且與文章不符。
+
+### 完成的主要任務
+
+- RankWoven SEO 插件新增 LLMs 專用內容清理：移除 EZ TOC／TOC 容器與未註冊 Visual Composer shortcode。
+- `llms.txt`、`llms-full.txt`、文章 `.md` 與 RSS 共用每篇文章的乾淨正文／摘要來源；只有偵測到內容目錄型 Meta 摘要時才回退到該文章正文。
+- 在 `wp_trim_excerpt()` 呼叫堆疊中加入限定過濾器，讓 Hostinger 日後重建實體 `llms.txt` 時不再輸出 TOC 或 shortcode。
+
+### 關鍵決策和解決方案
+
+- 不改變前台文章的 TOC 顯示，只在摘要產生堆疊和 LLMs 輸出路徑清理導覽標記。
+- 自訂且有效的 SEO Meta Description 仍保留；只有空值或以「內容目錄／Table of Contents」開頭的摘要才使用文章正文回退。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、Hostinger LLMs.txt 產生器、Docker PHP 8.2。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- Docker WordPress 容器 `php -l` 通過。
+- 本地實際文章摘要已確認各自回傳自身正文；合成 EZ TOC 樣本可正確移除導覽容器。
+- 本地 LLMs 文件生成結果不含 `內容目錄`、`Toggle`、`[vc_row]` 或 `font_container`；重複摘要只存在於測試站原本刻意重複的商品／分類資料。
+- 線上 `cyruschan.com/llms.txt` 的靜態文件替換尚待 Hostinger 網站 API 恢復後完成。
+
+### 下一步行動清單
+
+- 上傳已驗證的 RankWoven 插件至 `cyruschan.com` WordPress。
+- 以文章完整內容生成並替換網站根目錄實體 `llms.txt`，清除快取後再次檢查文章 URL／摘要一一對應。
+
+## 會話總結（2026-08-30）— 新增 WordPress GEO 優化設定
+
+### 會話主要目的
+
+根據 GEO 審計截圖，為 RankWoven SEO WordPress 插件加入 AI 爬蟲存取、索引／摘要控制，以及語言 hreflang 聲明設定。
+
+### 完成的主要任務
+
+- 新增 `GEO 優化` 後台分頁和 `rankwoven_geo_settings` 選項，提供 AI Training Crawlers、AI Search Crawlers、AI Assistant Fetchers 三組 User-agent 控制。
+- 將 `Indexability` 和 `Snippet Controls` 接到前台 `robots` meta，支持 `noindex`、`nofollow`、`nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
+- 新增語言代碼、替代語言 URL、`x-default URL` 設定，前台輸出 hreflang 標籤；GEO readiness、AI Crawler Access 和 Machine Readability 分數按設定動態計算。
+- 動態 `/robots.txt` 會追加對應 AI User-agent 的 `Allow`／`Disallow` 規則；診斷頁增加 GEO readiness 分數。
+- 更新插件 README、WordPress 測試清單與插件版本至 `0.5.0`。
+
+### 關鍵決策和解決方案
+
+- 預設允許三組 AI 爬蟲、公開索引和摘要引用，語言代碼回退到 WordPress 網站語言，`x-default` 回退到首頁；不硬編碼第三方審計分數。
+- 替代語言採用每行 `language=URL` 的簡單格式，只接受 http／https URL；無效語言代碼回退到網站語言，無效 URL 會被忽略。
+- 不新增資料庫表或外部 API，沿用既有 nonce、`manage_options` 權限和設定保存流程。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Hooks、robots.txt、前台 meta／hreflang、原生後台表單、CSS Grid。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/admin.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- `git diff --check` 通過；工作區沒有新增 `.env`、密碼、Token、API Key 或私鑰。
+- 已將插件 PHP／CSS 同步到本地 WordPress 測試站目錄，但 Docker daemon 在重啟時回報 read-only filesystem，容器目前無法提供 `php -l`、WP-CLI 或前台 smoke check。
+- 本機 MAMP PHP CLI 路徑不存在；完整 PHP 語法檢查需待 Docker daemon 恢復後重跑。
+
+### 下一步行動清單
+
+- 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 13 驗證後台 GEO 分頁、`/robots.txt`、前台 robots meta 和 `hreflang="x-default"`。
+- 通過 PHP 語法檢查後，只提交本次四個插件／文檔文件，再按用戶授權推送 GitHub；WordPress 插件生產部署仍需獨立的 Hosting／主機流程。
+
+## 會話總結（2026-08-31）— Sitemap 搜尋引擎提交入口
+
+### 會話主要目的
+
+在 WordPress 插件的 `網站地圖` 頁面加入各主要搜尋引擎的 Sitemap／站長工具提交連結，方便管理員完成索引提交。
+
+### 完成的主要任務
+
+- 新增 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 提交／收錄入口卡片。
+- Google 連結自動帶入本站首頁作為 Search Console property，Brave 連結自動帶入當前 `sitemap.xml` URL。
+- 所有第三方連結使用新分頁、`noopener noreferrer` 和可訪問性標籤。
+- 對沒有穩定獨立 Sitemap 提交表單的搜尋引擎顯示實際限制及替代發現方式。
+- 插件版本更新至 `0.5.1`，同步更新插件 README 和 WordPress 測試清單。
+
+### 關鍵決策和解決方案
+
+- 不在插件內直接向第三方搜尋引擎提交資料；連結只開啟官方平台，登入、網站驗證和提交由管理員在對方平台完成。
+- 保留既有 SaaS Google Search Console API 提交流程，新增入口只補充 Bing、Baidu、Yandex、Naver、Sogou、Brave 等平台。
+- Yahoo、DuckDuckGo、Ask、AOL 和 Qwant 沒有穩定的獨立 Sitemap 表單，因此使用官方入口或 Bing Webmaster Tools 並在 UI 顯示說明。
+
+### 使用的技術棧
+
+WordPress PHP 8、原生後台 HTML、CSS Grid、官方搜尋引擎站長工具連結。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/admin.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- `git diff --check` 通過；Google property 和 Brave Sitemap URL 參數已使用 URL 編碼。
+- 尚未執行 WordPress runtime 冒煙測試；此前本地 Docker daemon 曾回報 read-only filesystem，需恢復後驗證後台卡片和外部連結。
+- 本次未修改 `.env`、憑據或任何敏感設定。
+
+### 下一步行動清單
+
+- 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 11 驗證所有連結、Sitemap URL 參數及手機版排版。
+- 通過插件 PHP 語法檢查後，只提交本次相關文件並推送到 GitHub `main`。
+
+## 會話總結（2026-08-31）— WordPress 內容 SEO 逐項評分
+
+### 會話主要目的
+
+按參考畫面的每個 SEO 檢查項完善 WordPress 文章、頁面和商品評分，讓管理員能看見具體問題、警告及通過項目，而不只是一個總分。
+
+### 完成的主要任務
+
+- 將編輯器 SEO 評分擴充為 19 項、總權重 100 的完整清單，涵蓋關鍵詞、標題／描述、正文、連結、圖片及可讀性。
+- 在 WordPress SEO 面板新增 `Problems`、`Warnings`、`Success` 三組狀態清單，保存或 AI 生成後即時更新。
+- 文章、頁面、Portfolio 和商品共用同一套本地評分；SaaS `/editor-seo` API 也回傳一致的 19 項 `scoreChecks`。
+- 新增中英文混合內容單位計算、內外鏈網域判斷、圖片 Alt Text、首段關鍵詞、關鍵詞密度和其他內容重複關鍵詞檢查。
+- 新增文章／頁面／商品 API 測試，驗證檢查鍵完整且權重合計為 100；插件版本更新至 `0.6.0`。
+
+### 關鍵決策和解決方案
+
+- 每項結果統一使用 `pass`、`warning`、`fail`，總分按固定權重累加；警告取得該項約一半分數，問題不給分。
+- 中文內容按漢字逐字、其他語言按詞組計算，避免英文專用字數函式造成誤判。
+- 可讀性檢查採可解釋的規則式判斷，不使用 AI 猜測；圖片主題相關性目前以 Alt Text 是否包含完整 Focus keyphrase 作為可重現標準。
+- 不新增資料表；逐項結果按當前內容即時計算，既有自訂欄位只保存總分和分析摘要。
+
+### 使用的技術棧
+
+WordPress PHP 8、WordPress Post Meta／AJAX、原生 JavaScript DOM、CSS Grid、TypeScript、Zod、Fastify、Vitest。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- API TypeScript build、ESLint、JavaScript 語法、`git diff --check` 和指定 API 測試通過；`siteConnections.test.ts` 共 34 項測試成功。
+- 插件主 PHP 文件已通過 `php-parser` 靜態解析。
+- WordPress Docker 容器 runtime 檢查未完成：本機 Docker daemon 回報容器 `resolv.conf` 唯讀並令容器停止，無法執行容器內 `php -l` 或後台視覺驗證。
+- 未新增或提交 `.env`、密碼、Token、API Key、Application Password 或私鑰。
+
+### 下一步行動清單
+
+- Docker Desktop 恢復後，按 `plugins/wordpress/TESTING.md` 清單 9 驗證三種內容類型的 19 項狀態、AJAX 更新和桌面／窄螢幕排版。
+- WordPress 生產站需另行更新 `rankwoven-seo` 插件；推送主倉庫只會觸發 RankWoven API／Web 的既有部署流程。
+
+## 會話總結（2026-08-31）— SEO 評分審查修正
+
+### 會話主要目的
+
+修正逐項 SEO 評分實作在關鍵詞邊界、商品資料、空正文及標題顯示寬度方面的誤判，並完成提交前審查。
+
+### 完成的主要任務
+
+- 關鍵詞檢查改為完整詞匹配；多詞 Focus keyphrase 可按所有詞判斷，不會把 `AI` 誤算入 `email`。
+- SEO title width 改用中文字元雙寬單位計算，避免只按字符數判斷。
+- 評分把文章摘要納入正文上下文；商品額外讀取 WooCommerce 特色圖片和商品圖庫的 Alt Text。
+- 空正文不再從連續句子、子標題、段落、語態和句長項目取得虛假成功分；無圖片時 Image keyphrase 保持警告但不加分。
+- 補充 API 測試覆蓋空正文、關鍵詞邊界、多詞關鍵詞及商品摘要，並同步更新插件測試流程包含 `editor-seo.css`。
+
+### 關鍵決策和解決方案
+
+- PHP 插件與 SaaS API 保持同一套規則和檢查鍵，兩端分別在本地執行以支援 WordPress 離線 fallback。
+- 不引入同義詞資料庫或外部 NLP 服務；圖片主題相關性以 Focus keyphrase 的完整詞／所有詞匹配作為可重現規則。
+
+### 使用的技術棧
+
+WordPress PHP 8、WooCommerce Post Meta、TypeScript、Fastify、Zod、Vitest、CSS、原生 JavaScript。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
+- `plugins/wordpress/rankwoven-seo/assets/editor-seo.css`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果或未驗證原因
+
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過；測試為 46 項成功、4 項 PostgreSQL 整合測試跳過。
+- `php-parser` 解析插件 PHP 通過；JavaScript 語法和 `git diff --check` 通過。
+- 已同步插件文件到本地 WordPress 測試站；Docker daemon 因 `/var/lib/docker/containers/...` 唯讀，無法啟動 `cyruschan-wp` 執行 `php -l` 或後台 runtime 驗證。
+- `code-review` 雙軸審查已完成，發現的關鍵詞、商品、空正文和寬度問題均已修正；未提交任何 `.env` 或敏感憑據。
+- 功能提交 `ae03b26` 已推送至 GitHub `main`；`Production Deploy` run `33323877321` 的 Verify 和 Hostinger VPS Deploy 均成功。
+- 部署後 `https://api.rankwoven.com/health` 返回 API 服務正常，`https://rankwoven.com` 返回 `200 OK`。
+
+### 下一步行動清單
+
+- Docker Desktop 恢復後，重新啟動 `cyruschan-wp`，依 `plugins/wordpress/TESTING.md` 清單 9 驗證文章、頁面和商品的 19 項狀態及圖片圖庫。
+- WordPress 測試站插件已同步；生產 WordPress 插件仍需獨立發布流程，不由 VPS GitHub Actions 自動更新。

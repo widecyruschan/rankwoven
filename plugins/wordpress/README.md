@@ -26,6 +26,7 @@ Settings -> RankWoven SEO
 當前後台支援：
 
 - 以接近 AIOSEO 的方式提供 `儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`圖片屬性`、`工具類` 和 `診斷` 管理入口。
+- 提供 `GEO 優化` 分頁，管理 AI 爬蟲存取、索引／摘要控制與語言 hreflang 聲明。
 - 後台 UI 使用 WordPress 原生 admin 元件加 RankWoven 輕量樣式，提供卡片化儀表板、連線狀態、快速操作與更清楚的設定分區；插件主容器會自動鋪滿 WordPress 後台可用寬度，並兼容側欄收合與手機版，不額外載入前端 SPA 框架。
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
@@ -36,7 +37,9 @@ Settings -> RankWoven SEO
 - 執行圖片屬性批量更新工具，先測試一張圖片，再分批更新既有圖片媒體。
 - 查看只讀診斷頁，檢查 API 連接、Token、本地同步、圖片屬性和 Application Password 配置狀態。
 - 在 `搜尋外觀` 頁籤為文章、頁面、Portfolio 和商品設定預設 SEO title、Meta description 與 Meta keywords 模板。
-- 在 `網站地圖` 頁籤動態生成 `sitemap.xml`，並提交到 Google Search Console。
+- 在 `網站地圖` 頁籤動態生成 `sitemap.xml`、提交到 Google Search Console，並手動保存 WordPress 動態 `robots.txt` 內容。
+- 在 `網站地圖` 頁籤中的 `LLMs.txt` 區塊按公開文章類型和分類法生成 `llms.txt`、`llms-full.txt`，並可選擇為文章提供 `.md` Markdown 地址。
+- 在 `網站地圖` 頁籤中的 `RSS Sitemap` 區塊按最新更新內容生成獨立 RSS Sitemap，可設定文章數量和 Post Types。
 - 在文章、頁面、Portfolio 和商品編輯頁顯示 RankWoven SEO 面板，輸入 Focus keyphrase 後可用 AI 生成或優化 SEO title、Slug 和 Meta description。
 - 在文章、頁面、Portfolio 和商品編輯頁保存 Keywords，並在前台頁面的 `<head>` 輸出 Meta description、Meta keywords、Google+ itemprop、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。
 - 一鍵建立站點連接，調用 SaaS API 的 `POST /api/v1/site-connections`。
@@ -90,11 +93,65 @@ http://host.docker.internal:3011
 - WordPress 原生 `Update` / `Publish`：也會保存 RankWoven 面板中的 SEO title、Meta description 和 Keywords，避免刷新後欄位變空。
 - 若 WordPress AJAX 返回 nonce 過期、未登入、插件 action 未載入或 PHP 非 JSON 錯誤，面板會顯示可讀原因，避免只顯示泛化的 `SEO request failed`。
 
-RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。內容分數會根據當前標題、Meta description、Slug、正文長度、H1、內部連結與 Focus keyphrase 覆蓋情況即時計算。
+RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。
+
+內容分數使用文章、頁面、Portfolio 和商品共用的 100 分制，面板按 `Problems`、`Warnings`、`Success` 即時列出以下 19 項檢查：
+
+- Focus keyphrase、SEO title width、Keyphrase in SEO title。
+- Meta description length、Keyphrase in meta description、Keyphrase in slug。
+- Text length、Keyphrase density、Keyphrase in introduction。
+- Outbound links、Internal links、Images、Image keyphrase。
+- Consecutive sentences、Subheading distribution、Paragraph length、Passive voice、Sentence length。
+- Previously used keyphrase。
+
+中文內容長度不使用只適合英文的 `str_word_count()`，而是按中文字元及其他語言的詞組計算。SEO title width 會把中文字元按較寬的顯示單位計算；外部／內部連結會按本站網域分類；圖片檢查會讀取正文 `<img>` 和 Alt Text，商品另會納入短描述、特色圖片及商品圖庫；重複 Focus keyphrase 會排除當前內容後查詢其他文章、頁面、Portfolio 和商品。可讀性項目屬規則式提示，用於找出明顯問題，不取代人工編輯判斷。
 
 `搜尋外觀` 頁籤可為不同內容類型設定預設模板。每個 SEO Title、Meta Description 和 Meta Keywords 欄位都提供可點擊標籤，客戶可直接插入 `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}` 和 `{{post_type_label}}`，不需要手動輸入 placeholder 代碼；早期單括號格式也會兼容。單篇文章若已保存自訂 SEO 欄位，仍會優先使用單篇值。
 
-`網站地圖` 頁籤會動態輸出 `sitemap.xml`，包含已發佈的文章、頁面、Portfolio 和商品，並在 `robots.txt` 動態補上 `Sitemap:` 行。`Submit to Google` 會透過 SaaS 後端的 Google Search Console API 將 `sitemap.xml` 提交給 Google。
+`網站地圖` 頁籤會動態輸出 `sitemap.xml`，包含已發佈的文章、頁面、Portfolio 和商品。管理員也可在同頁手動保存 `robots.txt` 內容；留空時使用 WordPress 預設 robots 輸出。RankWoven 會在 WordPress 動態 `robots.txt` 中自動補上 `Sitemap:` 行，避免手動內容漏掉 `sitemap.xml`；啟用 RSS Sitemap 後也會補上 `sitemap.rss` 行。輸出會排在常見 SEO 插件的 robots filter 之後，避免被 AIOSEO 等插件覆蓋。`Submit to Google` 會透過 SaaS 後端的 Google Search Console API 將 `sitemap.xml` 提交給 Google。
+
+網站地圖頁新增「提交 Sitemap 到搜尋引擎」區塊，提供 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 的官方站長工具或收錄入口。每個連結都會在新分頁開啟，並自動帶入本站的網站屬性（Google）或 Sitemap URL（Brave）。這些連結只負責開啟第三方平台，不會在未經授權的情況下提交資料；需要網站驗證或登入的服務會在其平台內完成。沒有獨立 Sitemap 表單的搜尋引擎會顯示對應說明，並導向可用的 Bing／官方收錄入口。
+
+## LLMs.txt 與 RSS Sitemap
+
+後台路徑：
+
+```text
+RankWoven SEO -> 網站地圖 -> LLMs.txt
+```
+
+LLMs.txt 設定預設全部關閉，避免插件升級後自動公開網站內容。啟用主開關後，插件會動態輸出：
+
+- `/llms.txt`：網站標題、描述、公開文章摘要連結和公開分類項連結。
+- `/llms-full.txt`：在 `llms.txt` 的基礎上加入已選文章的正文 Markdown；需要同時啟用 `llms.txt` 和 `llms-full.txt`。
+- `/{post-permalink}.md`：選擇「為公開文章提供 .md 地址」後，按文章固定連結輸出單篇 Markdown 內容。
+
+管理員可設定每種公開文章類型和分類法的 URL 上限、文章類型／分類法範圍、排除文章 ID、排除分類項 ID，以及標題和描述模板。模板支援 `{{site_title}}`、`{{site_name}}`、`{{site_description}}` 和 `{{site_url}}`。只會讀取已發佈且可公開訪問的內容，不會包含附件、草稿或回收站內容。
+
+如果網站根目錄已有實體 `llms.txt` 或 `llms-full.txt`，Web 伺服器可能會優先返回實體文件；此時需移除或更新實體文件，動態設定才會生效。插件不會自動覆蓋現有實體文件。
+
+網站地圖頁同時提供 `RSS Sitemap` 區塊：啟用後，插件會在 `/sitemap.rss` 輸出 RSS 2.0 文件，並透過插件內置的 `rss-sitemap.xsl` 提供瀏覽器可讀的文章列表。文章仍按現有 `modified DESC` 順序輸出，不由 XSL 重新排序；每項包含標題、連結、發佈時間、摘要、純文字正文和特色圖片／站點圖標。`貼文數量`限制整個 RSS Sitemap 的最新項目數，預設為 50；關閉開關時不接管該地址。
+
+`llms.txt`、`llms-full.txt`、文章 `.md` 和 RSS 內容在輸出前會移除 HTML、Script／Style 和 WordPress／Visual Composer shortcode 標籤及屬性，只保留可讀文字，避免 `[vc_row]`、`font_container` 等編輯器代碼出現在公開文件中。
+
+## GEO 優化
+
+後台路徑：
+
+```text
+RankWoven SEO -> GEO 優化
+```
+
+GEO 設定會按照 AI 搜尋引擎實際讀取頁面的方式，集中管理以下項目：
+
+- `AI Training Crawlers`：GPTBot、Google-Extended、CCBot、ClaudeBot 和 Bytespider。
+- `AI Search Crawlers`：OAI-SearchBot、Claude-SearchBot、PerplexityBot、Googlebot 和 Bingbot。
+- `AI Assistant Fetchers`：ChatGPT-User、Claude-User 和 Perplexity-User。
+- `Indexability`：控制是否輸出 `noindex, nofollow`。
+- `Snippet Controls`：控制是否輸出 `nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
+- `Language Declaration`：輸出當前語言、替代語言和 `x-default` hreflang 連結。
+
+三組 AI 爬蟲、索引和摘要選項預設允許，語言代碼會自動使用 WordPress 網站語言，`x-default` 預設指向網站首頁。替代語言使用每行一組 `language=URL` 格式，例如 `en=https://example.com/en/`。保存後，設定會同時影響動態 `/robots.txt` 和前台頁面的 `<head>`；GEO readiness 分數與兩個分組分數會根據當前設定即時計算，不會硬編碼第三方審計結果。
 
 Twitter/X Username 與 Facebook App ID 可在 `Settings -> RankWoven SEO` 保存；留空時不輸出 `@username` 或 `APP ID` 這類 placeholder。需要由主題或自訂代碼覆寫時，也可使用 `rankwoven_seo_twitter_username` 和 `rankwoven_seo_facebook_app_id` filter 返回正式值。
 
