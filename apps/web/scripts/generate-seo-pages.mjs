@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { marked } from 'marked';
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDirectory = path.join(webRoot, 'dist');
@@ -35,7 +36,137 @@ function setLink(document, rel, href) {
   element.setAttribute('href', href);
 }
 
-function renderSeoPage(seo) {
+function appendTextElement(document, parent, tagName, text, className = '') {
+  const element = document.createElement(tagName);
+  element.textContent = text;
+  if (className) element.className = className;
+  parent.appendChild(element);
+  return element;
+}
+
+function appendInternalLink(document, parent, href, text) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.textContent = text;
+  parent.appendChild(link);
+  return link;
+}
+
+function renderBlogIndexFallback(document) {
+  const app = document.querySelector('#app');
+  if (!app) throw new Error('Missing #app mount point in SEO template.');
+
+  const main = document.createElement('main');
+  main.className = 'blog-page seo-static-fallback';
+  const header = document.createElement('header');
+  header.className = 'blog-heading';
+  appendTextElement(document, header, 'p', 'SEO 教學', 'eyebrow');
+  appendTextElement(document, header, 'h1', 'SEO 教學與 AI 搜尋優化文章');
+  appendTextElement(document, header, 'p', '從 SEO 基礎、技術 SEO、內容策略到 GEO 與 AI 搜尋優化，依章節閱讀完整教學。');
+  main.appendChild(header);
+
+  const articleGrid = document.createElement('section');
+  articleGrid.className = 'blog-article-grid';
+  articleGrid.setAttribute('aria-label', 'SEO 教學文章');
+  for (const article of articles) {
+    const articleCard = document.createElement('article');
+    articleCard.className = 'blog-article-card';
+    const cardContent = document.createElement('div');
+    cardContent.className = 'blog-card-content';
+    appendTextElement(document, cardContent, 'p', `第 ${article.chapter} 章`, 'blog-card-meta');
+    const heading = document.createElement('h2');
+    appendInternalLink(document, heading, `/blog/${article.slug}`, article.title);
+    cardContent.appendChild(heading);
+    appendTextElement(document, cardContent, 'p', article.excerpt);
+    const readLink = appendInternalLink(document, cardContent, `/blog/${article.slug}`, '閱讀文章');
+    readLink.className = 'blog-read-link';
+    articleCard.appendChild(cardContent);
+    articleGrid.appendChild(articleCard);
+  }
+  main.appendChild(articleGrid);
+  app.replaceChildren(main);
+}
+
+function sanitizeArticleHtml(document, markdown) {
+  const container = document.createElement('div');
+  container.innerHTML = marked.parse(markdown, { gfm: true, breaks: false });
+  container.querySelectorAll('script, style, iframe, object, embed').forEach((element) => element.remove());
+  container.querySelectorAll('a[href]').forEach((link) => {
+    const href = link.getAttribute('href') ?? '';
+    if (!/^(?:https?:\/\/|\/|#)/.test(href)) link.removeAttribute('href');
+    if (/^https?:\/\//.test(href)) link.setAttribute('rel', 'noopener noreferrer');
+  });
+  return container.innerHTML;
+}
+
+function buildArticleDescription(article, markdown) {
+  const contentDocument = new JSDOM(marked.parse(markdown, { gfm: true, breaks: false })).window.document;
+  contentDocument.querySelectorAll('script, style, pre, code').forEach((element) => element.remove());
+  const excerpt = article.excerpt.replace(/\s+/g, ' ').trim();
+  const contentText = (contentDocument.body.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const sourceText = contentText.startsWith(excerpt) ? contentText : `${excerpt} ${contentText}`.trim();
+  const characters = [...sourceText];
+  if (characters.length <= 156) return sourceText;
+
+  const candidate = characters.slice(0, 155).join('');
+  const naturalEnding = Math.max(candidate.lastIndexOf('。'), candidate.lastIndexOf('！'), candidate.lastIndexOf('？'));
+  return `${(naturalEnding >= 119 ? candidate.slice(0, naturalEnding + 1) : candidate).trim()}…`;
+}
+
+function renderBlogArticleFallback(document, article, markdown, articleIndex) {
+  const app = document.querySelector('#app');
+  if (!app) throw new Error('Missing #app mount point in SEO template.');
+
+  const main = document.createElement('main');
+  main.className = 'blog-article-page seo-static-fallback';
+  const breadcrumb = document.createElement('nav');
+  breadcrumb.className = 'blog-breadcrumb';
+  breadcrumb.setAttribute('aria-label', '文章導覽');
+  appendInternalLink(document, breadcrumb, '/blog', '返回 SEO 教學文章');
+  main.appendChild(breadcrumb);
+
+  const articleElement = document.createElement('article');
+  const header = document.createElement('header');
+  header.className = 'blog-article-header';
+  const headerCopy = document.createElement('div');
+  headerCopy.className = 'blog-article-header-copy';
+  appendTextElement(document, headerCopy, 'p', `SEO 教學第 ${article.chapter} 章`, 'blog-card-meta');
+  appendTextElement(document, headerCopy, 'h1', article.title);
+  appendTextElement(document, headerCopy, 'p', article.excerpt);
+  header.appendChild(headerCopy);
+  const image = document.createElement('img');
+  image.src = article.coverImage;
+  image.alt = article.title;
+  image.width = 1024;
+  image.height = 1024;
+  header.appendChild(image);
+  articleElement.appendChild(header);
+
+  const content = document.createElement('div');
+  content.className = 'seo-markdown';
+  content.innerHTML = sanitizeArticleHtml(document, markdown);
+  articleElement.appendChild(content);
+  main.appendChild(articleElement);
+
+  const navigation = document.createElement('nav');
+  navigation.className = 'blog-article-navigation';
+  navigation.setAttribute('aria-label', '相關 SEO 教學文章');
+  const previous = articleIndex > 0 ? articles[articleIndex - 1] : null;
+  const next = articleIndex < articles.length - 1 ? articles[articleIndex + 1] : null;
+  if (previous) appendInternalLink(document, navigation, `/blog/${previous.slug}`, `上一篇：${previous.title}`);
+  if (next) appendInternalLink(document, navigation, `/blog/${next.slug}`, `下一篇：${next.title}`);
+
+  const relatedArticles = articles
+    .filter((candidate, candidateIndex) => candidateIndex !== articleIndex && candidate.categoryId === article.categoryId)
+    .slice(0, 3);
+  for (const relatedArticle of relatedArticles) {
+    appendInternalLink(document, navigation, `/blog/${relatedArticle.slug}`, `相關文章：${relatedArticle.title}`);
+  }
+  main.appendChild(navigation);
+  app.replaceChildren(main);
+}
+
+function renderSeoPage(seo, renderBody) {
   const dom = new JSDOM(template);
   const { document } = dom.window;
   const canonicalUrl = new globalThis.URL(seo.path, siteUrl).toString();
@@ -67,31 +198,41 @@ function renderSeoPage(seo) {
     document.head.appendChild(schemaElement);
   }
 
+  renderBody?.(document);
+
   return dom.serialize();
 }
 
-async function writeSeoPage(seo) {
+async function writeSeoPage(seo, renderBody) {
   const relativePath = seo.path === '/' ? '' : seo.path.replace(/^\//, '');
   const outputDirectory = path.join(distDirectory, relativePath);
+  const html = renderSeoPage(seo, renderBody);
   await mkdir(outputDirectory, { recursive: true });
-  await writeFile(path.join(outputDirectory, 'index.html'), renderSeoPage(seo), 'utf8');
+  await writeFile(path.join(outputDirectory, 'index.html'), html, 'utf8');
+  return html;
 }
 
 for (const page of Object.values(publicSeoPages)) {
-  await writeSeoPage({ path: page.path, ...page.seo });
+  await writeSeoPage({ path: page.path, ...page.seo }, page.path === '/blog' ? renderBlogIndexFallback : undefined);
 }
 
-for (const article of articles) {
+const generatedArticlePages = new Map();
+for (const [articleIndex, article] of articles.entries()) {
   if (!/^[a-z0-9-]+$/.test(article.slug)) {
     throw new Error(`Invalid blog article slug: ${article.slug}`);
+  }
+  if (!/^seo-chapter-\d+\.md$/.test(article.contentFile)) {
+    throw new Error(`Invalid blog article content file: ${article.contentFile}`);
   }
 
   const articlePath = `/blog/${article.slug}`;
   const imageUrl = new globalThis.URL(article.coverImage, siteUrl).toString();
-  await writeSeoPage({
+  const markdown = await readFile(path.join(webRoot, 'src/content/seo', article.contentFile), 'utf8');
+  const description = buildArticleDescription(article, markdown);
+  const html = await writeSeoPage({
     path: articlePath,
     title: article.title,
-    description: article.excerpt,
+    description,
     keyword: article.title,
     type: 'article',
     imageUrl,
@@ -99,14 +240,39 @@ for (const article of articles) {
       '@context': 'https://schema.org',
       '@type': 'BlogPosting',
       headline: article.title,
-      description: article.excerpt,
+      description,
       keywords: article.title,
       image: imageUrl,
       inLanguage: 'zh-Hant',
       isPartOf: { '@type': 'Blog', name: 'RankWoven SEO 學習中心', url: `${siteUrl}/blog` },
       publisher: { '@type': 'Organization', name: 'RankWoven', url: siteUrl }
     }
-  });
+  }, (document) => renderBlogArticleFallback(document, article, markdown, articleIndex));
+  generatedArticlePages.set(article.slug, html);
 }
 
-globalThis.console.log(`Generated SEO fallback HTML for ${Object.keys(publicSeoPages).length + articles.length} public URLs.`);
+const blogIndexHtml = await readFile(path.join(distDirectory, 'blog/index.html'), 'utf8');
+const blogIndexDocument = new JSDOM(blogIndexHtml).window.document;
+const blogIndexLinks = new Set(
+  [...blogIndexDocument.querySelectorAll('a[href^="/blog/"]')].map((link) => link.getAttribute('href'))
+);
+for (const article of articles) {
+  if (!blogIndexLinks.has(`/blog/${article.slug}`)) {
+    throw new Error(`SEO blog index does not link to article: ${article.slug}`);
+  }
+
+  const articleDocument = new JSDOM(generatedArticlePages.get(article.slug)).window.document;
+  const articleLinks = [...articleDocument.querySelectorAll('a[href^="/blog"]')];
+  const descriptionLength = [...(articleDocument.querySelector('meta[name="description"]')?.getAttribute('content') ?? '')].length;
+  if (!articleDocument.querySelector('h1') || !articleDocument.querySelector('.seo-markdown') || !articleLinks.some((link) => link.getAttribute('href') === '/blog')) {
+    throw new Error(`SEO fallback body is incomplete for article: ${article.slug}`);
+  }
+  if (!articleLinks.some((link) => link.getAttribute('href') !== '/blog')) {
+    throw new Error(`SEO fallback article has no outgoing article link: ${article.slug}`);
+  }
+  if (descriptionLength < 120 || descriptionLength > 156) {
+    throw new Error(`SEO description length ${descriptionLength} is invalid for article: ${article.slug}`);
+  }
+}
+
+globalThis.console.log(`Generated SEO fallback HTML for ${Object.keys(publicSeoPages).length + articles.length} public URLs; verified ${articles.length} blog inlinks.`);

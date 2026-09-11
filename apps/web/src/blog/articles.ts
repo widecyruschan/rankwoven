@@ -118,6 +118,20 @@ export function getAdjacentBlogArticles(chapter: number) {
   };
 }
 
+export function getBlogArticleSeoDescription(article: BlogArticle) {
+  const contentDocument = new DOMParser().parseFromString(article.html, 'text/html');
+  contentDocument.querySelectorAll('script, style, pre, code').forEach((element) => element.remove());
+  const excerpt = article.excerpt.replace(/\s+/g, ' ').trim();
+  const contentText = (contentDocument.body.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const sourceText = contentText.startsWith(excerpt) ? contentText : `${excerpt} ${contentText}`.trim();
+  const characters = [...sourceText];
+  if (characters.length <= 156) return sourceText;
+
+  const candidate = characters.slice(0, 155).join('');
+  const naturalEnding = Math.max(candidate.lastIndexOf('。'), candidate.lastIndexOf('！'), candidate.lastIndexOf('？'));
+  return `${(naturalEnding >= 119 ? candidate.slice(0, naturalEnding + 1) : candidate).trim()}…`;
+}
+
 export async function loadBlogArticle(slug: string): Promise<BlogArticle | null> {
   const summary = getBlogArticleSummary(slug);
   if (!summary) return null;

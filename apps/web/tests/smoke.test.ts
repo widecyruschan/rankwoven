@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { blogArticles, getAdjacentBlogArticles, loadBlogArticle } from '../src/blog/articles';
+import { blogArticles, getAdjacentBlogArticles, getBlogArticleSeoDescription, loadBlogArticle } from '../src/blog/articles';
 import { publicSeoKeywordKeys } from '../src/constants/publicSeo';
 import { i18n } from '../src/i18n';
 import { updateSeoHead } from '../src/utils/seoHead';
@@ -104,6 +104,12 @@ describe('web smoke test', () => {
     const adjacentArticles = getAdjacentBlogArticles(1);
     expect(adjacentArticles.previous).toBeNull();
     expect(adjacentArticles.next?.slug).toBe('seo-business-value');
+
+    const shortExcerptArticle = await loadBlogArticle('nap-citations');
+    expect(shortExcerptArticle).not.toBeNull();
+    const seoDescription = getBlogArticleSeoDescription(shortExcerptArticle!);
+    expect([...seoDescription].length).toBeGreaterThanOrEqual(120);
+    expect([...seoDescription].length).toBeLessThanOrEqual(156);
   });
 
   it('builds a keyword-aligned public SEO head without indexing private pages', () => {

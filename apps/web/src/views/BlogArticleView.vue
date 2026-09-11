@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ArrowLeft, ArrowRight, Clock3, List } from 'lucide-vue-next';
-import { getAdjacentBlogArticles, loadBlogArticle, type BlogArticle } from '../blog/articles';
+import { getAdjacentBlogArticles, getBlogArticleSeoDescription, loadBlogArticle, type BlogArticle } from '../blog/articles';
 import { updateSeoHead } from '../utils/seoHead';
 
 const route = useRoute();
@@ -19,9 +19,10 @@ const adjacentArticles = computed(() => (article.value ? getAdjacentBlogArticles
 
 function updateArticleSeo(currentArticle: BlogArticle) {
   const canonicalUrl = new window.URL(`/blog/${currentArticle.slug}`, window.location.origin).toString();
+  const description = getBlogArticleSeoDescription(currentArticle);
   updateSeoHead({
     title: `${currentArticle.title} | RankWoven`,
-    description: currentArticle.excerpt,
+    description,
     canonicalUrl,
     indexable: true,
     keywords: [currentArticle.title],
@@ -41,7 +42,7 @@ function updateStructuredData(currentArticle: BlogArticle) {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: currentArticle.title,
-    description: currentArticle.excerpt,
+    description: getBlogArticleSeoDescription(currentArticle),
     keywords: currentArticle.title,
     image: new window.URL(currentArticle.coverImage, window.location.origin).toString(),
     articleSection: t(`publicPages.blog.categories.${currentArticle.categoryId}`),
