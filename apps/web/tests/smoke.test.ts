@@ -211,4 +211,16 @@ describe('web smoke test', () => {
     );
   });
 
+  it('centers and balances the localized pricing heading', async () => {
+    const styleSource = await readFile(resolve('src/styles.css'), 'utf8');
+
+    expect(styleSource).toContain(
+      '.pricing-heading h1 {\n  max-width: 680px;\n  margin-inline: auto;\n  font-size: 40px;\n  font-weight: 700;\n  line-height: 1.2;\n  text-wrap: balance;\n}'
+    );
+    expect(styleSource).toContain('@media (min-width: 761px) and (max-width: 1080px)');
+    expect(styleSource).toContain(
+      '.marketing-nav {\n    order: 3;\n    justify-content: center;\n    width: 100%;\n  }'
+    );
+  });
+
 });

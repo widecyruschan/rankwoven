@@ -1137,9 +1137,11 @@ html[data-theme='dark'] .seo-markdown code:not(pre code) {
 
 .pricing-heading h1 {
   max-width: 680px;
+  margin-inline: auto;
   font-size: 40px;
   font-weight: 700;
   line-height: 1.2;
+  text-wrap: balance;
 }
 
 .eyebrow {
@@ -2792,6 +2794,19 @@ html[data-theme='dark'] .seo-markdown code:not(pre code) {
 
 .admin-setting-card[data-tone='neutral']::before {
   background: var(--color-border-strong);
+}
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .marketing-topbar {
+    flex-wrap: wrap;
+    gap: 12px 24px;
+  }
+
+  .marketing-nav {
+    order: 3;
+    justify-content: center;
+    width: 100%;
+  }
 }
 
 @media (max-width: 760px) {
