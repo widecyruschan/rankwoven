@@ -28,6 +28,16 @@ body {
   margin: 0;
   min-width: 0;
   background: var(--color-canvas);
+  color: var(--color-ink);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.theme-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  white-space: nowrap;
 }
 
 a {
@@ -116,6 +126,197 @@ a:visited {
   background:
     radial-gradient(circle at 86% 18%, rgb(246 211 101 / 24%), transparent 24rem),
     linear-gradient(180deg, #fbfdfc 0%, var(--color-canvas) 42%, #eef8f5 100%);
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --color-brand-primary: #5aa8ff;
+  --color-brand-primary-dark: #a9d2ff;
+  --color-brand-primary-soft: #153a58;
+  --color-brand-primary-mist: #102c43;
+  --color-brand-accent: #86df65;
+  --color-brand-accent-dark: #b7f09f;
+  --color-ink: #edf3f8;
+  --color-ink-muted: #9eafbd;
+  --color-muted: #b4c0ca;
+  --color-border: #30424f;
+  --color-border-strong: #4c6271;
+  --color-surface: #17252f;
+  --color-surface-soft: #1d303c;
+  --color-canvas: #0c151c;
+  --shadow-panel: 0 10px 32px rgb(0 0 0 / 24%);
+  --shadow-soft: 0 18px 55px rgb(0 0 0 / 32%);
+}
+
+html[data-theme='dark'] body,
+html[data-theme='dark'] .app-shell,
+html[data-theme='dark'] .main-panel {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .app-shell {
+  background: linear-gradient(180deg, #0e1a23 0%, var(--color-canvas) 56%, #10231f 100%);
+}
+
+html[data-theme='dark'] .marketing-shell {
+  background: linear-gradient(180deg, #101b22 0%, var(--color-canvas) 52%, #10231f 100%);
+}
+
+html[data-theme='dark'] .sidebar,
+html[data-theme='dark'] .marketing-topbar,
+html[data-theme='dark'] .topbar.ant-layout-header,
+html[data-theme='dark'] .marketing-footer {
+  border-color: var(--color-border);
+  background: #111e27 !important;
+}
+
+html[data-theme='dark'] .brand,
+html[data-theme='dark'] .page-heading,
+html[data-theme='dark'] .metric-card,
+html[data-theme='dark'] .content-panel,
+html[data-theme='dark'] .section-card,
+html[data-theme='dark'] .ant-card,
+html[data-theme='dark'] .data-table,
+html[data-theme='dark'] .table-like {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+html[data-theme='dark'] .brand,
+html[data-theme='dark'] .metric-card[data-tone='primary'] {
+  background: linear-gradient(180deg, var(--color-surface), var(--color-surface-soft));
+}
+
+html[data-theme='dark'] .metric-card[data-tone='accent'] {
+  background: linear-gradient(180deg, var(--color-surface), #26342a);
+}
+
+html[data-theme='dark'] .nav-list,
+html[data-theme='dark'] .ant-menu-light {
+  background: transparent !important;
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .nav-list a,
+html[data-theme='dark'] .ant-menu-light .ant-menu-item,
+html[data-theme='dark'] .marketing-nav a {
+  color: var(--color-ink-muted);
+}
+
+html[data-theme='dark'] .nav-list a.router-link-active,
+html[data-theme='dark'] .ant-menu-light .ant-menu-item-selected,
+html[data-theme='dark'] .marketing-nav a.router-link-active {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-dark);
+}
+
+html[data-theme='dark'] .data-head,
+html[data-theme='dark'] .table-head,
+html[data-theme='dark'] .ant-table-thead > tr > th {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-dark);
+}
+
+html[data-theme='dark'] .data-row:not(.data-head):hover,
+html[data-theme='dark'] .table-row:not(.table-head):hover,
+html[data-theme='dark'] .ant-table-tbody > tr:hover > td {
+  background: var(--color-brand-primary-mist);
+}
+
+html[data-theme='dark'] .data-row + .data-row,
+html[data-theme='dark'] .table-row + .table-row,
+html[data-theme='dark'] .ant-table-tbody > tr > td,
+html[data-theme='dark'] .ant-table-thead > tr > th {
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] input,
+html[data-theme='dark'] textarea,
+html[data-theme='dark'] select,
+html[data-theme='dark'] .date-input,
+html[data-theme='dark'] .ant-input,
+html[data-theme='dark'] .ant-input-affix-wrapper,
+html[data-theme='dark'] .ant-select-selector,
+html[data-theme='dark'] .ant-picker,
+html[data-theme='dark'] .ant-btn-default,
+html[data-theme='dark'] .secondary-button {
+  border-color: var(--color-border-strong);
+  background: #12202a;
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] input::placeholder,
+html[data-theme='dark'] textarea::placeholder {
+  color: #8295a4;
+}
+
+html[data-theme='dark'] .language-menu,
+html[data-theme='dark'] .language-option,
+html[data-theme='dark'] .ant-dropdown-menu,
+html[data-theme='dark'] .ant-select-dropdown {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .language-option:hover,
+html[data-theme='dark'] .language-option-active,
+html[data-theme='dark'] .ant-dropdown-menu-item:hover,
+html[data-theme='dark'] .ant-select-item-option-active {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .theme-switcher {
+  border-color: var(--color-border-strong);
+  background: #1b2f3d;
+  color: var(--color-brand-primary-dark);
+}
+
+html[data-theme='dark'] .theme-switcher:hover,
+html[data-theme='dark'] .theme-switcher:focus-visible {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-primary-soft);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .ant-table,
+html[data-theme='dark'] .ant-table-container,
+html[data-theme='dark'] .ant-table-content {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .ant-empty-description,
+html[data-theme='dark'] .ant-form-item-label > label,
+html[data-theme='dark'] .ant-statistic-title,
+html[data-theme='dark'] .ant-typography {
+  color: var(--color-muted);
+}
+
+html[data-theme='dark'] .ant-modal-content,
+html[data-theme='dark'] .ant-modal-header,
+html[data-theme='dark'] .ant-modal-body,
+html[data-theme='dark'] .ant-modal-footer {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .marketing-footer strong,
+html[data-theme='dark'] .marketing-footer a,
+html[data-theme='dark'] .topbar h1,
+html[data-theme='dark'] .page-heading h2,
+html[data-theme='dark'] .content-panel h2 {
+  color: var(--color-ink);
 }
 
 .marketing-topbar {

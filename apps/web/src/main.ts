@@ -23,8 +23,11 @@ import {
 import 'ant-design-vue/dist/reset.css';
 import './styles.css';
 import App from './App.vue';
+import { initializeTheme } from './composables/useTheme';
 import { i18n } from './i18n';
 import { router } from './router';
+
+initializeTheme();
 
 const app = createApp(App);
 

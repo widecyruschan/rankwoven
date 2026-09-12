@@ -29,6 +29,12 @@ const messages = {
       adminDashboard: 'Admin dashboard',
       logout: 'Log out'
     },
+    theme: {
+      dark: 'Dark',
+      light: 'Light',
+      switchToDark: 'Switch to dark theme',
+      switchToLight: 'Switch to light theme'
+    },
     nav: {
       dashboard: 'Site Overview',
       sites: 'Site Management',
@@ -1113,6 +1119,12 @@ const messages = {
       customerDashboard: '客戶後台',
       adminDashboard: '管理後台',
       logout: '登出'
+    },
+    theme: {
+      dark: '暗色',
+      light: '亮色',
+      switchToDark: '切換至暗色主題',
+      switchToLight: '切換至亮色主題'
     },
     nav: {
       dashboard: '站點概覽',

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { blogArticles, getAdjacentBlogArticles, getBlogArticleSeoDescription, loadBlogArticle } from '../src/blog/articles';
 import { publicSeoKeywordKeys } from '../src/constants/publicSeo';
+import { useTheme } from '../src/composables/useTheme';
 import { i18n } from '../src/i18n';
 import { updateSeoHead } from '../src/utils/seoHead';
 
@@ -179,4 +180,19 @@ describe('web smoke test', () => {
       i18n.global.locale.value = originalLocale;
     }
   });
+
+  it('persists and applies the selected theme', () => {
+    const { isDark, setTheme } = useTheme();
+
+    setTheme('dark');
+    expect(isDark.value).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(globalThis.localStorage.getItem('aieo-theme')).toBe('dark');
+
+    setTheme('light');
+    expect(isDark.value).toBe(false);
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(globalThis.localStorage.getItem('aieo-theme')).toBe('light');
+  });
+
 });

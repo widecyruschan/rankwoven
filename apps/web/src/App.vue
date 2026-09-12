@@ -21,6 +21,7 @@ import {
 } from 'lucide-vue-next';
 import rankwovenLogo from './assets/rankwoven-logo.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
+import ThemeSwitcher from './components/ThemeSwitcher.vue';
 import { useAuthStore } from './stores/auth';
 
 const route = useRoute();
@@ -113,6 +114,7 @@ function logout() {
         </RouterLink>
       </nav>
       <div class="marketing-actions">
+        <ThemeSwitcher />
         <LanguageSwitcher />
         <RouterLink class="icon-link-button" :to="marketingEntryLink">
           <LogIn :size="17" aria-hidden="true" />
@@ -178,6 +180,7 @@ function logout() {
           <RouterLink v-else class="icon-link-button" to="/admin">
             {{ t('app.adminDashboard') }}
           </RouterLink>
+          <ThemeSwitcher />
           <LanguageSwitcher />
           <a-button @click="logout">
             <template #icon>
