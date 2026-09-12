@@ -195,4 +195,20 @@ describe('web smoke test', () => {
     expect(globalThis.localStorage.getItem('aieo-theme')).toBe('light');
   });
 
+  it('keeps the dark theme logo and article content readable', async () => {
+    const appSource = await readFile(resolve('src/App.vue'), 'utf8');
+    const darkLogoSource = await readFile(resolve('src/assets/rankwoven-logo-dark.svg'), 'utf8');
+    const styleSource = await readFile(resolve('src/styles.css'), 'utf8');
+
+    expect(appSource).toContain('isDark.value ? rankwovenLogoDark : rankwovenLogo');
+    expect(darkLogoSource).toContain('fill="#EDF3F8"');
+    expect(styleSource).toContain("html[data-theme='dark'] .seo-markdown {\n  color: var(--color-muted);\n}");
+    expect(styleSource).toContain(
+      "html[data-theme='dark'] .seo-markdown blockquote {\n  background: var(--color-surface-soft);\n  color: var(--color-ink);\n}"
+    );
+    expect(styleSource).toContain(
+      "html[data-theme='dark'] .seo-markdown code:not(pre code) {\n  background: var(--color-brand-primary-mist);\n  color: var(--color-ink);\n}"
+    );
+  });
+
 });

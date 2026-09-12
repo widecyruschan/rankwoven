@@ -20,15 +20,19 @@ import {
   Waypoints
 } from 'lucide-vue-next';
 import rankwovenLogo from './assets/rankwoven-logo.svg';
+import rankwovenLogoDark from './assets/rankwoven-logo-dark.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
 import ThemeSwitcher from './components/ThemeSwitcher.vue';
+import { useTheme } from './composables/useTheme';
 import { useAuthStore } from './stores/auth';
 
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
+const { isDark } = useTheme();
 const authStore = useAuthStore();
 const isNavigationOpen = ref(false);
+const rankwovenLogoSource = computed(() => (isDark.value ? rankwovenLogoDark : rankwovenLogo));
 
 const marketingItems = [
   { to: '/features', labelKey: 'marketing.nav.features' },
@@ -100,7 +104,7 @@ function logout() {
   <div v-if="isMarketingLayout" class="marketing-shell">
     <header class="marketing-topbar">
       <RouterLink class="marketing-brand" to="/">
-        <img class="brand-logo" :src="rankwovenLogo" alt="RankWoven">
+        <img class="brand-logo" :src="rankwovenLogoSource" alt="RankWoven">
       </RouterLink>
       <nav class="marketing-nav" :aria-label="t('app.mainNavigation')">
         <RouterLink
@@ -141,7 +145,7 @@ function logout() {
   <a-layout v-else class="app-shell">
     <a-layout-sider class="sidebar" :class="{ 'sidebar-open': isNavigationOpen }" width="272">
       <div class="brand">
-        <img class="brand-logo" :src="rankwovenLogo" alt="RankWoven">
+        <img class="brand-logo" :src="rankwovenLogoSource" alt="RankWoven">
         <small>{{ shellSubtitle }}</small>
       </div>
 

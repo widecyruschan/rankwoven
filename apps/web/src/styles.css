@@ -319,6 +319,20 @@ html[data-theme='dark'] .content-panel h2 {
   color: var(--color-ink);
 }
 
+html[data-theme='dark'] .seo-markdown {
+  color: var(--color-muted);
+}
+
+html[data-theme='dark'] .seo-markdown blockquote {
+  background: var(--color-surface-soft);
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .seo-markdown code:not(pre code) {
+  background: var(--color-brand-primary-mist);
+  color: var(--color-ink);
+}
+
 .marketing-topbar {
   position: sticky;
   top: 0;
