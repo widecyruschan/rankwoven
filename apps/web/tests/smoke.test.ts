@@ -209,6 +209,12 @@ describe('web smoke test', () => {
     expect(styleSource).toContain(
       "html[data-theme='dark'] .seo-markdown code:not(pre code) {\n  background: var(--color-brand-primary-mist);\n  color: var(--color-ink);\n}"
     );
+    expect(styleSource).toContain(
+      "html[data-theme='dark'] .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item {\n  color: var(--color-ink);\n}"
+    );
+    expect(styleSource).toContain(
+      "html[data-theme='dark'] .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item:hover {\n  background: var(--color-brand-primary-soft);\n  color: var(--color-ink);\n}"
+    );
   });
 
   it('centers and balances the localized pricing heading', async () => {

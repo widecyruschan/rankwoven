@@ -267,6 +267,15 @@ html[data-theme='dark'] .ant-select-dropdown {
   color: var(--color-ink);
 }
 
+html[data-theme='dark'] .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item {
+  color: var(--color-ink);
+}
+
+html[data-theme='dark'] .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item:hover {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-ink);
+}
+
 html[data-theme='dark'] .language-option:hover,
 html[data-theme='dark'] .language-option-active,
 html[data-theme='dark'] .ant-dropdown-menu-item:hover,
