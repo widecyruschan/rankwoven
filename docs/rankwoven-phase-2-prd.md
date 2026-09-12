@@ -6,6 +6,7 @@
 > 適用團隊：產品、設計、前端、API、Worker、資料、增長與客戶成功
 > 相關文件：`docs/seo-ai-platform-prd.md`、`docs/frontend-page-spec.md`、`docs/rankwoven-phase-2-development-workflow.md`、`docs/research/phase-2-ai-seo-2026.md`、`docs/research/phase-2-api-pricing-2026.md`
 > Provider／成本核檢：`docs/approvals/phase-2/PH2-02-provider-selection.md`
+> AI gateway 接口：`docs/breakout-api-integration.md`
 
 ## 1. 執行摘要
 
@@ -447,7 +448,7 @@ published -> verifying -> verified
 
 ### 10.2 模型路由
 
-PH2-02 的批准候選以 `docs/approvals/phase-2/PH2-02-provider-selection.md` 為準：OpenAI `gpt-5.6-luna` 作互動／embedding 主路由、Gemini 3.8／3.7 Flash Batch 作低成本非同步批量、Claude Sonnet 5 作長文及引用 fallback。模型 ID、價格、生效日期及區域條款必須由 pricing snapshot 提供，業務邏輯不可寫死；未獲 PH2-02 批准前只可使用 fixture，不可在生產啟用新 Provider。
+PH2-02 的批准候選以 `docs/approvals/phase-2/PH2-02-provider-selection.md` 與 `docs/breakout-api-integration.md` 為準：所有 AI 任務固定經既有 Breakout API gateway，模型供應商不形成獨立 API provider。文字、embedding、圖片與高品質／批量需求只從 `/v1/models` 同步的 gateway catalog 選擇 approved model ID；模型 ID、gateway pricing snapshot、生效日期與 capability 狀態必須版本化，業務邏輯不可寫死。未獲 PH2-02 批准前只可使用 fixture，不可在生產啟用新 gateway model profile。
 
 | 任務                    | 預設策略                                    | 原因                               |
 | ----------------------- | ------------------------------------------- | ---------------------------------- |
@@ -460,13 +461,13 @@ PH2-02 的批准候選以 `docs/approvals/phase-2/PH2-02-provider-selection.md` 
 
 要求：
 
-- Provider Adapter 接受統一 Zod／JSON Schema；優先使用供應商原生 Structured Outputs，不再依賴從自由文本截取 JSON。
+- `AiGatewayAdapter` 接受統一 Zod／JSON Schema，固定呼叫既有 gateway，所有模型切換只傳 model ID；不再依賴從自由文本截取 JSON。
 - 模型輸出通過 schema、商業規則、引用及安全驗證後才可進入產品資料表。
 - Structured Outputs 只約束支援 schema 的輸出形狀；應用仍須處理 refusal、截斷、`max_tokens`、不完整輸出及 runtime validation。
 - prompt、schema、規則與模型路由全部版本化。
 - 同一任務最多一次格式修復；仍失敗則標記 failed，不無限重試。
-- Fallback 模型只能處理相同資料權限與保存條款的任務，並在結果中顯示實際 Provider。
-- 對不需要供應商保存狀態的敏感 OpenAI 工作流明確使用 `store: false`，由 RankWoven 自行保存版本與審計記錄。
+- Fallback 模型只能使用同一 gateway、相同 capability、資料權限與保存條款的 approved model，並在結果中顯示 gateway、model 與 catalog snapshot。
+- gateway 未明確文件化的供應商專屬參數不得轉送；由 RankWoven 自行保存版本與審計記錄。
 - 不把抓取頁面的文字當成系統指令；外部內容一律是不可信資料。
 
 ### 10.3 有界工作流
@@ -687,7 +688,7 @@ AI 不直接持有 CMS 寫權限、付款權限或任意 HTTP 工具。套用操
 | `content_optimization_runs`       | 文章分析／改寫           | site_id、article_id、input_hash、locale、rules_version、prompt_version、status                                                               |
 | `content_score_checks`            | 可解釋逐項分數           | run_id、code、source_type、status、weight、evidence、recommendation                                                                          |
 | `content_claims`                  | 主張與引用               | run_id、claim_text、source_url、source_hash、source_type、verification_status                                                                |
-| `usage_ledger`                    | append-only 用量事實來源 | workspace_id、operation、event_type（reserve／finalize／release）、reservation_id、provider、units、cost_estimate、idempotency_key；key 唯一 |
+| `usage_ledger`                    | append-only 用量事實來源 | workspace_id、operation、event_type（reserve／finalize／release）、reservation_id、provider、gateway_model、price_snapshot_id、units、cost_estimate、idempotency_key；key 唯一 |
 | `entitlement_assignments`         | 功能與限制               | workspace_id、feature_key、limit_value、period、source、effective_at、expires_at                                                             |
 | `workspace_invitations`           | 多工作區邀請             | workspace_id、email_hash、role、token_hash、expires_at、accepted_at；token 只保存 hash                                                       |
 | `password_reset_tokens`           | 密碼重設                 | user_id、token_hash、expires_at、used_at；單次使用                                                                                           |
@@ -821,7 +822,7 @@ Migration 使用新檔案追加，不在 runtime route 中建立新表。大型�
 
 ### 14.2 Idempotency
 
-任務 key 由 `workspace + operation + normalized input hash + provider + rules/prompt version + data date bucket` 組成。同一 key 執行中時返回現有任務；已完成且仍在新鮮期時返回快取結果。
+任務 key 由 `workspace + operation + normalized input hash + provider + gateway model + rules/prompt version + data date bucket` 組成。同一 key 執行中時返回現有任務；已完成且仍在新鮮期時返回快取結果。
 
 ### 14.3 建議新鮮期
 
@@ -992,7 +993,7 @@ Migration 使用新檔案追加，不在 runtime route 中建立新表。大型�
 
 **第 1 週：資料契約與持久化**
 
-- 依 PH2-02 確定 DataForSEO 主 SEO Data Provider、模型路由與商務配額；正式放量前重新核對 DataForSEO、Ahrefs／Semrush 報價。
+- 依 PH2-02 確定 DataForSEO 主 SEO Data Provider，以及 Breakout API gateway model catalog、capability profile 與商務配額；正式放量前重新核對 DataForSEO、Ahrefs／Semrush 與 Breakout 控制台價格快照。
 - 建立 Research Project、Run、Candidate、Metric、Usage Ledger migration。
 - 定義來源類型、Provider Adapter 及 async task contract。
 - 補齊註冊、密碼重設、郵箱驗證、多工作區資料隔離，以及 Worker retry／退避／死信資料結構。

@@ -374,4 +374,51 @@ describe('analytics and keyword routes', () => {
       apiConfig.KEYWORD_VOLUME_API_KEY = originalApiKey;
     }
   });
+
+  it('uses Ahrefs Keyword Explorer overview with bearer authentication', async () => {
+    const originalProvider = apiConfig.KEYWORD_VOLUME_PROVIDER;
+    const originalAhrefsUrl = apiConfig.AHREFS_API_URL;
+    const originalAhrefsKey = apiConfig.AHREFS_API_KEY;
+    apiConfig.KEYWORD_VOLUME_PROVIDER = 'ahrefs';
+    apiConfig.AHREFS_API_URL = 'https://api.ahrefs.com/v3/keywords-explorer/overview';
+    apiConfig.AHREFS_API_KEY = 'test-ahrefs-key';
+
+    try {
+      const service = createKeywordSuggestionService(undefined, async (url, init) => {
+        const requestUrl = new URL(String(url));
+        expect(requestUrl.pathname).toBe('/v3/keywords-explorer/overview');
+        expect(requestUrl.searchParams.get('keywords')).toBe('AI SEO tools');
+        expect(requestUrl.searchParams.get('country')).toBe('hk');
+        expect(requestUrl.searchParams.get('select')).toBe('keyword,volume,cpc,difficulty');
+        expect(requestUrl.searchParams.get('output')).toBe('json');
+        expect(init?.method).toBe('GET');
+        expect(init?.headers).toMatchObject({ Authorization: 'Bearer test-ahrefs-key' });
+
+        return new Response(
+          JSON.stringify({
+            keywords: [
+              {
+                keyword: 'AI SEO tools',
+                volume: 2400,
+                cpc: 375,
+                difficulty: 48
+              }
+            ]
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      });
+
+      const metrics = await service.enrichKeywords(['AI SEO tools'], 'zh-HK');
+      expect(metrics.get('ai seo tools')).toMatchObject({
+        monthlySearchVolume: 2400,
+        cpcUsd: 3.75,
+        keywordDifficulty: 48
+      });
+    } finally {
+      apiConfig.KEYWORD_VOLUME_PROVIDER = originalProvider;
+      apiConfig.AHREFS_API_URL = originalAhrefsUrl;
+      apiConfig.AHREFS_API_KEY = originalAhrefsKey;
+    }
+  });
 });

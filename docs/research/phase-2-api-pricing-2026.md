@@ -3,6 +3,7 @@
 - 查閱日期：2026-09-13（USD，未計稅及區域折扣）
 - 用途：為第二階段 Keyword Intelligence、Content Optimizer、Site Audit、Backlink 機會、CMS 發布及計費流程選型。
 - 價格會變更；實作前須重新核對官方頁面。凡需登入、合約或帳戶上下文的項目，本文明確標示「需登入／報價」，不作硬編數字。
+- **AI 連線決策更新（2026-09-13）**：本文的 OpenAI、Anthropic 與 Gemini 價格只保留為上游市場比較，不能用於 RankWoven 實際請求或扣費。所有 AI 請求統一經既有 Breakout API gateway，實際 model catalog 及價格以 `docs/breakout-api-integration.md`、gateway 控制台與使用日誌為準。
 
 ## 1. AI 模型 API
 
@@ -13,7 +14,7 @@
 | Anthropic Messages／Tool use          | 長文審閱、引用、複雜重寫        | 官方公開 per MTok：Claude Opus 5 input $5、output $25；Sonnet 5 input $2、output $10；Haiku 4.5 input $1、output $5。Prompt cache read 通常為 input 10%；Batch 低 50% | Structured Outputs／strict tools 仍要 runtime validation；Message Batch 最多 100,000 requests 或 256 MB，最長 24 小時。來源：[Pricing](https://docs.anthropic.com/en/docs/about-claude/pricing)、[Batch](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing)                                              |
 | Gemini Developer API                  | 低成本分類、grounding、批量分析 | Gemini 3.8／3.7 Flash 於 2026-12-31 前 Standard input $0.75、output $3.75，2027-01-01 起 $1.50／$7.50；Batch 約為 Standard 50%                | Grounding with Google Search 每月共 5,000 requests 免費，其後 $14／1,000；Batch inline <20 MB、JSONL <2 GB。來源：[Pricing](https://ai.google.dev/gemini-api/docs/pricing)、[Batch](https://ai.google.dev/gemini-api/docs/batch-api)、[Grounding](https://ai.google.dev/gemini-api/docs/google-search)                                              |
 
-**AI 選型結論：** P0 使用 OpenAI Responses（schema/tool 生態完整）+ OpenAI Embeddings；長文引用可接 Anthropic Sonnet；成本敏感的離線分類使用 Gemini Flash Batch。所有 provider 均經 `AIProviderAdapter`，保存 model、版本、token、unit cost snapshot、evidence refs。模型 ID、價格及生效日期不可寫死於業務邏輯。
+**AI 選型結論（已取代）**：不建立 OpenAI、Anthropic 或 Gemini 直連 adapter。P0 只使用 Breakout gateway 與 gateway model profile；保存 gateway、model、catalog snapshot、token、unit cost snapshot、evidence refs。模型 ID、價格及生效日期不可寫死於業務邏輯。
 
 ## 2. SEO／競品／Backlink 資料
 
@@ -57,13 +58,13 @@
 ### 推薦（MVP／P0）
 
 1. DataForSEO PAYG：$50 最低充值；只查 Top 100／必要欄位，SERP、Backlinks、LLM Mentions 分開記錄 cost。
-2. OpenAI Responses + embeddings：即時請求用小模型，長批量使用 Batch（官方 50% 折扣）；保留 Anthropic Sonnet 作長文／citation fallback。
+2. Breakout gateway：文字、embedding 與圖片只切換經 capability 驗證的 model ID；成本使用 gateway 價格快照與使用日誌，而非上游公開單價。
 3. GSC、CrUX、Lighthouse、WordPress REST：免費 API 或自建成本，按 OAuth／主機配額治理。
 4. Stripe Billing + Entitlements + 自建 credits ledger；PayPal 作可選通道，不承諾「無限使用」。
 
 ### 成本敏感替代
 
-- Gemini Flash Batch 取代大部分離線分類；DataForSEO 仍保留作可驗證 SEO 數據。
+- 在 Breakout catalog 中為非即時分類建立 approved batch profile；DataForSEO 仍保留作可驗證 SEO 數據。
 - 不購買 Ahrefs／Semrush 平台代付；讓 Enterprise 使用者 BYOK，平台只保留加密 connection metadata。
 
 ### 高精度／企業替代

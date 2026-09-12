@@ -5,6 +5,7 @@
 > 依據：`docs/rankwoven-phase-2-prd.md`
 > 研究底稿：`docs/research/phase-2-ai-seo-2026.md`、`docs/research/phase-2-api-pricing-2026.md`
 > PH2-02 核檢：`docs/approvals/phase-2/PH2-02-provider-selection.md`
+> AI gateway 接口：`docs/breakout-api-integration.md`
 > 原則：每一步必須完成核檢並得到明確批准，才可開始下一步。
 
 ## 1. 文件目的
@@ -160,11 +161,11 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **工作**：
 
-1. 對每個 Provider 記錄能力、單位、配額、延遲、資料保留、地區限制、fallback 與退訂方式。
-2. 為 Keyword／SERP／Backlink／LLM Mention 選主 Provider；為 AI 文字、Embedding、Grounding、圖片、Email、支付選主／備方案。
+1. 對每個 SEO／CMS／支付 Provider 記錄能力、單位、配額、延遲、資料保留、地區限制、fallback 與退訂方式；AI 只盤點既有 Breakout gateway 的 model catalog、capability 與價格快照。
+2. 為 Keyword／SERP／Backlink／LLM Mention 選主 Provider；AI 文字、Embedding、圖片只選 gateway model profile，不另選上游 API。
 3. 建立每項任務的成本公式、月度上限、單租戶上限及 hard stop。
 4. 用 fixture 模擬 provider success、timeout、429、partial、schema refusal、價格漂移及不可用地區。
-5. 確定 BYOK 是否開放，並把金鑰責任與用量顯示寫入方案。
+5. 確定 SEO BYOK 是否開放，並把 gateway key、價格快照、模型切換責任與用量顯示寫入方案。
 
 **核檢**：
 
@@ -180,7 +181,7 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **批准門檻**：Finance／Operations 批准預算；Security／Privacy 批准資料處理；Tech Lead 批准 adapter 能力。
 
-**本次選型結論**：DataForSEO 作平台 SEO 主 Provider；OpenAI `gpt-5.6-luna` 作互動／embedding 主路由；Gemini Flash Batch 作低成本非同步批量；Claude Sonnet 5 作長文與引用 fallback；Ahrefs／Semrush 只作 BYOK；WordPress first；Stripe + 本地 `usage_ledger`；Email 只生成草稿。
+**本次選型結論**：DataForSEO 作平台 SEO 主 Provider；所有 AI 模型請求固定經既有 Breakout API gateway，文字、embedding、圖片只切換已核驗 model ID；Ahrefs／Semrush 只作 SEO BYOK；WordPress first；Stripe + 本地 `usage_ledger`；Email 只生成草稿。
 
 ### PH2-03：架構、資料與 API 契約
 
@@ -188,7 +189,7 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **工作**：
 
-1. 建立 capability-oriented Provider Adapter：`SeoMetricsProvider`、`TextGenerationProvider`、`EmbeddingProvider`、`PageFetchService`、`PublishingTargetAdapter`、`BillingProvider`。
+1. 建立 capability-oriented adapter：`SeoMetricsProvider`、單一 `AiGatewayAdapter`、`PageFetchService`、`PublishingTargetAdapter`、`BillingProvider`；`AiGatewayAdapter` 固定使用 Breakout gateway，只切換 model profile。
 2. 定義 PostgreSQL migration、workspace foreign key、unique constraint、資料保留及加密參照。
 3. 定義 `sourceType`：`first_party_observed`、`provider_estimated`、`deterministic_check`、`ai_inferred`、`user_asserted`。
 4. 所有長任務使用 `202 + taskId + progress`；所有寫入使用 `Idempotency-Key`。
@@ -385,15 +386,14 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 價格均為官方公開資料在 2026-09-13 的快照；按量、地區、合約、稅項、最低消費及生效日期可能改變。正式採購前要重新核價，不能把本表當發票。完整核檢以 `docs/approvals/phase-2/PH2-02-provider-selection.md` 為準。
 
-### 6.1 AI 文字、結構化輸出與 Embedding
+### 6.1 AI 統一代理、模型目錄與 Embedding
 
-| 方案             | 適合工作                                              | 價格／限制摘要                                                                                                                                          | 優點                                                        | 風險／取捨                                                      |
-| ---------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------- |
-| OpenAI API       | Responses、Structured Outputs、工具、Embedding、Evals | 2026-09-13 快照：`gpt-5.6-luna` $0.20／$1.20、`gpt-5.6-terra` $2／$12、`gpt-5.6-sol` $4／$20 per MTok；Batch 約低 50%                                                                                   | **互動與 Embedding 主 Provider**；SDK、工具與結構化輸出完整 | 需處理 refusal、截斷、`store:false`、價格及資料區域變動             |
-| Anthropic Claude | 高品質長文改寫、文件引用、審稿                        | Claude Sonnet 5：$2／MTok input、$10／MTok output；Haiku 4.5：$1／$5；Batch 低 50%                                                                      | **高品質 fallback**；引用與長文品質佳                       | schema 有子集及 strict tool 限制；價格快照需按官方頁更新        |
-| Google Gemini    | 低成本批量、Grounding、Google Search 引用             | Gemini 3.8／3.7 Flash：2026-12-31 前 $0.75／$3.75 per MTok，2027-01-01 起 $1.50／$7.50；Batch 約低 50%；Google Search 每月共 5,000 requests 免費，其後 $14／1,000 queries | **離線批量與 grounding**；成本低、多語言                    | Grounding 按實際搜尋查詢計費；需保存 model ID 與生效日期 |
+| 方案 | 適合工作 | 已核驗接口／限制 | 選擇 |
+| --- | --- | --- | --- |
+| Breakout API gateway | 文字、Embedding、圖片、模型切換 | `GET /v1/models` 已返回 200 與 48 個 model；現有文字 adapter 使用 `POST /v1/chat/completions`；embedding／圖片需 PH2-03 capability smoke | **唯一 AI 連線**：不建立上游 Provider API |
+| Gateway model profile | `text.default`、`text.high_quality`、`text.batch`、`embedding.default`、`image.default` | model ID 必須存在於 gateway catalog，並保存 `supported_endpoint_types`、capability 與價格快照 | **唯一切換方式**：只換 model ID，不換 key 或 base URL |
 
-**推薦組合**：OpenAI Responses／Embedding 處理互動評分、結構化輸出與即時研究；Gemini Flash Batch 處理意圖、標籤、摘要及低成本批量初稿；Claude Sonnet 作高價值內容改寫、引用對齊與質量 fallback。所有請求走 `TextGenerationProvider`／`EmbeddingProvider`，不把模型 ID 寫死在業務邏輯。
+**推薦組合**：所有 AI 請求走 `AiGatewayAdapter` 與既有 `WENWEN_API_BASE_URL`；管理員只在經驗證的 Breakout model catalog 建立／切換 profile。gateway `/v1/models` 不提供價格，因此成本由 Breakout 控制台／使用日誌的 pricing snapshot 管理，不能用上游公開單價直接結算。
 
 ### 6.2 SEO 數據與 Backlink
 
@@ -438,10 +438,7 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 ```text
 monthly_cost
 = seo_provider_calls * endpoint_unit_cost
-+ input_tokens / 1,000,000 * input_price
-+ output_tokens / 1,000,000 * output_price
-+ grounding_queries * search_query_price
-+ embedding_tokens / 1,000,000 * embedding_price
++ gateway_model_price_snapshot(input_tokens, output_tokens, image_count)
 + cms_hosting / storage / email / payment fees
 ```
 
@@ -449,15 +446,14 @@ monthly_cost
 
 ### 7.2 例：1,000 次內容分析
 
-假設每次 4,000 input tokens + 1,000 output tokens，共 4M input + 1M output，未計 grounding、storage、稅項及 provider minimum：
+假設每次 4,000 input tokens + 1,000 output tokens，共 4M input + 1M output，未計圖片、重試、storage 與稅項：
 
-| 模型             |                          同步估算 | Batch 估算（按 50% 折扣假設） | 適合                 |
-| ---------------- | --------------------------------: | ----------------------------: | -------------------- |
-| Gemini 3.8／3.7 Flash | 4 × $0.75 + 1 × $3.75 = **$6.75** |                  約 **$3.38** | 批量標籤、摘要、初稿 |
-| Claude Sonnet 5  |     4 × $2 + 1 × $10 = **$18.00** |                  約 **$9.00** | 高價值重寫、審稿     |
-| Claude Haiku 4.5 |       4 × $1 + 1 × $5 = **$9.00** |                  約 **$4.50** | 低成本分類／改寫     |
+```text
+gateway_cost = 4 × gateway_price_snapshot.input_usd_per_mtok
+             + 1 × gateway_price_snapshot.output_usd_per_mtok
+```
 
-這個例子只用於比較，不代表實際帳單；正式模型價格、上下文長度、cache、圖片、grounding、重試及輸出量都要進入計算。
+Breakout `/v1/models` 不回傳價格；PH2-03 必須先把控制台或使用日誌的模型價格存為版本化 snapshot，才能顯示各 model 的 1,000 次成本、預留 credits 與實際毛利。上游公開價格只可作外部市場比較，不可作 RankWoven 扣費依據。
 
 ### 7.3 SEO API 用量例子
 
@@ -477,7 +473,7 @@ monthly_cost
 | 層             | 選擇                                                                        | 理由                                                                     |
 | -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | SEO data       | DataForSEO 平台主 Provider；Ahrefs／Semrush BYOK                            | 一套 API 覆蓋 keyword／SERP／backlink／LLM；高階客戶承擔自有費用         |
-| AI routing     | OpenAI interactive／Embedding + Gemini Flash Batch + Claude Sonnet fallback | 以成本、品質、grounding、schema 和資料政策分工，不把所有工作交給昂貴模型 |
+| AI routing     | 單一 Breakout API gateway + versioned model profiles                         | 同一 key／base URL，按任務切換 model ID、capability 及價格快照              |
 | Performance    | Lighthouse + direct CrUX                                                    | lab／field 分離，避開 PSI field data 退場風險                            |
 | CMS            | WordPress first，Shopify second，Ghost optional，Joomla／OpenCart 2D        | 符合現有基礎與市場價值，逐步增加寫入面                                   |
 | Billing        | Stripe Subscription／Entitlement + local usage ledger；PayPal later         | 付款與權限分離，配額不受非同步 meter 延遲影響                            |
@@ -499,7 +495,7 @@ monthly_cost
 ### 8.2 降級策略
 
 - SEO Provider 不可用：返回 `PROVIDER_UNAVAILABLE` 或既有快取，不用 AI 填值。
-- AI Provider 不可用：切換同能力 fallback；若沒有同等資料政策，返回 partial／failed。
+- AI gateway 或 model 不可用：只切換同一 gateway、同 capability 的 approved model；若沒有則返回 partial／failed，不改用上游直連 API。
 - CrUX 無資料：保留 Lighthouse lab 結果，顯示 field data unavailable。
 - CMS 不可用：保存已批准草稿與任務，不重複發布。
 - Billing webhook 延遲：保留本地已驗證 entitlement，進入 reconciliation，不立即永久停權。

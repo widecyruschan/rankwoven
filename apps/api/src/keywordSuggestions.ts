@@ -387,17 +387,21 @@ async function fetchAhrefsMetrics(
   if (!ahrefsUrl || !ahrefsKey) return undefined;
 
   try {
-    // Ahrefs accepts up to 200 keywords per request
-    const response = await fetchImpl(ahrefsUrl, {
-      method: 'POST',
+    const requestUrl = new URL(ahrefsUrl);
+    requestUrl.searchParams.set('keywords', keywords.slice(0, 200).join(','));
+    requestUrl.searchParams.set(
+      'country',
+      locale === 'zh-HK' ? 'hk' : locale.startsWith('zh') ? 'tw' : 'us'
+    );
+    requestUrl.searchParams.set('select', 'keyword,volume,cpc,difficulty');
+    requestUrl.searchParams.set('limit', String(Math.min(keywords.length, 200)));
+    requestUrl.searchParams.set('output', 'json');
+
+    const response = await fetchImpl(requestUrl, {
+      method: 'GET',
       headers: {
-        Authorization: `Bearer ${ahrefsKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        keywords: keywords.slice(0, 200),
-        country: locale.startsWith('zh') ? 'tw' : 'us'
-      })
+        Authorization: `Bearer ${ahrefsKey}`
+      }
     });
 
     if (!response.ok) return undefined;
@@ -411,7 +415,19 @@ async function fetchAhrefsMetrics(
       }>;
     };
 
-    return normalizeAhrefsSemrushMetrics(body.keywords ?? []);
+    return (body.keywords ?? [])
+      .map((keyword) => {
+        const cpcCents = toNumber(keyword.cpc);
+
+        return {
+          keyword: normalizeKeyword(String(keyword.keyword ?? '')),
+          monthlySearchVolume: toNumber(keyword.volume),
+          // Ahrefs Keyword Explorer returns CPC in USD cents.
+          cpcUsd: cpcCents === undefined ? undefined : cpcCents / 100,
+          keywordDifficulty: toNumber(keyword.difficulty)
+        };
+      })
+      .filter((keyword) => keyword.keyword);
   } catch {
     return undefined;
   }
@@ -750,7 +766,7 @@ export function createKeywordSuggestionService(
     },
 
     async enrichKeywords(keywords, locale) {
-      const enriched = await enrichWithThirdParty(keywords, locale, fetch);
+      const enriched = await enrichWithThirdParty(keywords, locale, fetchImpl);
       return enriched;
     }
   };
