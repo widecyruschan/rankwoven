@@ -18,6 +18,7 @@ import {
   type SuggestionStatus,
   type SuggestionType
 } from '../api/siteConnections';
+import { getRoutePath } from '../constants/routeRegistry';
 
 const { t } = useI18n();
 
@@ -417,7 +418,7 @@ onMounted(() => {
         >
           {{ isAuditing ? t('suggestions.auditRunning') : t('suggestions.runAudit') }}
         </a-button>
-        <RouterLink class="primary-button" to="/app/article-suggestions">{{ t('suggestions.openArticle') }}</RouterLink>
+        <RouterLink class="primary-button" :to="getRoutePath('app-media')">{{ t('suggestions.openArticle') }}</RouterLink>
       </div>
     </div>
 
@@ -484,7 +485,7 @@ onMounted(() => {
               >
                 {{ t('apply.applyOne') }}
               </a-button>
-              <RouterLink class="text-button" to="/app/article-suggestions">{{ t('suggestions.review') }}</RouterLink>
+              <RouterLink class="text-button" :to="getRoutePath('app-media')">{{ t('suggestions.review') }}</RouterLink>
             </div>
           </template>
         </template>

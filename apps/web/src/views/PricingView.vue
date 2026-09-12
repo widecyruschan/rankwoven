@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { getRoutePath } from '../constants/routeRegistry';
 
 const { t } = useI18n();
 
@@ -58,7 +59,7 @@ const plans = computed(() => [
         <ul class="plain-list">
           <li v-for="feature in plan.features" :key="feature">{{ feature }}</li>
         </ul>
-        <RouterLink :class="plan.featured ? 'primary-button' : 'secondary-button'" to="/login">
+        <RouterLink :class="plan.featured ? 'primary-button' : 'secondary-button'" :to="getRoutePath('auth-login')">
           {{ t('pricing.action') }}
         </RouterLink>
       </article>

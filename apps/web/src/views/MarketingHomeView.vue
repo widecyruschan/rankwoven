@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { getRoutePath } from '../constants/routeRegistry';
 
 const { t } = useI18n();
 
@@ -41,8 +42,8 @@ const signalItems = computed(() => [
         <h1>{{ t('marketing.headline') }}</h1>
         <p>{{ t('marketing.subheadline') }}</p>
         <div class="action-row">
-          <RouterLink class="primary-button" to="/login">{{ t('marketing.primaryAction') }}</RouterLink>
-          <RouterLink class="secondary-button" to="/pricing">{{ t('marketing.secondaryAction') }}</RouterLink>
+          <RouterLink class="primary-button" :to="getRoutePath('auth-login')">{{ t('marketing.primaryAction') }}</RouterLink>
+          <RouterLink class="secondary-button" :to="getRoutePath('public-pricing')">{{ t('marketing.secondaryAction') }}</RouterLink>
         </div>
       </div>
 
@@ -216,7 +217,7 @@ const signalItems = computed(() => [
     <section class="marketing-section marketing-band persona-cta">
       <div class="persona-cta-inner">
         <h2>{{ t('marketing.headline') }}</h2>
-        <RouterLink class="primary-button" to="/login">{{ t('marketing.primaryAction') }}</RouterLink>
+        <RouterLink class="primary-button" :to="getRoutePath('auth-login')">{{ t('marketing.primaryAction') }}</RouterLink>
       </div>
     </section>
   </main>

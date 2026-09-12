@@ -21,7 +21,7 @@
 | 客戶產品 | `/app/*` | `noindex, nofollow` | 現有 app views | 站點、分析、關鍵詞、媒體、內鏈、任務、CMS、Lighthouse、設定 |
 | 內部管理 | `/admin/*` | `noindex, nofollow` | 現有 admin views | 平台、客戶、用量、運營和管理設定 |
 
-路由 meta 由 `apps/web/src/router/index.ts` 維護 `indexable`、`canonicalPath`、`descriptionKey` 和 `keywordKey`；`apps/web/src/utils/seoHead.ts` 統一同步頁面 title、description、keywords、robots、canonical、Open Graph 和 Twitter card。公開頁面 URL 同步到 `apps/web/public/sitemap.xml`，`/app`、`/admin` 和登入／註冊流程同時由 Nginx `X-Robots-Tag` 與前端 meta 禁止索引。
+路由 meta 由 `apps/web/src/constants/routeRegistry.json` 作為唯一來源，再由 `apps/web/src/router/index.ts` 生成；`apps/web/src/utils/seoHead.ts` 統一同步頁面 title、description、keywords、robots、canonical、Open Graph 和 Twitter card。公開頁面 URL 由同一 registry 驅動 `apps/web/public/sitemap.xml` 及 `sitemap-pages.xml`／`sitemap-blog.xml` 分組，`/app`、`/admin` 和登入／註冊流程同時由 Nginx `X-Robots-Tag` 與前端 meta 禁止索引。
 
 目前仍是 Vite + Vue SPA，營銷與 Blog 的真實文案在瀏覽器載入後由 Vue 渲染。每次 build 會由 `apps/web/scripts/generate-seo-pages.mjs` 根據公開頁面與文章 manifest 產生 96 個路由專屬的 `dist/**/index.html`，讓不執行 JavaScript 的爬蟲仍能取得正確 title、description、keywords、canonical、Open Graph 和文章 BlogPosting metadata；但 H1 與正文仍未進入初始 HTML。正式 SEO 上線前如需完整內容索引，仍需將營銷與內容層遷移到 SSG 或 SSR，後台維持 SPA。
 
@@ -57,7 +57,7 @@
 - `/blog` 每頁顯示 12 篇文章，搜尋同時比對標題和摘要，分類選單由 16 個 `BlogCategoryId` 驅動。
 - `/blog/:slug` 由 `BlogArticleView.vue` 載入正文，使用 `marked` 轉換 Markdown，再由 `DOMPurify` 消毒後插入 DOM；外部連結會加上 `target="_blank"` 與 `rel="noopener noreferrer"`。
 - 文章正文維持繁體中文；頁面導覽、篩選器、metadata、錯誤狀態和 footer 走 Vue I18n。切換至英文等 locale 時，不對正文做未經人工審校的假翻譯。
-- 文章封面輸出至 `apps/web/public/blog/seo/images/*.webp`；文章 URL 和公開頁面 URL 一起由 `scripts/generate-sitemap.mjs` 生成到 `apps/web/public/sitemap.xml`。
+- 文章封面輸出至 `apps/web/public/blog/seo/images/*.webp`；文章 URL 和公開頁面 URL 由 `routeRegistry.json` 及文章 manifest 經 `scripts/generate-sitemap.mjs` 生成到 Sitemap index 及分組檔案。
 - build 後的靜態 SEO fallback 會為公開入口與 86 篇文章輸出路由專屬 HTML metadata；文章正文和 H1 仍在瀏覽器載入後由 Vue 渲染。
 - 正式 SEO 上線前如需完整內容索引，仍需將公開 Blog 由目前 Vite SPA 遷移至 SSG/SSR，讓文章正文和 H1 出現在初始 HTML。
 

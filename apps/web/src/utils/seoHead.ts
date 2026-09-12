@@ -7,6 +7,7 @@ export interface SeoHeadOptions {
   type?: 'website' | 'article';
   imageUrl?: string;
   locale?: string;
+  schema?: Record<string, unknown>;
 }
 
 function setMeta(attribute: 'name' | 'property', key: string, content: string) {
@@ -31,6 +32,57 @@ function setLink(rel: string, href: string) {
     document.head.appendChild(element);
   }
   element.setAttribute('href', href);
+}
+
+function setAlternateLink(hreflang: string, href: string) {
+  let element = document.head.querySelector<HTMLLinkElement>(
+    `link[rel="alternate"][hreflang="${hreflang}"]`
+  );
+  if (!element) {
+    element = document.createElement('link');
+    element.setAttribute('rel', 'alternate');
+    element.setAttribute('hreflang', hreflang);
+    document.head.appendChild(element);
+  }
+  element.setAttribute('href', href);
+}
+
+function removeAlternateLinks() {
+  document.head
+    .querySelectorAll('link[rel="alternate"][hreflang]')
+    .forEach((element) => element.remove());
+}
+
+function updateRouteSchema(options: SeoHeadOptions) {
+  document.querySelector('#rankwoven-route-schema')?.remove();
+  if (!options.indexable) return;
+
+  const organization = {
+    '@type': 'Organization',
+    name: 'RankWoven',
+    url: new URL('/', window.location.origin).toString()
+  };
+  const website = {
+    '@type': 'WebSite',
+    name: 'RankWoven',
+    url: new URL('/', window.location.origin).toString(),
+    publisher: organization
+  };
+  const schema = options.schema ?? {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: options.title,
+    description: options.description,
+    url: options.canonicalUrl,
+    isPartOf: website,
+    publisher: organization,
+    inLanguage: options.locale ?? 'zh_Hant'
+  };
+  const element = document.createElement('script');
+  element.id = 'rankwoven-route-schema';
+  element.type = 'application/ld+json';
+  element.textContent = JSON.stringify(schema);
+  document.head.appendChild(element);
 }
 
 export function updateSeoHead(options: SeoHeadOptions) {
@@ -62,4 +114,10 @@ export function updateSeoHead(options: SeoHeadOptions) {
     removeMeta('name', 'twitter:image');
   }
   setLink('canonical', options.canonicalUrl);
+  if (options.indexable) {
+    setAlternateLink('x-default', options.canonicalUrl);
+  } else {
+    removeAlternateLinks();
+  }
+  updateRouteSchema(options);
 }

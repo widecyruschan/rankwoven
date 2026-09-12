@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { Form, Input, Button, Card, Typography, message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { registerUser } from '../api/auth';
+import { getRoutePath } from '../constants/routeRegistry';
 import { useAuthStore } from '../stores/auth';
 
 const { t } = useI18n();
@@ -41,7 +42,7 @@ async function handleRegister() {
     const session = await registerUser(formState.name.trim(), formState.email.trim().toLowerCase(), formState.password);
     authStore.setSession(session.token, session.user);
     message.success(t('login.successRegistered'));
-    await router.push('/app/dashboard');
+    await router.push(getRoutePath('app-dashboard'));
   } catch (e: unknown) {
     message.error((e instanceof Error ? e.message : undefined) || tc('failed'));
   } finally {
@@ -102,7 +103,7 @@ async function handleRegister() {
           </Form.Item>
         </Form>
         <div class="auth-links">
-          <router-link to="/login">{{ tc('loginLink') }}</router-link>
+          <router-link :to="getRoutePath('auth-login')">{{ tc('loginLink') }}</router-link>
         </div>
       </Card>
     </div>

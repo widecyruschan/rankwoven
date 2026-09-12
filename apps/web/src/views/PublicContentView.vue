@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { getRoutePath } from '../constants/routeRegistry';
 
 type PublicPageKey = 'features' | 'blog' | 'docs' | 'help' | 'about' | 'contact' | 'privacy' | 'terms';
 type ContentItem = { title: string; body: string };
@@ -64,7 +65,7 @@ function submitContact() {
           </article>
         </div>
       </div>
-      <RouterLink class="primary-button" to="/login">{{ t('publicPages.features.cta') }}</RouterLink>
+      <RouterLink class="primary-button" :to="getRoutePath('auth-login')">{{ t('publicPages.features.cta') }}</RouterLink>
     </section>
 
     <section v-else-if="pageKey === 'docs'" class="public-content-section public-docs-layout">
@@ -77,7 +78,7 @@ function submitContact() {
           <div><h2>{{ step.title }}</h2><p>{{ step.body }}</p></div>
         </article>
         <div class="public-code-block"><span>{{ t('publicPages.docs.codeLabel') }}</span><pre><code>{{ t('publicPages.docs.code') }}</code></pre></div>
-        <RouterLink class="primary-button" to="/pricing">{{ t('publicPages.docs.cta') }}</RouterLink>
+        <RouterLink class="primary-button" :to="getRoutePath('public-pricing')">{{ t('publicPages.docs.cta') }}</RouterLink>
       </div>
     </section>
 
@@ -88,7 +89,7 @@ function submitContact() {
           <p>{{ faq.answer }}</p>
         </details>
       </div>
-      <RouterLink class="secondary-button" to="/contact">{{ t('publicPages.help.contactCta') }}</RouterLink>
+      <RouterLink class="secondary-button" :to="getRoutePath('public-contact')">{{ t('publicPages.help.contactCta') }}</RouterLink>
     </section>
 
     <section v-else-if="pageKey === 'about'" class="public-content-section">
@@ -97,7 +98,7 @@ function submitContact() {
       <div class="public-blog-grid">
         <article v-for="item in valueItems" :key="item.title" class="public-item-card"><h2>{{ item.title }}</h2><p>{{ item.body }}</p></article>
       </div>
-      <RouterLink class="primary-button" to="/features">{{ t('publicPages.about.cta') }}</RouterLink>
+      <RouterLink class="primary-button" :to="getRoutePath('public-features')">{{ t('publicPages.about.cta') }}</RouterLink>
     </section>
 
     <section v-else-if="pageKey === 'contact'" class="public-content-section public-contact-layout">

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import type { TableColumnsType } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
+import { getRoutePath } from '../constants/routeRegistry';
 import { getSiteConnections, getSiteConnection, deleteSiteConnection, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
 
 const { t, locale } = useI18n();
@@ -315,7 +316,7 @@ onMounted(() => {
               <a-button
                 v-if="record.status === 'connected'"
                 type="link"
-                @click="router.push({ path: '/app/site-audit', query: { siteId: record.id } })"
+                @click="router.push({ path: getRoutePath('app-site-audit'), query: { siteId: record.id } })"
               >
                 {{ t('nav.siteAudit') }}
               </a-button>

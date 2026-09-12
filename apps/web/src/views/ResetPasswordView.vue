@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { Input, Button, Card, Typography, Form, message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { resetPassword } from '../api/auth';
+import { getRoutePath } from '../constants/routeRegistry';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -46,7 +47,7 @@ async function handleSubmit() {
     success.value = true;
     message.success(tc('success'));
     setTimeout(() => {
-      router.push('/login');
+      router.push(getRoutePath('auth-login'));
     }, 2000);
   } catch (e: unknown) {
     message.error(e instanceof Error ? e.message : tc('invalidToken'));
@@ -72,7 +73,7 @@ async function handleSubmit() {
             {{ tc('invalidToken') }}
           </Typography.Paragraph>
           <div class="auth-links">
-            <router-link to="/forgot-password">{{ tc('backToLogin') }}</router-link>
+            <router-link :to="getRoutePath('auth-forgot-password')">{{ tc('backToLogin') }}</router-link>
           </div>
         </template>
         <template v-else>

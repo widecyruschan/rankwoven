@@ -1,8 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { blogArticles, getAdjacentBlogArticles, getBlogArticleSeoDescription, loadBlogArticle } from '../src/blog/articles';
+import {
+  blogArticles,
+  getAdjacentBlogArticles,
+  getBlogArticleSeoDescription,
+  loadBlogArticle
+} from '../src/blog/articles';
 import { publicSeoKeywordKeys } from '../src/constants/publicSeo';
+import {
+  activePublicSeoRoutes,
+  activeRouteEntries,
+  getNavigationRoutes,
+  plannedRouteEntries,
+  routeRegistry
+} from '../src/constants/routeRegistry';
 import { useTheme } from '../src/composables/useTheme';
 import { i18n } from '../src/i18n';
 import { darkAntDesignTheme, darkWorkspacePalette } from '../src/theme/darkWorkspaceTheme';
@@ -36,7 +48,7 @@ describe('web smoke test', () => {
       expect(mediaViewSource).not.toContain('<a-tabs');
       expect(mediaViewSource).not.toContain('activeTab');
       expect(mediaViewSource).not.toContain('activeIssue');
-      expect(mediaViewSource).not.toContain("issue: activeIssue.value");
+      expect(mediaViewSource).not.toContain('issue: activeIssue.value');
       expect(mediaViewSource).toContain(':row-selection="mediaRowSelection"');
       expect(mediaViewSource).toContain('batchApproveOptimizationSuggestions');
       expect(mediaViewSource).toContain('batchApplyOptimizationSuggestions');
@@ -54,7 +66,9 @@ describe('web smoke test', () => {
   it('defaults traffic analytics to the first connected site', async () => {
     const analyticsViewSource = await readFile(resolve('src/views/AnalyticsView.vue'), 'utf8');
 
-    expect(analyticsViewSource).toContain('const hasSelectedSite = sites.value.some((site) => site.id === selectedSiteId.value);');
+    expect(analyticsViewSource).toContain(
+      'const hasSelectedSite = sites.value.some((site) => site.id === selectedSiteId.value);'
+    );
     expect(analyticsViewSource).toContain('selectedSiteId.value = sites.value[0].id;');
     expect(analyticsViewSource.indexOf('await loadSites();')).toBeLessThan(
       analyticsViewSource.indexOf('await loadAnalytics();')
@@ -80,7 +94,9 @@ describe('web smoke test', () => {
 
     try {
       i18n.global.locale.value = 'en';
-      expect(i18n.global.t('publicPages.features.title')).toContain('AI SEO Website Optimization Tools');
+      expect(i18n.global.t('publicPages.features.title')).toContain(
+        'AI SEO Website Optimization Tools'
+      );
       expect(i18n.global.t('publicPages.privacy.title')).toBe('AI SEO Tool Privacy Policy');
 
       i18n.global.locale.value = 'zh-Hant';
@@ -93,7 +109,9 @@ describe('web smoke test', () => {
 
   it('keeps the SEO handbook complete and internally navigable', async () => {
     expect(blogArticles).toHaveLength(86);
-    expect(blogArticles.map((article) => article.chapter)).toEqual(Array.from({ length: 86 }, (_, index) => index + 1));
+    expect(blogArticles.map((article) => article.chapter)).toEqual(
+      Array.from({ length: 86 }, (_, index) => index + 1)
+    );
     expect(new Set(blogArticles.map((article) => article.slug)).size).toBe(86);
     expect(blogArticles.every((article) => article.coverImage.endsWith('.webp'))).toBe(true);
 
@@ -127,11 +145,25 @@ describe('web smoke test', () => {
     });
 
     expect(document.title).toContain('SEO 教學');
-    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('網站 SEO');
-    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('index, follow');
-    expect(document.querySelector('meta[name="keywords"]')?.getAttribute('content')).toBe('SEO 教學');
-    expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://rankwoven.com/');
-    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://rankwoven.com/');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain(
+      '網站 SEO'
+    );
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'index, follow'
+    );
+    expect(document.querySelector('meta[name="keywords"]')?.getAttribute('content')).toBe(
+      'SEO 教學'
+    );
+    expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(
+      'https://rankwoven.com/'
+    );
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+      'https://rankwoven.com/'
+    );
+    expect(
+      document.querySelector('link[rel="alternate"][hreflang="x-default"]')?.getAttribute('href')
+    ).toBe('https://rankwoven.com/');
+    expect(document.querySelector('#rankwoven-route-schema')?.textContent).toContain('WebPage');
 
     updateSeoHead({
       title: '登入 RankWoven',
@@ -141,38 +173,96 @@ describe('web smoke test', () => {
       locale: 'zh_Hant'
     });
 
-    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex, nofollow');
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'noindex, nofollow'
+    );
     expect(document.querySelector('meta[name="keywords"]')).toBeNull();
+    expect(document.querySelector('link[rel="alternate"][hreflang="x-default"]')).toBeNull();
+    expect(document.querySelector('#rankwoven-route-schema')).toBeNull();
+  });
+
+  it('keeps the route registry as the source of truth for public and private boundaries', () => {
+    expect(activePublicSeoRoutes.map((route) => route.publicSeoKey)).toEqual(
+      Object.keys(publicSeoKeywordKeys)
+    );
+    expect(new Set(activePublicSeoRoutes.map((route) => route.path)).size).toBe(
+      activePublicSeoRoutes.length
+    );
+    expect(activePublicSeoRoutes.every((route) => route.indexable && route.sitemapGroup)).toBe(
+      true
+    );
+    const privateRoutes = activeRouteEntries.filter((route) => route.area !== 'public');
+    expect(privateRoutes.every((route) => route.indexable === false)).toBe(true);
+    expect(privateRoutes.every((route) => route.sitemapGroup === undefined)).toBe(true);
+    expect(getNavigationRoutes('customer').every((route) => route.area === 'customer')).toBe(true);
+    expect(getNavigationRoutes('admin').every((route) => route.area === 'admin')).toBe(true);
+    expect(routeRegistry.redirects).toEqual(
+      expect.arrayContaining([
+        { from: '/app/articles', to: '/app/sites' },
+        { from: '/app/article-sync', to: '/app/tasks' }
+      ])
+    );
+    expect(plannedRouteEntries.some((route) => route.id === 'app-site-research')).toBe(true);
+    expect(plannedRouteEntries.every((route) => route.enabled === false)).toBe(true);
   });
 
   it('assigns one unique localized keyword to every indexable public page', () => {
     const originalLocale = i18n.global.locale.value;
-    const contentPages = ['features', 'docs', 'help', 'about', 'contact', 'privacy', 'terms', 'blog'] as const;
+    const contentPages = [
+      'features',
+      'docs',
+      'help',
+      'about',
+      'contact',
+      'privacy',
+      'terms',
+      'blog'
+    ] as const;
 
     try {
       for (const locale of ['en', 'zh-Hant'] as const) {
         i18n.global.locale.value = locale;
-        const keywords = Object.values(publicSeoKeywordKeys).map((keywordKey) => String(i18n.global.t(keywordKey)));
+        const keywords = Object.values(publicSeoKeywordKeys).map((keywordKey) =>
+          String(i18n.global.t(keywordKey))
+        );
 
         expect(keywords).toHaveLength(10);
         expect(new Set(keywords).size).toBe(keywords.length);
-        expect(keywords.every((keyword, index) => keyword !== Object.values(publicSeoKeywordKeys)[index])).toBe(true);
+        expect(
+          keywords.every((keyword, index) => keyword !== Object.values(publicSeoKeywordKeys)[index])
+        ).toBe(true);
 
         for (const page of contentPages) {
           const keyword = String(i18n.global.t(publicSeoKeywordKeys[page])).toLocaleLowerCase();
-          expect(String(i18n.global.t(`publicPages.${page}.title`)).toLocaleLowerCase()).toContain(keyword);
-          expect(String(i18n.global.t(`publicPages.${page}.body`)).toLocaleLowerCase()).toContain(keyword);
+          expect(String(i18n.global.t(`publicPages.${page}.title`)).toLocaleLowerCase()).toContain(
+            keyword
+          );
+          expect(String(i18n.global.t(`publicPages.${page}.body`)).toLocaleLowerCase()).toContain(
+            keyword
+          );
         }
 
         const homeKeyword = String(i18n.global.t(publicSeoKeywordKeys.home)).toLocaleLowerCase();
-        expect(String(i18n.global.t('marketing.homeTitle')).toLocaleLowerCase()).toContain(homeKeyword);
-        expect(String(i18n.global.t('marketing.headline')).toLocaleLowerCase()).toContain(homeKeyword);
-        expect(String(i18n.global.t('marketing.homeDescription')).toLocaleLowerCase()).toContain(homeKeyword);
+        expect(String(i18n.global.t('marketing.homeTitle')).toLocaleLowerCase()).toContain(
+          homeKeyword
+        );
+        expect(String(i18n.global.t('marketing.headline')).toLocaleLowerCase()).toContain(
+          homeKeyword
+        );
+        expect(String(i18n.global.t('marketing.homeDescription')).toLocaleLowerCase()).toContain(
+          homeKeyword
+        );
 
-        const pricingKeyword = String(i18n.global.t(publicSeoKeywordKeys.pricing)).toLocaleLowerCase();
-        expect(String(i18n.global.t('pricing.title')).toLocaleLowerCase()).toContain(pricingKeyword);
+        const pricingKeyword = String(
+          i18n.global.t(publicSeoKeywordKeys.pricing)
+        ).toLocaleLowerCase();
+        expect(String(i18n.global.t('pricing.title')).toLocaleLowerCase()).toContain(
+          pricingKeyword
+        );
         expect(String(i18n.global.t('pricing.body')).toLocaleLowerCase()).toContain(pricingKeyword);
-        expect(String(i18n.global.t('marketing.pricingDescription')).toLocaleLowerCase()).toContain(pricingKeyword);
+        expect(String(i18n.global.t('marketing.pricingDescription')).toLocaleLowerCase()).toContain(
+          pricingKeyword
+        );
       }
 
       i18n.global.locale.value = 'zh-Hant';
@@ -205,7 +295,9 @@ describe('web smoke test', () => {
 
     expect(appSource).toContain('isDark.value ? rankwovenLogoDark : rankwovenLogo');
     expect(darkLogoSource).toContain('fill="#EDF3F8"');
-    expect(styleSource).toContain("html[data-theme='dark'] .seo-markdown {\n  color: var(--color-muted);\n}");
+    expect(styleSource).toContain(
+      "html[data-theme='dark'] .seo-markdown {\n  color: var(--color-muted);\n}"
+    );
     expect(styleSource).toContain(
       "html[data-theme='dark'] .seo-markdown blockquote {\n  background: var(--color-surface-soft);\n  color: var(--color-ink);\n}"
     );
@@ -225,7 +317,9 @@ describe('web smoke test', () => {
         .replace('#', '')
         .match(/.{2}/g)!
         .map((channel) => Number.parseInt(channel, 16) / 255)
-        .map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+        .map((channel) =>
+          channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+        );
 
       return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
     }
@@ -233,8 +327,10 @@ describe('web smoke test', () => {
     function getContrastRatio(foreground: string, background: string) {
       const foregroundLuminance = getRelativeLuminance(foreground);
       const backgroundLuminance = getRelativeLuminance(background);
-      return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
-        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+      return (
+        (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+      );
     }
 
     expect(darkAntDesignTheme.algorithm).toBeTruthy();
@@ -245,12 +341,24 @@ describe('web smoke test', () => {
       colorTextPlaceholder: darkWorkspacePalette.textTertiary,
       colorBorder: darkWorkspacePalette.border
     });
-    expect(getContrastRatio(darkWorkspacePalette.text, darkWorkspacePalette.surface)).toBeGreaterThanOrEqual(4.5);
-    expect(getContrastRatio(darkWorkspacePalette.textTertiary, darkWorkspacePalette.surface)).toBeGreaterThanOrEqual(4.5);
-    expect(getContrastRatio(darkWorkspacePalette.border, darkWorkspacePalette.surface)).toBeGreaterThanOrEqual(3);
-    expect(getContrastRatio(darkWorkspacePalette.primaryText, darkWorkspacePalette.primary)).toBeGreaterThanOrEqual(4.5);
-    expect(styleSource).toContain("html[data-theme='dark'] .app-shell .ant-tag {\n  color: var(--color-ink);\n}");
-    expect(styleSource).toContain('.ant-card,\n.ant-card-body,\n.analytics-chart {\n  min-width: 0;\n}');
+    expect(
+      getContrastRatio(darkWorkspacePalette.text, darkWorkspacePalette.surface)
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      getContrastRatio(darkWorkspacePalette.textTertiary, darkWorkspacePalette.surface)
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      getContrastRatio(darkWorkspacePalette.border, darkWorkspacePalette.surface)
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      getContrastRatio(darkWorkspacePalette.primaryText, darkWorkspacePalette.primary)
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(styleSource).toContain(
+      "html[data-theme='dark'] .app-shell .ant-tag {\n  color: var(--color-ink);\n}"
+    );
+    expect(styleSource).toContain(
+      '.ant-card,\n.ant-card-body,\n.analytics-chart {\n  min-width: 0;\n}'
+    );
   });
 
   it('centers and balances the localized pricing heading', async () => {
@@ -264,5 +372,4 @@ describe('web smoke test', () => {
       '.marketing-nav {\n    order: 3;\n    justify-content: center;\n    width: 100%;\n  }'
     );
   });
-
 });

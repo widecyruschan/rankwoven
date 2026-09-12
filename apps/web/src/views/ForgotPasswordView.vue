@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { Input, Button, Card, Typography, Form, message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { forgotPassword } from '../api/auth';
+import { getRoutePath } from '../constants/routeRegistry';
 
 const { t } = useI18n();
 
@@ -59,7 +60,7 @@ async function handleSubmit() {
           </Form.Item>
         </Form>
         <div class="auth-links">
-          <router-link to="/login">{{ tc('backToLogin') }}</router-link>
+          <router-link :to="getRoutePath('auth-login')">{{ tc('backToLogin') }}</router-link>
         </div>
       </Card>
     </div>

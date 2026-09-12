@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { BookOpen, ChevronLeft, ChevronRight, Search } from 'lucide-vue-next';
 import { blogArticles, blogCategoryIds, type BlogCategoryId } from '../blog/articles';
+import { getRoutePath } from '../constants/routeRegistry';
 
 const pageSize = 12;
 const { t } = useI18n();
@@ -84,7 +85,7 @@ function changePage(nextPage: number) {
 
     <section v-if="paginatedArticles.length" class="blog-article-grid">
       <article v-for="article in paginatedArticles" :key="article.slug" class="blog-article-card">
-        <RouterLink class="blog-card-image" :to="`/blog/${article.slug}`" :aria-label="article.title">
+        <RouterLink class="blog-card-image" :to="getRoutePath('public-blog-article', { slug: article.slug })" :aria-label="article.title">
           <img :src="article.coverImage" :alt="article.title" loading="lazy" width="1024" height="1024">
         </RouterLink>
         <div class="blog-card-content">
@@ -93,9 +94,9 @@ function changePage(nextPage: number) {
             <span>{{ t('publicPages.blog.chapter', { chapter: article.chapter }) }}</span>
             <span>{{ t('publicPages.blog.readingMinutes', { minutes: article.readingMinutes }) }}</span>
           </div>
-          <h2><RouterLink :to="`/blog/${article.slug}`">{{ article.title }}</RouterLink></h2>
+          <h2><RouterLink :to="getRoutePath('public-blog-article', { slug: article.slug })">{{ article.title }}</RouterLink></h2>
           <p>{{ article.excerpt }}</p>
-          <RouterLink class="blog-read-link" :to="`/blog/${article.slug}`">
+          <RouterLink class="blog-read-link" :to="getRoutePath('public-blog-article', { slug: article.slug })">
             {{ t('publicPages.blog.readArticle') }}
             <ChevronRight :size="16" aria-hidden="true" />
           </RouterLink>

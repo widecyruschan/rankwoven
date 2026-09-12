@@ -23,6 +23,7 @@ import rankwovenLogo from './assets/rankwoven-logo.svg';
 import rankwovenLogoDark from './assets/rankwoven-logo-dark.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
 import ThemeSwitcher from './components/ThemeSwitcher.vue';
+import { getRoutePath } from './constants/routeRegistry';
 import { useTheme } from './composables/useTheme';
 import { useAuthStore } from './stores/auth';
 
@@ -35,34 +36,34 @@ const isNavigationOpen = ref(false);
 const rankwovenLogoSource = computed(() => (isDark.value ? rankwovenLogoDark : rankwovenLogo));
 
 const marketingItems = [
-  { to: '/features', labelKey: 'marketing.nav.features' },
-  { to: '/pricing', labelKey: 'marketing.nav.pricing' },
-  { to: '/blog', labelKey: 'marketing.nav.blog' },
-  { to: '/docs', labelKey: 'marketing.nav.docs' },
-  { to: '/help', labelKey: 'marketing.nav.help' },
-  { to: '/login', labelKey: 'marketing.nav.login' }
-];
+  { routeId: 'public-features', labelKey: 'marketing.nav.features' },
+  { routeId: 'public-pricing', labelKey: 'marketing.nav.pricing' },
+  { routeId: 'public-blog', labelKey: 'marketing.nav.blog' },
+  { routeId: 'public-docs', labelKey: 'marketing.nav.docs' },
+  { routeId: 'public-help', labelKey: 'marketing.nav.help' },
+  { routeId: 'auth-login', labelKey: 'marketing.nav.login' }
+].map((item) => ({ to: getRoutePath(item.routeId), labelKey: item.labelKey }));
 
 const appNavigationItems = [
-  { to: '/app', labelKey: 'nav.dashboard', icon: LayoutDashboard },
-  { to: '/app/sites', labelKey: 'nav.sites', icon: Waypoints },
-  { to: '/app/analytics', labelKey: 'nav.analytics', icon: BarChart3 },
-  { to: '/app/keywords', labelKey: 'nav.keywords', icon: Search },
-  { to: '/app/media', labelKey: 'nav.media', icon: Image },
-  { to: '/app/links', labelKey: 'nav.links', icon: Link2 },
-  { to: '/app/tasks', labelKey: 'nav.tasks', icon: ListChecks },
-  { to: '/app/cms-adapters', labelKey: 'nav.cmsAdapters', icon: PlugZap },
-  { to: '/app/lighthouse', labelKey: 'nav.lighthouse', icon: Gauge },
-  { to: '/app/settings', labelKey: 'nav.settings', icon: Settings }
-];
+  { routeId: 'app-dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { routeId: 'app-sites', labelKey: 'nav.sites', icon: Waypoints },
+  { routeId: 'app-analytics', labelKey: 'nav.analytics', icon: BarChart3 },
+  { routeId: 'app-keywords', labelKey: 'nav.keywords', icon: Search },
+  { routeId: 'app-media', labelKey: 'nav.media', icon: Image },
+  { routeId: 'app-links', labelKey: 'nav.links', icon: Link2 },
+  { routeId: 'app-tasks', labelKey: 'nav.tasks', icon: ListChecks },
+  { routeId: 'app-cms-adapters', labelKey: 'nav.cmsAdapters', icon: PlugZap },
+  { routeId: 'app-lighthouse', labelKey: 'nav.lighthouse', icon: Gauge },
+  { routeId: 'app-settings', labelKey: 'nav.settings', icon: Settings }
+].map((item) => ({ to: getRoutePath(item.routeId), labelKey: item.labelKey, icon: item.icon }));
 
 const adminNavigationItems = [
-  { to: '/admin', labelKey: 'admin.nav.overview', icon: BarChart3 },
-  { to: '/admin/customers', labelKey: 'admin.nav.customers', icon: Users },
-  { to: '/admin/usage', labelKey: 'admin.nav.usage', icon: CreditCard },
-  { to: '/admin/operations', labelKey: 'admin.nav.operations', icon: Activity },
-  { to: '/admin/settings', labelKey: 'admin.nav.settings', icon: Settings }
-];
+  { routeId: 'admin-overview', labelKey: 'admin.nav.overview', icon: BarChart3 },
+  { routeId: 'admin-customers', labelKey: 'admin.nav.customers', icon: Users },
+  { routeId: 'admin-usage', labelKey: 'admin.nav.usage', icon: CreditCard },
+  { routeId: 'admin-operations', labelKey: 'admin.nav.operations', icon: Activity },
+  { routeId: 'admin-settings', labelKey: 'admin.nav.settings', icon: Settings }
+].map((item) => ({ to: getRoutePath(item.routeId), labelKey: item.labelKey, icon: item.icon }));
 
 const currentTitle = computed(() => t(String(route.meta.titleKey ?? 'nav.dashboard')));
 const currentLayout = computed(() => String(route.meta.layout ?? 'app'));
@@ -72,7 +73,7 @@ const navigationItems = computed(() => (isAdminLayout.value ? adminNavigationIte
 const shellSubtitle = computed(() => (isAdminLayout.value ? t('admin.subtitle') : t('app.brandSubtitle')));
 const topbarPhase = computed(() => (isAdminLayout.value ? t('admin.phase') : t('app.phase')));
 const selectedMenuKeys = computed(() => [route.path]);
-const marketingEntryLink = computed(() => (authStore.isLoggedIn ? '/app' : '/login'));
+const marketingEntryLink = computed(() => (authStore.isLoggedIn ? getRoutePath('app-dashboard') : getRoutePath('auth-login')));
 const marketingEntryLabelKey = computed(() => (authStore.isLoggedIn ? 'marketing.nav.dashboard' : 'marketing.nav.login'));
 
 watch(
@@ -96,14 +97,14 @@ function navigateToMenuItem({ key }: { key: string }) {
 
 function logout() {
   authStore.logout();
-  void router.push('/login');
+  void router.push(getRoutePath('auth-login'));
 }
 </script>
 
 <template>
   <div v-if="isMarketingLayout" class="marketing-shell">
     <header class="marketing-topbar">
-      <RouterLink class="marketing-brand" to="/">
+      <RouterLink class="marketing-brand" :to="getRoutePath('marketing-home')">
         <img class="brand-logo" :src="rankwovenLogoSource" alt="RankWoven">
       </RouterLink>
       <nav class="marketing-nav" :aria-label="t('app.mainNavigation')">
@@ -134,10 +135,10 @@ function logout() {
         <span>{{ t('marketing.footer.tagline') }}</span>
       </div>
       <nav :aria-label="t('marketing.footer.legal')">
-        <RouterLink to="/about">{{ t('marketing.nav.about') }}</RouterLink>
-        <RouterLink to="/contact">{{ t('marketing.nav.contact') }}</RouterLink>
-        <RouterLink to="/privacy">{{ t('marketing.footer.privacy') }}</RouterLink>
-        <RouterLink to="/terms">{{ t('marketing.footer.terms') }}</RouterLink>
+        <RouterLink :to="getRoutePath('public-about')">{{ t('marketing.nav.about') }}</RouterLink>
+        <RouterLink :to="getRoutePath('public-contact')">{{ t('marketing.nav.contact') }}</RouterLink>
+        <RouterLink :to="getRoutePath('public-privacy')">{{ t('marketing.footer.privacy') }}</RouterLink>
+        <RouterLink :to="getRoutePath('public-terms')">{{ t('marketing.footer.terms') }}</RouterLink>
       </nav>
     </footer>
   </div>
@@ -175,13 +176,13 @@ function logout() {
           <h1>{{ currentTitle }}</h1>
         </div>
         <div class="topbar-actions">
-          <RouterLink class="icon-link-button" to="/">
+          <RouterLink class="icon-link-button" :to="getRoutePath('marketing-home')">
             {{ t('app.publicSite') }}
           </RouterLink>
-          <RouterLink v-if="isAdminLayout" class="icon-link-button" to="/app">
+          <RouterLink v-if="isAdminLayout" class="icon-link-button" :to="getRoutePath('app-dashboard')">
             {{ t('app.customerDashboard') }}
           </RouterLink>
-          <RouterLink v-else class="icon-link-button" to="/admin">
+          <RouterLink v-else class="icon-link-button" :to="getRoutePath('admin-overview')">
             {{ t('app.adminDashboard') }}
           </RouterLink>
           <ThemeSwitcher />

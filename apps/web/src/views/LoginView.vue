@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { getRoutePath } from '../constants/routeRegistry';
 import { useAuthStore } from '../stores/auth';
 
 const { t } = useI18n();
@@ -19,7 +20,7 @@ const loginError = ref('');
 
 function getSafeRedirect() {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
-  return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/app';
+  return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : getRoutePath('app-dashboard');
 }
 
 async function submitLogin() {
@@ -45,8 +46,8 @@ async function submitLogin() {
         <h1>{{ t('login.title') }}</h1>
         <p>{{ t('login.body') }}</p>
         <div v-if="!isLoggedIn" class="login-hint">
-          <p><router-link to="/register">{{ t('login.registerLink') }}</router-link></p>
-          <p><router-link to="/forgot-password">{{ t('login.forgotPasswordLink') }}</router-link></p>
+          <p><router-link :to="getRoutePath('auth-register')">{{ t('login.registerLink') }}</router-link></p>
+          <p><router-link :to="getRoutePath('auth-forgot-password')">{{ t('login.forgotPasswordLink') }}</router-link></p>
         </div>
       </div>
 

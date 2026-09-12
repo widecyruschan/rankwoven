@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ArrowLeft, ArrowRight, Clock3, List } from 'lucide-vue-next';
 import { getAdjacentBlogArticles, getBlogArticleSeoDescription, loadBlogArticle, type BlogArticle } from '../blog/articles';
+import { getRoutePath } from '../constants/routeRegistry';
 import { updateSeoHead } from '../utils/seoHead';
 
 const route = useRoute();
@@ -18,7 +19,7 @@ let schemaElement: HTMLScriptElement | null = null;
 const adjacentArticles = computed(() => (article.value ? getAdjacentBlogArticles(article.value.chapter) : { previous: null, next: null }));
 
 function updateArticleSeo(currentArticle: BlogArticle) {
-  const canonicalUrl = new window.URL(`/blog/${currentArticle.slug}`, window.location.origin).toString();
+  const canonicalUrl = new window.URL(getRoutePath('public-blog-article', { slug: currentArticle.slug }), window.location.origin).toString();
   const description = getBlogArticleSeoDescription(currentArticle);
   updateSeoHead({
     title: `${currentArticle.title} | RankWoven`,
@@ -131,12 +132,12 @@ onBeforeUnmount(() => {
     <section v-else-if="loadFailed || !article" class="blog-article-state">
       <h1>{{ t('publicPages.blog.notFoundTitle') }}</h1>
       <p>{{ t('publicPages.blog.notFoundBody') }}</p>
-      <RouterLink class="primary-button" to="/blog">{{ t('publicPages.blog.browseArticles') }}</RouterLink>
+      <RouterLink class="primary-button" :to="getRoutePath('public-blog')">{{ t('publicPages.blog.browseArticles') }}</RouterLink>
     </section>
 
     <template v-else>
       <nav class="blog-breadcrumb" :aria-label="t('publicPages.blog.breadcrumbLabel')">
-        <RouterLink to="/blog"><ArrowLeft :size="16" aria-hidden="true" />{{ t('publicPages.blog.backToBlog') }}</RouterLink>
+        <RouterLink :to="getRoutePath('public-blog')"><ArrowLeft :size="16" aria-hidden="true" />{{ t('publicPages.blog.backToBlog') }}</RouterLink>
       </nav>
 
       <article>
@@ -174,12 +175,12 @@ onBeforeUnmount(() => {
       </article>
 
       <nav class="blog-article-navigation" :aria-label="t('publicPages.blog.articleNavigationLabel')">
-        <RouterLink v-if="adjacentArticles.previous" :to="`/blog/${adjacentArticles.previous.slug}`">
+        <RouterLink v-if="adjacentArticles.previous" :to="getRoutePath('public-blog-article', { slug: adjacentArticles.previous.slug })">
           <ArrowLeft :size="18" aria-hidden="true" />
           <span><small>{{ t('publicPages.blog.previousArticle') }}</small>{{ adjacentArticles.previous.title }}</span>
         </RouterLink>
         <span v-else />
-        <RouterLink v-if="adjacentArticles.next" :to="`/blog/${adjacentArticles.next.slug}`">
+        <RouterLink v-if="adjacentArticles.next" :to="getRoutePath('public-blog-article', { slug: adjacentArticles.next.slug })">
           <span><small>{{ t('publicPages.blog.nextArticle') }}</small>{{ adjacentArticles.next.title }}</span>
           <ArrowRight :size="18" aria-hidden="true" />
         </RouterLink>

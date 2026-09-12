@@ -13,6 +13,7 @@ import {
 } from '@/api/appInsights';
 import SearchConsolePanel from '@/components/SearchConsolePanel.vue';
 import LighthousePanel from '@/components/LighthousePanel.vue';
+import { getRoutePath } from '@/constants/routeRegistry';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -221,13 +222,13 @@ function navigateToTab(tab: string) {
   dashboardTab.value = tab;
 }
 function navigateToAudit() {
-  router.push('/app/lighthouse');
+  router.push(getRoutePath('app-lighthouse'));
 }
 function navigateToSites() {
-  router.push('/app/sites');
+  router.push(getRoutePath('app-sites'));
 }
 function navigateToLinks() {
-  router.push('/app/links');
+  router.push(getRoutePath('app-links'));
 }
 
 onMounted(async () => {
