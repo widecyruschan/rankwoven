@@ -1,10 +1,11 @@
-import { createApp } from 'vue';
+import { computed, createApp, defineComponent, h } from 'vue';
 import { createPinia } from 'pinia';
 import {
   Alert,
   Button,
   Card,
   Col,
+  ConfigProvider,
   Dropdown,
   Form,
   Input,
@@ -20,16 +21,28 @@ import {
   Tabs,
   Tag
 } from 'ant-design-vue';
+import type { ThemeConfig } from 'ant-design-vue/es/config-provider/context';
 import 'ant-design-vue/dist/reset.css';
 import './styles.css';
 import App from './App.vue';
-import { initializeTheme } from './composables/useTheme';
+import { initializeTheme, useTheme } from './composables/useTheme';
 import { i18n } from './i18n';
 import { router } from './router';
+import { darkAntDesignTheme } from './theme/darkWorkspaceTheme';
 
 initializeTheme();
 
-const app = createApp(App);
+const ThemedRoot = defineComponent({
+  name: 'ThemedRoot',
+  setup() {
+    const { isDark } = useTheme();
+    const antDesignTheme = computed<ThemeConfig>(() => (isDark.value ? darkAntDesignTheme : {}));
+
+    return () => h(ConfigProvider, { theme: antDesignTheme.value }, { default: () => h(App) });
+  }
+});
+
+const app = createApp(ThemedRoot);
 
 app.use(createPinia());
 app.use(router);

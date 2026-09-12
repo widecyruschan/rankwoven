@@ -5,6 +5,7 @@ import { blogArticles, getAdjacentBlogArticles, getBlogArticleSeoDescription, lo
 import { publicSeoKeywordKeys } from '../src/constants/publicSeo';
 import { useTheme } from '../src/composables/useTheme';
 import { i18n } from '../src/i18n';
+import { darkAntDesignTheme, darkWorkspacePalette } from '../src/theme/darkWorkspaceTheme';
 import { updateSeoHead } from '../src/utils/seoHead';
 
 describe('web smoke test', () => {
@@ -198,6 +199,8 @@ describe('web smoke test', () => {
   it('keeps the dark theme logo and article content readable', async () => {
     const appSource = await readFile(resolve('src/App.vue'), 'utf8');
     const darkLogoSource = await readFile(resolve('src/assets/rankwoven-logo-dark.svg'), 'utf8');
+    const chartSource = await readFile(resolve('src/components/AnalyticsChart.vue'), 'utf8');
+    const mainSource = await readFile(resolve('src/main.ts'), 'utf8');
     const styleSource = await readFile(resolve('src/styles.css'), 'utf8');
 
     expect(appSource).toContain('isDark.value ? rankwovenLogoDark : rankwovenLogo');
@@ -209,12 +212,45 @@ describe('web smoke test', () => {
     expect(styleSource).toContain(
       "html[data-theme='dark'] .seo-markdown code:not(pre code) {\n  background: var(--color-brand-primary-mist);\n  color: var(--color-ink);\n}"
     );
-    expect(styleSource).toContain(
-      "html[data-theme='dark'] .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item {\n  color: var(--color-ink);\n}"
-    );
-    expect(styleSource).toContain(
-      "html[data-theme='dark'] .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item:hover {\n  background: var(--color-brand-primary-soft);\n  color: var(--color-ink);\n}"
-    );
+    expect(mainSource).toContain('h(ConfigProvider, { theme: antDesignTheme.value }');
+    expect(mainSource).toContain('isDark.value ? darkAntDesignTheme : {}');
+    expect(chartSource).toContain(':theme="chartTheme"');
+  });
+
+  it('uses an accessible dark palette for forms, tables, and charts', async () => {
+    const styleSource = await readFile(resolve('src/styles.css'), 'utf8');
+
+    function getRelativeLuminance(hexColor: string) {
+      const channels = hexColor
+        .replace('#', '')
+        .match(/.{2}/g)!
+        .map((channel) => Number.parseInt(channel, 16) / 255)
+        .map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    }
+
+    function getContrastRatio(foreground: string, background: string) {
+      const foregroundLuminance = getRelativeLuminance(foreground);
+      const backgroundLuminance = getRelativeLuminance(background);
+      return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+    }
+
+    expect(darkAntDesignTheme.algorithm).toBeTruthy();
+    expect(darkAntDesignTheme.token).toMatchObject({
+      colorBgContainer: darkWorkspacePalette.surface,
+      colorBgElevated: darkWorkspacePalette.elevated,
+      colorText: darkWorkspacePalette.text,
+      colorTextPlaceholder: darkWorkspacePalette.textTertiary,
+      colorBorder: darkWorkspacePalette.border
+    });
+    expect(getContrastRatio(darkWorkspacePalette.text, darkWorkspacePalette.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(getContrastRatio(darkWorkspacePalette.textTertiary, darkWorkspacePalette.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(getContrastRatio(darkWorkspacePalette.border, darkWorkspacePalette.surface)).toBeGreaterThanOrEqual(3);
+    expect(getContrastRatio(darkWorkspacePalette.primaryText, darkWorkspacePalette.primary)).toBeGreaterThanOrEqual(4.5);
+    expect(styleSource).toContain("html[data-theme='dark'] .app-shell .ant-tag {\n  color: var(--color-ink);\n}");
+    expect(styleSource).toContain('.ant-card,\n.ant-card-body,\n.analytics-chart {\n  min-width: 0;\n}');
   });
 
   it('centers and balances the localized pricing heading', async () => {
