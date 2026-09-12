@@ -3781,3 +3781,45 @@ Vue 3、TypeScript、Vite、CSS Media Queries、Vue I18n。
 ### 下一步行動清單
 
 - 在獲得推送／部署授權後，將本次提交推送至 GitHub 並驗證生產定價頁。
+
+## 會話總結（2026-09-12）— 修正暗色模式 Logo 與文章對比
+
+### 會話主要目的
+
+根據暗色模式截圖，修正品牌 Logo 與 Blog 文章文字在深色背景上不清晰的問題。
+
+### 完成的主要任務
+
+- 新增暗色版 RankWoven Logo，將品牌文字由深色調整為淺色，保留原有盾牌與金色箭頭。
+- 前台頁首與客戶／管理後台側欄會跟隨主題自動切換 Logo。
+- 為 SEO 文章正文、引用區及行內代碼加入暗色專用文字與背景色。
+- 增加回歸測試，確保暗色 Logo 切換與文章閱讀樣式不會被移除。
+
+### 關鍵決策和解決方案
+
+只修正實測不達標的元素：功能頁文字原有對比已通過，因此不做無效的全頁改色；文章色彩沿用現有暗色 token，避免影響亮色模式或擴大設計系統。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Vite、Vue Composition API、CSS Variables、SVG、Vitest、WCAG AA 對比檢查。
+
+### 新增或修改文件
+
+- `apps/web/src/App.vue`
+- `apps/web/src/assets/rankwoven-logo-dark.svg`
+- `apps/web/src/styles.css`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過，共 10 項測試。
+- `npm run build -w @aieo/web` 通過，生成 96 個公開 SEO 頁面。
+- 暗色 Logo 文字切換為 `#EDF3F8`，亮色 Logo 能正常恢復。
+- 文章正文對比由 `1.43:1` 提升至 `9.86:1`，引用區為 `12.19:1`，引用連結為 `8.67:1`，全部高於 WCAG AA 要求。
+- 375px 行動端視口沒有橫向溢出。
+
+### 下一步行動清單
+
+- 獲得授權後推送 `main`，並在生產環境重新驗證首頁、功能頁與 Blog 文章暗色模式。
