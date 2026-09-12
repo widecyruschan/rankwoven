@@ -3823,3 +3823,42 @@ Vue 3、TypeScript、Vite、Vue Composition API、CSS Variables、SVG、Vitest�
 ### 下一步行動清單
 
 - 獲得授權後推送 `main`，並在生產環境重新驗證首頁、功能頁與 Blog 文章暗色模式。
+
+## 會話總結（2026-09-12）— 修正定價頁排版錯位
+
+### 會話主要目的
+
+根據中英文定價頁截圖，修正標題偏左、英文換行凌亂及窄桌面導覽溢出的問題。
+
+### 完成的主要任務
+
+- 將受 `max-width` 限制的定價頁 H1 重新置中，與 eyebrow 和描述共用同一視覺中心。
+- 為多語言標題加入平衡換行，避免英文只剩單字落在下一行。
+- 在 `761–1080px` 視口將主導覽移至第二列，避免 Logo、導覽與操作控制互相擠壓。
+- 新增排版回歸測試，鎖定標題置中、平衡換行及窄桌面斷點規則。
+
+### 關鍵決策和解決方案
+
+保留既有 `40px` 桌面與 `32px` 行動端字級，只補齊 `margin-inline: auto` 與 `text-wrap: balance`；窄桌面使用獨立 media query，不改動桌面和手機既有結構。
+
+### 使用的技術棧
+
+Vue 3、Vite、CSS Logical Properties、CSS Text Wrap、Responsive Media Queries、Vitest、瀏覽器 DOM 量測。
+
+### 新增或修改文件
+
+- `apps/web/src/styles.css`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 全倉通過，共 69 項測試；另有 4 項 PostgreSQL 整合測試按環境跳過。
+- `npm run build -w @aieo/web` 通過，生成 96 個公開 SEO 頁面。
+- `1251px` 視口下 H1 中心由 `395px` 修正為頁面中心 `618px`。
+- `1080px`、`1081px`、`800px`、`760px` 與 `375px` 視口均沒有水平溢出。
+
+### 下一步行動清單
+
+- 獲得授權後推送 `main` 並驗證生產定價頁中英文排版。
