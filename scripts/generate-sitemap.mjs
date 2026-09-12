@@ -30,6 +30,14 @@ function escapeXml(value) {
 const activePublicRoutes = routeRegistry.routes.filter(
   (route) => route.area === 'public' && route.enabled !== false && route.indexable === true
 );
+const publicRoutesMissingSeoKey = activePublicRoutes
+  .filter((route) => route.dynamic !== true && typeof route.publicSeoKey !== 'string')
+  .map((route) => route.id);
+if (publicRoutesMissingSeoKey.length > 0) {
+  throw new Error(
+    `Indexable public routes missing publicSeoKey: ${publicRoutesMissingSeoKey.join(', ')}`
+  );
+}
 const staticPaths = activePublicRoutes
   .filter((route) => route.dynamic !== true && route.canonicalPath)
   .map((route) => ({ group: route.sitemapGroup ?? 'pages', path: route.canonicalPath }));

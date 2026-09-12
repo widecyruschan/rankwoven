@@ -21,6 +21,14 @@ const [template, publicSeoPages, routeRegistry, articles] = await Promise.all([
 const activePublicRoutes = routeRegistry.routes.filter(
   (route) => route.area === 'public' && route.enabled !== false && route.indexable === true
 );
+const publicRoutesMissingSeoKey = activePublicRoutes
+  .filter((route) => route.dynamic !== true && typeof route.publicSeoKey !== 'string')
+  .map((route) => route.id);
+if (publicRoutesMissingSeoKey.length > 0) {
+  throw new Error(
+    `Indexable public routes missing publicSeoKey: ${publicRoutesMissingSeoKey.join(', ')}`
+  );
+}
 const publicSeoRouteEntries = activePublicRoutes.filter(
   (route) => route.dynamic !== true && typeof route.publicSeoKey === 'string'
 );
