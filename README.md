@@ -3743,3 +3743,41 @@ Node.js、JSDOM、Vite、Vue 3、静态 SEO fallback HTML。
 
 - 提交本次静态 SEO 页面修复并推送 GitHub `main`。
 - 部署后重新抓取生产页面，确认缓存已更新。
+
+## 會話總結（2026-09-12）— 調整定價頁標題字級
+
+### 會話主要目的
+
+修正定價頁中英文主標題過大、視覺層級失衡的問題。
+
+### 完成的主要任務
+
+- 將定價頁桌面主標題由 `64px / 900` 收斂為 `40px / 700`。
+- 將定價頁行動端主標題調整為 `32px / 700`，並維持 `1.2` 行高。
+- 將標題最大寬度限制為 `680px`，改善英文長標題換行與閱讀節奏。
+- 修改範圍只限定價頁，不影響首頁 Hero 與登入頁標題。
+
+### 關鍵決策和解決方案
+
+使用定價頁既有 `.pricing-heading h1` 選擇器做局部覆寫，避免改動共用標題規則；以固定響應式字級維持中英文一致層級及穩定版面。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Vite、CSS Media Queries、Vue I18n。
+
+### 新增或修改文件
+
+- `apps/web/src/styles.css`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- 使用 Node.js `22.23.2` 執行 `npm run test` 全倉通過：API 46、Web 9、Worker 4、AI Provider 7、CMS Adapter 1；另有 4 項 PostgreSQL 測試按環境跳過。
+- `npm run build` 全倉通過，生成 96 個公開 SEO 頁面。
+- `npm run security:audit` 通過，返回 `found 0 vulnerabilities`。
+- 本地瀏覽器驗證中英文桌面標題均為 `40px`，行動端均為 `32px`，頁面沒有橫向溢出。
+
+### 下一步行動清單
+
+- 在獲得推送／部署授權後，將本次提交推送至 GitHub 並驗證生產定價頁。
