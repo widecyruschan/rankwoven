@@ -3862,3 +3862,42 @@ Vue 3、Vite、CSS Logical Properties、CSS Text Wrap、Responsive Media Queries
 ### 下一步行動清單
 
 - 獲得授權後推送 `main` 並驗證生產定價頁中英文排版。
+
+## 會話總結（2026-09-12）— 修正暗色語言選單對比
+
+### 會話主要目的
+
+修正暗色模式語言選單文字過暗、預設狀態難以閱讀的問題。
+
+### 完成的主要任務
+
+- 為 Ant Design 語言下拉選單項目加入精準暗色文字覆蓋。
+- 修正被 Ant Design specificity 蓋掉的暗色 hover 背景。
+- 擴充回歸測試，鎖定預設文字及 hover 的暗色 token。
+
+### 關鍵決策和解決方案
+
+根因是選單容器已套用暗色 token，但 `.ant-dropdown-menu-item` 仍被元件庫設為 `rgba(0,0,0,.88)`；修正只提高語言浮層項目的 selector specificity，不使用 `!important`，亦不改動其他下拉選單。
+
+### 使用的技術棧
+
+Vue 3、Ant Design Vue、CSS Variables、CSS Specificity、Vitest、WCAG AA 對比量測。
+
+### 新增或修改文件
+
+- `apps/web/src/styles.css`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 全倉通過，共 69 項測試；另有 4 項 PostgreSQL 整合測試按環境跳過。
+- `npm run build -w @aieo/web` 通過，生成 96 個公開 SEO 頁面。
+- 暗色預設文字對比由 `1.34:1` 提升至 `13.99:1`。
+- hover 使用品牌淺藍底及淺色文字；亮色模式維持白底深色文字。
+- 375px 視口的 11 個語言選項完整落在頁面內，沒有水平溢出。
+
+### 下一步行動清單
+
+- 獲得授權後推送 `main` 並驗證生產語言選單。
