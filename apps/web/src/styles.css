@@ -1121,6 +1121,13 @@ html[data-theme='dark'] .content-panel h2 {
   line-height: 1.7;
 }
 
+.pricing-heading h1 {
+  max-width: 680px;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .eyebrow {
   color: var(--color-brand-primary);
   font-weight: 800;
@@ -2803,10 +2810,14 @@ html[data-theme='dark'] .content-panel h2 {
   }
 
   .marketing-copy h1,
-  .pricing-heading h1,
   .login-panel h1 {
     font-size: 36px;
     line-height: 1.08;
+  }
+
+  .pricing-heading h1 {
+    font-size: 32px;
+    line-height: 1.2;
   }
 
   .product-preview {
