@@ -3706,3 +3706,40 @@ WordPress PHP 8、WooCommerce Post Meta、TypeScript、Fastify、Zod、Vitest、
 
 - Docker Desktop 恢復後，重新啟動 `cyruschan-wp`，依 `plugins/wordpress/TESTING.md` 清單 9 驗證文章、頁面和商品的 19 項狀態及圖片圖庫。
 - WordPress 測試站插件已同步；生產 WordPress 插件仍需獨立發布流程，不由 VPS GitHub Actions 自動更新。
+## 会话总结（2026-09-12）— 修复公开页面孤岛
+
+### 会话主要目的
+
+修复除 Blog 外的公开页面被 SEO 工具判定为孤岛页面的问题，并将修复结果推送到 GitHub。
+
+### 完成的主要任务
+
+- 静态 SEO 生成器为首页、Features、Docs、Help、About、Contact、Privacy、Terms、Pricing 和 Blog 输出真实可读内容。
+- 每个公开页面加入统一的站内页面导航，确保页面之间存在导入和导出内链。
+- 保留 Blog 的 86 篇文章链接，并让 Blog 主页和文章页连接到其它公开页面。
+- 构建阶段新增唯一 H1、正文长度、导出内链和全站导入链接断言，发现孤岛会直接阻止构建。
+
+### 关键决策和解决方案
+
+根因是静态 SEO 页面只包含 Meta 和空的 `#app`，非 JavaScript 爬虫无法看到 Vue 渲染的内容。修复使用轻量静态 fallback，不改变 Vue 运行时页面；所有内链使用站内相对路径，避免生成外部或不可抓取地址。
+
+### 使用的技术栈
+
+Node.js、JSDOM、Vite、Vue 3、静态 SEO fallback HTML。
+
+### 新增或修改文件
+
+- `apps/web/scripts/generate-seo-pages.mjs`
+- `README.md`
+
+### 验证结果
+
+- `npm run build -w @aieo/web` 通过，生成 96 个公开 SEO 页面。
+- 10 个公开页面均有唯一 H1、可读正文和 9 个站内公开页面链接。
+- 全站公开页面孤岛数量：`0`，最少导入链接：`9`。
+- Blog 86 篇文章链接和文章页正文继续通过构建断言。
+
+### 下一步行动清单
+
+- 提交本次静态 SEO 页面修复并推送 GitHub `main`。
+- 部署后重新抓取生产页面，确认缓存已更新。

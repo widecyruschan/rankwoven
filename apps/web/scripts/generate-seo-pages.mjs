@@ -52,6 +52,39 @@ function appendInternalLink(document, parent, href, text) {
   return link;
 }
 
+function appendPublicNavigation(document, parent, currentPath) {
+  const navigation = document.createElement('nav');
+  navigation.className = 'public-static-navigation';
+  navigation.setAttribute('aria-label', 'RankWoven 公開頁面導覽');
+  for (const page of Object.values(publicSeoPages)) {
+    if (page.path === currentPath) continue;
+    appendInternalLink(document, navigation, page.path, page.seo.title);
+  }
+  parent.appendChild(navigation);
+  return navigation;
+}
+
+function renderPublicPageFallback(document, page) {
+  const app = document.querySelector('#app');
+  if (!app) throw new Error('Missing #app mount point in SEO template.');
+
+  const main = document.createElement('main');
+  main.className = 'public-content-page seo-static-fallback';
+  const hero = document.createElement('section');
+  hero.className = 'public-content-hero';
+  appendTextElement(document, hero, 'p', 'RankWoven AI SEO', 'eyebrow');
+  appendTextElement(document, hero, 'h1', page.seo.title);
+  appendTextElement(document, hero, 'p', page.seo.description, 'public-content-lead');
+  main.appendChild(hero);
+
+  const linkSection = document.createElement('section');
+  linkSection.className = 'public-content-section public-static-links';
+  appendTextElement(document, linkSection, 'h2', '探索 RankWoven');
+  appendPublicNavigation(document, linkSection, page.path);
+  main.appendChild(linkSection);
+  app.replaceChildren(main);
+}
+
 function renderBlogIndexFallback(document) {
   const app = document.querySelector('#app');
   if (!app) throw new Error('Missing #app mount point in SEO template.');
@@ -64,6 +97,7 @@ function renderBlogIndexFallback(document) {
   appendTextElement(document, header, 'h1', 'SEO 教學與 AI 搜尋優化文章');
   appendTextElement(document, header, 'p', '從 SEO 基礎、技術 SEO、內容策略到 GEO 與 AI 搜尋優化，依章節閱讀完整教學。');
   main.appendChild(header);
+  appendPublicNavigation(document, main, '/blog');
 
   const articleGrid = document.createElement('section');
   articleGrid.className = 'blog-article-grid';
@@ -163,6 +197,7 @@ function renderBlogArticleFallback(document, article, markdown, articleIndex) {
     appendInternalLink(document, navigation, `/blog/${relatedArticle.slug}`, `相關文章：${relatedArticle.title}`);
   }
   main.appendChild(navigation);
+  appendPublicNavigation(document, main, `/blog/${article.slug}`);
   app.replaceChildren(main);
 }
 
@@ -213,7 +248,10 @@ async function writeSeoPage(seo, renderBody) {
 }
 
 for (const page of Object.values(publicSeoPages)) {
-  await writeSeoPage({ path: page.path, ...page.seo }, page.path === '/blog' ? renderBlogIndexFallback : undefined);
+  const renderBody = page.path === '/blog'
+    ? renderBlogIndexFallback
+    : (document) => renderPublicPageFallback(document, page);
+  await writeSeoPage({ path: page.path, ...page.seo }, renderBody);
 }
 
 const generatedArticlePages = new Map();
@@ -275,4 +313,32 @@ for (const article of articles) {
   }
 }
 
-globalThis.console.log(`Generated SEO fallback HTML for ${Object.keys(publicSeoPages).length + articles.length} public URLs; verified ${articles.length} blog inlinks.`);
+const publicPages = Object.values(publicSeoPages);
+const publicPaths = new Set(publicPages.map((page) => page.path));
+const publicIncomingLinks = new Map(publicPages.map((page) => [page.path, 0]));
+for (const page of publicPages) {
+  const relativePath = page.path === '/' ? '' : page.path.replace(/^\//, '');
+  const html = await readFile(path.join(distDirectory, relativePath, 'index.html'), 'utf8');
+  const document = new JSDOM(html).window.document;
+  if (document.querySelectorAll('h1').length !== 1 || document.body.textContent.trim().length < 80) {
+    throw new Error(`SEO fallback body is incomplete for public page: ${page.path}`);
+  }
+
+  const outgoingPaths = new Set(
+    [...document.querySelectorAll('a[href]')]
+      .map((link) => link.getAttribute('href'))
+      .filter((href) => publicPaths.has(href))
+  );
+  if (outgoingPaths.size === 0) {
+    throw new Error(`SEO fallback public page has no outgoing internal link: ${page.path}`);
+  }
+  for (const pathValue of outgoingPaths) {
+    publicIncomingLinks.set(pathValue, publicIncomingLinks.get(pathValue) + 1);
+  }
+}
+const orphanedPublicPages = [...publicIncomingLinks].filter(([, count]) => count === 0);
+if (orphanedPublicPages.length > 0) {
+  throw new Error(`SEO public pages without incoming links: ${orphanedPublicPages.map(([pathValue]) => pathValue).join(', ')}`);
+}
+
+globalThis.console.log(`Generated SEO fallback HTML for ${Object.keys(publicSeoPages).length + articles.length} public URLs; verified ${articles.length} blog inlinks and ${publicPages.length} public page inlinks.`);
