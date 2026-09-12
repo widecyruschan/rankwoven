@@ -3901,3 +3901,50 @@ Vue 3、Ant Design Vue、CSS Variables、CSS Specificity、Vitest、WCAG AA 對�
 ### 下一步行動清單
 
 - 獲得授權後推送 `main` 並驗證生產語言選單。
+
+## 會話總結（2026-09-12）— 統一暗色表單、表格與圖表配色
+
+### 會話主要目的
+
+參考指定深灰藍儀表板配色，修正客戶後台暗色模式中表單、表格及狀態元件文字與背景混在一起的問題。
+
+### 完成的主要任務
+
+- 抽取參考圖的深灰藍表面、浮層、邊框、主文字、次要文字及品牌色，建立共用工作台 palette。
+- 在應用啟動層加入 Ant Design Vue `darkAlgorithm`，統一 Select、Input、Card、Statistic、Tabs、Table、Alert、Dropdown、Modal、Tag、Progress 等元件。
+- ECharts 共享相同深灰藍 palette，主題切換時重新初始化圖表，確保圖例、座標軸、網格線及 tooltip 可讀。
+- 移除會覆蓋 Ant Design 主題的零散暗色 CSS，保留原生日期欄位及自訂元件規則。
+- 修正 Card／ECharts 的 min-content 撐寬問題，避免手機頁面出現橫向溢出。
+- 新增 palette token 與 WCAG 對比回歸測試。
+
+### 關鍵決策和解決方案
+
+根因是既有暗色模式只覆蓋部分 Ant Design class，元件內層仍使用亮色演算法。改用元件庫官方暗色演算法作為單一來源，再以參考圖 palette 覆寫全域 token；避免繼續逐項增加高 specificity CSS。
+
+### 使用的技術棧
+
+Vue 3、Ant Design Vue ConfigProvider、Ant Design darkAlgorithm、ECharts、CSS Variables、Vitest、WCAG AA 對比量測。
+
+### 新增或修改文件
+
+- `apps/web/src/main.ts`
+- `apps/web/src/components/AnalyticsChart.vue`
+- `apps/web/src/theme/darkWorkspaceTheme.ts`
+- `apps/web/src/styles.css`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 全倉通過，共 70 項測試；另有 4 項 PostgreSQL 整合測試按環境跳過。
+- `npm run build -w @aieo/web` 通過，生成 96 個公開 SEO 頁面。
+- Select 由 `1.12:1` 提升至 `14.33:1`；Card／Statistic／Tabs 由最低 `1.34:1` 提升至 `14.33–15.11:1`。
+- 表格表頭及儲存格對比分別為 `14.54:1` 與 `14.33:1`；活動 Tab 為 `4.85:1`。
+- 控制邊界對比為 `3.12:1`；placeholder 為 `6.27:1`；狀態 Tag 改用高對比主文字。
+- 375px 視口 Card 寬度為 `324px`、圖表寬度為 `274px`，頁面沒有水平溢出。
+- 臨時 QA 頁與路由已刪除，沒有納入提交。
+
+### 下一步行動清單
+
+- 獲得授權後推送 `main`，並在生產 Analytics、Tasks 及其他表格頁重新量測暗色元件。
