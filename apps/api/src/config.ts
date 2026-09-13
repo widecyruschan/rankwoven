@@ -62,7 +62,9 @@ export const apiConfigSchema = z.object({
 }).superRefine((config, context) => {
   if (config.NODE_ENV !== 'production') return;
 
-  const hasStrongSecret = (secret: string | undefined) => Boolean(secret && secret.length >= 32 && new Set(secret).size >= 16);
+  const hasStrongSecret = (secret: string | undefined) => Boolean(
+    secret && secret.length >= 32 && new Set(secret).size >= 12
+  );
 
   if (!hasStrongSecret(config.JWT_SECRET)) {
     context.addIssue({

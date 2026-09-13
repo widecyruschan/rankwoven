@@ -5264,3 +5264,33 @@ GitHub Actions、OpenSSH、Docker Compose、Hostinger VPS、Bash。
 ### 下一步行動清單
 
 - 通過 `main` push 觸發新部署，等待完整 Verify、Docker build、容器啟動、公開 health 和登入 smoke check。
+
+## 會話總結（2026-09-13）— 修正生產密鑰強度誤判
+
+### 會話主要目的
+
+修復合法 256-bit 十六進制 WordPress 憑據加密密鑰被 production config 誤判為弱密鑰的問題。
+
+### 完成的主要任務
+
+- 確認使用者提供的兩組密鑰均為 64 字符；WordPress 密鑰包含 15 種十六進制字符，仍具足夠隨機熵，但原校驗要求必須包含全部 16 種字符。
+- 將 production secret 最低字符多樣性由 16 調整為 12，繼續要求至少 32 字符並拒絕低多樣性固定字串。
+- 新增實際 64 位十六進制密鑰的 config 回歸測試，確保合法 key 可啟動 production API。
+
+### 使用的技術棧
+
+TypeScript、Zod、Vitest、Node.js crypto 設定策略。
+
+### 新增或修改文件
+
+- `apps/api/src/config.ts`
+- `apps/api/tests/securityHardening.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- 待完成 lint、security hardening test、production image 啟動及 GitHub Actions 部署驗證。
+
+### 下一步行動清單
+
+- 驗證通過後提交並推送 `main`，重新執行 production deployment。

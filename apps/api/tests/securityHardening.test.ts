@@ -25,7 +25,7 @@ describe('security hardening', () => {
     expect(parseApiConfig({
       NODE_ENV: 'production',
       JWT_SECRET: '0123456789abcdefABCDEF0123456789',
-      WORDPRESS_CREDENTIAL_ENCRYPTION_KEY: 'fedcba9876543210ZYXWVU9876543210'
+      WORDPRESS_CREDENTIAL_ENCRYPTION_KEY: '557a9d95d1b46639bf6d4ce424b1c5ffa59838fcde41d7a7217c17ddf9db584a'
     })).toMatchObject({ NODE_ENV: 'production' });
   });
 
