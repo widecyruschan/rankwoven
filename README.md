@@ -5159,3 +5159,41 @@ TypeScript、Fastify、PostgreSQL、Node.js Fetch／Undici、Vitest、Docker Com
 
 - 尚未 commit、push 或部署；需另行取得明確授權後才可執行。
 - 正式部署前仍需在 VPS 安全配置 `JWT_SECRET`、`WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 與部署 smoke 帳戶，並完成 privacy／legal review。
+
+## 會話總結（2026-09-13）— GitHub 推送前置檢查
+
+### 會話主要目的
+
+將已驗證的 PH2-03／PH2-04 開發成果提交並推送至 GitHub。
+
+### 完成的主要任務
+
+- 確認本地 `main` 與 `origin/main` 推送前沒有分歧。
+- 只暫存 PH2-03／PH2-04 相關程式、migration、測試、部署配置與文件；排除 `.env`、`.codebuddy/`、臨時圖片及未屬於本階段的 UI／WordPress 修改。
+- 完成敏感資訊模式檢查，提交中沒有私鑰、GitHub Token、OpenAI Key、Google API Key 或 `.env` 文件。
+- 建立本地提交 `e276e6e`：`feat(phase-2): add platform contracts and security hardening`。
+- 檢查 GitHub repository 與 `production` Environment Secrets，確認尚未配置 `DEPLOY_SMOKE_EMAIL` 與 `DEPLOY_SMOKE_PASSWORD`。
+
+### 關鍵決策和解決方案
+
+- 暫停推送 `main`，因為該推送會觸發生產部署，而部署腳本已按 PH2-04 安全要求對缺少 smoke 登入憑據採 fail-closed；在缺少 Secrets 時繼續推送只會產生可預期的失敗部署。
+- 後續可在 GitHub `production` Environment 配置有效 smoke 帳戶後推送 `main`，或明確改為推送 `codex/ph2-04-security-hardening` 分支以避免觸發生產部署。
+
+### 使用的技術棧
+
+Git、GitHub CLI、GitHub Actions、Docker Compose。
+
+### 新增或修改文件
+
+- `README.md`
+
+### 驗證結果
+
+- PH2-04 的 lint、test、build、security audit、migration、production image 及 Compose fail-closed 驗證已於上一節記錄並通過。
+- 本次 Git staged diff 的敏感資訊與 whitespace 檢查通過。
+- GitHub push 尚未執行，原因是缺少 production smoke Secrets。
+
+### 下一步行動清單
+
+- 配置 `DEPLOY_SMOKE_EMAIL` 與 `DEPLOY_SMOKE_PASSWORD` 後推送 `main`，並監看 `Production Deploy` workflow。
+- 若本次只需保存到 GitHub、不部署，改推送 `codex/ph2-04-security-hardening` 分支。
