@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
     volumes: !override []
-    command: sh -c "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run build -w @aieo/api && npm run start -w @aieo/api"
+    command: sh -c "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run build -w @aieo/api && npm run start:production -w @aieo/api"
     environment:
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be configured for production}
@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
     volumes: !override []
-    command: sh -c "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run build -w @aieo/worker && npm run start -w @aieo/worker"
+    command: sh -c "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run build -w @aieo/worker && npm run start:production -w @aieo/worker"
     environment:
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be configured for production}

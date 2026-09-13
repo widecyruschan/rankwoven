@@ -5197,3 +5197,39 @@ Git、GitHub CLI、GitHub Actions、Docker Compose。
 
 - 配置 `DEPLOY_SMOKE_EMAIL` 與 `DEPLOY_SMOKE_PASSWORD` 後推送 `main`，並監看 `Production Deploy` workflow。
 - 若本次只需保存到 GitHub、不部署，改推送 `codex/ph2-04-security-hardening` 分支。
+
+## 會話總結（2026-09-13）— 生產啟動錯誤修復與重新部署
+
+### 會話主要目的
+
+配置生產 smoke 測試帳號與正式密鑰，推送 PH2-02 至 PH2-04，並修復部署後 API 容器啟動失敗。
+
+### 完成的主要任務
+
+- 已將 `demo@rankwoven.com`／`rankwoven` 配置為 GitHub `production` Environment 的 smoke Secrets；密碼未寫入倉庫。
+- 已將使用者提供的 `JWT_SECRET` 與 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 寫入 VPS `/docker/rankwoven/.env`，僅驗證變量存在與長度，未輸出密鑰；原 `.env` 先備份，權限為 `600`。
+- 重新部署時定位到 API 的 Node ESM 啟動錯誤：TypeScript 編譯輸出的相對 import 沒有 `.js` 副檔名，`node dist/index.js` 無法解析 `dist/config`。
+- 新增 API／Worker `start:production` 腳本，以已安裝的 `tsx` 執行源入口；production Compose 保留 build、non-root、production secret hard-fail 及既有安全設定。
+- 本地 production Docker image 已驗證 API 使用 production secrets 啟動，`/health` 返回 200，確認不再出現 `ERR_MODULE_NOT_FOUND`。
+
+### 使用的技術棧
+
+Node.js 22、TypeScript、tsx、Docker Compose、GitHub Actions、Hostinger VPS。
+
+### 新增或修改文件
+
+- `apps/api/package.json`
+- `apps/worker/package.json`
+- `docker-compose.prod.yml`
+- `README.md`
+
+### 驗證結果
+
+- GitHub Actions Verify（前一輪）：Lint、Test、Build、Security Audit 全部通過。
+- VPS Compose 在密鑰配置後可解析，API／Worker production 啟動命令已在本地 image 通過 smoke health check。
+- 前一輪部署因 API ESM 啟動錯誤失敗；本次修復尚未推送／重新部署。
+
+### 下一步行動清單
+
+- 提交並推送本次 production 啟動修復到 `main`。
+- 監看 GitHub Actions 重新執行完整 Verify、SSH、migration、Docker 重建及 health／登入 smoke check。
