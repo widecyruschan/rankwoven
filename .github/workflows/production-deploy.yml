@@ -84,6 +84,8 @@ jobs:
                 -p "$HOSTINGER_VPS_PORT" \
                 -o BatchMode=yes \
                 -o ConnectTimeout=10 \
+                -o ServerAliveInterval=30 \
+                -o ServerAliveCountMax=20 \
                 -o StrictHostKeyChecking=accept-new \
                 -o UserKnownHostsFile=~/.ssh/known_hosts \
                 "$HOSTINGER_VPS_USER@$HOSTINGER_VPS_HOST" \

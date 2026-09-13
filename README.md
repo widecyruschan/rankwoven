@@ -5233,3 +5233,34 @@ Node.js 22、TypeScript、tsx、Docker Compose、GitHub Actions、Hostinger VPS�
 
 - 提交並推送本次 production 啟動修復到 `main`。
 - 監看 GitHub Actions 重新執行完整 Verify、SSH、migration、Docker 重建及 health／登入 smoke check。
+
+## 會話總結（2026-09-13）— 修復長時間部署 SSH 斷線
+
+### 會話主要目的
+
+處理 production secrets 配置後部署仍因 GitHub Actions SSH 斷線而中止的問題。
+
+### 完成的主要任務
+
+- 確認 VPS `/docker/rankwoven/.env` 已安全配置 `JWT_SECRET` 與 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY`，兩者均為 64 字符，文件權限為 `600`；未輸出密鑰值。
+- 確認第二次部署的 Verify、SSH、migration 和 Web 鏡像構建均通過，但 API／Worker 鏡像在長時間 Docker 構建期間因 SSH `Broken pipe` 未完成，導致部署中止。
+- 在 `scripts/deploy-production.sh` 與 GitHub Actions SSH 探測中加入 `ServerAliveInterval=30`、`ServerAliveCountMax=20` 和連接超時設定，避免長構建無輸出時斷線。
+
+### 使用的技術棧
+
+GitHub Actions、OpenSSH、Docker Compose、Hostinger VPS、Bash。
+
+### 新增或修改文件
+
+- `scripts/deploy-production.sh`
+- `.github/workflows/production-deploy.yml`
+- `README.md`
+
+### 驗證結果
+
+- 生產密鑰存在性與長度檢查通過；Compose 解析通過。
+- 目前上一輪部署因 SSH `Broken pipe` 失敗，線上 API 曾返回 502；待 keepalive 修復推送後重新部署。
+
+### 下一步行動清單
+
+- 通過 `main` push 觸發新部署，等待完整 Verify、Docker build、容器啟動、公開 health 和登入 smoke check。

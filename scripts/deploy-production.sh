@@ -98,10 +98,15 @@ DEPLOY_SMOKE_EMAIL="${DEPLOY_SMOKE_EMAIL}"
 DEPLOY_SMOKE_PASSWORD="${DEPLOY_SMOKE_PASSWORD}"
 REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 DEPLOY_COMMIT="$(git rev-parse "$DEPLOY_REF")"
+SSH_OPTIONS=(
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=20
+  -o ConnectTimeout=15
+)
 
 echo "Deploying RankWoven ${DEPLOY_COMMIT} to ${REMOTE}:${DEPLOY_PATH}"
 
-ssh "$REMOTE" "set -euo pipefail
+ssh "${SSH_OPTIONS[@]}" "$REMOTE" "set -euo pipefail
 mkdir -p '$DEPLOY_BACKUP_DIR'
 if [[ -d '$DEPLOY_PATH' ]]; then
   backup_path='$DEPLOY_BACKUP_DIR/rankwoven-config-'\$(date +%Y%m%d%H%M%S)'.tgz'
@@ -117,7 +122,7 @@ if [[ -d '$DEPLOY_PATH' ]]; then
   fi
 fi"
 
-git archive --format=tar "$DEPLOY_REF" | ssh "$REMOTE" "set -euo pipefail
+git archive --format=tar "$DEPLOY_REF" | ssh "${SSH_OPTIONS[@]}" "$REMOTE" "set -euo pipefail
 new_dir='${DEPLOY_PATH}-new'
 old_dir='${DEPLOY_PATH}-old-'\$(date +%Y%m%d%H%M%S)
 if [[ -e \"\$new_dir\" ]]; then
@@ -136,7 +141,7 @@ fi
 mv \"\$new_dir\" '$DEPLOY_PATH'
 echo \"Activated release: $DEPLOY_PATH\""
 
-ssh "$REMOTE" "set -euo pipefail
+ssh "${SSH_OPTIONS[@]}" "$REMOTE" "set -euo pipefail
 cd '$DEPLOY_PATH'
 COMPOSE_FILES='-f docker-compose.yml -f docker-compose.prod.yml'
 docker compose \$COMPOSE_FILES --profile '$DEPLOY_PROFILE' up -d postgres
