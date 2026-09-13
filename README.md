@@ -5334,3 +5334,34 @@ GitHub Actions、Node.js 22、TypeScript、tsx、Vitest、Docker Compose、Postg
 
 - 由於 WordPress 憑據加密密鑰已從舊本地 fallback 輪換為正式 key，現有站點的 WordPress Application Password 應在客戶後台重新錄入，確保後續 Worker 寫回可解密。
 - 後續進入 PH2-05 前，完成 privacy／legal reviewer 對資料保留及營運地區責任的確認。
+
+## 會話總結（2026-09-13）— 縮短 production image 權限處理
+
+### 會話主要目的
+
+修復 `Dockerfile.production` 對整個 `/workspace` 執行遞歸 `chown` 導致 VPS build 長時間卡住及服務維護窗口過長的問題。
+
+### 完成的主要任務
+
+- 確認 VPS build 卡在 `chown -R node:node /workspace`，而不是 CPU、記憶體、磁碟或應用程式測試問題。
+- 取消對應的卡住 GitHub run，只終止該次遠程 Docker build 進程，未停止或刪除資料庫 volume／備份。
+- 使用既有已驗證 image 重新啟動全部五個 production containers，先恢復公開服務。
+- 將 `Dockerfile.production` 改為 `COPY --chown=node:node . .`，移除額外遞歸權限掃描；本地相同 image build 由數分鐘降至約 6 秒。
+
+### 使用的技術棧
+
+Docker BuildKit、Docker Compose、GitHub Actions、Hostinger VPS。
+
+### 新增或修改文件
+
+- `Dockerfile.production`
+- `README.md`
+
+### 驗證結果
+
+- 本地 production image build 成功，`COPY --chown` 步驟約 1.5 秒，最終 image 保持 `USER node`。
+- VPS 五個 production containers 已恢復運行，Web、PostgreSQL、Redis health check 正常。
+
+### 下一步行動清單
+
+- 推送 build 優化並完成最後一次 GitHub Actions deployment、health 及登入 smoke check。

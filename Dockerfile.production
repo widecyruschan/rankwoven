@@ -25,8 +25,7 @@ COPY packages/security/package.json packages/security/package.json
 
 RUN npm ci --ignore-scripts
 
-COPY . .
-RUN chown -R node:node /workspace
+COPY --chown=node:node . .
 
 USER node
 
