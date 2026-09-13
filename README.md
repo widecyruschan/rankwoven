@@ -68,6 +68,9 @@ AIEO 是 RankWoven 的 AI SEO 自動優化平台工程倉庫。RankWoven 主域�
 ├── docs/
 │   ├── brand-guidelines.md
 │   ├── domain-setup.md
+│   ├── rankwoven-phase-2-development-workflow.md
+│   ├── rankwoven-phase-2-prd.md
+│   ├── research/
 │   ├── saas-dashboard-prototype.md
 │   └── seo-ai-platform-prd.md
 ├── docker-compose.yml
@@ -310,6 +313,10 @@ Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4
 ## 文件
 
 - [AI SEO 自動優化平台開發需求文件](docs/seo-ai-platform-prd.md)
+- [RankWoven 第二階段 AI SEO PRD](docs/rankwoven-phase-2-prd.md)
+- [RankWoven 第二階段開發流程與方案選型](docs/rankwoven-phase-2-development-workflow.md)
+- [PH2-04 安全、私隱與 SSRF 核檢](docs/approvals/phase-2/PH2-04-security-privacy-ssrf.md)
+- [第二階段 API、配額與成本研究](docs/research/phase-2-api-pricing-2026.md)
 - [RankWoven 域名與 DNS 接入方案](docs/domain-setup.md)
 - [RankWoven 品牌與基礎 UI 視覺規範](docs/brand-guidelines.md)
 - [RankWoven SaaS 後台核心頁面原型](docs/saas-dashboard-prototype.md)
@@ -3398,6 +3405,7 @@ WordPress PHP 8、WordPress Hooks、`get_posts`／`get_terms`、純文字 Markdo
 ### 新增或修改文件
 
 - `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/README.md`
 - `plugins/wordpress/README.md`
 - `plugins/wordpress/TESTING.md`
 - `README.md`
@@ -3435,6 +3443,7 @@ WordPress PHP 8、WordPress Hooks、RSS 2.0 XML、`get_posts`、Docker PHP 8.2�
 ### 新增或修改文件
 
 - `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/README.md`
 - `plugins/wordpress/README.md`
 - `plugins/wordpress/TESTING.md`
 - `README.md`
@@ -3473,6 +3482,7 @@ WordPress PHP 8、RSS 2.0 XML、XSLT 1.0、WordPress `get_posts`／內容清理 
 - `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
 - `plugins/wordpress/rankwoven-seo/assets/rss-sitemap.xsl`
 - `plugins/wordpress/README.md`
+- `plugins/wordpress/rankwoven-seo/README.md`
 - `plugins/wordpress/TESTING.md`
 - `README.md`
 
@@ -3487,225 +3497,333 @@ WordPress PHP 8、RSS 2.0 XML、XSLT 1.0、WordPress `get_posts`／內容清理 
 - 暫時移開測試站實體 `llms.txt`，啟用 RSS 設定後驗證 `/sitemap.rss`、XSL 載入、XML 解析和文章排序。
 - 完成前台驗證後，只提交本次相關文件，再按用戶授權推送 GitHub／部署。
 
-## 會話總結（2026-08-30）— 修正 LLMs.txt 文章摘要對應錯誤
+## 會話總結（2026-08-30）— 修復 GitHub Actions SSH 部署失敗
 
 ### 會話主要目的
 
-修正 WordPress 實體 `llms.txt` 將 EZ TOC「內容目錄」誤當成多篇文章摘要，導致每個 URL 後面的內容重複且與文章不符。
+修復 `Production Deploy` 在 `Configure SSH` 階段連續五次探測失敗，導致 Hostinger VPS 部署 Job 中止的問題。
 
 ### 完成的主要任務
 
-- RankWoven SEO 插件新增 LLMs 專用內容清理：移除 EZ TOC／TOC 容器與未註冊 Visual Composer shortcode。
-- `llms.txt`、`llms-full.txt`、文章 `.md` 與 RSS 共用每篇文章的乾淨正文／摘要來源；只有偵測到內容目錄型 Meta 摘要時才回退到該文章正文。
-- 在 `wp_trim_excerpt()` 呼叫堆疊中加入限定過濾器，讓 Hostinger 日後重建實體 `llms.txt` 時不再輸出 TOC 或 shortcode。
+- 以失敗 workflow `33302129981` 作為可重現回路，確認 Verify 已通過，故障只發生在部署 Job 的 SSH 預檢。
+- 只讀檢查 VPS：SSH 監聽 IPv4／IPv6 22 端口、UFW 未啟用、nftables 沒有 INPUT 拒絕規則，本機可使用明確指定的部署私鑰以 `root` 登入。
+- 更新 GitHub Repository Secrets 的 VPS Host、Port、User 與 SSH Key；未在日誌、文檔或 Git 中輸出任何私鑰內容。
+- 重新執行失敗 Job；第二次執行的 `Configure SSH`、`Deploy` 及整個 workflow 全部通過。
 
 ### 關鍵決策和解決方案
 
-- 不改變前台文章的 TOC 顯示，只在摘要產生堆疊和 LLMs 輸出路徑清理導覽標記。
-- 自訂且有效的 SEO Meta Description 仍保留；只有空值或以「內容目錄／Table of Contents」開頭的摘要才使用文章正文回退。
+- 根因是 GitHub 保存的 VPS 連接 Secret 與目前有效連接資料不一致，不是 workflow 程式碼、VPS SSH 服務或主機防火牆故障。
+- 不修改 workflow 或放寬 VPS 防火牆；直接校正現有 Secrets，維持原本的私鑰驗證和 `StrictHostKeyChecking=accept-new` 安全流程。
 
 ### 使用的技術棧
 
-WordPress PHP 8、WordPress Hooks、Hostinger LLMs.txt 產生器、Docker PHP 8.2。
+GitHub Actions、GitHub CLI、OpenSSH、Hostinger VPS、Docker Compose、curl。
 
 ### 新增或修改文件
 
-- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
-- `README.md`
+- `README.md`（只追加本次會話記錄）
+- GitHub Repository Secrets（外部設定，不包含在 Git 檔案）
 
-### 驗證結果或未驗證原因
+### 驗證結果
 
-- Docker WordPress 容器 `php -l` 通過。
-- 本地實際文章摘要已確認各自回傳自身正文；合成 EZ TOC 樣本可正確移除導覽容器。
-- 本地 LLMs 文件生成結果不含 `內容目錄`、`Toggle`、`[vc_row]` 或 `font_container`；重複摘要只存在於測試站原本刻意重複的商品／分類資料。
-- 線上 `cyruschan.com/llms.txt` 的靜態文件替換尚待 Hostinger 網站 API 恢復後完成。
+- Workflow `33302129981` 第二次執行成功，Verify 與 Deploy Job 全部為綠色。
+- 生產 API health、部署 commit、Docker Compose 容器健康與受保護 API 的 401 行為均再次驗證。
 
 ### 下一步行動清單
 
-- 上傳已驗證的 RankWoven 插件至 `cyruschan.com` WordPress。
-- 以文章完整內容生成並替換網站根目錄實體 `llms.txt`，清除快取後再次檢查文章 URL／摘要一一對應。
+- GitHub Actions 對 Node.js 20 action runtime 顯示棄用警告；後續可在 `actions/checkout`／`actions/setup-node` 官方新 major 穩定後升級，該警告不影響本次部署。
 
-## 會話總結（2026-08-30）— 新增 WordPress GEO 優化設定
-
-### 會話主要目的
-
-根據 GEO 審計截圖，為 RankWoven SEO WordPress 插件加入 AI 爬蟲存取、索引／摘要控制，以及語言 hreflang 聲明設定。
-
-### 完成的主要任務
-
-- 新增 `GEO 優化` 後台分頁和 `rankwoven_geo_settings` 選項，提供 AI Training Crawlers、AI Search Crawlers、AI Assistant Fetchers 三組 User-agent 控制。
-- 將 `Indexability` 和 `Snippet Controls` 接到前台 `robots` meta，支持 `noindex`、`nofollow`、`nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
-- 新增語言代碼、替代語言 URL、`x-default URL` 設定，前台輸出 hreflang 標籤；GEO readiness、AI Crawler Access 和 Machine Readability 分數按設定動態計算。
-- 動態 `/robots.txt` 會追加對應 AI User-agent 的 `Allow`／`Disallow` 規則；診斷頁增加 GEO readiness 分數。
-- 更新插件 README、WordPress 測試清單與插件版本至 `0.5.0`。
-
-### 關鍵決策和解決方案
-
-- 預設允許三組 AI 爬蟲、公開索引和摘要引用，語言代碼回退到 WordPress 網站語言，`x-default` 回退到首頁；不硬編碼第三方審計分數。
-- 替代語言採用每行 `language=URL` 的簡單格式，只接受 http／https URL；無效語言代碼回退到網站語言，無效 URL 會被忽略。
-- 不新增資料庫表或外部 API，沿用既有 nonce、`manage_options` 權限和設定保存流程。
-
-### 使用的技術棧
-
-WordPress PHP 8、WordPress Hooks、robots.txt、前台 meta／hreflang、原生後台表單、CSS Grid。
-
-### 新增或修改文件
-
-- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
-- `plugins/wordpress/rankwoven-seo/assets/admin.css`
-- `plugins/wordpress/README.md`
-- `plugins/wordpress/TESTING.md`
-- `README.md`
-
-### 驗證結果或未驗證原因
-
-- `git diff --check` 通過；工作區沒有新增 `.env`、密碼、Token、API Key 或私鑰。
-- 已將插件 PHP／CSS 同步到本地 WordPress 測試站目錄，但 Docker daemon 在重啟時回報 read-only filesystem，容器目前無法提供 `php -l`、WP-CLI 或前台 smoke check。
-- 本機 MAMP PHP CLI 路徑不存在；完整 PHP 語法檢查需待 Docker daemon 恢復後重跑。
-
-### 下一步行動清單
-
-- 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 13 驗證後台 GEO 分頁、`/robots.txt`、前台 robots meta 和 `hreflang="x-default"`。
-- 通過 PHP 語法檢查後，只提交本次四個插件／文檔文件，再按用戶授權推送 GitHub；WordPress 插件生產部署仍需獨立的 Hosting／主機流程。
-
-## 會話總結（2026-08-31）— Sitemap 搜尋引擎提交入口
+## 會話總結（2026-08-31）— 更新 WordPress SEO 外掛
 
 ### 會話主要目的
 
-在 WordPress 插件的 `網站地圖` 頁面加入各主要搜尋引擎的 Sitemap／站長工具提交連結，方便管理員完成索引提交。
+將 `plugins/wordpress/rankwoven-seo/` 更新至已完成的 SEO 評分與 GEO 優化版本，同時保留圖片優化、LLMs.txt 與 RSS Sitemap 功能。
 
 ### 完成的主要任務
 
-- 新增 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 提交／收錄入口卡片。
-- Google 連結自動帶入本站首頁作為 Search Console property，Brave 連結自動帶入當前 `sitemap.xml` URL。
-- 所有第三方連結使用新分頁、`noopener noreferrer` 和可訪問性標籤。
-- 對沒有穩定獨立 Sitemap 提交表單的搜尋引擎顯示實際限制及替代發現方式。
-- 插件版本更新至 `0.5.1`，同步更新插件 README 和 WordPress 測試清單。
+- 恢復 19 項、100 分權重的文章／頁面／商品 SEO 逐項檢查，並在編輯器顯示 Problems、Warnings、Success 清單。
+- 恢復 GEO 爬蟲存取、索引／摘要控制、hreflang 與 `x-default` 設定，以及 Sitemap 搜尋引擎提交入口。
+- 合併 WebP／AVIF 圖片優化、圖片批量轉換與從網址上傳模組，保留 LLMs.txt／RSS 的純文字內容清理。
+- 更新插件版本至 `0.6.0` 及插件 README。
 
 ### 關鍵決策和解決方案
 
-- 不在插件內直接向第三方搜尋引擎提交資料；連結只開啟官方平台，登入、網站驗證和提交由管理員在對方平台完成。
-- 保留既有 SaaS Google Search Console API 提交流程，新增入口只補充 Bing、Baidu、Yandex、Naver、Sogou、Brave 等平台。
-- Yahoo、DuckDuckGo、Ask、AOL 和 Qwant 沒有穩定的獨立 Sitemap 表單，因此使用官方入口或 Bing Webmaster Tools 並在 UI 顯示說明。
+以 GitHub `origin/main` 的 `0.6.0` SEO/GEO 實作為基線，再精確合併工作區已有圖片優化與內容清理改動，避免覆蓋未提交的使用者功能或憑據設定。
 
 ### 使用的技術棧
 
-WordPress PHP 8、原生後台 HTML、CSS Grid、官方搜尋引擎站長工具連結。
+WordPress PHP 8、WordPress Hooks、jQuery、RSS 2.0／XSLT、WebP／AVIF 圖片處理、JavaScript ESLint。
 
 ### 新增或修改文件
 
-- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
-- `plugins/wordpress/rankwoven-seo/assets/admin.css`
-- `plugins/wordpress/README.md`
-- `plugins/wordpress/TESTING.md`
-- `README.md`
-
-### 驗證結果或未驗證原因
-
-- `git diff --check` 通過；Google property 和 Brave Sitemap URL 參數已使用 URL 編碼。
-- 尚未執行 WordPress runtime 冒煙測試；此前本地 Docker daemon 曾回報 read-only filesystem，需恢復後驗證後台卡片和外部連結。
-- 本次未修改 `.env`、憑據或任何敏感設定。
-
-### 下一步行動清單
-
-- 恢復 Docker Desktop 後，按 `plugins/wordpress/TESTING.md` 清單 11 驗證所有連結、Sitemap URL 參數及手機版排版。
-- 通過插件 PHP 語法檢查後，只提交本次相關文件並推送到 GitHub `main`。
-
-## 會話總結（2026-08-31）— WordPress 內容 SEO 逐項評分
-
-### 會話主要目的
-
-按參考畫面的每個 SEO 檢查項完善 WordPress 文章、頁面和商品評分，讓管理員能看見具體問題、警告及通過項目，而不只是一個總分。
-
-### 完成的主要任務
-
-- 將編輯器 SEO 評分擴充為 19 項、總權重 100 的完整清單，涵蓋關鍵詞、標題／描述、正文、連結、圖片及可讀性。
-- 在 WordPress SEO 面板新增 `Problems`、`Warnings`、`Success` 三組狀態清單，保存或 AI 生成後即時更新。
-- 文章、頁面、Portfolio 和商品共用同一套本地評分；SaaS `/editor-seo` API 也回傳一致的 19 項 `scoreChecks`。
-- 新增中英文混合內容單位計算、內外鏈網域判斷、圖片 Alt Text、首段關鍵詞、關鍵詞密度和其他內容重複關鍵詞檢查。
-- 新增文章／頁面／商品 API 測試，驗證檢查鍵完整且權重合計為 100；插件版本更新至 `0.6.0`。
-
-### 關鍵決策和解決方案
-
-- 每項結果統一使用 `pass`、`warning`、`fail`，總分按固定權重累加；警告取得該項約一半分數，問題不給分。
-- 中文內容按漢字逐字、其他語言按詞組計算，避免英文專用字數函式造成誤判。
-- 可讀性檢查採可解釋的規則式判斷，不使用 AI 猜測；圖片主題相關性目前以 Alt Text 是否包含完整 Focus keyphrase 作為可重現標準。
-- 不新增資料表；逐項結果按當前內容即時計算，既有自訂欄位只保存總分和分析摘要。
-
-### 使用的技術棧
-
-WordPress PHP 8、WordPress Post Meta／AJAX、原生 JavaScript DOM、CSS Grid、TypeScript、Zod、Fastify、Vitest。
-
-### 新增或修改文件
-
-- `apps/api/src/seoOptimization.ts`
-- `apps/api/tests/siteConnections.test.ts`
 - `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
 - `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
 - `plugins/wordpress/rankwoven-seo/assets/editor-seo.css`
-- `plugins/wordpress/README.md`
-- `plugins/wordpress/TESTING.md`
-- `README.md`
+- `plugins/wordpress/rankwoven-seo/assets/admin.css`
+- `plugins/wordpress/rankwoven-seo/assets/css/admin-style.css`
+- `plugins/wordpress/rankwoven-seo/assets/js/admin-script.js`
+- `plugins/wordpress/rankwoven-seo/assets/js/media-url-upload.js`
+- `plugins/wordpress/rankwoven-seo/assets/rss-sitemap.xsl`
+- `plugins/wordpress/rankwoven-seo/includes/class-image-optimizer.php`
+- `plugins/wordpress/rankwoven-seo/README.md`
 
-### 驗證結果或未驗證原因
+### 驗證結果
 
-- API TypeScript build、ESLint、JavaScript 語法、`git diff --check` 和指定 API 測試通過；`siteConnections.test.ts` 共 34 項測試成功。
-- 插件主 PHP 文件已通過 `php-parser` 靜態解析。
-- WordPress Docker 容器 runtime 檢查未完成：本機 Docker daemon 回報容器 `resolv.conf` 唯讀並令容器停止，無法執行容器內 `php -l` 或後台視覺驗證。
-- 未新增或提交 `.env`、密碼、Token、API Key、Application Password 或私鑰。
+- PHP parser：主插件與圖片優化模組通過。
+- JavaScript：編輯器、圖片管理與網址上傳腳本通過語法檢查。
+- `npm run lint` 通過。
+- `npm run test` 通過：API 43、Web 8、Worker 4、AI provider 7、CMS adapter 1；另有 4 個資料庫測試按環境跳過。
+- 未提交任何 `.env`、密碼、Token、API Key 或私鑰；本機沒有 PHP CLI，未執行原生 `php -l`。
 
 ### 下一步行動清單
 
-- Docker Desktop 恢復後，按 `plugins/wordpress/TESTING.md` 清單 9 驗證三種內容類型的 19 項狀態、AJAX 更新和桌面／窄螢幕排版。
-- WordPress 生產站需另行更新 `rankwoven-seo` 插件；推送主倉庫只會觸發 RankWoven API／Web 的既有部署流程。
+- 只提交本次插件目錄與本會話 README 變更，推送至 GitHub `main`。
+- 推送後檢查 GitHub Actions 與生產健康檢查。
 
-## 會話總結（2026-08-31）— SEO 評分審查修正
+## 會話總結（2026-08-31）— 完善 GEO 設定
 
 ### 會話主要目的
 
-修正逐項 SEO 評分實作在關鍵詞邊界、商品資料、空正文及標題顯示寬度方面的誤判，並完成提交前審查。
+根據 GEO 審計報告，補齊 WordPress 外掛的結構化資料、內容可引用性與 E-E-A-T 設定。
 
 ### 完成的主要任務
 
-- 關鍵詞檢查改為完整詞匹配；多詞 Focus keyphrase 可按所有詞判斷，不會把 `AI` 誤算入 `email`。
-- SEO title width 改用中文字元雙寬單位計算，避免只按字符數判斷。
-- 評分把文章摘要納入正文上下文；商品額外讀取 WooCommerce 特色圖片和商品圖庫的 Alt Text。
-- 空正文不再從連續句子、子標題、段落、語態和句長項目取得虛假成功分；無圖片時 Image keyphrase 保持警告但不加分。
-- 補充 API 測試覆蓋空正文、關鍵詞邊界、多詞關鍵詞及商品摘要，並同步更新插件測試流程包含 `editor-seo.css`。
+- 新增可關閉的 JSON-LD 圖譜，支援 Organization、WebSite、Person、Article、WebPage、Product 和 BreadcrumbList。
+- 新增 Organization 名稱、描述、Logo、`sameAs` 社交連結，以及 JSON-LD、Entity、Content、Author & Date 四項開關。
+- GEO readiness 擴展為 AI Crawler Access、Machine Readability、Structured Data、Content & Citability、Trust & E-E-A-T 五組評分。
+- 加入標題層級、首段答案、問題式標題、清單／表格、統計數據、引用、內容深度、作者、日期、About／Contact、Privacy／Terms、品牌一致性和 HTTPS 檢查。
+- `x-default` 留空時自動回退至網站首頁，避免 hreflang 缺失。
 
 ### 關鍵決策和解決方案
 
-- PHP 插件與 SaaS API 保持同一套規則和檢查鍵，兩端分別在本地執行以支援 WordPress 離線 fallback。
-- 不引入同義詞資料庫或外部 NLP 服務；圖片主題相關性以 Focus keyphrase 的完整詞／所有詞匹配作為可重現規則。
+結構化資料預設啟用但每項可獨立停用；商品價格、SKU 和庫存只在存在對應 WooCommerce 欄位時輸出；內容評估只取最近更新的公開內容作為站點代表樣本，避免掃描全部文章。
 
 ### 使用的技術棧
 
-WordPress PHP 8、WooCommerce Post Meta、TypeScript、Fastify、Zod、Vitest、CSS、原生 JavaScript。
+WordPress Hooks、PHP 8、Schema.org JSON-LD、`get_posts`／`get_page_by_path`。
 
 ### 新增或修改文件
 
-- `apps/api/src/seoOptimization.ts`
-- `apps/api/tests/siteConnections.test.ts`
 - `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
-- `plugins/wordpress/rankwoven-seo/assets/editor-seo.js`
-- `plugins/wordpress/rankwoven-seo/assets/editor-seo.css`
-- `plugins/wordpress/README.md`
-- `plugins/wordpress/TESTING.md`
+- `plugins/wordpress/rankwoven-seo/README.md`
 - `README.md`
 
-### 驗證結果或未驗證原因
+### 驗證結果
 
-- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過；測試為 46 項成功、4 項 PostgreSQL 整合測試跳過。
-- `php-parser` 解析插件 PHP 通過；JavaScript 語法和 `git diff --check` 通過。
-- 已同步插件文件到本地 WordPress 測試站；Docker daemon 因 `/var/lib/docker/containers/...` 唯讀，無法啟動 `cyruschan-wp` 執行 `php -l` 或後台 runtime 驗證。
-- `code-review` 雙軸審查已完成，發現的關鍵詞、商品、空正文和寬度問題均已修正；未提交任何 `.env` 或敏感憑據。
-- 功能提交 `ae03b26` 已推送至 GitHub `main`；`Production Deploy` run `33323877321` 的 Verify 和 Hostinger VPS Deploy 均成功。
-- 部署後 `https://api.rankwoven.com/health` 返回 API 服務正常，`https://rankwoven.com` 返回 `200 OK`。
+- 測試站 Docker WordPress PHP 8.2 parser 通過。
+- JavaScript 語法檢查與 `git diff --check` 通過。
+- 尚未執行完整 `npm run lint`、`npm run test`、`npm run build`。
 
 ### 下一步行動清單
 
-- Docker Desktop 恢復後，重新啟動 `cyruschan-wp`，依 `plugins/wordpress/TESTING.md` 清單 9 驗證文章、頁面和商品的 19 項狀態及圖片圖庫。
-- WordPress 測試站插件已同步；生產 WordPress 插件仍需獨立發布流程，不由 VPS GitHub Actions 自動更新。
+- 在測試站後台保存 GEO 設定，逐頁檢查 JSON-LD 與 hreflang。
+- 使用 Rich Results Test 及 Search Console 驗證 Article／Product Schema。
+
+## 會話總結（2026-08-31）— 新增 IndexNow
+
+### 會話主要目的
+
+為 WordPress SEO 插件新增 IndexNow 即時通知，讓搜尋引擎更快發現文章、頁面、Portfolio 和商品的變更。
+
+### 完成的主要任務
+
+- 新增 IndexNow 啟用、自動提交、內容類型和 API Key 設定。
+- 新增公開 `/{key}.txt` 驗證文件路由及手動 URL 批量提交。
+- 在公開內容發佈、更新、移除時自動通知 `api.indexnow.org`。
+- 加入本站網域驗證、最多 10,000 個 URL 限制、2xx 狀態處理和 60 秒重複提交鎖定。
+
+### 關鍵決策和解決方案
+
+IndexNow Key 是公開驗證值，不當作登入密碼保存或輸出到日誌；所有提交 URL 必須屬於本站 http／https 網域，網路錯誤不會阻止 WordPress 內容保存。
+
+### 使用的技術棧
+
+WordPress Hooks、WordPress HTTP API、IndexNow JSON API、動態純文字文件路由。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- Docker WordPress PHP 8.2 parser 通過。
+- 本地測試站的 `/{key}.txt` 返回 `200` 及正確純文字 Key。
+- 尚待完成 IndexNow API mock 與完整 lint／test／build。
+
+### 下一步行動清單
+
+- 在測試站攔截 HTTP 請求，驗證 IndexNow JSON payload 與成功／失敗狀態保存。
+- 提交前檢查插件目錄，不包含 `.env`、密碼、Token、API Key 或私鑰。
+
+## 會話總結（2026-09-11）— 調整 WordPress 插件導航間距
+
+### 會話主要目的
+
+根據截圖紅框位置，改善 WordPress 插件後台頂部導航與 Overview 內容面板之間的間距。
+
+### 完成的主要任務
+
+- 將 `.rankwoven-admin-tabs.nav-tab-wrapper` 的下邊距由 `18px` 調整為 `34px`。
+- 保留導航標籤尺寸、內容卡片內距及其他頁面樣式不變。
+
+### 關鍵決策和解決方案
+
+採用單一 CSS 間距修改，限定影響頂部導航與下一個內容區塊的垂直距離，避免改動其它後台元件。
+
+### 使用的技術棧
+
+WordPress admin CSS。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/assets/admin.css`
+- `README.md`
+
+### 驗證結果
+
+- 待在 WordPress 後台瀏覽器確認桌面及窄螢幕的實際間距。
+
+### 下一步行動清單
+
+- 同步插件到測試站後檢查導航與 Overview 之間的視覺距離。
+
+## 會話總結（2026-09-12）— 修復 Blog 孤島頁面
+
+### 會話主要目的
+
+修復全部 Blog 文章被 SEO 工具判定為沒有導入內鏈的孤島頁面，並處理同一報告中的無導出連結、H1 缺失、正文過短和 Meta Description 過短。
+
+### 完成的主要任務
+
+- 靜態 `/blog` SEO HTML 輸出全部 86 篇文章的可抓取連結。
+- 每篇靜態文章頁輸出 H1、完整 Markdown 正文、返回 Blog、上一篇／下一篇及同分類相關文章連結。
+- 短文章摘要會結合正文生成 120 至 156 字的 Meta Description，並同步套用到 Vue 執行後的 Meta 與 BlogPosting Schema。
+- SEO 頁面生成器新增鏈接圖、H1、正文、導出文章連結及描述長度斷言，缺失時直接令構建失敗。
+- 新增短摘要文章的 Meta Description 回歸測試。
+
+### 關鍵決策和解決方案
+
+根因是原靜態 SEO 生成器只更新 `<head>`，`<body>` 仍是空白 `#app`。修復在構建階段輸出真實可讀內容和內鏈，Vue 載入後仍正常接管 `#app`，不改變既有互動頁面。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Vite、JSDOM、Marked、Vitest、靜態 SEO fallback HTML。
+
+### 新增或修改文件
+
+- `apps/web/scripts/generate-seo-pages.mjs`
+- `apps/web/src/blog/articles.ts`
+- `apps/web/src/views/BlogArticleView.vue`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run build -w @aieo/web` 通過，生成 96 個公開 SEO 頁面並驗證 86 篇 Blog 導入內鏈。
+- 靜態鏈接圖檢查：86 篇文章、最少 5 條導入內鏈、孤島頁面 0。
+- `npm run test -w @aieo/web` 通過，共 8 項測試。
+- `npm run test` 全倉庫通過：API 46、Web 8、Worker 4、AI Provider 7、CMS Adapter 1；另有 4 項 PostgreSQL 測試按環境跳過。
+- `npm run lint` 通過。
+- 本地瀏覽器驗證 Blog 列表和文章頁均只有一個 H1，文章正文正常載入，Meta Description 長度符合要求，無瀏覽器錯誤。
+- 提交 `02478a6` 已推送至 GitHub `main`，遠端 SHA 已確認一致。
+- GitHub Actions 的 Lint、Test、Build 通過，但 Security audit 因新披露的 `fast-uri` 高危通告及既有 Fastify／Vitest 通告失敗，因此未進入 VPS 部署。
+
+### 下一步行動清單
+
+- 另開依賴安全修復，更新 `fast-uri`／Fastify／Vitest 相依版本並重跑部署；部署完成後以生產頁面原始 HTML 重跑孤島頁面檢查。
+
+## 會話總結（2026-09-12）— 修復安全掃描部署失敗
+
+### 會話主要目的
+
+修復 Blog SEO 提交後 GitHub Actions 在 Security audit 階段因新依賴漏洞通告而失敗，並重新部署生產環境。
+
+### 完成的主要任務
+
+- Fastify 由 `5.10.0` 升級至 `5.12.4`。
+- Vitest 由 `3.2.7` 升級至 `4.1.11`。
+- 傳遞依賴 `fast-uri` 更新至安全版本 `3.1.7`／`4.1.4`。
+- Web TypeScript 設定明確加入 Node 類型，兼容 Vitest 4 的類型載入方式。
+- 重新生成 npm 鎖文件並以乾淨 `npm ci` 驗證。
+
+### 關鍵決策和解決方案
+
+依照 GitHub Security Advisory 的首個修復版本選擇最小穩定升級，不使用 `npm audit fix --force`，避免引入 Vitest 5 或未審查的依賴變更。
+
+### 使用的技術棧
+
+Node.js 22、npm workspaces、Fastify、Vitest、GitHub Actions、npm audit。
+
+### 新增或修改文件
+
+- `package.json`
+- `package-lock.json`
+- `apps/api/package.json`
+- `apps/web/tsconfig.json`
+- `README.md`
+
+### 驗證結果
+
+- `npm ci --ignore-scripts --registry=https://registry.npmjs.org` 通過。
+- `npm run lint` 通過。
+- `npm run test` 全倉庫通過。
+- `npm run build` 通過。
+- `npm run security:audit` 返回 `found 0 vulnerabilities`。
+
+### 下一步行動清單
+
+- 提交 `a3d9b92` 已推送至 `main`；GitHub Actions run `34630956000` 的 Verify、Security audit 與 Hostinger VPS Deploy 全部通過。
+- 生產 API health 正常，主站返回 `200`；`/blog` 原始 HTML 包含 86 篇文章連結，示例文章包含 H1、完整正文、5 條文章內鏈及 156 字 Meta Description。
+
+## 会话总结（2026-09-12）— 安装 UI 技能与主题切换
+
+### 会话主要目的
+
+搜索并自动安装 UI 优化技能，改善前端视觉一致性，并为网站和工作台增加亮色／暗色主题选择。
+
+### 完成的主要任务
+
+- 使用 `agent-reach` 搜索 GitHub UI 技能，找到 `gnurio/refactoring-ui-plugin`。
+- 使用 `skill-installer` 自动安装 `meta-refactor-ui` 及其 10 个细分 UI 技能。
+- 新增 `useTheme` composable 和 `ThemeSwitcher` 组件。
+- 在营销页、客户后台和管理后台顶部加入主题切换按钮。
+- 主题选择写入 `localStorage`，刷新页面后保持；亮色和暗色分别覆盖自定义样式及 Ant Design 控件。
+- 加入暗色模式颜色变量、表面层级、表格、表单、下拉菜单和弹窗样式。
+
+### 关键决策和解决方案
+
+采用亮色作为默认主题，使用单一 `data-theme` 属性驱动 CSS 变量，避免在每个页面重复维护主题逻辑；暗色配色保持蓝色品牌强调，同时提高深色背景上的正文和控件对比度。
+
+### 使用的技术栈
+
+Vue 3、TypeScript、Vue I18n、Ant Design Vue、Lucide Icons、CSS Variables、localStorage。
+
+### 新增或修改文件
+
+- `apps/web/src/composables/useTheme.ts`
+- `apps/web/src/components/ThemeSwitcher.vue`
+- `apps/web/src/main.ts`
+- `apps/web/src/App.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/styles.css`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 验证结果
+
+- `npm run lint` 通过。
+- `npm run test` 全仓库通过：API 46、Web 9、Worker 4、AI Provider 7、CMS Adapter 1；另有 4 项 PostgreSQL 测试按环境跳过。
+- `npm run build` 通过。
+- 本地浏览器验证亮色／暗色切换、localStorage 持久化、按钮无障碍标签及无横向溢出。
+
+### 下一步行动清单
+
+- 在浏览器中继续检查已登录工作台各页面的表格、图表和弹窗暗色对比度。
+- 经授权后提交并推送主题 UI 改动。
+
 ## 会话总结（2026-09-12）— 修复公开页面孤岛
 
 ### 会话主要目的
@@ -3948,3 +4066,1096 @@ Vue 3、Ant Design Vue ConfigProvider、Ant Design darkAlgorithm、ECharts、CSS
 ### 下一步行動清單
 
 - 獲得授權後推送 `main`，並在生產 Analytics、Tasks 及其他表格頁重新量測暗色元件。
+
+## 會話總結（2026-09-12）— 部署現有 UI 與制定第二階段 PRD
+
+### 會話主要目的
+
+先將已完成的暗色工作台 UI 推送及部署到生產環境，再結合現有產品基線、使用者初步構想與 2026 年官方 AI／SEO 能力，制定 RankWoven 第二階段開發 PRD。
+
+### 完成的主要任務
+
+- 將暗色表單、表格、圖表與狀態元件更新提交並推送至 GitHub `main`。
+- 確認 GitHub Actions `Production Deploy` 的 Verify、Lint、70 項測試、Build、Security audit 及 Hostinger VPS Deploy 全部成功。
+- 以登入後生產工作台驗證 Analytics、Tasks、Select、Card、Statistic、Tabs、Table 及 Tag 的新暗色 palette 已生效。
+- 完整核對現有 PRD、關鍵詞 Provider、Site Audit、Lighthouse、GSC、內容建議、資料表與前端路由基線。
+- 使用官方一手資料研究 Structured Outputs、grounding、Batch、SEO 競品資料、AI 搜尋引用、GSC、PageSpeed、Shopify、Stripe、PayPal 及 outreach 合規。
+- 新增第二階段 PRD，涵蓋 Keyword Intelligence、Content Optimizer、站點體檢、競品／AI 可見度監控、外鏈機會、CMS／API、計費、資料真實性、安全、測試、KPI 與分階段時程。
+
+### 關鍵決策和解決方案
+
+- 競品排名、搜尋量、流量估算及權威指標必須來自授權資料 Provider；AI 只負責語義擴展、聚類、解釋與策略，不可補造真實指標。
+- E-E-A-T 改寫必須使用可驗證引用及 Claim Ledger；作者經驗、案例與資格由用戶提供，AI 不得虛構。
+- 不採「付費無限使用」，改用 Entitlement、Research Credits、append-only usage ledger 及 spending cap 控制可變成本。
+- 外鏈功能先做機會推薦與 outreach 草稿，不自動寄信或建立連結。
+- 建議分為 Phase 2A 六週、Phase 2B 四週及另行估算的 Phase 2C；兩至三週只適合單一垂直切片驗證。
+- 新增 AI Search Visibility 作 Phase 2B 差異化能力，但明確標示為固定問題集的採樣結果，不稱為穩定「AI 排名」。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Fastify、PostgreSQL、Redis／BullMQ、Zod／JSON Schema、WordPress、GSC、PageSpeed Insights／CrUX／Lighthouse、DataForSEO／Ahrefs／Semrush Provider、OpenAI／Anthropic／Gemini Provider、Stripe、PayPal、Shopify Admin GraphQL。
+
+### 新增或修改文件
+
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/research/phase-2-ai-seo-2026.md`
+- `README.md`
+
+### 驗證結果
+
+- 生產版本為 `225b12bd9870ef5a2a175809c9d75a57357099a7`，本地 `main`、`origin/main` 與 GitHub Actions head SHA 一致。
+- GitHub Actions run `34686367887` 結論為 `success`，生產 API health 正常。
+- PRD 已核對標題結構、Git diff 格式與敏感字串，未加入 `.env`、密碼、Token、API Key 或私鑰。
+- PRD 與研究筆記是部署完成後的本地文件，未再次推送，避免純文件修改觸發生產部署。
+
+### 下一步行動清單
+
+- 確認 Phase 2A 主 SEO Data Provider、首批市場與 Beta 月度資料預算。
+- 將 PRD 拆成可獨立交付的垂直功能 Issue，先實作研究專案持久化、來源標籤與用量帳本。
+- 文件獲確認後再獨立提交，避免夾帶工作區中其他既有未提交內容。
+
+## 會話總結（2026-09-12）— Backlink 發布 API 調研
+
+### 會話主要目的
+
+確認是否存在可發布 backlink 的 API，並區分合法 CMS 發布能力與 backlink 分析能力。
+
+### 完成的主要任務
+
+- 查閱 Google Link Spam 政策、WordPress REST API、Ghost Admin API、Shopify Admin GraphQL、DataForSEO Backlinks 及 Ahrefs API 官方文件。
+- 確認 WordPress、Ghost、Shopify 等 API 可在站點所有者授權下建立或發布內容。
+- 確認 DataForSEO、Ahrefs、Semrush 適合做 backlink profile、referring domains、競品與新／失連結分析，不能代表第三方網站發布權限。
+
+### 關鍵決策和解決方案
+
+- 不設計自動向第三方網站注入 backlink 的功能；RankWoven 應採「機會發現 → 草稿 → 人工批准 → 自有 CMS 發布」流程。
+- 付費／贊助連結需按 Google 政策使用 `rel="sponsored"` 或 `nofollow`；outreach 發送另需處理退訂、suppression list 及地區法規。
+
+### 使用的技術棧
+
+WordPress REST API、Ghost Admin API、Shopify Admin GraphQL、DataForSEO Backlinks API、Ahrefs API、Semrush API。
+
+### 新增或修改文件
+
+- 未修改程式碼；只追加本次研究記錄至 `README.md`。
+
+### 驗證結果
+
+- 官方文件查閱完成；未新增 API Key、密碼、Token 或 `.env`。
+
+### 下一步行動清單
+
+- 若納入第二階段，先實作 DataForSEO／Ahrefs／Semrush backlink 機會 Adapter，再接 WordPress／Shopify 的授權內容發布。
+
+## 會話總結（2026-09-12）— 將 Backlink 發布流程納入 Phase 2C
+
+### 會話主要目的
+
+按「發現機會 → AI 分析 → 生成草稿 → 人工批准 → 授權 CMS 發布 → 重新抓取驗證」流程，完善第二階段 PRD 的外鏈開發規劃。
+
+### 完成的主要任務
+
+- 在 PRD 新增 Backlink Opportunity 六步工作流及 `discovered`、`qualified`、`drafted`、`approved`、`publishing`、`published`、`verifying` 等狀態。
+- 增加 `publishing_targets`、`backlink_publication_runs`、`backlink_verifications` 資料模型。
+- 增加外鏈機會分析、outreach／合作文章草稿、批准、授權 CMS 發布及發布後驗證 API。
+- 在 Phase 2C 加入 DataForSEO／Ahrefs／Semrush Adapter、WordPress／Ghost、Shopify、reconciliation、公共 API 與合規控制的逐週排期。
+
+### 關鍵決策和解決方案
+
+- 只允許發布到用戶已連接並授權的 WordPress、Ghost、Shopify 等 CMS；不提供第三方網站自動注入 backlink。
+- Outreach 仍只生成草稿／匯出，不自動寄信；合作文章默認先建立 CMS draft，直接發布或排程需要高權限及二次確認。
+- 每次發布前建立快照並使用 `Idempotency-Key`；發布後重新檢查 HTTP、canonical、錨文本、`rel` 與可索引提示，不承諾排名或索引提升。
+
+### 使用的技術棧
+
+DataForSEO／Ahrefs／Semrush Backlink Provider、WordPress REST API、Ghost Admin API、Shopify Admin GraphQL、CMS Adapter、PostgreSQL、Redis／BullMQ、Zod／JSON Schema。
+
+### 新增或修改文件
+
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- PRD 已通過 Prettier 及 `git diff --check`；未新增 `.env`、密碼、Token、API Key 或私鑰。
+- 本次只更新規劃文件，未修改程式碼、未提交及未推送，亦未觸發生產部署。
+
+### 下一步行動清單
+
+- 在 Phase 2C 開發前確認主 Backlink Provider 合約、CMS OAuth scope、發布頻率與驗證保留期。
+
+## 會話總結（2026-09-12）— 將第一版未完成項目承接到第二版 PRD
+
+### 會話主要目的
+
+根據第一版功能覆蓋度與待辦清單，補齊第二版 PRD 的開發範圍、API、資料模型、驗收標準與排期。
+
+### 完成的主要任務
+
+- 新增「第一版未完成項目承接清單」，涵蓋認證／工作區、AI 批量優化、AI 文章生成、批量審批、精準關鍵詞數據、多站點比較、WordPress 推送、Worker／死信、報告導出、訂閱、多語言、Site Audit、定時套用及 Joomla／OpenCart。
+- 新增第一版承接 API：註冊、密碼重設、工作區邀請、批量批准／套用、報告、死信管理、多站點比較及 WordPress 草稿推送。
+- 將 Joomla／OpenCart 從模糊的 Phase 2C 調整為獨立 Phase 2D，避免與 backlink／Shopify／公共 API 排期互相擠壓。
+- 在 Phase 2A 排期加入認證、Worker、批量內容計劃、批量審批、WordPress draft push、Site Audit 端到端測試及死信管理。
+
+### 關鍵決策和解決方案
+
+- 已完成的生產靜態 Web 部署不重複排期；未完成項目全部指定目標階段及可驗收結果。
+- 第一版現有 API、CMS Adapter、BullMQ、i18n、權限、用量與快照規則繼續沿用，不建立平行架構。
+- AI 文章生成仍預設只產生草稿，圖片任務與文字任務分開，發布前必須人工批准。
+
+### 使用的技術棧
+
+Vue 3、TypeScript、Fastify、PostgreSQL、Redis／BullMQ、WordPress、GSC、GA4、DataForSEO／Ahrefs／Semrush、Shopify、Joomla、OpenCart。
+
+### 新增或修改文件
+
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- PRD 已通過 Prettier、`git diff --check` 及敏感資料檢查。
+- 本次只更新規劃文件，未修改程式碼、未提交、未推送或部署。
+
+### 下一步行動清單
+
+- 先按 Phase 2A 承接表拆分 Issue，優先實作認證／工作區、用量帳本、Worker 任務治理與關鍵詞研究持久化。
+
+## 會話總結（2026-09-12）— 重整前台、客戶後台與管理後台路由
+
+### 會話主要目的
+
+按照最新第二階段 PRD，重新規劃三類前端頁面路由，建立單一 SEO route contract，避免公開頁再次出現 SEO 孤島。
+
+### 完成的主要任務
+
+- 在第二版 PRD 新增 Canonical Route Plan，分開公開前台、認證流程、客戶後台與管理後台。
+- 規劃公開首頁、工具中心、工具詳情、Extension、Blog、Blog 分類與文章詳情的 canonical route、導入來源及索引狀態。
+- 規劃 workspace／site-scoped 客戶後台路由，將研究、內容優化、Audit、Analytics、Tasks、整合及計費放入清晰的站點上下文。
+- 規劃管理後台工作區、客戶、站點、Provider、用量、任務、內容政策、運營及設定路由。
+- 新增舊 flat `/app/*` 路由的兼容 redirect 對照，避免現有入口中斷。
+- 新增 route registry、link graph、sitemap 分組、hreflang、初始 HTML、robots／X-Robots-Tag 及孤島頁建置阻斷規則。
+- 將第一版未完成的 SEO／路由驗收納入 Phase 2A／2B 排期，包含公開 SEO fallback、孤島數為 0、多站點對比及 locale route。
+
+### 關鍵決策和解決方案
+
+- 以同一份 route registry 驅動 Vue Router、SEO head、靜態 SEO 生成器及 sitemap，禁止新增頁面只修改其中一處。
+- 公開 indexable route 必須有唯一 canonical、H1／正文、至少一條導入連結及完整 sitemap／hreflang metadata；query state、登入頁、`/app`、`/admin` 一律不索引。
+- Blog 分類頁只有在文章數、獨有介紹與互鏈條件達標時才索引，否則只作 noindex filter state。
+- 客戶後台所有操作頁要求 workspace／site 權限及 breadcrumb；管理後台完全與公開 SEO 圖譜隔離。
+
+### 使用的技術棧
+
+Vue Router、Vue 3、TypeScript、Vue I18n、route registry、Vite 靜態 SEO generator、Nginx `X-Robots-Tag`、sitemap index、hreflang、JSON-LD、Vitest。
+
+### 新增或修改文件
+
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- PRD 已通過 Prettier、`git diff --check` 及敏感資料檢查。
+- 本次只更新規劃文件，未修改程式碼、未提交、未推送或部署。
+
+### 下一步行動清單
+
+- 按 route registry 先建立公開／私有 route contract，再更新 `apps/web/src/router/index.ts`、SEO generator、sitemap generator 與 route graph 測試。
+
+## 會話總結（2026-09-12）— 建立第二階段逐步核檢開發流程
+
+### 會話主要目的
+
+根據第二階段 PRD，制定每一步都需核檢及明確批准後才可繼續的詳細開發流程，並比較 API、Provider、配額與價格，選出最優化方案。
+
+### 完成的主要任務
+
+- 新增 15 個有批准閘門的開發階段，從現況盤點、路由與 SEO、Provider 選型、架構、安全、資料、後端、前端、CMS、Audit、Billing、QA 到 Canary 與 GA 決策。
+- 為每個階段定義輸入、工作、證據、核檢清單、批准角色、停止條件及回滾方式。
+- 整合 DataForSEO／Ahrefs／Semrush、OpenAI／Anthropic／Gemini、GSC／CrUX／Lighthouse、WordPress／Ghost／Shopify、Stripe／PayPal／SES 的官方能力、價格與限制。
+- 新增成本計算公式、AI 與 SEO API 用量示例、Research Credits、usage reservation、hard cap、BYOK 及 Provider fallback 策略。
+- 定義最優化推薦組合：DataForSEO 平台主 Provider、OpenAI 互動／Embedding、Gemini Batch、Claude 高品質 fallback、Lighthouse + CrUX、Stripe + 本地 usage ledger。
+- 將 workflow 文件與研究底稿加入 README 文件索引及目錄結構。
+
+### 關鍵決策和解決方案
+
+- 每一步必須收到 `APPROVE PH2-XX` 才能開始下一步；已讀、CI 綠燈或口頭同意不算批准。
+- 價格按固定公開價、按量計費、需登入／報價分級，正式採購前必須重新核價。
+- 不把第三方 SEO 估算、AI 推論或支付 Provider webhook 當成即時權限真相；由 RankWoven 自有 evidence layer、usage ledger 與狀態機負責。
+
+### 使用的技術棧
+
+Vue 3、Vue Router、TypeScript、Fastify、PostgreSQL、Redis／BullMQ、Zod／JSON Schema、DataForSEO、OpenAI、Anthropic、Gemini、GSC、CrUX、Lighthouse、WordPress、Shopify、Stripe。
+
+### 新增或修改文件
+
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/research/phase-2-api-pricing-2026.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- workflow、PRD 與研究底稿均通過 Prettier 及 `git diff --check`；敏感資料掃描無結果。
+- 本次只更新文件，未修改程式碼、未提交、未推送或部署。
+- Agent Reach `v1.5.0` 已確認為最新版本。
+
+### 下一步行動清單
+
+- 由 Product Owner、Tech Lead、Security、Finance、QA 逐步審批 `PH2-00` 至 `PH2-04`，再開始任何 runtime code 開發。
+
+## 會話總結（2026-09-12）— 執行 PH2-00 現況盤點
+
+### 會話主要目的
+
+分析當前網站、SaaS 客戶後台、管理後台、API、Worker、AI／CMS package 及 WordPress 插件，與第一階段 PRD 的未完成清單逐項對比，並把確認的缺口整合到第二階段 PRD。
+
+### 完成的主要任務
+
+- 建立 `PH2-00` 現況證據報告，記錄代碼基線、工作區 dirty 狀態、公開／客戶／管理網站盤點及生產健康。
+- 確認公開前台目前有 10 個固定公開入口、86 篇 Blog 文章，最近一次 build 生成 96 個公開 SEO fallback，公開頁與文章內鏈孤島檢查為 0。
+- 盤點目前 Vue Router 的 flat `/app/*`、`/admin/*`、認證 route 及缺少的第二階段 `/tools/*`、site-scoped route、Billing、Visibility、Provider 管理頁。
+- 以 API／前端／Worker／插件證據修正第一階段舊覆蓋度判定：批量 approve／apply、死信重試／忽略／export、WordPress 寫回前最新值校驗及註冊／密碼 API 已有部分實作，不再誤列為完全缺失。
+- 確認真正未完成項目：Email verify、OAuth、多工作區、持久化 Keyword Intelligence、Content Optimizer、報告、Billing、統一 route registry、外部 Audit E2E、跨 CMS 及完整 WP draft push。
+- 將現況、證據、缺口判定及 Phase 2A／2B／2C／2D 承接結果寫入第二階段 PRD。
+
+### 關鍵決策和解決方案
+
+- 以有證據的程式碼、測試、建置和生產檢查覆蓋舊 PRD 百分比；沒有證據的功能不標記為完成。
+- PH2-00 只做盤點與 PRD 整合，不提前修改 runtime code；下一步 PH2-01 才開始 route registry 與 SEO contract。
+- 保留現有舊 route 的兼容 redirect 與既有 API，第二階段以統一工作流及 site-scoped 路由逐步收斂，不作一次性破壞性替換。
+
+### 使用的技術棧
+
+Vue Router、Vue 3、TypeScript、Vite SEO generator、Fastify、PostgreSQL、Redis／BullMQ、Vitest、WordPress REST、GSC、GA4、Lighthouse、CrUX。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-00-current-state.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 46 passed／4 skipped、Web 12 passed、Worker 4 passed、AI Provider 7 passed、CMS Adapter 1 passed。
+- `npm run build` 通過，生成 96 個公開 SEO fallback；`npm run security:audit` 通過（0 vulnerabilities）。
+- `https://api.rankwoven.com/health` 正常，`https://rankwoven.com` 返回 `200 OK`。
+- PRD、PH2-00 報告及 README 通過 Prettier／`git diff --check`；未新增 `.env`、密碼、Token、API Key 或私鑰。
+- 本次只更新文件，未提交、未推送、未部署；`main` 與 `origin/main` 未改變。
+
+### 下一步行動清單
+
+- 等待 Product Owner、Tech Lead、Security／Privacy Reviewer 明確回覆 `APPROVE PH2-00`。
+- 批准後再進入 PH2-01，建立 canonical route registry、公開／私有 SEO contract、link graph、sitemap 分組及 redirect manifest。
+
+## 會話總結（2026-09-12）— 完成 PH2-00 現況盤點與 PRD 整合
+
+### 會話主要目的
+
+從 PH2-00 開始分析現有網站、客戶後台、管理後台、API、Worker、AI／CMS package 及 WordPress 插件，對比第一階段 PRD，確認未完成項目並整合到第二階段 PRD。
+
+### 完成的主要任務
+
+- 建立 `docs/approvals/phase-2/PH2-00-current-state.md`，記錄代碼基線、工作區 dirty 狀態、公開／Blog／認證／客戶／管理／插件盤點及第一階段對比。
+- 確認公開前台有 10 個固定公開入口、86 篇 Blog，共 96 個 SEO fallback；最近一次 build 的公開頁／Blog link graph 孤島數為 0。
+- 核對現有 flat `/app/*`、`/admin/*`、認證 route，以及尚未落地的第二階段 `/tools/*`、site-scoped、Billing、Visibility、Provider 管理頁。
+- 以實際 API／前端／Worker 證據修正舊覆蓋度清單：批量 approve／apply、死信重試／忽略／export、WordPress 寫回前最新值校驗及註冊／密碼 API 已有部分或基線實作。
+- 將真正未完成部分整合到第二階段 PRD：Email verify、OAuth、多工作區、持久化 Keyword Intelligence、Content Optimizer、統一 route registry、報告、Billing、外部 Audit E2E、WordPress draft push、跨 CMS。
+
+### 關鍵決策和解決方案
+
+- 不把第一階段 2026-07-28 的舊百分比直接當現況；以源碼、測試、build、security audit 及生產 health 的可驗證證據為準。
+- PH2-00 只完成盤點與文件整合，不提前進入 PH2-01 runtime code；下一步才實作 canonical route registry、link graph 與 SEO contract。
+- 保留使用者工作區既有 dirty 修改，不執行 reset、清理、全量 stage 或任何未授權部署。
+
+### 使用的技術棧
+
+Vue 3、Vue Router、TypeScript、Vite SEO generator、Fastify、PostgreSQL、Redis／BullMQ、Vitest、WordPress REST、GSC、GA4、Lighthouse、CrUX。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-00-current-state.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 46 passed／4 skipped、Web 12 passed、Worker 4 passed、AI Provider 7 passed、CMS Adapter 1 passed。
+- `npm run build` 通過，生成 96 個公開 SEO fallback；`npm run security:audit` 通過，0 vulnerabilities。
+- `https://api.rankwoven.com/health` 正常；`https://rankwoven.com` 返回 `200 OK`。
+- 新增與更新文件通過 Prettier、`git diff --check` 及敏感資料掃描。
+- 本次只更新文件，未修改程式碼、未提交、未推送或部署；`main` 與 `origin/main` 仍在 `225b12b`。
+
+### 下一步行動清單
+
+- 等待 Product Owner、Tech Lead、Security／Privacy Reviewer 明確回覆 `APPROVE PH2-00`。
+- 批准後才進入 PH2-01，建立單一 route registry 並更新 Vue Router、SEO generator、Sitemap generator 及孤島 graph 測試。
+
+## 會話總結（2026-09-12）— 實作 PH2-01 路由與 SEO 契約
+
+### 會話主要目的
+
+在 `APPROVE PH2-00` 後，實作第二階段第一步：以單一 route registry 統一 Vue Router、公開 SEO fallback、Sitemap、導覽與公開／私有索引邊界，減少 SEO 孤島及路由漂移。
+
+### 完成的主要任務
+
+- 新增 `apps/web/src/constants/routeRegistry.json` 及 TypeScript accessor，登記公開前台、認證、客戶後台、管理後台、兼容 redirect 與 planned routes。
+- 改造 `apps/web/src/router/index.ts` 由 registry 生成路由 metadata、權限、layout 及懶載入 component。
+- 將 App、登入、註冊、重設密碼、Pricing、Marketing、Blog、Dashboard、Suggestions、Sites 等高頻導覽改用 route registry accessor。
+- 靜態 SEO generator 改由 registry 驗證 public SEO manifest，為公開頁補預設 WebPage／Organization／WebSite JSON-LD、BlogPosting author 及 `x-default`。
+- Sitemap generator 改為 Sitemap index + `sitemap-pages.xml`／`sitemap-blog.xml`，排除 private／planned routes；Nginx 對 child sitemap 使用明確靜態 404 邊界。
+- 將 `/verify-email` 納入認證頁 noindex／X-Robots-Tag 規則。
+- 新增 route registry 邊界回歸測試；修正註冊成功跳到不存在 `/app/dashboard` 的死鏈。
+
+### 關鍵決策和解決方案
+
+- planned `/tools/*`、`/extension`、Blog category 及 site-scoped `/app/sites/:siteId/*` 先登記但保持 disabled，不生成無正文 SEO 頁或錯誤索引入口。
+- 既有 flat `/app/*` 頁面暫時保留，並在 registry 標記 `migrationTargetId`；待對應頁面元件與資料上下文完成後再 redirect，避免把現有可用功能導向空頁。
+- 公開頁 JSON-LD 與 `x-default` 由 SEO head／generator 統一補足；私有／認證頁清理 alternate 與 schema。
+
+### 使用的技術棧
+
+Vue 3、Vue Router、TypeScript、Vite、JSON route registry、JSDOM、Sitemap XML、Nginx、Vue I18n、Vitest。
+
+### 新增或修改文件
+
+- `apps/web/src/constants/routeRegistry.json`
+- `apps/web/src/constants/routeRegistry.ts`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/App.vue`
+- `apps/web/src/utils/seoHead.ts`
+- `apps/web/scripts/generate-seo-pages.mjs`
+- `scripts/generate-sitemap.mjs`
+- `apps/web/nginx.conf`
+- `apps/web/public/sitemap.xml`
+- `apps/web/public/sitemap-pages.xml`
+- `apps/web/public/sitemap-blog.xml`
+- 相關前端 view、測試及 `docs/frontend-page-spec.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 46 passed／4 skipped、Web 13 passed、Worker 4 passed、AI Provider 7 passed、CMS Adapter 1 passed。
+- `npm run build -w @aieo/web` 通過；SEO fallback 96 URLs、Blog 86 inlinks、公開頁 10 inlinks。
+- Sitemap index 2 groups、96 URLs；沒有 private／planned URL。
+- `npm run security:audit` 通過，0 vulnerabilities。
+- 生產 API health 正常，主站 `200 OK`；本次未部署新 code。
+- Nginx 容器級 `nginx -t` 未執行，原因是本機沒有可用 `nginx:1.27-alpine` image；保留為部署前驗證項。
+- 代碼審查發現的死鏈與導航漂移問題已修正；未提交、未推送，未夾帶工作區原有 dirty 修改。
+
+### 下一步行動清單
+
+- 等待 Design／SEO／Tech Lead 明確回覆 `APPROVE PH2-01`。
+- 批准後才進入 PH2-02：Provider、模型、價格、配額與最優化方案。
+
+## 會話總結（2026-09-13）— PH2-01 推送與 PH2-02 Provider 成本選型
+
+### 會話主要目的
+
+在 `APPROVE PH2-01` 後確認当前流程已推送到 GitHub／生产环境，并完成 PH2-02 Provider、模型、价格、配额及成本治理核检。
+
+### 完成的主要任务
+
+- 确认 `main` 与 `origin/main` 同步到 `a991d75`；PH2-01 Production Deploy `34703770442` 已完成，API health 与主站 `200 OK` 正常。
+- 使用 `agent-reach` 及 Jina Reader 重新核对 OpenAI、Anthropic、Gemini、DataForSEO、Ahrefs、Semrush、GSC、CrUX、Shopify、Stripe 等官方页面。
+- 新增 `docs/approvals/phase-2/PH2-02-provider-selection.md`，记录能力矩阵、模型路由、价格快照、1,000 次内容分析及 SEO API 用量示例、BYOK、secret boundary、quota hard stop、fallback 与采购待办。
+- 将 2026-09-13 的模型及价格更新同步到第二阶段 PRD、开发流程及研究底稿；PH2-01 标记为已批准，PH2-02 保持待批准。
+
+### 关键决策和解决方案
+
+- DataForSEO 作为平台 SEO 主 Provider；Ahrefs／Semrush 只作 Agency／Enterprise BYOK。
+- OpenAI `gpt-5.6-luna` 作为互动／embedding 主路由；Gemini 3.8／3.7 Flash Batch 处理低成本异步批量；Claude Sonnet 5 作为长文及引用 fallback。
+- 以版本化 pricing snapshot、`reserve → finalize／release` usage ledger、workspace／daily／platform cap 及 hard stop 控制变动成本；不提供无限使用路径。
+- 本次只更新文档，未修改 runtime code；未将 `.env`、密码、Token、API Key、私钥或完整凭据加入 Git。
+
+### 使用的技术栈
+
+Markdown、Jina Reader、agent-reach、GitHub Actions、DataForSEO、OpenAI、Anthropic、Gemini、GSC、CrUX、Stripe。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-02-provider-selection.md`
+- `docs/research/phase-2-api-pricing-2026.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 验证结果
+
+- 官方价格与配额页面于 2026-09-13 重新核对；Ahrefs／Semrush 商务报价及 DataForSEO 账户条款仍待采购确认。
+- `agent-reach doctor --json` 正常；Agent Reach v1.5.0 已是最新版本。
+- PH2-02 仅为方案与批准文档，未启动 PH2-03，未新增 migration、API、Provider adapter 或生产任务。
+
+### 下一步行动清单
+
+- 等待 Product Owner、Tech Lead、Security／Privacy Reviewer、Finance／Operations 明确回复 `APPROVE PH2-02`。
+- 获批后才进入 PH2-03：架构、资料模型、Provider adapter、pricing snapshot、usage ledger 与 API 契约。
+
+## 會話總結（2026-09-12）— 修復 Docker Desktop AIEO 掛載與啟動
+
+### 會話主要目的
+
+修復 Docker Desktop 中 AIEO Compose 專案無法啟動的問題，重新掛載目前倉庫並確認本地 Web、API、Worker、PostgreSQL 和 Redis 可正常運行。
+
+### 完成的主要任務
+
+- 確認舊容器曾掛載到 Codex 臨時目錄 `/private/tmp/aieo-internal-links.xUZeyD`，造成 `/workspace/package.json` 不存在及應用容器退出碼 `254`。
+- 使用目前倉庫路徑 `/Volumes/Extreme SSD/gitCode/AIEO` 重新建置並建立 Compose 容器。
+- 保留 PostgreSQL 和 Redis 資料卷，只移除並重建損壞的 `aieo_node_modules_*` 依賴卷，修復並行 `npm install` 留下的缺少依賴和 workspace symlink 錯誤。
+- 完成一次完整 Compose 重建，確認三個應用容器的 `/workspace` 均指向目前倉庫。
+
+### 關鍵決策和解決方案
+
+- 不刪除任何 PostgreSQL／Redis 資料卷，不使用 `docker compose down -v`，避免遺失業務資料。
+- 先移除應用容器，再只重建依賴快取卷；這是針對實際錯誤根因的最小修復。
+- 未修改應用程式碼或 Compose 配置，保留現有工作區的其他未提交修改。
+
+### 使用的技術棧
+
+Docker Desktop 4.90.0、Docker Compose 5.3.1、Node.js 22、Vite、Fastify、PostgreSQL 16、Redis 7。
+
+### 新增或修改文件
+
+- `README.md`：追加本次 Docker 診斷、修復與驗證記錄。
+- Docker Desktop 執行環境：重建 AIEO 應用容器與 Node modules 依賴卷；未修改 Git 中的程式碼文件。
+
+### 驗證結果
+
+- `docker compose --profile data ps -a`：`api`、`web`、`worker`、`postgres`、`redis` 全部運行；PostgreSQL 和 Redis 顯示 `healthy`。
+- `curl http://localhost:3011/health`：返回 `success: true`。
+- `curl -I http://localhost:8080/`：返回 `HTTP/1.1 200 OK`。
+- 三個應用容器 `/workspace` 掛載來源均為 `/host_mnt/Volumes/Extreme SSD/gitCode/AIEO`。
+- 完整容器重建後再次通過上述 health／HTTP 檢查；未提交、未推送、未部署，也未上傳 `.env`、密碼或 Token。
+
+### 下一步行動清單
+
+- Docker Desktop 重新啟動後，從倉庫目錄執行 `docker compose --profile data up -d --build`，避免使用舊的臨時工作區 Compose 專案。
+- 若再次出現依賴卷錯誤，先檢查容器的 `/workspace` 掛載來源，再只清理 `aieo_node_modules_*` 卷，不要清理 PostgreSQL／Redis 資料卷。
+
+## 會話總結（2026-09-12）— PH2-01 路由與 SEO 契約實作
+
+### 會話主要目的
+
+在 `APPROVE PH2-00` 後，按第二階段 PRD 實作第一個工程步驟：以單一 route registry 統一 Vue Router、公開 SEO fallback、Sitemap、導覽及公開／私有索引邊界。
+
+### 完成的主要任務
+
+- 新增 `apps/web/src/constants/routeRegistry.json` 及 TypeScript accessor，登記公開、認證、客戶、管理、兼容 redirect 及 planned routes。
+- 將 Router 改為由 registry 生成路由 metadata、layout、權限、懶載入元件及 redirect。
+- 將 App、登入、註冊、密碼、Marketing、Blog、Dashboard、Suggestions、Sites 等高頻內鏈改為 registry accessor。
+- SEO generator 現在會驗證 registry 與 public SEO manifest 一致，公開頁預設輸出 WebPage／Organization／WebSite JSON-LD、BlogPosting author 及 `x-default`。
+- Sitemap 改為 index + `sitemap-pages.xml`／`sitemap-blog.xml`；planned、private、auth URL 不會生成到 Sitemap。新增 SEO route graph，build 時檢查未知內鏈、重複路由及孤島。
+- Nginx 新增 Sitemap child file 的靜態 404 邊界，並把 `/verify-email` 納入 noindex。
+- 修正註冊完成後跳轉不存在 `/app/dashboard` 的死鏈。
+
+### 關鍵決策和解決方案
+
+- planned `/tools/*`、`/extension`、Blog category 及 site-scoped `/app/sites/:siteId/*` 只登記為 disabled，等待對應頁面與資料上下文完成後才啟用，避免生成薄內容或空白頁。
+- 現有 flat `/app/*` route 暫時保留並標記 `migrationTargetId`，不把用戶導向尚未實作的 site-scoped 頁面。
+- PH2-01 不處理 AI、CMS、計費或內容功能；只建立後續開發必須遵守的 URL、SEO、Sitemap 與 link graph 基礎。
+
+### 使用的技術棧
+
+Vue 3、Vue Router、TypeScript、Vite、JSON route registry、JSDOM、Sitemap XML、Nginx、Vue I18n、Vitest。
+
+### 新增或修改文件
+
+- `apps/web/src/constants/routeRegistry.json`
+- `apps/web/src/constants/routeRegistry.ts`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/utils/seoHead.ts`
+- `apps/web/src/App.vue` 及相關前端頁面內鏈
+- `apps/web/scripts/generate-seo-pages.mjs`
+- `scripts/generate-sitemap.mjs`
+- `apps/web/nginx.conf`
+- `apps/web/public/sitemap.xml`
+- `apps/web/public/sitemap-pages.xml`
+- `apps/web/public/sitemap-blog.xml`
+- `apps/web/tests/smoke.test.ts`
+- `docs/frontend-page-spec.md`
+- `docs/approvals/phase-2/PH2-00-current-state.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 46 passed／4 skipped、Web 13 passed、Worker 4 passed、AI Provider 7 passed、CMS Adapter 1 passed。
+- `npm run build -w @aieo/web` 通過：SEO fallback 96 URLs、route graph 96 nodes／1365 edges、Blog 86 inlinks、公開頁 10 inlinks。
+- Sitemap index 2 groups、96 URLs；private／planned route 不在 Sitemap。
+- `npm run security:audit` 通過，0 vulnerabilities。
+- 生產 API health 正常，主站 `200 OK`；本次未部署。
+- Nginx 容器級 `nginx -t` 未執行，原因是本機沒有可用 Nginx image；保留為部署前檢查。
+- 已建立本步本地提交 `d8afa16` 及 registry 校驗修正 `a991d75`，尚未推送；未夾帶工作區原有 `.env`、密碼、Token、API Key、私鑰或其他 dirty 修改。
+
+### 下一步行動清單
+
+- 等待 Design／SEO／Tech Lead 明確回覆 `APPROVE PH2-01`。
+- 批准後才進入 PH2-02：Provider、模型、價格、配額與最優化方案。
+
+## 會話總結（2026-09-13）— 統一 Breakout API 模型代理
+
+### 會話主要目的
+
+將第二階段 AI 方案改為只使用既有 Breakout API 代理接口；不同 AI 任務只切換 model ID，不再切換 OpenAI、Anthropic、Gemini 或其他上游 API。
+
+### 完成的主要任務
+
+- 使用官方 Breakout API 文件與既有 server-side gateway 設定核對接口；`GET /v1/models` 實測返回 `200 OK`，取得 48 個 model ID。
+- 新增 `docs/breakout-api-integration.md`，記錄 model catalog、OpenAI 相容接口、設定邊界、模型 profile、成本快照、PH2-03 實作契約及安全限制。
+- 更新 PH2-02、第二階段 PRD、開發流程及成本研究：AI 固定走 `WENWEN_API_BASE_URL`／`WENWEN_API_KEY`，只允許 gateway catalog 中經 capability 驗證的 model ID。
+- 明確區分：DataForSEO、GSC、CrUX 及 SEO BYOK 仍是資料接口；它們不屬於模型代理，不能由 AI 模型替代。
+
+### 關鍵決策和解決方案
+
+- 模型清單的唯一來源為 Breakout `GET /v1/models`；管理端只可從同步後且已驗證 capability 的 model profile 選擇。
+- `/v1/models` 不返回代理價格，因此產品成本以 Breakout 控制台／使用日誌的版本化 pricing snapshot 結算；不再以各上游官方公開價格直接扣費。
+- 現有部署的預設 model 不在本次直接修改，避免未經批准切換生產模型；模型目錄同步、profile、embedding／圖片 endpoint smoke 及 usage ledger 擴充列入 PH2-03。
+
+### 使用的技術棧
+
+Breakout API、OpenAI 相容 HTTP、Node.js、TypeScript、Markdown、agent-reach。
+
+### 新增或修改文件
+
+- `docs/breakout-api-integration.md`
+- `docs/approvals/phase-2/PH2-02-provider-selection.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/research/phase-2-api-pricing-2026.md`
+- `README.md`
+
+### 驗證結果
+
+- Breakout `GET /v1/models` 以現有 server-side 連線返回 `200` 與 48 個模型；沒有輸出 API token。
+- 現有程式確認文字模型已使用 `POST /v1/chat/completions` 的 OpenAI 相容 adapter。
+- 不直接測試 embedding 或圖片生成，避免在 PH2-03 核檢前產生外部模型費用；它們已列為獨立小額 smoke gate。
+- 本次只更新文件，未修改 `.env`、模型設定、runtime code、資料庫或生產服務，亦未提交或推送。
+
+### 下一步行動清單
+
+- 等待 `APPROVE PH2-02`，再進入 PH2-03 建立單一 `AiGatewayAdapter`、模型目錄、價格快照、usage ledger 與 API 契約。
+
+## 會話總結（2026-09-13）— 本機 Docker 重建與 GSC 驗證
+
+### 會話主要目的
+
+重建本機 Docker Compose 服務，並以既有 Google 服務帳戶測試 Search Console 設定、Property 存取與 Search Analytics 實際查詢。
+
+### 完成的主要任務
+
+- 執行 `docker compose --profile data up -d --build`，重建 Web、API、Worker；保留 PostgreSQL 與 Redis 資料卷，未使用 `down -v`。
+- 確認本機 API、Web、Worker、PostgreSQL、Redis 全部啟動；PostgreSQL、Redis 維持 healthy。
+- 確認 API 容器取得 Google 服務帳戶設定，安全交換 OAuth access token 並讀取 GSC Property 清單。
+- 對一個已授權 Property 執行最小化 Search Analytics query，驗證資料讀取鏈路。
+
+### 關鍵決策和解決方案
+
+- GSC 目前採服務帳戶 JWT，並非 OAuth Client ID callback；驗證過程只輸出狀態、Property 數量與 HTTP 結果，不輸出憑證、access token、Property URL 或關鍵詞資料。
+- 第一次探針因 `tsx -e` 頂層 `await` 限制未執行，改用 async 函式後成功；這不是 GSC 憑證或權限錯誤。
+
+### 使用的技術棧
+
+Docker Compose、Node.js、TypeScript、Fastify、PostgreSQL、Redis、Google Search Console API、服務帳戶 JWT。
+
+### 新增或修改文件
+
+- `README.md`：追加本機部署與 GSC 驗證結果。
+- 未修改應用程式碼、Docker Compose、資料庫 schema 或憑證檔案。
+
+### 驗證結果
+
+- 本機 API health 返回 `200`；Web 返回 `200`。
+- GSC 服務帳戶驗證成功，可讀取 4 個已授權 Property。
+- Search Analytics 最小化查詢返回 `200`，並取得 1 列資料。
+- 未顯示或提交 `.env`、服務帳戶 JSON、private key、access token 或其他敏感資料；未提交、未推送、未部署生產。
+
+### 下一步行動清單
+
+- 若要開啟 CrUX，依 PH2-03 新增 `CRUX_API_KEY`、Compose 傳遞、server-side adapter、rate limit 與測試。
+- 等待 `APPROVE PH2-02` 後才進入 PH2-03 runtime 實作。
+
+## 會話總結（2026-09-13）— Ahrefs Keyword Explorer 接入修正
+
+### 會話主要目的
+
+將已申請的 Ahrefs API 正確接入 RankWoven 關鍵詞指標流程，使用官方 Ahrefs API v3 Keyword Explorer Overview endpoint。
+
+### 完成的主要任務
+
+- 查核 Ahrefs 官方 OpenAPI 規格，確認 `GET /v3/keywords-explorer/overview`、Bearer API key、`keywords`、`country` 及 `select` query 參數。
+- 修正 Ahrefs adapter：由不相容的 POST JSON 改為官方 GET query 形式，並將 Ahrefs CPC 的 USD cents 值轉換為產品使用的 USD。
+- 在 Docker Compose API service 加入 `AHREFS_API_URL` 與 `AHREFS_API_KEY` 環境變數傳遞。
+- 更新 `.env.example` 的 Ahrefs endpoint 與啟用說明，加入 mock-based Ahrefs 回歸測試。
+- 修正 `enrichKeywords()` 使用注入 fetch 的測試性缺口，避免 provider test 繞過 mock。
+
+### 關鍵決策和解決方案
+
+- Ahrefs 是 SEO 資料 Provider，不是 Breakout AI gateway 的上游模型；使用者只需設定 Ahrefs secret，不改變 AI gateway。
+- 實際 Ahrefs key 尚未寫入本機 `.env`，故不發送任何付費 Ahrefs request；容器確認目前 provider 仍是 `generic`。
+
+### 使用的技術棧
+
+Ahrefs API v3、OpenAPI、Node.js、TypeScript、Vitest、Docker Compose。
+
+### 新增或修改文件
+
+- `apps/api/src/keywordSuggestions.ts`
+- `apps/api/tests/health.test.ts`
+- `docker-compose.yml`
+- `.env.example`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/api -- health.test.ts`：9 項通過。
+- `npm run lint`、`npm run build -w @aieo/api`、`git diff --check` 通過。
+- 本機 API 容器已重建且 `/health` 返回 `200`。
+- 未讀取、輸出、提交或推送 Ahrefs API key。
+
+### 下一步行動清單
+
+- 在本機或生產 secret `.env` 設定 Ahrefs URL、key 及 provider 選擇後，重建 API 容器並以一個小額 Keyword Explorer 查詢驗證。
+- 使用者明確授權後才提交、推送或部署此次 Ahrefs adapter 變更。
+
+## 會話總結（2026-09-13）— 關鍵詞資料來源環境變數核檢
+
+### 會話主要目的
+
+核對 `KEYWORD_VOLUME_PROVIDER` 重複定義，避免 Ahrefs、DataForSEO 或 generic 資料來源因 `.env` 覆蓋順序而被錯誤選用。
+
+### 完成的主要任務
+
+- 僅讀取環境變數名稱，確認本機 `.env` 第 36 與 53 行重複定義 `KEYWORD_VOLUME_PROVIDER`；最後一行會覆蓋前一行。
+- 確認 `.env.example` 的 `KEYWORD_VOLUME_PROVIDER` 只保留一個定義，並移除重複的 Google OAuth 範例欄位。
+- 更新 selector 註解，說明關鍵詞資料來源只能定義一次。
+
+### 關鍵決策和解決方案
+
+- 不直接讀取或覆寫 `.env` 的值，避免暴露或破壞敏感設定；保留第 53 行的目前有效值，待使用者移除第 36 行舊定義。
+
+### 新增或修改文件
+
+- `.env.example`
+- `README.md`
+
+### 驗證結果
+
+- `.env.example` 無重複 key，`KEYWORD_VOLUME_PROVIDER` 計數為 1。
+- `git diff --check` 通過；未輸出、提交或推送任何 secret。
+
+### 下一步行動清單
+
+- 使用者在本機 `.env` 移除第 36 行的舊 `KEYWORD_VOLUME_PROVIDER` 後，保留第 53 行的目標來源設定。
+
+## 會話總結（2026-09-13）— 生產 Ahrefs 設定重載與狀態驗證
+
+### 會話主要目的
+
+在使用者配置 Ahrefs 生產 key 後，重新部署現有 commit 以重載 VPS `.env`，並驗證 Keyword Explorer 資料來源與最小化 enrichment 路徑。
+
+### 完成的主要任務
+
+- 以 `workflow_dispatch` 重新執行 Production Deploy，部署 `b655f1c` 並重建 VPS API 容器。
+- GitHub Actions Verify 與 Hostinger VPS Deploy 均通過；部署腳本健康與登入 smoke check 成功。
+- 使用部署 smoke 帳戶安全檢查 keyword sources 及單關鍵詞 enrichment，不輸出應用 token、Ahrefs key 或原始回應。
+
+### 驗證結果
+
+- 生產 API 回報 `activeProvider: generic`、Ahrefs inactive；單關鍵詞 enrichment 返回 `200` 但沒有 Ahrefs 指標，沒有消耗 Ahrefs API units。
+- 根因是生產 selector 未設為 `ahrefs`，或較後的 `KEYWORD_VOLUME_PROVIDER=generic` 重複定義覆蓋設定。
+
+### 下一步行動清單
+
+- 在生產 `/docker/rankwoven/.env` 只保留一次 `KEYWORD_VOLUME_PROVIDER=ahrefs`，並保留 Ahrefs URL 與 key。
+- 修正後重新載入 API 容器，再重跑單關鍵詞實際 Ahrefs enrichment 驗證。
+
+## 會話總結（2026-09-13）— Ahrefs 獨立環境變數命名
+
+### 會話主要目的
+
+保留既有 `KEYWORD_VOLUME_*` generic／DataForSEO 設定組，將 Ahrefs 啟用狀態改為獨立命名，避免 selector 重複與設定覆蓋。
+
+### 完成的主要任務
+
+- 將 Ahrefs 啟用開關改為 `AHREFS_KEYWORD_METRICS_ENABLED`。
+- `KEYWORD_VOLUME_PROVIDER` 僅保留 `dataforseo`、`semrush`、`generic`；Ahrefs 不再與 generic family 共用 selector。
+- 更新 API resolver、來源狀態、Docker Compose 與 `.env.example`，並調整 Ahrefs 回歸測試。
+
+### 關鍵決策和解決方案
+
+- 明確選擇 DataForSEO 時維持其優先級；在 generic 模式下，`AHREFS_KEYWORD_METRICS_ENABLED=true` 才啟用 Ahrefs。
+- 新配置採用：`KEYWORD_VOLUME_PROVIDER=generic`、`AHREFS_KEYWORD_METRICS_ENABLED=true`、`AHREFS_API_URL`、`AHREFS_API_KEY`。
+
+### 新增或修改文件
+
+- `apps/api/src/config.ts`
+- `apps/api/src/keywordSuggestions.ts`
+- `apps/api/tests/health.test.ts`
+- `docker-compose.yml`
+- `.env.example`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/api -- health.test.ts`：9 項通過。
+- `npm run lint`、`npm run build -w @aieo/api`、`git diff --check` 通過。
+- 本次未讀取、輸出、提交或推送 Ahrefs key，未部署生產。
+
+### 下一步行動清單
+
+- 使用者明確授權推送後，將獨立 Ahrefs selector 部署到生產，再將 `AHREFS_KEYWORD_METRICS_ENABLED=true` 加入生產 `.env` 並驗證。
+
+## 會話總結（2026-09-13）— Hostinger MCP 配置與生產 Web 502 修復
+
+### 會話主要目的
+
+將使用者提供的 Hostinger MCP servers 安全寫入全局 Codex 配置，並調查及修復 `rankwoven.com` 的 502 Bad Gateway。
+
+### 完成的主要任務
+
+- 從本機 `.env` 安全讀取 `HOSTINGER_API_TOKEN`，寫入 `~/.codex/config.toml` 的六個 Hostinger MCP server：hosting、domains、dns、billing、reach、vps；建立本地 backup，配置檔設為 600 權限。
+- 以公開探針、VPS 唯讀 SSH、Docker Compose 與 Nginx 配置確認：API 正常但 Web 容器退出，導致主站 502。
+- 修正 production Compose：恢復 Dockerfile.web 的 Nginx command，並以 `!override` 移除開發用 port mapping，只保留 `127.0.0.1:8082:80`。
+- 推送 `e7eeee7`，GitHub Actions Production Deploy 成功後確認 VPS Web 容器 healthy、8082 監聽及公開主站恢復。
+
+### 關鍵決策和解決方案
+
+- 根因是 production Nginx image 繼承開發用 `npm install && npm run dev` command；image 內沒有 npm，容器以退出碼 127 結束。不是 API、DNS 或 Nginx upstream port 不一致。
+- MCP token 沒有輸出至終端、文件或 Git；Codex 官方文件指出全局 MCP 配置修改需要新工作階段或重啟客戶端才能反映至工具清單。
+
+### 新增或修改文件
+
+- `~/.codex/config.toml`：全局 Hostinger MCP 設定，未納入 Git。
+- `docker-compose.prod.yml`
+- `README.md`
+
+### 驗證結果
+
+- 本機 production Compose 合併結果：Web command 為 null（使用 image CMD），僅有 8082→80 port；本機 Nginx Web 容器 healthy，HTTP 200。
+- GitHub Actions Production Deploy `34711160019` 成功。
+- VPS `rankwoven-web-1` 以 `nginx -g daemon off;` 運行、healthy、監聽 127.0.0.1:8082。
+- `https://rankwoven.com/` 與 `https://api.rankwoven.com/health` 均返回 200。
+
+### 下一步行動清單
+
+- 重啟 Codex Desktop 或開啟新工作階段，以載入新增的全局 Hostinger MCP servers。
+- 將獨立 Ahrefs selector 修正推送後，再重跑生產 Ahrefs 小額查詢驗證。
+
+## 會話總結（2026-09-13）— 批准 PH2-02 Provider 與成本選型
+
+### 會話主要目的
+
+記錄 Product Owner 對 PH2-02 Provider、模型、成本、配額及資料安全方案的正式批准。
+
+### 完成的主要任務
+
+- 將 `docs/approvals/phase-2/PH2-02-provider-selection.md` 狀態更新為 `APPROVED`。
+- 同步第二階段 PRD 與開發流程的 PH2-02 狀態及 PH2-03 進入條件。
+
+### 關鍵決策和解決方案
+
+- 批准 DataForSEO 作 SEO 主資料 Provider；所有 AI 任務固定走 Breakout API gateway，只切換經驗證的 model ID。
+- 批准 gateway model catalog、pricing snapshot、usage ledger、workspace／daily／platform cap、hard stop、SEO BYOK 及 server-side secret 邊界。
+- 本批准不代表 PH2-03 runtime adapter、migration 或對外 API 已完成；必須按流程逐步核檢。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-02-provider-selection.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- PH2-02 批准記錄：Product Owner（使用者），2026-09-13T02:28:43Z。
+- 文件狀態與下一步條件已同步；未修改 runtime code、資料庫、環境變數或生產服務。
+
+### 下一步行動清單
+
+- 進入 PH2-03：架構、資料模型、單一 `AiGatewayAdapter`、model catalog、pricing snapshot、usage ledger 與 API 契約設計。
+
+## 會話總結（2026-09-13）— 進入 PH2-03 架構與 API 契約設計
+
+### 會話主要目的
+
+在 `APPROVE PH2-02` 後開始 PH2-03，將已批准的 Provider／模型成本方案轉成可實作的架構、資料與 API 契約。
+
+### 完成的主要任務
+
+- 盤點現有 Fastify API、Auth／workspace scope、PostgreSQL migration、Repository、Redis／Worker、Vue API client 與 CMS／AI package 邊界。
+- 新增 `docs/approvals/phase-2/PH2-03-architecture-api-contract.md`，定義分層架構、单一 Breakout `AiGatewayAdapter`、SEO／CMS adapter、Phase 2A 資料表、狀態機、幂等、REST／Zod、權限、安全、可觀測性及測試計劃。
+- 同步第二階段 PRD、開發流程及 README，標記 `PH2-03 DESIGN_READY_PENDING_APPROVAL`。
+
+### 關鍵決策和解決方案
+
+- migration 只透過版本化 SQL；route／controller 不直接建表或調用外部 Provider。
+- 所有長任務使用 `202 + taskId`、task attempts、reserve／finalize／release、partial／expired／dead-letter 及 audit event。
+- 所有 AI 請求固定經 Breakout gateway；SEO Provider、CMS 寫回、workspace／role／quota 與 secret 邊界保持獨立。
+
+### 使用的技術棧
+
+Fastify、TypeScript、Zod、PostgreSQL、Redis、Worker、Vue 3、Pinia、Breakout API、WordPress／CMS Adapter、Mermaid。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-03-architecture-api-contract.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- 完成現況與契約盤點；未修改 runtime code、migration、資料庫、API 或生產服務。
+- 只進行文件同步，保留既有工作區 dirty 修改，未提交或推送。
+
+### 下一步行動清單
+
+- 由 Tech Lead、Security／Privacy Reviewer、QA Lead 核檢並回覆 `APPROVE PH2-03`。
+- 批准後按文件順序實作 shared types、migration、Repository、`AiGatewayAdapter`、pricing snapshot、quota、API 與 Worker contract。
+
+## 會話總結（2026-09-13）— 生產密鑰配置說明
+
+### 會話主要目的
+
+說明 `JWT_SECRET` 與 `WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 的來源、生成方式及生產配置注意事項。
+
+### 關鍵決策和解決方案
+
+- 兩個值都是自行生成的高熵隨機密鑰，不是從 Hostinger、Google 或 WordPress 申請。
+- `JWT_SECRET` 用於登入 token、密碼雜湊及認證簽名；`WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 用於 API 加密與 Worker 解密 WordPress 應用程式密碼。
+- 兩者必須使用不同值，並只保存於本機／VPS `.env` 或 secret manager，不能提交 Git。
+
+### 驗證結果
+
+- 已核對現有程式在缺少設定時會回退到開發預設值；本次只提供配置說明，未讀取、修改或輸出任何 secret。
+
+### 下一步行動清單
+
+- 生成兩個密鑰並写入 `/docker/rankwoven/.env`，再重建 API 与 Worker；若数据库已有加密的 WordPress 凭证，轮换加密密钥后需重新录入这些凭证。
+
+## 會話總結（2026-09-13）— 批准並實作 PH2-03 基礎契約
+
+### 會話主要目的
+
+在 Product Owner（使用者）批准 `PH2-03` 後，按已核檢的架構、資料與 API 契約開始實作第一批可驗證 runtime 基礎。
+
+### 完成的主要任務
+
+- 將 `PH2-03` 架構文件、第二階段 PRD 與開發流程標記為 `APPROVED / IMPLEMENTATION_COMPLETE`，記錄批准人與本次會話時間。
+- 新增 Phase 2 共用型別：錯誤碼、API response、request context、分頁、任務狀態機、幂等雜湊、用量 reserve／finalize／release、task attempt、audit event、Breakout gateway model／price contract。
+- 新增 InMemory 與 PostgreSQL Phase 2 repository 基礎，所有 SQL 使用參數化查詢並按 workspace scope 查詢。
+- 新增 `0010`–`0014` migration，建立 Phase 2A 任務、幂等、研究、關鍵詞、內容優化、用量、權限投影、重試、審計、gateway catalog／price snapshot／Profile 表，並以 workspace scope trigger 與 append-only ledger 保護資料；migration 在本地資料庫成功執行並可重複安全跳過。
+- 新增單一 Breakout AI gateway adapter，只使用既有 `WENWEN_API_BASE_URL`、`WENWEN_API_KEY` 與 model ID，覆蓋 models、chat、embedding、image response mapping 與錯誤脫敏。
+- 新增已認證的任務讀取／取消、用量查詢、管理員模型目錄／Profile、關鍵詞研究、內容優化與 webhook API 契約；寫入操作要求 `Idempotency-Key`，重複請求會回放原 response。
+- 新增 Gateway model sync Worker、task attempt、Worker 任務狀態／退避純函式、Phase 2 OpenAPI 契約摘要與 PostgreSQL contract test；未通過後續 gate 的 Provider／CMS／支付端點會安全拒絕。
+
+### 關鍵決策和解決方案
+
+- AI 仍固定經既有 Breakout gateway，不新增或切換 OpenAI／Anthropic／Gemini 直連 API。
+- 先落地共享契約、migration、repository、gateway mapping、幂等與用量治理，再進入真正的 Keyword／Content application service 與 Worker provider 執行流程。
+- 所有錯誤只返回內部錯誤碼，不返回上游原始 body；任何秘密、token、`.env` 或完整 raw payload 都未寫入程式碼、測試或文件。
+
+### 使用的技術棧
+
+TypeScript、Fastify、PostgreSQL、Vitest、OpenAPI 3.1、Breakout API gateway、Node.js crypto。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-03-architecture-api-contract.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `packages/ai-providers/src/phase2.ts`
+- `packages/ai-providers/src/phase2Gateway.ts`
+- `packages/ai-providers/tests/phase2Contracts.test.ts`
+- `packages/ai-providers/tests/phase2Gateway.test.ts`
+- `apps/api/src/phase2Repository.ts`
+- `apps/api/src/phase2Routes.ts`
+- `apps/api/src/phase2FeatureRoutes.ts`
+- `apps/api/tests/phase2Repository.postgres.test.ts`
+- `apps/api/tests/phase2Routes.test.ts`
+- `apps/worker/src/phase2TaskState.ts`
+- `apps/worker/src/index.ts`
+- `apps/worker/tests/phase2TaskState.test.ts`
+- `db/migrations/0010_phase2_contracts.sql`
+- `db/migrations/0011_phase2_integrity.sql`
+- `db/migrations/0012_gateway_model_profiles.sql`
+- `db/migrations/0013_phase2_workspace_scope.sql`
+- `db/migrations/0014_phase2_brief_scope.sql`
+- `docs/openapi/phase2-contract.yaml`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 53 項、Web 13 項、Worker 8 項、AI provider 15 項、CMS adapter 1 項；本地 PostgreSQL 條件測試在容器內的 Phase 2 repository contract 2 項通過。
+- `npm run build` 通過；Web SEO 靜態頁與 route graph 生成成功。
+- `npm run security:audit` 通過，發現 0 個 high 以上漏洞。
+- `npm run db:migrate` 已重複執行驗證：`0010_phase2_contracts.sql` 至 `0014_phase2_brief_scope.sql` 均可安全跳過已套用版本。
+- 未提交或推送；工作區仍保留使用者既有 dirty 修改，未使用 `git add .`，未包含任何敏感設定。
+
+### 下一步行動清單
+
+- 进入 PH2-04 安全、私隱與 SSRF／Prompt Injection 設計核檢。
+- PH2-03 後續實作需加入 pricing snapshot 管理、entitlement／quota service，以及 Keyword／Content application service；完成各自測試後再進入下一個批准 gate。
+
+## 會話總結（2026-09-13）— 進入 PH2-04 安全、私隱與 SSRF 核檢
+
+### 會話主要目的
+
+在 PH2-03 基礎契約完成後，盤點 RankWoven 的安全、私隱、SSRF、AI prompt、Webhook、CI／Docker 與資料保留風險，建立下一步修復與批准依據。
+
+### 完成的主要任務
+
+- 新增 `docs/approvals/phase-2/PH2-04-security-privacy-ssrf.md`，定義信任邊界、STRIDE 資料流、`PublicUrlPolicy`、私隱保留、AI guardrail、權限／監控與驗收測試。
+- 已驗證並列為 blocker：Lighthouse 任意 URL SSRF、Worker CMS URL SSRF、未認證站點連接寫入、production 開發模式與 JWT fallback、reset token response／log 洩漏、弱 password hash，以及 CMS 正文寫入一般 log。
+- Webhook 目前預設拒絕且不處理 payload；在 PH2-11 驗簽與去重實作前保持關閉。
+- 同步 PH2-04 狀態至開發流程與第二階段 PRD。
+
+### 關鍵決策和解決方案
+
+- 所有伺服器端抓取將統一透過 `PublicUrlPolicy`，在 DNS、IP、redirect 與連線層阻擋 private、metadata、loopback 與 DNS rebinding 目標。
+- P0 auth、站點連接及 SSRF 問題必須先修復，才可啟用 PH2-06、PH2-07、PH2-09 或 PH2-11 的真實外部副作用。
+- 資料保留表是工程預設，不取代 privacy／legal reviewer 對營運地區與合同義務的確認。
+
+### 使用的技術棧
+
+Fastify、TypeScript、PostgreSQL、Docker Compose、GitHub Actions、Node.js crypto、Puppeteer／Lighthouse、Breakout API gateway。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-04-security-privacy-ssrf.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- 完成認證、URL fetch、Worker、Webhook、AI prompt、Docker、CI 與 dependency 的唯讀盤點；未讀取或輸出 `.env` 值，也未對內網／外網目標發送 SSRF 測試請求。
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 通過；安全掃描發現 0 個依賴 high 以上漏洞。
+- 未修改 runtime 程式、未提交、未推送、未部署。
+
+### 下一步行動清單
+
+- Security Reviewer、Privacy Reviewer 與 Product Owner 核檢 `PH2-04-security-privacy-ssrf.md`。
+- 收到 `APPROVE PH2-04` 後，按文件第 8 節順序修復 SEC-01 至 SEC-07，先完成 production auth 與站點連接／SSRF 邊界。
+
+## 會話總結（2026-09-13）— 實作 PH2-04 安全、私隱與 SSRF 修復
+
+### 會話主要目的
+
+在 `APPROVE PH2-04` 後關閉已驗證的 SSRF、認證、站點授權、密碼、敏感日誌與 production runtime P0／P1 問題。
+
+### 完成的主要任務
+
+- 新增共享 `@aieo/security` package，統一 URL scheme、DNS、public IP、redirect 前驗證與已驗證 DNS address pinning。
+- Lighthouse 對 unsafe URL 返回 `UNSAFE_TARGET_URL`；production 停用本機 Puppeteer fallback，避免任意 URL 進入 server-side browser。
+- Worker WordPress fetch 改為 URL revalidation、固定 DNS address、manual redirect、cross-origin redirect 拒絕、15 秒 timeout、JSON MIME 與 2 MiB response cap。
+- 站點建立改為 `editor+` 登入操作，並以呼叫者 workspace 建立／查找連接；匿名建立回傳 401。
+- production 設定必須有不同且至少 32 字元的 JWT／CMS encryption key；production API／Worker 使用 non-root runtime image 及 start command。
+- 忘記密碼不再輸出／記錄 reset token；新密碼改用 salted `scrypt`，舊 HMAC hash 僅能使用顯式 migration secret 登入後升級。
+- 收斂 CORS allowlist、trusted proxy rate-limit key、Worker snapshot log redaction 及 deployment smoke credential 的 fail-closed 規則。
+
+### 新增或修改文件
+
+- `packages/security/`
+- `apps/api/src/auth.ts`
+- `apps/api/src/config.ts`
+- `apps/api/src/lighthouse.ts`
+- `apps/api/src/server.ts`
+- `apps/api/src/siteConnections.ts`
+- `apps/worker/src/index.ts`
+- `Dockerfile.production`
+- `docker-compose.yml`
+- `docker-compose.prod.yml`
+- `.github/workflows/production-deploy.yml`
+- `scripts/deploy-production.sh`
+- 對應 package、Docker、Compose、API／Worker／security tests、PH2-04 文件與 README。
+
+### 驗證結果
+
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 通過。
+- API：57 passed／6 skipped；Worker：9 passed；Security package：11 passed；Web：13 passed；AI provider：15 passed；CMS adapter：1 passed。
+- `bash -n scripts/deploy-production.sh`、production Compose dummy-secret dry-run 與 `git diff --check` 通過。
+- 未讀取／提交 `.env`、未部署、未推送。
+
+### 下一步行動清單
+
+- 在 VPS `/docker/rankwoven/.env` 設定新的 `JWT_SECRET`、`WORDPRESS_CREDENTIAL_ENCRYPTION_KEY`、`DEPLOY_SMOKE_EMAIL`、`DEPLOY_SMOKE_PASSWORD`；既有 HMAC 帳戶如需平滑升級，暫時設定 `LEGACY_PASSWORD_HMAC_SECRET` 為舊 JWT secret。
+- 完成 privacy／legal reviewer 對資料保留與營運地區責任的確認後，進入 PH2-05 基礎資料、用量與任務治理。
+
+## 會話總結（2026-09-13）— 完成 PH2-04 安全修復收尾
+
+### 會話主要目的
+
+繼續完成 `APPROVE PH2-04` 後的安全、私隱與 SSRF 修復，處理中斷的 production image 驗證與部署契約同步。
+
+### 完成的主要任務
+
+- 完成並驗證 `@aieo/security` 的 DNS/IP pinning、SSRF 阻擋、redirect 重新驗證與 2 MiB response limit。
+- 完成 production auth hard-fail、不同高熵 secret、scrypt 密碼雜湊、legacy hash 顯式遷移、reset token 移除回應與日誌。
+- 完成站點建立登入／workspace scope、Lighthouse unsafe URL 阻擋、Worker Basic Auth fetch 防護與敏感內容日誌遮罩。
+- 完成 CORS allowlist、trusted proxy、production non-root image、無開發 bind mount、deployment smoke credential 必填。
+- 完成 PH2-04 文件、部署文件、PH2 PRD、開發流程與 package lock 同步。
+
+### 驗證結果
+
+- 全倉 `lint`、`test`、`build`、`security:audit` 通過。
+- API 57 passed／6 skipped；Worker 9 passed；Security 11 passed；AI provider 15 passed；Web 13 passed；CMS adapter 1 passed。
+- Docker production image build 成功，容器以 `uid=1000(node)` 執行且不包含 `.env`。
+- Production Compose 缺少 JWT／WordPress encryption secret 時以 exit code 1 fail closed；提供 dummy secrets 的 config dry-run 通過。
+- `npm run db:migrate` 可重複執行，`git diff --check` 通過。
+
+### 未完成或需外部批准
+
+- 尚未對 VPS 執行部署；需先在 VPS `.env` 配置新的 JWT／CMS key 及 smoke 帳戶，並確認舊 WordPress 憑據是否需要重新錄入。
+- Privacy／legal reviewer 仍需確認資料保留、DPA、GDPR／PECR／CAN-SPAM／PCI 適用責任。
+- 真實 SEO Provider、CMS 發佈與支付 webhook 仍受 PH2-06／07／09／11 gate 控制。
+
+## 會話總結（2026-09-13）— PH2-04 安全收尾補強
+
+### 會話主要目的
+
+完成 `APPROVE PH2-04` 後的最後安全收尾，消除錯誤詳情洩露與任務 API 的跨工作區存取風險。
+
+### 完成的主要任務
+
+- Lighthouse、Site Audit 與 WordPress 媒體掃描錯誤回應改為穩定錯誤碼，不回傳第三方原始 body、內部路徑或底層 exception message；日誌同步使用脫敏錯誤碼。
+- WordPress API JSON／HTML 抓取統一加入 URL policy、DNS 驗證、DNS pinning、手動 redirect、跨 origin redirect 拒絕、15 秒 timeout、MIME 與 2 MiB response limit。
+- 同步任務列表、匯出、重試、忽略、批量處理與死信統計全部加入 workspace scope；死信告警查詢改為登入後可用，設定修改限 owner／admin；批量 task ID 加入 UUID 與數量驗證。
+- Site update、WordPress credentials、Analytics settings 保留已授權 site token 相容路徑，同時對 SaaS 使用者強制登入、workspace scope 與 viewer 權限限制。
+- 更新 PH2-04 核檢文件、開發流程與本 README，記錄完成範圍與外部 privacy／legal 待辦。
+
+### 使用的技術棧
+
+TypeScript、Fastify、PostgreSQL、Node.js Fetch／Undici、Vitest、Docker Compose。
+
+### 新增或修改文件
+
+- `apps/api/src/lighthouse.ts`
+- `apps/api/src/siteAudit.ts`
+- `apps/api/src/siteConnections.ts`
+- `apps/api/tests/securityHardening.test.ts`
+- `apps/worker/src/index.ts`
+- `packages/security/src/index.ts`
+- `packages/security/tests/publicUrlPolicy.test.ts`
+- `docs/approvals/phase-2/PH2-04-security-privacy-ssrf.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 58 passed／6 skipped、Web 13 passed、Worker 9 passed、AI provider 15 passed、CMS adapter 1 passed、Security 15 passed。
+- `npm run build` 通過，Web SEO fallback HTML 與 route graph 生成成功。
+- `npm run security:audit` 通過，0 個 high 以上漏洞。
+- `npm run db:migrate` 通過，所有已套用 migration 可安全跳過。
+- Production image `aieo-ph2-04-security-check` build 成功；production Compose dummy-secret dry-run 通過；`git diff --check` 通過。
+
+### 下一步行動清單
+
+- 尚未 commit、push 或部署；需另行取得明確授權後才可執行。
+- 正式部署前仍需在 VPS 安全配置 `JWT_SECRET`、`WORDPRESS_CREDENTIAL_ENCRYPTION_KEY` 與部署 smoke 帳戶，並完成 privacy／legal review。

@@ -8,6 +8,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/ai-providers/package.json packages/ai-providers/package.json
 COPY packages/cms-adapters/package.json packages/cms-adapters/package.json
+COPY packages/security/package.json packages/security/package.json
 
 RUN npm install
 

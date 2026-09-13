@@ -2,8 +2,10 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import lighthouse from 'lighthouse';
 import puppeteer from 'puppeteer-core';
 import { z } from 'zod';
+import { UnsafeTargetUrlError, validatePublicUrl, type ValidatedPublicUrl } from '@aieo/security';
 import { requireAuth, type AuthService } from './auth';
 import type { SiteConnectionRepository } from './siteConnections';
+import { apiConfig } from './config';
 
 export interface LighthouseAuditResult {
   url: string;
@@ -239,7 +241,14 @@ async function auditViaLocalLighthouse(url: string, strategy: 'mobile' | 'deskto
   }
 }
 
-export function createLighthouseService() {
+export interface LighthouseServiceOptions {
+  validateUrl?: (url: string) => Promise<ValidatedPublicUrl>;
+  allowLocalFallback?: boolean;
+}
+
+export function createLighthouseService(options: LighthouseServiceOptions = {}) {
+  const validateUrl = options.validateUrl ?? validatePublicUrl;
+  const allowLocalFallback = options.allowLocalFallback ?? apiConfig.ALLOW_LOCAL_LIGHTHOUSE_FALLBACK;
   const throttleQueue: Array<{
     url: string;
     strategy: 'mobile' | 'desktop';
@@ -277,20 +286,20 @@ export function createLighthouseService() {
   }
 
   async function doAuditUrl(url: string, strategy: 'mobile' | 'desktop'): Promise<LighthouseAuditResult> {
+    const validated = await validateUrl(url);
+    const publicUrl = validated.url.toString();
     // Try PageSpeed Insights API first (fast, no local Chrome needed)
     try {
-      return await auditViaPageSpeedApi(url, strategy);
+      return await auditViaPageSpeedApi(publicUrl, strategy);
     } catch (apiError) {
+      if (!allowLocalFallback) {
+        throw new Error('LIGHTHOUSE_EXTERNAL_AUDIT_FAILED', { cause: apiError });
+      }
       // Fall back to local Lighthouse CLI
       try {
-        return await auditViaLocalLighthouse(url, strategy);
+        return await auditViaLocalLighthouse(publicUrl, strategy);
       } catch (localError) {
-        throw new Error(
-          `Lighthouse audit failed for ${url}. ` +
-          `API: ${apiError instanceof Error ? apiError.message : 'unknown'}. ` +
-          `Local: ${localError instanceof Error ? localError.message : 'unknown'}`,
-          { cause: localError }
-        );
+        throw new Error('LIGHTHOUSE_AUDIT_FAILED', { cause: localError });
       }
     }
   }
@@ -355,6 +364,7 @@ export function registerLighthouseRoutes(
     }
 
     try {
+      await validatePublicUrl(url);
       // Wrap audit in a timeout so the connection never hangs indefinitely.
       // Slightly longer than the frontend timeout (90s) so the frontend receives
       // an error response instead of a network-level abort.
@@ -371,14 +381,22 @@ export function registerLighthouseRoutes(
         data: result
       };
     } catch (error) {
-      const details = error instanceof Error ? error.message : '未知錯誤';
-      console.error(`[lighthouse] Audit failed for ${url}: ${details}`);
+      if (error instanceof UnsafeTargetUrlError) {
+        return reply.status(400).send({
+          success: false,
+          message: '目標網址不符合安全抓取規則',
+          error: { code: 'UNSAFE_TARGET_URL' }
+        });
+      }
+      // Keep provider and browser errors out of both the response and logs. They
+      // may contain upstream response bodies, internal paths, or other details
+      // that are useful for debugging but unsafe to expose through this route.
+      console.error('[lighthouse] Audit failed: LIGHTHOUSE_ERROR');
       return reply.status(502).send({
         success: false,
-        message: `Lighthouse 審計失敗：${details}`,
+        message: 'Lighthouse 審計暫時無法完成，請稍後重試',
         error: {
-          code: 'LIGHTHOUSE_ERROR',
-          details
+          code: 'LIGHTHOUSE_ERROR'
         }
       });
     }

@@ -1,6 +1,6 @@
 # PH2-02 Provider、模型與成本選型核檢
 
-> 文件狀態：待批准 v1.1（統一 Breakout API 代理）
+> 文件狀態：已批准 v1.2（統一 Breakout API 代理）
 > 核檢日期：2026-09-13
 > 前置批准：`APPROVE PH2-00`、`APPROVE PH2-01`
 > 依據：`docs/rankwoven-phase-2-prd.md`、`docs/rankwoven-phase-2-development-workflow.md`、`docs/research/phase-2-api-pricing-2026.md`
@@ -161,4 +161,8 @@ Phase 2A 建議先採內部 cap，產品套餐正式價格需用 30 日實際數
 
 **Open risks**：Breakout model catalog 已核驗，但價格不在 `/v1/models` 回應中；正式 DataForSEO 商務條款、Ahrefs／Semrush 報價、代理價格快照、實際套餐 credits 與 30 日毛利尚未取得。這些不阻塞 PH2-03 的契約設計，但阻塞正式放量及平台代付上限提升。
 
-**Decision**：待 Product Owner、Tech Lead、Security／Privacy Reviewer、Finance／Operations 明確回覆 `APPROVE PH2-02`。
+**Decision**：`APPROVED`。
+
+**Approved by**：Product Owner（使用者）
+**Approved at**：2026-09-13T02:28:43Z
+**批准範圍**：本文件第 1–8 節的 Provider／gateway 選型、模型 profile、成本與配額治理、BYOK、資料保留、安全邊界及 PH2-03 前置條件。此批准不代表 PH2-03 runtime adapter、migration 或對外 API 已實作。

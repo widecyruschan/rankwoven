@@ -23,8 +23,11 @@ COPY packages/ai-providers/package.json packages/ai-providers/package.json
 COPY packages/cms-adapters/package.json packages/cms-adapters/package.json
 COPY packages/security/package.json packages/security/package.json
 
-RUN npm install
+RUN npm ci --ignore-scripts
 
 COPY . .
+RUN chown -R node:node /workspace
 
-CMD ["npm", "run", "dev"]
+USER node
+
+CMD ["node", "-e", "throw new Error('Production service command must be supplied by Docker Compose')"]

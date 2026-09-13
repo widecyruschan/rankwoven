@@ -34,6 +34,10 @@ import {
   type SiteConnectionRepository,
   registerSiteConnectionRoutes
 } from './siteConnections';
+import { createDefaultPhase2Repository } from './phase2Repository';
+import { registerPhase2Routes } from './phase2Routes';
+import { registerPhase2FeatureRoutes } from './phase2FeatureRoutes';
+import type { Phase2Repository } from '@aieo/ai-providers';
 
 interface CreateServerOptions {
   siteConnectionRepository?: SiteConnectionRepository;
@@ -41,11 +45,13 @@ interface CreateServerOptions {
   seoOptimizationRepository?: SeoOptimizationRepository;
   siteAuditRepository?: SiteAuditRepository;
   textGenerationProvider?: TextGenerationProvider;
+  phase2Repository?: Phase2Repository;
 }
 
 export function createServer(options: CreateServerOptions = {}) {
   const app = Fastify({
-    logger: true
+    logger: true,
+    trustProxy: apiConfig.TRUST_PROXY
   });
   const aiProviders = apiConfig.WENWEN_API_KEY
     ? createWenwenAiProviderRegistry({
@@ -75,9 +81,19 @@ export function createServer(options: CreateServerOptions = {}) {
   const authService = createAuthService(authRepository);
   const siteConnectionRepository =
     options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL);
+  const phase2Repository = options.phase2Repository ?? createDefaultPhase2Repository(apiConfig.DATABASE_URL);
 
+  const allowedCorsOrigins = new Set(
+    apiConfig.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  );
   app.register(cors, {
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedCorsOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('CORS_ORIGIN_DENIED'), false);
+    },
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
@@ -85,12 +101,7 @@ export function createServer(options: CreateServerOptions = {}) {
   app.register(rateLimit, {
     max: apiConfig.RATE_LIMIT_MAX,
     timeWindow: apiConfig.RATE_LIMIT_TIME_WINDOW_MS,
-    keyGenerator: (request) => {
-      // Use X-Forwarded-For if behind reverse proxy
-      const xff = request.headers['x-forwarded-for'];
-      const ip = Array.isArray(xff) ? xff[0] : (xff ?? request.ip);
-      return String(ip);
-    },
+    keyGenerator: (request) => request.ip,
     errorResponseBuilder: (_request, context) => ({
       success: false,
       message: '請求過於頻繁，請稍後再試',
@@ -205,6 +216,9 @@ export function createServer(options: CreateServerOptions = {}) {
     options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL),
     authService
   );
+
+  registerPhase2Routes(app, phase2Repository, authService);
+  registerPhase2FeatureRoutes(app, phase2Repository, authService, siteConnectionRepository);
 
   // 啟動站點稽核排程器（每 30 分鐘檢查一次）
   const stopScheduler = startSiteAuditScheduler(

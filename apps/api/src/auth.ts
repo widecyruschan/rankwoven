@@ -1,7 +1,8 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
+import { apiConfig } from './config';
 
 const loginSchema = z.object({
   email: z.email(),
@@ -99,7 +100,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at timestamptz
 `;
 
 function getJwtSecret() {
-  return process.env.JWT_SECRET ?? 'rankwoven-local-jwt-secret';
+  if (apiConfig.JWT_SECRET) {
+    return apiConfig.JWT_SECRET;
+  }
+  if (apiConfig.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET_REQUIRED');
+  }
+  return 'rankwoven-local-jwt-secret';
 }
 
 function toBase64Url(value: Buffer | string) {
@@ -110,8 +117,19 @@ function signPayload(value: string) {
   return createHmac('sha256', getJwtSecret()).update(value).digest('base64url');
 }
 
+function hashLegacyPassword(password: string, secret: string) {
+  return createHmac('sha256', secret).update(password).digest('hex');
+}
+
 function hashPassword(password: string) {
-  return createHmac('sha256', getJwtSecret()).update(password).digest('hex');
+  const salt = randomBytes(16).toString('base64url');
+  const derived = scryptSync(password, salt, 64, {
+    N: 16_384,
+    r: 8,
+    p: 1,
+    maxmem: 64 * 1024 * 1024
+  }).toString('base64url');
+  return `scrypt$v1$${salt}$${derived}`;
 }
 
 function isSameHash(left: string, right: string) {
@@ -119,6 +137,28 @@ function isSameHash(left: string, right: string) {
   const rightBuffer = Buffer.from(right);
 
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function verifyPassword(password: string, storedHash: string) {
+  const [algorithm, version, salt, encodedHash] = storedHash.split('$');
+  if (algorithm === 'scrypt' && version === 'v1' && salt && encodedHash) {
+    const derived = scryptSync(password, salt, 64, {
+      N: 16_384,
+      r: 8,
+      p: 1,
+      maxmem: 64 * 1024 * 1024
+    }).toString('base64url');
+    return isSameHash(derived, encodedHash);
+  }
+
+  const legacySecrets = [apiConfig.LEGACY_PASSWORD_HMAC_SECRET].filter(
+    (secret): secret is string => Boolean(secret)
+  );
+  return legacySecrets.some((secret) => isSameHash(hashLegacyPassword(password, secret), storedHash));
+}
+
+function needsPasswordRehash(storedHash: string) {
+  return !storedHash.startsWith('scrypt$v1$');
 }
 
 function createToken(user: AuthUser) {
@@ -136,17 +176,12 @@ function createToken(user: AuthUser) {
   return `${unsignedToken}.${signPayload(unsignedToken)}`;
 }
 
-function createResetToken(email: string) {
-  const header = toBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = toBase64Url(
-    JSON.stringify({
-      email,
-      purpose: 'password_reset',
-      exp: Math.floor(Date.now() / 1000) + 60 * 60
-    })
-  );
-  const unsignedToken = `${header}.${payload}`;
-  return `${unsignedToken}.${signPayload(unsignedToken)}`;
+function createResetToken() {
+  return randomBytes(32).toString('base64url');
+}
+
+function hashResetToken(token: string) {
+  return createHmac('sha256', 'rankwoven-reset-token-v1').update(token).digest('hex');
 }
 
 function readTokenSubject(token: string) {
@@ -253,8 +288,11 @@ export function createInMemoryAuthRepository(): AuthRepository {
   return {
     async login(email, password) {
       const u = users.get(email.toLowerCase());
-      if (!u || !isSameHash(hashPassword(password), u.passwordHash)) {
+      if (!u || !verifyPassword(password, u.passwordHash)) {
         return undefined;
+      }
+      if (needsPasswordRehash(u.passwordHash)) {
+        u.passwordHash = hashPassword(password);
       }
       return u;
     },
@@ -286,7 +324,7 @@ export function createInMemoryAuthRepository(): AuthRepository {
     async changePassword(userId, currentPassword, newPassword) {
       for (const u of users.values()) {
         if (u.id === userId) {
-          if (!isSameHash(hashPassword(currentPassword), u.passwordHash)) {
+          if (!verifyPassword(currentPassword, u.passwordHash)) {
             return false;
           }
           u.passwordHash = hashPassword(newPassword);
@@ -298,16 +336,16 @@ export function createInMemoryAuthRepository(): AuthRepository {
     async storeResetToken(email, token) {
       const u = users.get(email.toLowerCase());
       if (!u) return false; // Don't leak user existence
-      resetTokens.set(token, { email, expiresAt: Date.now() + 60 * 60 * 1000 });
+      resetTokens.set(hashResetToken(token), { email, expiresAt: Date.now() + 60 * 60 * 1000 });
       return true;
     },
     async resetPassword(token, newPassword) {
-      const entry = resetTokens.get(token);
+      const entry = resetTokens.get(hashResetToken(token));
       if (!entry || entry.expiresAt < Date.now()) return false;
       const u = users.get(entry.email);
       if (!u) return false;
       u.passwordHash = hashPassword(newPassword);
-      resetTokens.delete(token);
+      resetTokens.delete(hashResetToken(token));
       return true;
     }
   };
@@ -337,8 +375,12 @@ export class PostgresAuthRepository implements AuthRepository {
     );
     const row = result.rows[0];
 
-    if (!row || !isSameHash(hashPassword(password), row.password_hash)) {
+    if (!row || !verifyPassword(password, row.password_hash)) {
       return undefined;
+    }
+
+    if (needsPasswordRehash(row.password_hash)) {
+      await this.pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [hashPassword(password), row.id]);
     }
 
     return mapUserRow(row);
@@ -421,7 +463,7 @@ export class PostgresAuthRepository implements AuthRepository {
       [userId]
     );
     const row = userResult.rows[0];
-    if (!row || !isSameHash(hashPassword(currentPassword), row.password_hash)) {
+    if (!row || !verifyPassword(currentPassword, row.password_hash)) {
       return false;
     }
 
@@ -437,7 +479,7 @@ export class PostgresAuthRepository implements AuthRepository {
 
     const result = await this.pool.query(
       `UPDATE users SET password_reset_token = $1, password_reset_expires_at = NOW() + INTERVAL '1 hour' WHERE email = $2`,
-      [token, email.toLowerCase()]
+      [hashResetToken(token), email.toLowerCase()]
     );
     return (result.rowCount ?? 0) > 0;
   }
@@ -447,7 +489,7 @@ export class PostgresAuthRepository implements AuthRepository {
 
     const result = await this.pool.query(
       `UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires_at = NULL WHERE password_reset_token = $2 AND password_reset_expires_at > NOW()`,
-      [hashPassword(newPassword), token]
+      [hashPassword(newPassword), hashResetToken(token)]
     );
     return (result.rowCount ?? 0) > 0;
   }
@@ -615,10 +657,14 @@ export function registerAuthRoutes(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : '註冊失敗';
-      const code = message.includes('已註冊') ? 'AUTH_EMAIL_DUPLICATE' : 'AUTH_REGISTER_FAILED';
+      const isDuplicate = message === '此電郵已註冊';
+      const code = isDuplicate ? 'AUTH_EMAIL_DUPLICATE' : 'AUTH_REGISTER_FAILED';
+      if (!isDuplicate) {
+        console.error('[auth] Register failed: AUTH_REGISTER_FAILED');
+      }
       return reply.status(code === 'AUTH_EMAIL_DUPLICATE' ? 409 : 500).send({
         success: false,
-        message,
+        message: isDuplicate ? message : '註冊失敗，請稍後重試',
         error: { code }
       });
     }
@@ -673,21 +719,12 @@ export function registerAuthRoutes(
       });
     }
 
-    const resetToken = createResetToken(parsed.data.email);
+    const resetToken = createResetToken();
     await repository.storeResetToken(parsed.data.email, resetToken);
-
-    // In production: send email with reset link
-    // In MVP: return token in response (dev convenience)
-    const resetUrl = `https://rankwoven.com/reset-password?token=${resetToken}`;
-
-    // Log instead of sending email for MVP
-    console.log(`[auth] Password reset link: ${resetUrl}`);
 
     return {
       success: true,
-      message: '如果此電郵已註冊，密碼重設郵件已發送',
-      // Remove token from response in production
-      ...(process.env.NODE_ENV !== 'production' ? { _devResetToken: resetToken, _devResetUrl: resetUrl } : {})
+      message: '如果此電郵已註冊，密碼重設郵件已發送'
     };
   });
 

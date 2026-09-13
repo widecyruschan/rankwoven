@@ -129,9 +129,13 @@ describe('analytics and keyword routes', () => {
   it('filters analytics overview by connected site and date range', async () => {
     const siteConnectionRepository = createInMemorySiteConnectionRepository();
     const server = createServer({ siteConnectionRepository });
+    const token = await loginDemoUser(server);
     const createSiteResponse = await server.inject({
       method: 'POST',
       url: '/api/v1/site-connections',
+      headers: {
+        authorization: `Bearer ${token}`
+      },
       payload: {
         platform: 'wordpress',
         name: 'Analytics Site',
@@ -142,7 +146,6 @@ describe('analytics and keyword routes', () => {
       }
     });
     const siteId = createSiteResponse.json<{ data: { site: { id: string } } }>().data.site.id;
-    const token = await loginDemoUser(server);
     const response = await server.inject({
       method: 'GET',
       url: `/api/v1/analytics/overview?siteId=${siteId}&startDate=2026-07-20&endDate=2026-07-26`,
@@ -377,9 +380,11 @@ describe('analytics and keyword routes', () => {
 
   it('uses Ahrefs Keyword Explorer overview with bearer authentication', async () => {
     const originalProvider = apiConfig.KEYWORD_VOLUME_PROVIDER;
+    const originalAhrefsEnabled = apiConfig.AHREFS_KEYWORD_METRICS_ENABLED;
     const originalAhrefsUrl = apiConfig.AHREFS_API_URL;
     const originalAhrefsKey = apiConfig.AHREFS_API_KEY;
-    apiConfig.KEYWORD_VOLUME_PROVIDER = 'ahrefs';
+    apiConfig.KEYWORD_VOLUME_PROVIDER = 'generic';
+    apiConfig.AHREFS_KEYWORD_METRICS_ENABLED = true;
     apiConfig.AHREFS_API_URL = 'https://api.ahrefs.com/v3/keywords-explorer/overview';
     apiConfig.AHREFS_API_KEY = 'test-ahrefs-key';
 
@@ -417,6 +422,7 @@ describe('analytics and keyword routes', () => {
       });
     } finally {
       apiConfig.KEYWORD_VOLUME_PROVIDER = originalProvider;
+      apiConfig.AHREFS_KEYWORD_METRICS_ENABLED = originalAhrefsEnabled;
       apiConfig.AHREFS_API_URL = originalAhrefsUrl;
       apiConfig.AHREFS_API_KEY = originalAhrefsKey;
     }

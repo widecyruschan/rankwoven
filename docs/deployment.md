@@ -30,6 +30,19 @@ Workflow：`.github/workflows/production-deploy.yml`
 11. 執行 `docker compose --profile data up -d --build` 重建並啟動服務。
 12. 驗證 `https://api.rankwoven.com/health` 和 `https://api.rankwoven.com/api/v1/site-connections`。
 
+生產 Compose 會使用 `Dockerfile.production` 建立 API／Worker，強制 `NODE_ENV=production`、non-root runtime、無開發 bind mount，並要求以下部署 secrets：
+
+```text
+JWT_SECRET
+WORDPRESS_CREDENTIAL_ENCRYPTION_KEY
+DEPLOY_SMOKE_EMAIL
+DEPLOY_SMOKE_PASSWORD
+```
+
+兩個應用程式 secret 必須各自使用至少 32 字元的高熵值且不可相同；部署腳本不再提供 demo smoke 帳戶 fallback。若要平滑升級舊 HMAC 密碼，暫時在 VPS `.env` 設定 `LEGACY_PASSWORD_HMAC_SECRET`，使用者成功登入後移除。
+
+API 的 `CORS_ORIGINS` 使用逗號分隔 allowlist，`TRUST_PROXY=true` 只可在前方代理已受信任時開啟。Lighthouse production fallback 預設關閉；所有 URL 抓取都必須通過 SSRF URL policy。
+
 需要的 GitHub Secrets：
 
 | Secret | 用途 |

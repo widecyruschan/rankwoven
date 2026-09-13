@@ -569,7 +569,7 @@ interface EnrichedKeyword extends ThirdPartyKeywordMetric {
 
 /**
  * Resolve which third-party provider to use based on config.
- * Priority: dataforseo > ahrefs > semrush > generic
+ * Priority: dataforseo > enabled Ahrefs > semrush > generic
  */
 function resolveMetricProvider(): { provider: KeywordDataSource; enabled: boolean } | null {
   const provider = apiConfig.KEYWORD_VOLUME_PROVIDER;
@@ -577,7 +577,11 @@ function resolveMetricProvider(): { provider: KeywordDataSource; enabled: boolea
   if (provider === 'dataforseo' && apiConfig.KEYWORD_VOLUME_API_URL && apiConfig.KEYWORD_VOLUME_API_KEY) {
     return { provider: 'dataforseo', enabled: true };
   }
-  if (provider === 'ahrefs' && apiConfig.AHREFS_API_URL && apiConfig.AHREFS_API_KEY) {
+  if (
+    apiConfig.AHREFS_KEYWORD_METRICS_ENABLED &&
+    apiConfig.AHREFS_API_URL &&
+    apiConfig.AHREFS_API_KEY
+  ) {
     return { provider: 'ahrefs', enabled: true };
   }
   if (provider === 'semrush' && apiConfig.SEMRUSH_API_URL && apiConfig.SEMRUSH_API_KEY) {
@@ -881,7 +885,7 @@ export function registerKeywordSuggestionRoutes(
       {
         id: 'ahrefs',
         name: 'Ahrefs',
-        active: apiConfig.KEYWORD_VOLUME_PROVIDER === 'ahrefs' && !!apiConfig.AHREFS_API_KEY,
+        active: apiConfig.AHREFS_KEYWORD_METRICS_ENABLED && !!apiConfig.AHREFS_API_KEY,
         description: 'Keyword difficulty, search volume, and traffic potential from Ahrefs.'
       },
       {

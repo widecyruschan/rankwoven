@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import { processNextQueuedTask } from '../src/index';
 
+const allowPublicTestUrl = async (url: string) => ({
+  url: new URL(url),
+  resolvedAddresses: [{ address: '93.184.216.34', family: 4 }]
+});
+
 describe('worker adapter wiring', () => {
   it('can load the WordPress adapter', () => {
     expect(createWordPressAdapter().getCapabilities().platform).toBe('wordpress');
@@ -55,7 +60,7 @@ describe('worker adapter wiring', () => {
       })
     })) as unknown as typeof fetch;
 
-    const task = await processNextQueuedTask(pool as never, fetchImpl);
+    const task = await processNextQueuedTask(pool as never, fetchImpl, allowPublicTestUrl);
 
     expect(task).toMatchObject({
       id: '00000000-0000-4000-8000-000000000301',
@@ -73,6 +78,54 @@ describe('worker adapter wiring', () => {
     expect(queries.some((query) => query.includes('INSERT INTO synced_articles'))).toBe(true);
     expect(queries.some((query) => query.includes("SET status = 'completed'"))).toBe(true);
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('syncs Breakout gateway models through the phase 2 task queue', async () => {
+    const previousKey = process.env.WENWEN_API_KEY;
+    const previousBaseUrl = process.env.WENWEN_API_BASE_URL;
+    process.env.WENWEN_API_KEY = 'test-gateway-key';
+    process.env.WENWEN_API_BASE_URL = 'https://gateway.test';
+    const queries: string[] = [];
+    const client = {
+      async query(sql: string) {
+        queries.push(sql);
+        if (sql.includes('FROM phase2_tasks')) {
+          return {
+            rows: [{
+              id: '00000000-0000-4000-8000-000000000304',
+              workspace_id: '00000000-0000-4000-8000-000000000001',
+              kind: 'gateway_model_sync',
+              retry_count: 0,
+              max_retries: 3
+            }]
+          };
+        }
+        return { rows: [] };
+      },
+      release: vi.fn()
+    };
+    const pool = { connect: vi.fn(async () => client) };
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: [{ id: 'gateway-text', owned_by: 'gateway', capabilities: ['chat'] }] })
+    })) as unknown as typeof fetch;
+
+    try {
+      const task = await processNextQueuedTask(pool as never, fetchImpl, allowPublicTestUrl);
+      expect(task).toMatchObject({ id: '00000000-0000-4000-8000-000000000304', kind: 'gateway_model_sync' });
+      expect(fetchImpl).toHaveBeenCalledWith(
+        'https://gateway.test/v1/models',
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer test-gateway-key' }) })
+      );
+      expect(queries.some((query) => query.includes('INSERT INTO gateway_model_catalog'))).toBe(true);
+      expect(queries.some((query) => query.includes('INSERT INTO task_attempts'))).toBe(true);
+      expect(queries.some((query) => query.includes("status = 'completed'"))).toBe(true);
+    } finally {
+      if (previousKey === undefined) delete process.env.WENWEN_API_KEY;
+      else process.env.WENWEN_API_KEY = previousKey;
+      if (previousBaseUrl === undefined) delete process.env.WENWEN_API_BASE_URL;
+      else process.env.WENWEN_API_BASE_URL = previousBaseUrl;
+    }
   });
 
   it('appends internal link suggestions without replacing builder content', async () => {
@@ -170,7 +223,7 @@ describe('worker adapter wiring', () => {
       throw new Error(`Unexpected fetch URL: ${url}`);
     }) as unknown as typeof fetch;
 
-    const task = await processNextQueuedTask(pool as never, fetchImpl);
+    const task = await processNextQueuedTask(pool as never, fetchImpl, allowPublicTestUrl);
 
     expect(task).toMatchObject({
       id: '00000000-0000-4000-8000-000000000303',
@@ -221,7 +274,7 @@ describe('worker adapter wiring', () => {
       json: async () => ({})
     })) as unknown as typeof fetch;
 
-    const task = await processNextQueuedTask(pool as never, fetchImpl);
+    const task = await processNextQueuedTask(pool as never, fetchImpl, allowPublicTestUrl);
 
     expect(task).toMatchObject({
       id: '00000000-0000-4000-8000-000000000302',
@@ -236,6 +289,42 @@ describe('worker adapter wiring', () => {
           query.params?.[3] === 'WORDPRESS_REST_503'
       )
     ).toBe(true);
+  });
+
+  it('does not request a rejected Worker target URL', async () => {
+    const queries: Array<{ sql: string; params?: unknown[] }> = [];
+    const client = {
+      async query(sql: string, params?: unknown[]) {
+        queries.push({ sql, params });
+        if (sql.includes('FROM sync_tasks st')) {
+          return {
+            rows: [{
+              id: '00000000-0000-4000-8000-000000000305',
+              site_id: '00000000-0000-4000-8000-000000000205',
+              scope: 'article',
+              target_cms_id: '101',
+              retry_count: 0,
+              max_retries: 3,
+              site_url: 'http://127.0.0.1',
+              wordpress_admin_username: 'admin',
+              wordpress_application_password_encrypted: encryptCredential('abcd efgh ijkl mnop')
+            }]
+          };
+        }
+        return { rows: [] };
+      },
+      release: vi.fn()
+    };
+    const pool = { connect: vi.fn(async () => client) };
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const rejectTarget = async () => {
+      throw new Error('UNSAFE_TARGET_URL');
+    };
+
+    await processNextQueuedTask(pool as never, fetchImpl, rejectTarget);
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(queries.some((query) => query.params?.[3] === 'UNSAFE_TARGET_URL')).toBe(true);
   });
 });
 

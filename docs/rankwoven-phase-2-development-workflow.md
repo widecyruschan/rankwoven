@@ -1,11 +1,12 @@
 # RankWoven 第二階段開發流程與方案選型
 
-> 文件狀態：執行草案 v1.1（PH2-01 已批准；PH2-02 待批准）
+> 文件狀態：執行草案 v1.2（PH2-01、PH2-02 已批准）
 > 建立日期：2026-09-12
 > 依據：`docs/rankwoven-phase-2-prd.md`
 > 研究底稿：`docs/research/phase-2-ai-seo-2026.md`、`docs/research/phase-2-api-pricing-2026.md`
 > PH2-02 核檢：`docs/approvals/phase-2/PH2-02-provider-selection.md`
 > AI gateway 接口：`docs/breakout-api-integration.md`
+> PH2-03 核檢：`docs/approvals/phase-2/PH2-03-architecture-api-contract.md`
 > 原則：每一步必須完成核檢並得到明確批准，才可開始下一步。
 
 ## 1. 文件目的
@@ -183,6 +184,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **本次選型結論**：DataForSEO 作平台 SEO 主 Provider；所有 AI 模型請求固定經既有 Breakout API gateway，文字、embedding、圖片只切換已核驗 model ID；Ahrefs／Semrush 只作 SEO BYOK；WordPress first；Stripe + 本地 `usage_ledger`；Email 只生成草稿。
 
+**PH2-02 狀態（2026-09-13）**：`APPROVED`。Product Owner（使用者）已批准本步範圍；批准記錄、時間與限制見 `docs/approvals/phase-2/PH2-02-provider-selection.md`。現可進入 PH2-03 契約設計，不得跳過 PH2-03、PH2-04 或 PH2-05 直接啟用 production runtime。
+
 ### PH2-03：架構、資料與 API 契約
 
 **輸入**：PH2-01 route registry、PH2-02 Provider matrix、最新 PRD 資料模型。
@@ -207,7 +210,11 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **批准門檻**：Tech Lead、Security Reviewer、QA Lead 聯合批准；未批准不可寫 runtime code。
 
+**PH2-03 狀態（2026-09-13）**：`APPROVED / IMPLEMENTATION_COMPLETE`。Product Owner（使用者）已批准本步（批准時間：2026-09-13，當前會話）。已完成 shared types、`0010`–`0014` migration、workspace scope、幂等、append-only usage ledger、Repository、Breakout gateway mapping、model catalog Worker、task attempts、Profile、價格／entitlement hard-stop、Keyword／Content／Webhook REST contract、OpenAPI 與測試。DataForSEO 真實 research、內容生成、SSRF fetch、CMS 寫回與支付 webhook 分別受 PH2-04、06、07、09、11 gate 控制，未完成 gate 時 API 必須安全拒絕，不能排入不可消費任務。
+
 ### PH2-04：安全、私隱與合規設計
+
+**PH2-04 狀態（2026-09-13）**：`APPROVED / IMPLEMENTATION_COMPLETE`。Product Owner（使用者）已批准本步。已完成共用 `PublicUrlPolicy`、Lighthouse／Worker／WordPress 媒體掃描 SSRF 防護、站點連接 auth + workspace scope、任務／死信 workspace 隔離、production secret hard-fail、production non-root runtime、reset token redaction、scrypt password hash 漸進升級、CORS／trusted proxy 收斂與錯誤碼／日誌脫敏。SEC-01 至 SEC-07 及本次收尾回歸測試、lint、build、security audit、Compose dry-run 均通過。真實 Provider、CMS 寫入或付款 webhook 仍受後續 gate 控制。
 
 **工作**：
 

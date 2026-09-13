@@ -81,9 +81,13 @@ async function createWordPressConnection(
     siteConnectionRepository: createInMemorySiteConnectionRepository(),
     ...serverOptions
   });
+  const authToken = await loginDemoUser(server);
   const response = await server.inject({
     method: 'POST',
     url: '/api/v1/site-connections',
+    headers: {
+      authorization: `Bearer ${authToken}`
+    },
     payload: {
       platform: 'wordpress',
       name: 'Local WordPress',
@@ -130,6 +134,22 @@ function createStubTextProvider(rewriteHandler: (request: { title?: string; html
 }
 
 describe('site connection routes', () => {
+  it('rejects unauthenticated site connection creation', async () => {
+    const server = createServer({ siteConnectionRepository: createInMemorySiteConnectionRepository() });
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/v1/site-connections',
+      payload: {
+        platform: 'wordpress',
+        name: 'Unauthenticated Site',
+        siteUrl: 'https://example.com'
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ error: { code: 'AUTH_TOKEN_INVALID' } });
+  });
+
   it('creates a WordPress site connection and returns a setup token once', async () => {
     const { response, body } = await createWordPressConnection();
 

@@ -2,7 +2,14 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 import { z } from 'zod';
+import {
+  UnsafeTargetUrlError,
+  fetchValidatedPublicUrl,
+  validatePublicUrl,
+  type ValidatedPublicUrl
+} from '@aieo/security';
 import { getBearerToken, requireAuth, type AuthService } from './auth';
+import { apiConfig } from './config';
 import { readGoogleCredentials } from './googleAuth';
 import { createSearchConsoleService } from './searchConsole';
 
@@ -100,6 +107,10 @@ const manualRefreshTaskSchema = z.object({
 
 const mediaScanSchema = z.object({
   updatedAfter: z.string().trim().max(80).optional()
+});
+
+const syncTaskIdsSchema = z.object({
+  taskIds: z.array(z.string().uuid()).min(1).max(100)
 });
 
 const syncBatchPayloadSchema = syncPayloadSchema.extend({
@@ -234,13 +245,14 @@ export interface SaveSyncBatchResult {
 }
 
 export interface SyncTaskListOptions {
+  workspaceId?: string;
   siteId?: string;
   scope?: SyncTaskScope;
   status?: SyncTaskStatus;
 }
 
 export interface SiteConnectionRepository {
-  create(input: CreateConnectionInput): Promise<{
+  create(input: CreateConnectionInput, workspaceId?: string): Promise<{
     site: SiteConnection;
     apiToken: string | null;
   }>;
@@ -270,12 +282,12 @@ export interface SiteConnectionRepository {
   getSyncTask(syncTaskId: string): Promise<SyncTask | undefined>;
   markSyncTaskRunning(syncTaskId: string): Promise<SyncTask | undefined>;
   markSyncTaskFailed(syncTaskId: string, errorMessage: string): Promise<SyncTask | undefined>;
-  retrySyncTask(syncTaskId: string): Promise<SyncTask | undefined>;
-  ignoreDeadLetterTask(syncTaskId: string): Promise<SyncTask | undefined>;
-  batchRetrySyncTasks(taskIds: string[]): Promise<SyncTask[]>;
-  batchIgnoreDeadLetterTasks(taskIds: string[]): Promise<SyncTask[]>;
+  retrySyncTask(syncTaskId: string, workspaceId?: string): Promise<SyncTask | undefined>;
+  ignoreDeadLetterTask(syncTaskId: string, workspaceId?: string): Promise<SyncTask | undefined>;
+  batchRetrySyncTasks(taskIds: string[], workspaceId?: string): Promise<SyncTask[]>;
+  batchIgnoreDeadLetterTasks(taskIds: string[], workspaceId?: string): Promise<SyncTask[]>;
   getTasksForExport(options?: SyncTaskListOptions): Promise<SyncTask[]>;
-  getDeadLetterStats(): Promise<{
+  getDeadLetterStats(workspaceId?: string): Promise<{
     totalDeadLetters: number;
     bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
   }>;
@@ -297,6 +309,18 @@ interface InMemorySiteConnection extends SiteConnection {
 
 type WordPressCredentialsInput = z.infer<typeof updateWordPressCredentialsSchema>;
 type SiteAnalyticsSettingsInput = z.infer<typeof updateSiteAnalyticsSchema>;
+
+type PublicUrlValidator = (url: string) => Promise<ValidatedPublicUrl>;
+
+const defaultWordPressUrlValidator: PublicUrlValidator = async (url) => {
+  if (process.env.NODE_ENV === 'test') {
+    return {
+      url: new URL(url),
+      resolvedAddresses: [{ address: '93.184.216.34', family: 4 }]
+    };
+  }
+  return validatePublicUrl(url);
+};
 
 export interface WordPressCredentials {
   site: SiteConnection;
@@ -549,8 +573,12 @@ function hashSiteToken(apiToken: string) {
 }
 
 function getCredentialEncryptionKey() {
+  if (apiConfig.NODE_ENV === 'production' && !apiConfig.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY) {
+    throw new Error('WORDPRESS_CREDENTIAL_ENCRYPTION_KEY_REQUIRED');
+  }
+
   const secret =
-    process.env.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY ??
+    apiConfig.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY ??
     process.env.JWT_SECRET ??
     'rankwoven-local-development-key';
 
@@ -945,25 +973,65 @@ async function fetchWordPressJson<T>(
   fetchImpl: typeof fetch,
   url: string,
   credentials: WordPressCredentials,
-  init?: RequestInit
+  init?: RequestInit,
+  validateUrl: PublicUrlValidator = defaultWordPressUrlValidator
 ): Promise<{ body: T; response: Response }> {
-  const response = await fetchImpl(url, {
-    ...init,
-    headers: {
-      Authorization: createBasicAuthHeader(credentials),
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers
-    }
-  });
+  let target = await validateUrl(url);
+  const trustedOrigin = target.url.origin;
 
-  if (!response.ok) {
-    throw new Error(`WORDPRESS_REST_${response.status}`);
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const requestInit: RequestInit = {
+        ...init,
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          Authorization: createBasicAuthHeader(credentials),
+          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+          ...init?.headers
+        }
+      };
+      const response = fetchImpl === fetch
+        ? await fetchValidatedPublicUrl(target, requestInit)
+        : await fetchImpl(target.url.toString(), requestInit);
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location || redirectCount === 3) throw new Error('UNSAFE_TARGET_URL');
+        target = await validateUrl(new URL(location, target.url).toString());
+        if (target.url.origin !== trustedOrigin) throw new Error('UNSAFE_TARGET_URL');
+        continue;
+      }
+
+      if (!response.ok) throw new Error(`WORDPRESS_REST_${response.status}`);
+      const contentType = response.headers.get('content-type') ?? '';
+      const contentLength = Number(response.headers.get('content-length') ?? 0);
+      if (contentLength > 2 * 1024 * 1024 || (contentType && !contentType.includes('application/json'))) {
+        throw new Error('WORDPRESS_RESPONSE_INVALID');
+      }
+
+      const body = await response.text();
+      if (Buffer.byteLength(body, 'utf8') > 2 * 1024 * 1024) {
+        throw new Error('WORDPRESS_RESPONSE_TOO_LARGE');
+      }
+      try {
+        return { body: JSON.parse(body) as T, response };
+      } catch {
+        throw new Error('WORDPRESS_RESPONSE_INVALID');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('WORDPRESS_REQUEST_TIMEOUT', { cause: error });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  return {
-    body: (await response.json()) as T,
-    response
-  };
+  throw new Error('UNSAFE_TARGET_URL');
 }
 
 function mapWordPressMedia(item: WordPressMediaResponseItem): SyncedMedia {
@@ -1182,19 +1250,38 @@ function extractWordPressPortfolioCards(contentHtml: string, siteUrl: string) {
 async function fetchWordPressHtml(
   fetchImpl: typeof fetch,
   url: string,
-  credentials: WordPressCredentials
+  credentials: WordPressCredentials,
+  validateUrl: PublicUrlValidator = defaultWordPressUrlValidator
 ) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await fetchImpl(url, {
+    const target = await validateUrl(url);
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort(), 15_000);
+    const requestInit: RequestInit = {
+      redirect: 'manual',
+      signal: controller.signal,
       headers: {
         Accept: 'text/html',
         Authorization: createBasicAuthHeader(credentials)
       }
-    });
+    };
+    const response = fetchImpl === fetch
+      ? await fetchValidatedPublicUrl(target, requestInit)
+      : await fetchImpl(target.url.toString(), requestInit);
 
-    return response.ok ? await response.text() : '';
+    if (!response.ok) return '';
+    const contentType = response.headers.get('content-type') ?? '';
+    const contentLength = Number(response.headers.get('content-length') ?? 0);
+    if (contentLength > 2 * 1024 * 1024 || (contentType && !contentType.includes('text/html') && !contentType.includes('application/xhtml+xml'))) {
+      return '';
+    }
+    const body = await response.text();
+    return Buffer.byteLength(body, 'utf8') <= 2 * 1024 * 1024 ? body : '';
   } catch {
     return '';
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -1439,10 +1526,15 @@ async function scanWordPressMediaLibrary(
   return { articles, media };
 }
 
-function createSiteConnection(id: string, input: CreateConnectionInput, apiToken: string): InMemorySiteConnection {
+function createSiteConnection(
+  id: string,
+  input: CreateConnectionInput,
+  apiToken: string,
+  workspaceId = defaultWorkspaceId
+): InMemorySiteConnection {
   return {
     id,
-    workspaceId: defaultWorkspaceId,
+    workspaceId,
     platform: input.platform,
     name: input.name,
     siteUrl: input.siteUrl,
@@ -1469,11 +1561,11 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
   const fullSyncMediaIds = new Map<string, Set<string>>();
 
   return {
-    async create(input) {
+    async create(input, workspaceId = defaultWorkspaceId) {
       const normalizedUrl = normalizeSiteUrl(input.siteUrl);
       const existing = Array.from(sites.values()).find(
         (site) =>
-          site.workspaceId === defaultWorkspaceId &&
+          site.workspaceId === workspaceId &&
           site.platform === input.platform &&
           normalizeSiteUrl(site.siteUrl) === normalizedUrl
       );
@@ -1500,7 +1592,7 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       }
 
       const apiToken = generateSiteToken();
-      const site = createSiteConnection(crypto.randomUUID(), input, apiToken);
+      const site = createSiteConnection(crypto.randomUUID(), input, apiToken, workspaceId);
 
       sites.set(site.id, site);
       articlesBySite.set(site.id, new Map());
@@ -1730,10 +1822,12 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       return task;
     },
     async listSyncTasks(options) {
+      const workspaceId = options?.workspaceId;
       const siteId = options?.siteId;
       const scope = options?.scope;
       const status = options?.status;
       return Array.from(syncTasks.values())
+        .filter((task) => !workspaceId || sites.get(task.siteId)?.workspaceId === workspaceId)
         .filter((task) => !siteId || task.siteId === siteId)
         .filter((task) => !scope || task.scope === scope)
         .filter((task) => !status || task.status === status)
@@ -1779,9 +1873,9 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         siteName: sites.get(task.siteId)?.name
       };
     },
-    async retrySyncTask(syncTaskId) {
+    async retrySyncTask(syncTaskId, workspaceId) {
       const task = syncTasks.get(syncTaskId);
-      if (!task) {
+      if (!task || (workspaceId && sites.get(task.siteId)?.workspaceId !== workspaceId)) {
         return undefined;
       }
 
@@ -1799,9 +1893,9 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         siteName: sites.get(task.siteId)?.name
       };
     },
-    async ignoreDeadLetterTask(syncTaskId) {
+    async ignoreDeadLetterTask(syncTaskId, workspaceId) {
       const task = syncTasks.get(syncTaskId);
-      if (!task) {
+      if (!task || (workspaceId && sites.get(task.siteId)?.workspaceId !== workspaceId)) {
         return undefined;
       }
 
@@ -1816,11 +1910,15 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         siteName: sites.get(task.siteId)?.name
       };
     },
-    async batchRetrySyncTasks(taskIds) {
+    async batchRetrySyncTasks(taskIds, workspaceId) {
       const result: SyncTask[] = [];
       for (const tid of taskIds) {
         const task = syncTasks.get(tid);
-        if (!task || !['dead_letter', 'failed'].includes(task.status)) continue;
+        if (
+          !task ||
+          (workspaceId && sites.get(task.siteId)?.workspaceId !== workspaceId) ||
+          !['dead_letter', 'failed'].includes(task.status)
+        ) continue;
         task.status = 'queued';
         task.errorMessage = undefined;
         task.retryCount = 0;
@@ -1830,11 +1928,15 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       }
       return result;
     },
-    async batchIgnoreDeadLetterTasks(taskIds) {
+    async batchIgnoreDeadLetterTasks(taskIds, workspaceId) {
       const result: SyncTask[] = [];
       for (const tid of taskIds) {
         const task = syncTasks.get(tid);
-        if (!task || task.status !== 'dead_letter') continue;
+        if (
+          !task ||
+          (workspaceId && sites.get(task.siteId)?.workspaceId !== workspaceId) ||
+          task.status !== 'dead_letter'
+        ) continue;
         task.status = 'failed';
         task.completedAt = new Date().toISOString();
         result.push({ ...task, siteName: sites.get(task.siteId)?.name });
@@ -1845,8 +1947,12 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       const tasks = await this.listSyncTasks(options);
       return tasks;
     },
-    async getDeadLetterStats() {
-      const deadLetterTasks = Array.from(syncTasks.values()).filter((t) => t.status === 'dead_letter');
+    async getDeadLetterStats(workspaceId) {
+      const deadLetterTasks = Array.from(syncTasks.values()).filter(
+        (task) =>
+          task.status === 'dead_letter' &&
+          (!workspaceId || sites.get(task.siteId)?.workspaceId === workspaceId)
+      );
       const bySiteMap = new Map<string, { count: number; latest: string }>();
       for (const t of deadLetterTasks) {
         const entry = bySiteMap.get(t.siteId) || { count: 0, latest: '' };
@@ -2010,11 +2116,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     });
   }
 
-  async create(input: CreateConnectionInput) {
+  async create(input: CreateConnectionInput, workspaceId = defaultWorkspaceId) {
     await this.ensureSchema();
 
     const normalizedUrl = normalizeSiteUrl(input.siteUrl);
-    const existing = await this.findByUrl(normalizedUrl, input.platform);
+    const existing = await this.findByUrl(normalizedUrl, input.platform, workspaceId);
 
     if (existing) {
       const result = await this.pool.query(
@@ -2078,7 +2184,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
       `,
       [
         id,
-        defaultWorkspaceId,
+        workspaceId,
         input.platform,
         input.name,
         normalizedUrl,
@@ -2101,7 +2207,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     };
   }
 
-  async findByUrl(siteUrl: string, platform: string): Promise<SiteConnection | undefined> {
+  async findByUrl(
+    siteUrl: string,
+    platform: string,
+    workspaceId = defaultWorkspaceId
+  ): Promise<SiteConnection | undefined> {
     await this.ensureSchema();
 
     const result = await this.pool.query(
@@ -2113,7 +2223,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           AND site_url = $3
         LIMIT 1
       `,
-      [defaultWorkspaceId, platform, siteUrl]
+      [workspaceId, platform, siteUrl]
     );
 
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
@@ -2550,12 +2660,18 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
   async listSyncTasks(options?: SyncTaskListOptions) {
     await this.ensureSchema();
 
+    const workspaceId = options?.workspaceId;
     const siteId = options?.siteId;
     const scope = options?.scope;
     const status = options?.status;
 
     const conditions: string[] = [];
     const params: (string | null)[] = [];
+
+    if (workspaceId) {
+      conditions.push(`sc.workspace_id = $${params.length + 1}::uuid`);
+      params.push(workspaceId);
+    }
 
     if (siteId) {
       conditions.push(`st.site_id = $${params.length + 1}::uuid`);
@@ -2647,8 +2763,12 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
   }
 
-  async retrySyncTask(syncTaskId: string) {
+  async retrySyncTask(syncTaskId: string, workspaceId?: string) {
     await this.ensureSchema();
+
+    const workspaceCondition = workspaceId
+      ? `AND site_id IN (SELECT id FROM site_connections WHERE workspace_id = $2::uuid)`
+      : '';
 
     const result = await this.pool.query(
       `
@@ -2660,16 +2780,21 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
             next_run_at = now()
         WHERE id = $1
           AND status IN ('dead_letter', 'failed')
+          ${workspaceCondition}
         RETURNING *
       `,
-      [syncTaskId]
+      workspaceId ? [syncTaskId, workspaceId] : [syncTaskId]
     );
 
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
   }
 
-  async ignoreDeadLetterTask(syncTaskId: string) {
+  async ignoreDeadLetterTask(syncTaskId: string, workspaceId?: string) {
     await this.ensureSchema();
+
+    const workspaceCondition = workspaceId
+      ? `AND site_id IN (SELECT id FROM site_connections WHERE workspace_id = $2::uuid)`
+      : '';
 
     const result = await this.pool.query(
       `
@@ -2678,20 +2803,24 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
             completed_at = now()
         WHERE id = $1
           AND status = 'dead_letter'
+          ${workspaceCondition}
         RETURNING *
       `,
-      [syncTaskId]
+      workspaceId ? [syncTaskId, workspaceId] : [syncTaskId]
     );
 
     return result.rows[0] ? mapSyncTaskRow(result.rows[0]) : undefined;
   }
 
-  async batchRetrySyncTasks(taskIds: string[]) {
+  async batchRetrySyncTasks(taskIds: string[], workspaceId?: string) {
     await this.ensureSchema();
 
     if (!taskIds.length) return [];
 
     const placeholders = taskIds.map((_, i) => `$${i + 1}::uuid`).join(', ');
+    const workspaceCondition = workspaceId
+      ? `AND site_id IN (SELECT id FROM site_connections WHERE workspace_id = $${taskIds.length + 1}::uuid)`
+      : '';
     const result = await this.pool.query(
       `
         UPDATE sync_tasks
@@ -2702,20 +2831,24 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
             next_run_at = now()
         WHERE id IN (${placeholders})
           AND status IN ('dead_letter', 'failed')
+          ${workspaceCondition}
         RETURNING *
       `,
-      taskIds
+      workspaceId ? [...taskIds, workspaceId] : taskIds
     );
 
     return result.rows.map(mapSyncTaskRow);
   }
 
-  async batchIgnoreDeadLetterTasks(taskIds: string[]) {
+  async batchIgnoreDeadLetterTasks(taskIds: string[], workspaceId?: string) {
     await this.ensureSchema();
 
     if (!taskIds.length) return [];
 
     const placeholders = taskIds.map((_, i) => `$${i + 1}::uuid`).join(', ');
+    const workspaceCondition = workspaceId
+      ? `AND site_id IN (SELECT id FROM site_connections WHERE workspace_id = $${taskIds.length + 1}::uuid)`
+      : '';
     const result = await this.pool.query(
       `
         UPDATE sync_tasks
@@ -2723,9 +2856,10 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
             completed_at = now()
         WHERE id IN (${placeholders})
           AND status = 'dead_letter'
+          ${workspaceCondition}
         RETURNING *
       `,
-      taskIds
+      workspaceId ? [...taskIds, workspaceId] : taskIds
     );
 
     return result.rows.map(mapSyncTaskRow);
@@ -2734,12 +2868,18 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
   async getTasksForExport(options?: SyncTaskListOptions) {
     await this.ensureSchema();
 
+    const workspaceId = options?.workspaceId;
     const siteId = options?.siteId;
     const scope = options?.scope;
     const status = options?.status;
 
     const conditions: string[] = [];
     const params: (string | null)[] = [];
+
+    if (workspaceId) {
+      conditions.push(`sc.workspace_id = $${params.length + 1}::uuid`);
+      params.push(workspaceId);
+    }
 
     if (siteId) {
       conditions.push(`st.site_id = $${params.length + 1}::uuid`);
@@ -2774,15 +2914,20 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     return result.rows.map(mapSyncTaskRow);
   }
 
-  async getDeadLetterStats() {
+  async getDeadLetterStats(workspaceId?: string) {
     await this.ensureSchema();
+    const workspaceCondition = workspaceId
+      ? 'AND site_id IN (SELECT id FROM site_connections WHERE workspace_id = $1::uuid)'
+      : '';
 
     const totalResult = await this.pool.query(
       `
         SELECT COUNT(*)::int AS count
         FROM sync_tasks
         WHERE status = 'dead_letter'
-      `
+          ${workspaceCondition}
+      `,
+      workspaceId ? [workspaceId] : []
     );
 
     const bySiteResult = await this.pool.query(
@@ -2795,9 +2940,11 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         FROM sync_tasks st
         JOIN site_connections sc ON sc.id = st.site_id
         WHERE st.status = 'dead_letter'
+          ${workspaceId ? 'AND sc.workspace_id = $1::uuid' : ''}
         GROUP BY sc.id, sc.name
         ORDER BY count DESC
-      `
+      `,
+      workspaceId ? [workspaceId] : []
     );
 
     return {
@@ -3381,6 +3528,11 @@ function validationError(reply: FastifyReply, error: z.ZodError) {
   });
 }
 
+async function validateConnectionTarget(siteUrl: string) {
+  if (process.env.NODE_ENV === 'test') return;
+  await validatePublicUrl(siteUrl);
+}
+
 async function ensureSiteToken(
   repository: SiteConnectionRepository,
   request: FastifyRequest,
@@ -3466,13 +3618,35 @@ export function registerSiteConnectionRoutes(
   });
 
   app.post('/api/v1/site-connections', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+    if (user.role === 'viewer') {
+      return reply.status(403).send({
+        success: false,
+        message: '沒有足夠權限建立站點連接',
+        error: { code: 'FORBIDDEN' }
+      });
+    }
     const parsed = createConnectionSchema.safeParse(request.body);
 
     if (!parsed.success) {
       return validationError(reply, parsed.error);
     }
 
-    const result = await repository.create(parsed.data);
+    try {
+      await validateConnectionTarget(parsed.data.siteUrl);
+    } catch (error) {
+      if (error instanceof UnsafeTargetUrlError) {
+        return reply.status(400).send({
+          success: false,
+          message: '目標網址不符合安全抓取規則',
+          error: { code: 'UNSAFE_TARGET_URL' }
+        });
+      }
+      throw error;
+    }
+
+    const result = await repository.create(parsed.data, user.workspaceId);
 
     return reply.status(201).send({
       success: true,
@@ -3514,12 +3688,20 @@ export function registerSiteConnectionRoutes(
     }
 
     const { siteId, scope, status } = request.query;
+    if (siteId && !(await repository.findForWorkspace(siteId, user.workspaceId))) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: { code: 'SITE_NOT_FOUND' }
+      });
+    }
 
     return {
       success: true,
       message: '操作成功',
       data: {
         tasks: await repository.listSyncTasks({
+          workspaceId: user.workspaceId,
           siteId: siteId || undefined,
           scope: scope as SyncTaskScope | undefined,
           status: status as SyncTaskStatus | undefined
@@ -3571,11 +3753,20 @@ export function registerSiteConnectionRoutes(
       return validationError(reply, parsed.error);
     }
 
+    try {
+      await validateConnectionTarget(parsed.data.siteUrl);
+    } catch (error) {
+      if (error instanceof UnsafeTargetUrlError) {
+        return reply.status(400).send({
+          success: false,
+          message: '目標網址不符合安全抓取規則',
+          error: { code: 'UNSAFE_TARGET_URL' }
+        });
+      }
+      throw error;
+    }
+
     const existingSite = await repository.find(request.params.siteId);
-    const tokenAuthorized = await repository.verifyToken(
-      request.params.siteId,
-      getBearerToken(request)
-    );
 
     if (!existingSite) {
       return reply.status(404).send({
@@ -3587,20 +3778,26 @@ export function registerSiteConnectionRoutes(
       });
     }
 
+    const tokenAuthorized = await repository.verifyToken(
+      request.params.siteId,
+      getBearerToken(request)
+    );
+
     if (!tokenAuthorized) {
       const user = await requireAuth(authService, request, reply);
-
-      if (!user) {
-        return reply;
+      if (!user) return reply;
+      if (user.role === 'viewer') {
+        return reply.status(403).send({
+          success: false,
+          message: '沒有足夠權限更新站點資訊',
+          error: { code: 'FORBIDDEN' }
+        });
       }
-
       if (existingSite.workspaceId !== user.workspaceId) {
         return reply.status(404).send({
           success: false,
           message: '找不到站點連接',
-          error: {
-            code: 'SITE_NOT_FOUND'
-          }
+          error: { code: 'SITE_NOT_FOUND' }
         });
       }
     }
@@ -3638,10 +3835,6 @@ export function registerSiteConnectionRoutes(
     }
 
     const existingSite = await repository.find(request.params.siteId);
-    const tokenAuthorized = await repository.verifyToken(
-      request.params.siteId,
-      getBearerToken(request)
-    );
 
     if (!existingSite) {
       return reply.status(404).send({
@@ -3653,20 +3846,26 @@ export function registerSiteConnectionRoutes(
       });
     }
 
+    const tokenAuthorized = await repository.verifyToken(
+      request.params.siteId,
+      getBearerToken(request)
+    );
+
     if (!tokenAuthorized) {
       const user = await requireAuth(authService, request, reply);
-
-      if (!user) {
-        return reply;
+      if (!user) return reply;
+      if (user.role === 'viewer') {
+        return reply.status(403).send({
+          success: false,
+          message: '沒有足夠權限更新 WordPress 憑證',
+          error: { code: 'FORBIDDEN' }
+        });
       }
-
       if (existingSite.workspaceId !== user.workspaceId) {
         return reply.status(404).send({
           success: false,
           message: '找不到站點連接',
-          error: {
-            code: 'SITE_NOT_FOUND'
-          }
+          error: { code: 'SITE_NOT_FOUND' }
         });
       }
     }
@@ -3704,10 +3903,6 @@ export function registerSiteConnectionRoutes(
     }
 
     const existingSite = await repository.find(request.params.siteId);
-    const tokenAuthorized = await repository.verifyToken(
-      request.params.siteId,
-      getBearerToken(request)
-    );
 
     if (!existingSite) {
       return reply.status(404).send({
@@ -3719,20 +3914,26 @@ export function registerSiteConnectionRoutes(
       });
     }
 
+    const tokenAuthorized = await repository.verifyToken(
+      request.params.siteId,
+      getBearerToken(request)
+    );
+
     if (!tokenAuthorized) {
       const user = await requireAuth(authService, request, reply);
-
-      if (!user) {
-        return reply;
+      if (!user) return reply;
+      if (user.role === 'viewer') {
+        return reply.status(403).send({
+          success: false,
+          message: '沒有足夠權限更新分析設定',
+          error: { code: 'FORBIDDEN' }
+        });
       }
-
       if (existingSite.workspaceId !== user.workspaceId) {
         return reply.status(404).send({
           success: false,
           message: '找不到站點連接',
-          error: {
-            code: 'SITE_NOT_FOUND'
-          }
+          error: { code: 'SITE_NOT_FOUND' }
         });
       }
     }
@@ -4104,7 +4305,7 @@ export function registerSiteConnectionRoutes(
       return reply;
     }
 
-    const task = await repository.retrySyncTask(request.params.taskId);
+    const task = await repository.retrySyncTask(request.params.taskId, user.workspaceId);
 
     if (!task) {
       return reply.status(400).send({
@@ -4134,7 +4335,7 @@ export function registerSiteConnectionRoutes(
       return reply;
     }
 
-    const task = await repository.ignoreDeadLetterTask(request.params.taskId);
+    const task = await repository.ignoreDeadLetterTask(request.params.taskId, user.workspaceId);
 
     if (!task) {
       return reply.status(400).send({
@@ -4161,16 +4362,10 @@ export function registerSiteConnectionRoutes(
     const user = await requireAuth(authService, request, reply);
     if (!user) return reply;
 
-    const { taskIds } = request.body;
-    if (!Array.isArray(taskIds) || taskIds.length === 0) {
-      return reply.status(400).send({
-        success: false,
-        message: '請提供有效的任務 ID 列表',
-        error: { code: 'INVALID_TASK_IDS' }
-      });
-    }
+    const parsed = syncTaskIdsSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
 
-    const tasks = await repository.batchRetrySyncTasks(taskIds);
+    const tasks = await repository.batchRetrySyncTasks(parsed.data.taskIds, user.workspaceId);
     return {
       success: true,
       message: `已重新加入 ${tasks.length} 個任務到隊列`,
@@ -4186,16 +4381,10 @@ export function registerSiteConnectionRoutes(
     const user = await requireAuth(authService, request, reply);
     if (!user) return reply;
 
-    const { taskIds } = request.body;
-    if (!Array.isArray(taskIds) || taskIds.length === 0) {
-      return reply.status(400).send({
-        success: false,
-        message: '請提供有效的任務 ID 列表',
-        error: { code: 'INVALID_TASK_IDS' }
-      });
-    }
+    const parsed = syncTaskIdsSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
 
-    const tasks = await repository.batchIgnoreDeadLetterTasks(taskIds);
+    const tasks = await repository.batchIgnoreDeadLetterTasks(parsed.data.taskIds, user.workspaceId);
     return {
       success: true,
       message: `已忽略 ${tasks.length} 個死信任務`,
@@ -4215,7 +4404,15 @@ export function registerSiteConnectionRoutes(
     if (!user) return reply;
 
     const { siteId, scope, status, format } = request.query;
+    if (siteId && !(await repository.findForWorkspace(siteId, user.workspaceId))) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: { code: 'SITE_NOT_FOUND' }
+      });
+    }
     const tasks = await repository.getTasksForExport({
+      workspaceId: user.workspaceId,
       siteId: siteId || undefined,
       scope: scope as SyncTaskScope | undefined,
       status: status as SyncTaskStatus | undefined
@@ -4261,7 +4458,7 @@ export function registerSiteConnectionRoutes(
     const user = await requireAuth(authService, request, reply);
     if (!user) return reply;
 
-    const stats = await repository.getDeadLetterStats();
+    const stats = await repository.getDeadLetterStats(user.workspaceId);
     return {
       success: true,
       message: '操作成功',
@@ -4283,8 +4480,11 @@ export function registerSiteConnectionRoutes(
         bySite: { siteId: string; siteName: string; count: number; latestDeadLetter: string | null }[];
       };
     };
-  }>('/api/v1/sync-tasks/dead-letter-alert', async () => {
-    const stats = await repository.getDeadLetterStats();
+  }>('/api/v1/sync-tasks/dead-letter-alert', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const stats = await repository.getDeadLetterStats(user.workspaceId);
     const { totalDeadLetters, bySite } = stats;
 
     let severity: 'normal' | 'warning' | 'critical';
@@ -4313,7 +4513,10 @@ export function registerSiteConnectionRoutes(
       success: boolean;
       data: { threshold: number };
     };
-  }>('/api/v1/sync-tasks/dead-letter-alert-config', async () => {
+  }>('/api/v1/sync-tasks/dead-letter-alert-config', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
     return {
       success: true,
       data: { threshold: deadLetterAlertThreshold }
@@ -4326,10 +4529,19 @@ export function registerSiteConnectionRoutes(
       success: boolean;
       message: string;
       data?: { threshold: number };
+      error?: { code: string };
     };
   }>('/api/v1/sync-tasks/dead-letter-alert-config', async (request, reply) => {
     const user = await requireAuth(authService, request, reply);
     if (!user) return reply;
+
+    if (user.role !== 'owner' && user.role !== 'admin') {
+      return reply.status(403).send({
+        success: false,
+        message: '只有工作區管理員可以修改死信告警設定',
+        error: { code: 'FORBIDDEN' }
+      });
+    }
 
     const { threshold } = request.body;
     if (typeof threshold !== 'number' || threshold < 1 || threshold > 1000) {
@@ -4516,6 +4728,13 @@ export function registerSiteConnectionRoutes(
         }
       });
     } catch (error) {
+      if (error instanceof UnsafeTargetUrlError || (error instanceof Error && error.message === 'UNSAFE_TARGET_URL')) {
+        return reply.status(400).send({
+          success: false,
+          message: '目標網址不符合安全抓取規則',
+          error: { code: 'UNSAFE_TARGET_URL' }
+        });
+      }
       if (error instanceof Error && error.message.startsWith('WORDPRESS_REST_')) {
         const statusCode = Number(error.message.slice('WORDPRESS_REST_'.length));
         return reply.status(statusCode === 401 ? 400 : 502).send({
@@ -4526,8 +4745,20 @@ export function registerSiteConnectionRoutes(
           }
         });
       }
+      if (error instanceof Error && error.message === 'WORDPRESS_REQUEST_TIMEOUT') {
+        return reply.status(504).send({
+          success: false,
+          message: 'WordPress 請求逾時，請稍後重試',
+          error: { code: 'WORDPRESS_REQUEST_TIMEOUT' }
+        });
+      }
 
-      throw error;
+      console.error('[siteConnections] WordPress media scan failed: WORDPRESS_MEDIA_SCAN_FAILED');
+      return reply.status(502).send({
+        success: false,
+        message: 'WordPress 媒體掃描失敗',
+        error: { code: 'WORDPRESS_MEDIA_SCAN_FAILED' }
+      });
     }
   });
 

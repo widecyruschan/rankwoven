@@ -57,9 +57,21 @@ describe('search console sitemap submission', () => {
     });
 
     try {
+      const loginResponse = await server.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: {
+          email: 'demo@rankwoven.com',
+          password: 'rankwoven'
+        }
+      });
+      const authToken = loginResponse.json<{ data: { token: string } }>().data.token;
       const createResponse = await server.inject({
         method: 'POST',
         url: '/api/v1/site-connections',
+        headers: {
+          authorization: `Bearer ${authToken}`
+        },
         payload: {
           platform: 'wordpress',
           name: 'Sitemap Site',
@@ -76,7 +88,7 @@ describe('search console sitemap submission', () => {
         method: 'POST',
         url: `/api/v1/site-connections/${createBody.data.site.id}/search-console/sitemaps`,
         headers: {
-          authorization: `Bearer ${createBody.data.apiToken}`
+          authorization: `Bearer ${authToken}`
         },
         payload: {
           sitemapPath: 'sitemap.xml'

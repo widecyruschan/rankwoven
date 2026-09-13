@@ -24,7 +24,7 @@ services:
 
   api:
     <<: *aieo-dev
-    command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run dev -w @aieo/api"
+    command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run dev -w @aieo/api"
     ports:
       - '3011:3000'
     environment:
@@ -50,6 +50,7 @@ services:
       KEYWORD_VOLUME_PROVIDER: ${KEYWORD_VOLUME_PROVIDER:-generic}
       KEYWORD_VOLUME_API_URL: ${KEYWORD_VOLUME_API_URL:-}
       KEYWORD_VOLUME_API_KEY: ${KEYWORD_VOLUME_API_KEY:-}
+      AHREFS_KEYWORD_METRICS_ENABLED: ${AHREFS_KEYWORD_METRICS_ENABLED:-false}
       AHREFS_API_URL: ${AHREFS_API_URL:-}
       AHREFS_API_KEY: ${AHREFS_API_KEY:-}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
@@ -59,7 +60,7 @@ services:
 
   worker:
     <<: *aieo-dev
-    command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run dev -w @aieo/worker"
+    command: sh -c "npm install && npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run dev -w @aieo/worker"
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://aieo:aieo_password@postgres:5432/aieo

@@ -1,0 +1,543 @@
+openapi: 3.1.0
+info:
+  title: RankWoven Phase 2 Contract
+  version: 0.1.0
+  description: >-
+    Phase 2A foundation endpoints. All write operations require a Bearer JWT and
+    an Idempotency-Key. Provider and CMS side effects are executed by workers.
+servers:
+  - url: https://api.rankwoven.com
+paths:
+  /api/v1/tasks/{taskId}:
+    get:
+      summary: Read a workspace-scoped task
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200': { $ref: '#/components/responses/TaskResponse' }
+        '401': { $ref: '#/components/responses/AuthError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/v1/tasks/{taskId}/cancel:
+    post:
+      summary: Cancel a queued or running task
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { $ref: '#/components/responses/TaskResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/AuthError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/v1/usage:
+    get:
+      summary: Read workspace usage ledger totals
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Usage summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsageResponse' }
+  /api/v1/admin/ai-gateway/models:
+    get:
+      summary: List the server-side Breakout model catalog
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Model metadata only
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelsResponse' }
+  /api/v1/admin/ai-gateway/models/sync:
+    post:
+      summary: Queue a Breakout model catalog sync
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202': { $ref: '#/components/responses/TaskAccepted' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/AuthError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/v1/admin/ai-gateway/profiles:
+    get:
+      summary: Read current gateway model profile assignments
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Profile assignments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfilesResponse' }
+  /api/v1/admin/ai-gateway/profiles/{profileKey}:
+    put:
+      summary: Assign a verified Breakout model to a profile
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: profileKey
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [text.default, text.high_quality, text.batch, embedding.default, image.default]
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modelId]
+              properties:
+                modelId: { type: string }
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/AuthError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+  /api/v1/keyword-research/projects:
+    post:
+      summary: Create a workspace-scoped keyword research project
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateKeywordResearchProject' }
+      responses:
+        '201': { $ref: '#/components/responses/KeywordProjectResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/AuthError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    get:
+      summary: List workspace keyword research projects
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { $ref: '#/components/responses/KeywordProjectsResponse' }
+  /api/v1/keyword-research/projects/{projectId}:
+    get:
+      summary: Read a keyword research project and its latest run metadata
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+      responses:
+        '200': { $ref: '#/components/responses/KeywordProjectResponse' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/v1/keyword-research/projects/{projectId}/runs:
+    post:
+      summary: Request a keyword research run
+      description: Returns PROVIDER_UNAVAILABLE until PH2-06 enables the canonical SEO provider worker.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202': { $ref: '#/components/responses/TaskAccepted' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+  /api/v1/keyword-research/runs/{runId}:
+    get:
+      summary: Read a keyword research run
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunId' }]
+      responses:
+        '200': { $ref: '#/components/responses/KeywordRunResponse' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/v1/keyword-research/projects/{projectId}/keywords:
+    get:
+      summary: List keyword candidates for a project
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { $ref: '#/components/responses/KeywordCandidatesResponse' }
+  /api/v1/keyword-research/projects/{projectId}/gaps:
+    get:
+      summary: Read canonical-provider keyword gaps
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+      responses:
+        '200': { $ref: '#/components/responses/KeywordGapsResponse' }
+  /api/v1/keyword-research/projects/{projectId}/briefs:
+    post:
+      summary: Create a content brief from a persisted keyword candidate
+      description: Returns PROVIDER_UNAVAILABLE until PH2-06 has populated keyword candidates.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201': { $ref: '#/components/responses/KeywordProjectResponse' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+  /api/v1/content-optimizations:
+    post:
+      summary: Request an asynchronous content optimization run
+      description: Requires an active verified model profile, a price snapshot, entitlement and PH2-07 worker enablement.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '202': { $ref: '#/components/responses/TaskAccepted' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '429': { $ref: '#/components/responses/QuotaExceeded' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+  /api/v1/content-optimizations/{runId}:
+    get:
+      summary: Read a content optimization run
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunId' }]
+      responses:
+        '200': { $ref: '#/components/responses/ContentOptimizationResponse' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/v1/content-optimizations/{runId}/rewrites:
+    post:
+      summary: Request a scoped rewrite task
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+  /api/v1/content-optimizations/{runId}/suggestions/{suggestionId}:
+    patch:
+      summary: Update a content optimization suggestion decision
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+  /api/v1/content-optimizations/{runId}/apply:
+    post:
+      summary: Create a CMS draft application task
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+  /api/v1/content-optimizations/{runId}/recheck:
+    post:
+      summary: Recheck a content optimization run
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+  /api/v1/webhooks/{provider}:
+    post:
+      summary: Receive a signed billing provider webhook
+      description: Public endpoint. Signature verification and provider activation are deferred to PH2-11.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, enum: [stripe, paypal] }
+        - name: X-Webhook-Signature
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 200 }
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+  schemas:
+    Task:
+      type: object
+      required: [id, kind, status, progress, estimatedCredits, retryCount, maxRetries, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid, nullable: true }
+        kind: { type: string, enum: [keyword_research, content_optimization, content_rewrite, gateway_model_sync, backlink_analysis, cms_publish] }
+        status: { type: string, enum: [queued, running, partial, completed, failed, cancelled, expired, dead_letter] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        estimatedCredits: { type: integer, minimum: 0 }
+        result: { type: object, additionalProperties: true, nullable: true }
+        errorCode: { type: string, nullable: true }
+        retryCount: { type: integer, minimum: 0 }
+        maxRetries: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+    CreateKeywordResearchProject:
+      type: object
+      required: [siteId, name, market, language]
+      properties:
+        siteId: { type: string, format: uuid }
+        name: { type: string, maxLength: 160 }
+        market: { type: string }
+        language: { type: string }
+        device: { type: string, enum: [desktop, mobile], default: desktop }
+        engine: { type: string, enum: [google], default: google }
+    KeywordProject:
+      type: object
+      required: [id, siteId, name, market, language, device, engine, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        name: { type: string }
+        market: { type: string }
+        language: { type: string }
+        device: { type: string }
+        engine: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TaskResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [task]
+          properties: { task: { $ref: '#/components/schemas/Task' } }
+    TaskAcceptedResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [taskId, status, progress, estimatedCredits]
+          properties:
+            taskId: { type: string, format: uuid }
+            status: { type: string, enum: [queued, running, partial, completed, failed, cancelled, expired, dead_letter] }
+            progress: { type: integer, minimum: 0, maximum: 100 }
+            estimatedCredits: { type: integer, minimum: 0 }
+    UsageResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [reservedUnits, reservedCost, finalizedCost, releasedCost]
+          properties:
+            reservedUnits: { type: number }
+            reservedCost: { type: number }
+            finalizedCost: { type: number }
+            releasedCost: { type: number }
+    ModelsResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            models:
+              type: array
+              items:
+                type: object
+                required: [gateway, modelId, supportedEndpointTypes, capabilityStatus, catalogHash]
+                properties:
+                  gateway: { type: string, enum: [wenwen] }
+                  modelId: { type: string }
+                  ownedBy: { type: string, nullable: true }
+                  supportedEndpointTypes: { type: array, items: { type: string, enum: [chat, embedding, image] } }
+                  capabilityStatus: { type: string, enum: [pending, verified, unavailable] }
+                  catalogHash: { type: string }
+                  verifiedAt: { type: string, format: date-time, nullable: true }
+    ProfilesResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [profiles]
+          properties:
+            profiles:
+              type: array
+              items:
+                type: object
+                required: [profileKey, modelId, status]
+                properties:
+                  profileKey: { type: string }
+                  modelId: { type: string, nullable: true }
+                  status: { type: string, enum: [unconfigured, pending, active] }
+    ProfileResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [profile]
+          properties:
+            profile:
+              type: object
+              required: [gateway, profileKey, modelId, version, status, updatedAt]
+              properties:
+                gateway: { type: string, enum: [wenwen] }
+                profileKey: { type: string }
+                modelId: { type: string }
+                version: { type: integer, minimum: 1 }
+                status: { type: string, enum: [active, disabled] }
+                updatedAt: { type: string, format: date-time }
+                updatedBy: { type: string, nullable: true }
+    KeywordProjectResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [project]
+          properties:
+            project: { $ref: '#/components/schemas/KeywordProject' }
+    KeywordProjectsResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [items, pagination]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/KeywordProject' } }
+            pagination: { $ref: '#/components/schemas/Pagination' }
+    KeywordRunResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: { type: object, additionalProperties: true }
+    KeywordCandidatesResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [items, pagination]
+          properties:
+            items: { type: array, items: { type: object, additionalProperties: true } }
+            pagination: { $ref: '#/components/schemas/Pagination' }
+    KeywordGapsResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: { type: object, additionalProperties: true }
+    ContentOptimizationResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: { type: object, additionalProperties: true }
+    Pagination:
+      type: object
+      required: [page, pageSize, total, totalPages]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    Error:
+      type: object
+      required: [success, message, error]
+      properties:
+        success: { type: boolean, const: false }
+        message: { type: string }
+        error:
+          type: object
+          required: [code]
+          properties:
+            code: { type: string }
+            details: {}
+  responses:
+    TaskResponse:
+      description: Task response
+      content: { application/json: { schema: { $ref: '#/components/schemas/TaskResponse' } } }
+    TaskAccepted:
+      description: Task accepted
+      content: { application/json: { schema: { $ref: '#/components/schemas/TaskAcceptedResponse' } } }
+    AuthError:
+      description: Authentication failed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ForbiddenError:
+      description: Insufficient role
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFoundError:
+      description: Workspace-scoped resource not found
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ValidationError:
+      description: Invalid request
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ConflictError:
+      description: Idempotency or task state conflict
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ProviderUnavailable:
+      description: Provider or capability unavailable
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    KeywordProjectResponse:
+      description: Keyword research project
+      content: { application/json: { schema: { $ref: '#/components/schemas/KeywordProjectResponse' } } }
+    KeywordProjectsResponse:
+      description: Paginated keyword research projects
+      content: { application/json: { schema: { $ref: '#/components/schemas/KeywordProjectsResponse' } } }
+    KeywordRunResponse:
+      description: Keyword research run
+      content: { application/json: { schema: { $ref: '#/components/schemas/KeywordRunResponse' } } }
+    KeywordCandidatesResponse:
+      description: Keyword candidates
+      content: { application/json: { schema: { $ref: '#/components/schemas/KeywordCandidatesResponse' } } }
+    KeywordGapsResponse:
+      description: Keyword gaps
+      content: { application/json: { schema: { $ref: '#/components/schemas/KeywordGapsResponse' } } }
+    ContentOptimizationResponse:
+      description: Content optimization result
+      content: { application/json: { schema: { $ref: '#/components/schemas/ContentOptimizationResponse' } } }
+    QuotaExceeded:
+      description: Workspace quota exhausted
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

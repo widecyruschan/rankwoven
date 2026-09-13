@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
+import { validatePublicUrl } from '@aieo/security';
 import { requireAuth, type AuthService } from './auth';
 import type { SiteConnectionRepository } from './siteConnections';
 
@@ -95,11 +96,16 @@ interface SerpApiSearchResponse {
 
 const SERPAPI_BASE_URL = 'https://serpapi.com/search';
 
+async function validateAuditTarget(siteUrl: string) {
+  if (process.env.NODE_ENV === 'test') return;
+  await validatePublicUrl(siteUrl);
+}
+
 function getSerpApiKey(): string {
   const raw = process.env.SERPAPI_KEY ?? '';
   const key = raw.trim();
   if (!key) {
-    throw new Error('未設定 SERPAPI_KEY 環境變數');
+    throw new Error('SERPAPI_NOT_CONFIGURED');
   }
   return key;
 }
@@ -151,22 +157,20 @@ async function fetchIndexedPages(
     creditsUsed += 1;
 
     if (!response.ok) {
-      console.error(
-        `[siteAudit] SerpApi HTTP ${response.status} ${response.statusText} for site:${domain}`
-      );
-      break;
+      console.error(`[siteAudit] SerpApi HTTP ${response.status} for site:${domain}`);
+      throw new Error('SERPAPI_HTTP_ERROR');
     }
 
     const data: SerpApiSearchResponse = await response.json();
 
     if (data.error) {
       const errMsg = data.error;
-      console.error(`[siteAudit] SerpApi error for site:${domain}: ${errMsg}`);
+      console.error(`[siteAudit] SerpApi returned an error for site:${domain}`);
       // 判斷是否為 API key 無效
       if (errMsg.toLowerCase().includes('invalid') || errMsg.toLowerCase().includes('api key')) {
-        throw new Error(`SerpApi 驗證失敗：${errMsg}。請檢查 SERPAPI_KEY 是否正確。`);
+        throw new Error('SERPAPI_AUTH_FAILED');
       }
-      throw new Error(`SerpApi 查詢失敗：${errMsg}`);
+      throw new Error('SERPAPI_QUERY_FAILED');
     }
 
     if (data.organic_results) {
@@ -377,6 +381,21 @@ export interface SiteAuditIssueData {
   affectedCount: number;
   recommendation?: string;
   sampleUrls?: string[];
+}
+
+function getSafeSiteAuditErrorCode(error: unknown) {
+  if (error instanceof SerpApiQuotaExceededError) return error.code;
+  if (error instanceof Error && [
+    'SERPAPI_NOT_CONFIGURED',
+    'SERPAPI_HTTP_ERROR',
+    'SERPAPI_AUTH_FAILED',
+    'SERPAPI_QUERY_FAILED',
+    'SERPAPI_QUOTA_EXCEEDED',
+    'UNSAFE_TARGET_URL'
+  ].includes(error.message)) {
+    return error.message;
+  }
+  return 'SITE_AUDIT_FAILED';
 }
 
 /**
@@ -942,6 +961,12 @@ export async function executeSiteAudit(
   auditRepository: SiteAuditRepository,
   pageLimit: number
 ): Promise<SiteAuditResult> {
+  try {
+    await validateAuditTarget(siteUrl);
+  } catch {
+    throw new Error('UNSAFE_TARGET_URL');
+  }
+
   // ── Quota pre-check ──
   const stats = await auditRepository.getSerpapiUsageStats();
   if (stats.remaining <= 0) {
@@ -996,7 +1021,7 @@ export async function executeSiteAudit(
 
     return updated;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '稽核失敗';
+    const errorMessage = getSafeSiteAuditErrorCode(error);
     console.error(`[siteAudit] 稽核失敗 siteId=${siteId}: ${errorMessage}`);
 
     const updated = await auditRepository.updateAuditResult(auditResult.id, {
@@ -1154,6 +1179,13 @@ export function registerSiteAuditRoutes(
           data: fullResult ?? result
         });
       } catch (error) {
+        if (error instanceof Error && error.message === 'UNSAFE_TARGET_URL') {
+          return reply.status(400).send({
+            success: false,
+            message: '目標網址不符合安全抓取規則',
+            error: { code: 'UNSAFE_TARGET_URL' }
+          });
+        }
         if (error instanceof SerpApiQuotaExceededError) {
           return reply.status(429).send({
             success: false,
@@ -1166,11 +1198,12 @@ export function registerSiteAuditRoutes(
             }
           });
         }
-        const message = error instanceof Error ? error.message : '稽核失敗';
+        const errorCode = getSafeSiteAuditErrorCode(error);
+        console.error(`[siteAudit] 稽核路由失敗: ${errorCode}`);
         return reply.status(500).send({
           success: false,
-          message: `稽核失敗：${message}`,
-          error: { code: 'AUDIT_FAILED', details: message }
+          message: 'SEO 稽核暫時無法完成，請稍後重試',
+          error: { code: 'AUDIT_FAILED' }
         });
       }
     }
@@ -1263,12 +1296,11 @@ export function registerSiteAuditRoutes(
           freeTierReset: 'monthly' as const
         }
       };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '獲取 SerpApi 使用統計失敗';
-      console.error(`[siteAudit] 獲取使用統計失敗: ${message}`);
+    } catch {
+      console.error('[siteAudit] 獲取使用統計失敗: INTERNAL_ERROR');
       return reply.status(500).send({
         success: false,
-        message,
+        message: '獲取 SerpApi 使用統計失敗，請稍後重試',
         error: { code: 'INTERNAL_ERROR' }
       });
     }
@@ -1349,15 +1381,13 @@ export async function processDueScheduledAudits(
           `[siteAudit] 排程稽核完成 siteId=${siteId} score=${result.overallScore ?? 'N/A'}`
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : '未知錯誤';
-        logger.error(`[siteAudit] 排程稽核失敗 siteId=${siteId}: ${message}`);
+        logger.error(`[siteAudit] 排程稽核失敗 siteId=${siteId}: ${getSafeSiteAuditErrorCode(error)}`);
       }
     }
 
     return processed;
   } catch (error) {
-    const message = error instanceof Error ? error.message : '未知錯誤';
-    logger.error(`[siteAudit] 排程稽核查詢失敗: ${message}`);
+    logger.error(`[siteAudit] 排程稽核查詢失敗: ${getSafeSiteAuditErrorCode(error)}`);
     return 0;
   }
 }
@@ -1373,8 +1403,7 @@ export function startSiteAuditScheduler(
 ): () => void {
   const timer = setInterval(() => {
     processDueScheduledAudits(auditRepository).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : '未知錯誤';
-      console.error(`[siteAudit] 排程器錯誤: ${message}`);
+      console.error(`[siteAudit] 排程器錯誤: ${getSafeSiteAuditErrorCode(error)}`);
     });
   }, intervalMs);
 

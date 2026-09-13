@@ -1,12 +1,14 @@
 # RankWoven 第二階段 AI SEO Intelligence PRD
 
-> 文件狀態：Draft v1.1（PH2-01 已批准；PH2-02 待批准）
+> 文件狀態：Draft v1.3（PH2-01、PH2-02、PH2-03、PH2-04 已批准並完成基礎實作）
 > 建立日期：2026-09-12
 > 產品基線：`main@a991d75`
 > 適用團隊：產品、設計、前端、API、Worker、資料、增長與客戶成功
 > 相關文件：`docs/seo-ai-platform-prd.md`、`docs/frontend-page-spec.md`、`docs/rankwoven-phase-2-development-workflow.md`、`docs/research/phase-2-ai-seo-2026.md`、`docs/research/phase-2-api-pricing-2026.md`
 > Provider／成本核檢：`docs/approvals/phase-2/PH2-02-provider-selection.md`
 > AI gateway 接口：`docs/breakout-api-integration.md`
+> PH2-03 架構核檢：`docs/approvals/phase-2/PH2-03-architecture-api-contract.md`
+> PH2-04 安全／私隱／SSRF 核檢：`docs/approvals/phase-2/PH2-04-security-privacy-ssrf.md`
 
 ## 1. 執行摘要
 
@@ -448,7 +450,7 @@ published -> verifying -> verified
 
 ### 10.2 模型路由
 
-PH2-02 的批准候選以 `docs/approvals/phase-2/PH2-02-provider-selection.md` 與 `docs/breakout-api-integration.md` 為準：所有 AI 任務固定經既有 Breakout API gateway，模型供應商不形成獨立 API provider。文字、embedding、圖片與高品質／批量需求只從 `/v1/models` 同步的 gateway catalog 選擇 approved model ID；模型 ID、gateway pricing snapshot、生效日期與 capability 狀態必須版本化，業務邏輯不可寫死。未獲 PH2-02 批准前只可使用 fixture，不可在生產啟用新 gateway model profile。
+PH2-02 的批准候選以 `docs/approvals/phase-2/PH2-02-provider-selection.md` 與 `docs/breakout-api-integration.md` 為準：所有 AI 任務固定經既有 Breakout API gateway，模型供應商不形成獨立 API provider。文字、embedding、圖片與高品質／批量需求只從 `/v1/models` 同步的 gateway catalog 選擇 approved model ID；模型 ID、gateway pricing snapshot、生效日期與 capability 狀態必須版本化，業務邏輯不可寫死。PH2-02 已批准；PH2-03 已由 Product Owner（使用者）於 2026-09-13 批准並完成基礎實作。真實 production model profile、SEO Provider、CMS 寫回與支付 webhook 仍須通過對應後續 gate。
 
 | 任務                    | 預設策略                                    | 原因                               |
 | ----------------------- | ------------------------------------------- | ---------------------------------- |

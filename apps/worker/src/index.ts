@@ -1,5 +1,7 @@
 import { createDecipheriv, createHash } from 'node:crypto';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
+import { createAiGatewayAdapter, type GatewayModel } from '@aieo/ai-providers';
+import { fetchValidatedPublicUrl, validatePublicUrl, type ValidatedPublicUrl } from '@aieo/security';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 
 type SyncTaskScope =
@@ -24,6 +26,14 @@ interface QueuedTask {
   maxRetries: number;
 }
 
+interface Phase2QueuedTask {
+  id: string;
+  workspaceId: string;
+  kind: 'gateway_model_sync';
+  retryCount: number;
+  maxRetries: number;
+}
+
 interface WorkerOptions {
   databaseUrl: string;
   pollIntervalMs?: number;
@@ -36,11 +46,43 @@ interface WordPressCredentials {
   applicationPassword: string;
 }
 
+type PublicUrlValidator = (url: string) => Promise<ValidatedPublicUrl>;
+
 const adapter = createWordPressAdapter();
 const heartbeatMs = 30_000;
 const defaultPollIntervalMs = 5_000;
 
+function normalizeWorkerErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  if (/^WORDPRESS_REST_[45]\d\d$/.test(message)) return message;
+  if ([
+    'UNSAFE_TARGET_URL',
+    'WORDPRESS_REQUEST_TIMEOUT',
+    'WORDPRESS_RESPONSE_INVALID',
+    'WORDPRESS_RESPONSE_TOO_LARGE',
+    'WORDPRESS_ARTICLE_RESPONSE_INVALID',
+    'WORDPRESS_MEDIA_RESPONSE_INVALID',
+    'WORDPRESS_CREDENTIALS_MISSING',
+    'WORDPRESS_CREDENTIAL_FORMAT_INVALID',
+    'WORDPRESS_CREDENTIAL_ENCRYPTION_KEY_REQUIRED',
+    'SYNC_TASK_TARGET_MISSING',
+    'SUGGESTION_TASK_INVALID',
+    'SUGGESTION_NOT_APPROVED',
+    'ROLLBACK_TASK_INVALID',
+    'APPLY_SNAPSHOT_NOT_APPLIED',
+    'PROVIDER_UNAVAILABLE'
+  ].includes(message)) {
+    return message;
+  }
+  if (message.startsWith('AI_GATEWAY_')) return message.split(':', 1)[0];
+  return 'WORKER_TASK_FAILED';
+}
+
 function getCredentialEncryptionKey() {
+  if (process.env.NODE_ENV === 'production' && !process.env.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY) {
+    throw new Error('WORDPRESS_CREDENTIAL_ENCRYPTION_KEY_REQUIRED');
+  }
+
   const secret =
     process.env.WORDPRESS_CREDENTIAL_ENCRYPTION_KEY ??
     process.env.JWT_SECRET ??
@@ -140,6 +182,120 @@ async function claimNextTask(client: PoolClient) {
   return mapQueuedTask(row);
 }
 
+async function claimNextPhase2Task(client: PoolClient): Promise<Phase2QueuedTask | undefined> {
+  const result = await client.query(
+    `
+      SELECT id, workspace_id, kind, retry_count, max_retries
+      FROM phase2_tasks
+      WHERE status = 'queued'
+        AND kind = 'gateway_model_sync'
+      ORDER BY created_at ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `
+  );
+  const row = result.rows[0];
+  if (!row) return undefined;
+
+  await client.query(
+    `UPDATE phase2_tasks SET status = 'running', updated_at = now() WHERE id = $1 AND status = 'queued'`,
+    [row.id]
+  );
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    kind: 'gateway_model_sync',
+    retryCount: Number(row.retry_count ?? 0),
+    maxRetries: Number(row.max_retries ?? 3)
+  };
+}
+
+async function processGatewayModelSyncTask(
+  client: PoolClient,
+  task: Phase2QueuedTask,
+  fetchImpl: typeof fetch
+) {
+  const gatewayKey = process.env.WENWEN_API_KEY;
+  const gatewayBaseUrl = process.env.WENWEN_API_BASE_URL;
+  if (!gatewayKey || !gatewayBaseUrl) {
+    throw new Error('PROVIDER_UNAVAILABLE');
+  }
+
+  const models = await createAiGatewayAdapter({
+    baseUrl: gatewayBaseUrl,
+    apiKey: gatewayKey,
+    fetchImpl
+  }).listModels();
+  for (const model of models) {
+    await saveGatewayModel(client, model);
+  }
+  await client.query(
+    `
+      INSERT INTO task_attempts (
+        id, task_id, workspace_id, attempt_no, status, started_at, completed_at, cost
+      ) VALUES ($1, $2, $3, $4, 'completed', now(), now(), 0)
+      ON CONFLICT (task_id, attempt_no) DO NOTHING
+    `,
+    [crypto.randomUUID(), task.id, task.workspaceId, task.retryCount + 1]
+  );
+  await client.query(
+    `UPDATE phase2_tasks SET status = 'completed', progress = 100, result = $2::jsonb, completed_at = now(), updated_at = now() WHERE id = $1`,
+    [task.id, JSON.stringify({ modelCount: models.length })]
+  );
+}
+
+async function failPhase2Task(client: PoolClient, task: Phase2QueuedTask, error: unknown) {
+  const nextRetryCount = task.retryCount + 1;
+  const status = nextRetryCount > task.maxRetries ? 'dead_letter' : 'queued';
+  const errorCode = normalizeWorkerErrorCode(error);
+  await client.query(
+    `
+      UPDATE phase2_tasks
+      SET status = $2,
+          retry_count = $3,
+          error_code = $4,
+          updated_at = now(),
+          completed_at = CASE WHEN $2 = 'dead_letter' THEN now() ELSE NULL END
+      WHERE id = $1 AND status = 'running'
+    `,
+    [task.id, status, nextRetryCount, errorCode]
+  );
+  await client.query(
+    `
+      INSERT INTO task_attempts (
+        id, task_id, workspace_id, attempt_no, status, error_code, started_at, completed_at, cost
+      ) VALUES ($1, $2, $3, $4, 'failed', $5, now(), now(), 0)
+      ON CONFLICT (task_id, attempt_no) DO NOTHING
+    `,
+    [crypto.randomUUID(), task.id, task.workspaceId, nextRetryCount, errorCode]
+  );
+}
+
+async function saveGatewayModel(client: PoolClient, model: GatewayModel) {
+  await client.query(
+    `
+      INSERT INTO gateway_model_catalog (
+        id, gateway, model_id, owned_by, supported_endpoint_types,
+        capability_status, catalog_hash, verified_at
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+      ON CONFLICT (gateway, model_id, catalog_hash) DO UPDATE SET
+        owned_by = EXCLUDED.owned_by,
+        supported_endpoint_types = EXCLUDED.supported_endpoint_types,
+        verified_at = EXCLUDED.verified_at
+    `,
+    [
+      crypto.randomUUID(),
+      model.gateway,
+      model.modelId,
+      model.ownedBy ?? null,
+      JSON.stringify(model.supportedEndpointTypes),
+      model.capabilityStatus,
+      model.catalogHash,
+      model.verifiedAt ?? new Date().toISOString()
+    ]
+  );
+}
+
 async function completeTask(client: PoolClient, task: QueuedTask, articlesReceived: number, mediaReceived: number) {
   const completedAt = new Date();
   await client.query(
@@ -194,7 +350,7 @@ function getRetryDelayMs(retryCount: number) {
 }
 
 async function failTask(client: PoolClient, task: QueuedTask, error: unknown) {
-  const message = error instanceof Error ? error.message : 'WORKER_TASK_FAILED';
+  const message = normalizeWorkerErrorCode(error);
   const nextRetryCount = task.retryCount + 1;
   const shouldDeadLetter = nextRetryCount > task.maxRetries;
 
@@ -243,27 +399,74 @@ async function failTask(client: PoolClient, task: QueuedTask, error: unknown) {
   }
 }
 
-async function fetchWordPressJson(fetchImpl: typeof fetch, url: string, credentials: WordPressCredentials, init?: RequestInit) {
-  const response = await fetchImpl(url, {
-    ...init,
-    headers: {
-      Authorization: createBasicAuthHeader(credentials),
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers
-    }
-  });
+async function fetchWordPressJson(
+  fetchImpl: typeof fetch,
+  url: string,
+  credentials: WordPressCredentials,
+  init: RequestInit | undefined,
+  validateUrl: PublicUrlValidator
+) {
+  let target = await validateUrl(url);
+  const trustedOrigin = target.url.origin;
 
-  if (!response.ok) {
-    throw new Error(`WORDPRESS_REST_${response.status}`);
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const requestInit: RequestInit = {
+        ...init,
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          Authorization: createBasicAuthHeader(credentials),
+          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+          ...init?.headers
+        }
+      };
+      const response = fetchImpl === fetch
+        ? await fetchValidatedPublicUrl(target, requestInit)
+        : await fetchImpl(target.url.toString(), requestInit);
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers?.get('location');
+        if (!location || redirectCount === 3) throw new Error('UNSAFE_TARGET_URL');
+        target = await validateUrl(new URL(location, target.url).toString());
+        if (target.url.origin !== trustedOrigin) throw new Error('UNSAFE_TARGET_URL');
+        continue;
+      }
+      if (!response.ok) throw new Error(`WORDPRESS_REST_${response.status}`);
+      const contentType = response.headers?.get('content-type') ?? '';
+      const contentLength = Number(response.headers?.get('content-length') ?? 0);
+      if (contentLength > 2 * 1024 * 1024 || (contentType && !contentType.includes('application/json'))) {
+        throw new Error('WORDPRESS_RESPONSE_INVALID');
+      }
+      if (typeof response.text === 'function') {
+        const body = await response.text();
+        if (Buffer.byteLength(body, 'utf8') > 2 * 1024 * 1024) {
+          throw new Error('WORDPRESS_RESPONSE_TOO_LARGE');
+        }
+        try {
+          return JSON.parse(body) as Record<string, unknown>;
+        } catch {
+          throw new Error('WORDPRESS_RESPONSE_INVALID');
+        }
+      }
+      return (await response.json()) as Record<string, unknown>;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw new Error('WORDPRESS_REQUEST_TIMEOUT', { cause: error });
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  return (await response.json()) as Record<string, unknown>;
+  throw new Error('UNSAFE_TARGET_URL');
 }
 
 async function processManualRefreshTask(
   client: PoolClient,
   task: QueuedTask,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  validateUrl: PublicUrlValidator
 ) {
   if (!task.targetCmsId) {
     throw new Error('SYNC_TASK_TARGET_MISSING');
@@ -271,7 +474,7 @@ async function processManualRefreshTask(
 
   const credentials = getCredentials(task);
   const path = task.scope === 'article' ? `posts/${task.targetCmsId}` : `media/${task.targetCmsId}`;
-  const body = await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials);
+  const body = await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials, undefined, validateUrl);
   const now = new Date();
 
   if (task.scope === 'article') {
@@ -297,7 +500,8 @@ async function processManualRefreshTask(
 async function processSuggestionApplyTask(
   client: PoolClient,
   task: QueuedTask,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  validateUrl: PublicUrlValidator
 ) {
   if (!task.suggestionId || !task.targetCmsId) {
     throw new Error('SUGGESTION_TASK_INVALID');
@@ -328,7 +532,9 @@ async function processSuggestionApplyTask(
   const currentData = await fetchWordPressJson(
     fetchImpl,
     buildWordPressUrl(task.siteUrl, currentEndpoint),
-    credentials
+    credentials,
+    undefined,
+    validateUrl
   );
 
   const currentItem = (targetType === 'article' ? currentData.article : currentData.media) as Record<string, unknown> | undefined;
@@ -368,11 +574,11 @@ async function processSuggestionApplyTask(
 
     if (snapshotBeforeValue !== realCurrentValue) {
       console.log(
-        '[suggestion_apply] snapshot before_value mismatch: audit_value=%s wordpress_real_value=%s field=%s article=%s',
-        snapshotBeforeValue,
-        realCurrentValue,
+        '[suggestion_apply] snapshot mismatch field=%s article=%s audit_length=%d wordpress_length=%d',
         fieldName,
-        task.targetCmsId
+        task.targetCmsId,
+        snapshotBeforeValue.length,
+        realCurrentValue.length
       );
     }
 
@@ -397,7 +603,7 @@ async function processSuggestionApplyTask(
   await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials, {
     method: 'POST',
     body: JSON.stringify(payload)
-  });
+  }, validateUrl);
 
   await client.query(
     `
@@ -426,7 +632,8 @@ async function processSuggestionApplyTask(
 async function processSuggestionRollbackTask(
   client: PoolClient,
   task: QueuedTask,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  validateUrl: PublicUrlValidator
 ) {
   if (!task.applySnapshotId || !task.targetCmsId) {
     throw new Error('ROLLBACK_TASK_INVALID');
@@ -458,7 +665,7 @@ async function processSuggestionRollbackTask(
   await fetchWordPressJson(fetchImpl, buildWordPressUrl(task.siteUrl, path), credentials, {
     method: 'POST',
     body: JSON.stringify(payload)
-  });
+  }, validateUrl);
 
   await client.query(
     `
@@ -716,12 +923,25 @@ async function upsertMedia(client: PoolClient, siteId: string, media: Record<str
   );
 }
 
-export async function processNextQueuedTask(pool: Pool, fetchImpl: typeof fetch = fetch) {
+export async function processNextQueuedTask(
+  pool: Pool,
+  fetchImpl: typeof fetch = fetch,
+  validateUrl: PublicUrlValidator = validatePublicUrl
+) {
   const client = await pool.connect();
   let task: QueuedTask | undefined;
+  let phase2Task: Phase2QueuedTask | undefined;
 
   try {
     await client.query('BEGIN');
+    phase2Task = await claimNextPhase2Task(client);
+    if (phase2Task) {
+      await client.query('COMMIT');
+      await client.query('BEGIN');
+      await processGatewayModelSyncTask(client, phase2Task, fetchImpl);
+      await client.query('COMMIT');
+      return phase2Task;
+    }
     task = await claimNextTask(client);
 
     if (!task) {
@@ -733,17 +953,22 @@ export async function processNextQueuedTask(pool: Pool, fetchImpl: typeof fetch 
 
     await client.query('BEGIN');
     if (task.scope === 'article' || task.scope === 'media') {
-      await processManualRefreshTask(client, task, fetchImpl);
+      await processManualRefreshTask(client, task, fetchImpl, validateUrl);
     } else if (task.scope === 'suggestion_rollback') {
-      await processSuggestionRollbackTask(client, task, fetchImpl);
+      await processSuggestionRollbackTask(client, task, fetchImpl, validateUrl);
     } else {
-      await processSuggestionApplyTask(client, task, fetchImpl);
+      await processSuggestionApplyTask(client, task, fetchImpl, validateUrl);
     }
     await client.query('COMMIT');
 
     return task;
   } catch (error) {
     await client.query('ROLLBACK');
+
+    if (phase2Task) {
+      await failPhase2Task(client, phase2Task, error);
+      return phase2Task;
+    }
 
     if (task) {
       await failTask(client, task, error);
@@ -755,6 +980,8 @@ export async function processNextQueuedTask(pool: Pool, fetchImpl: typeof fetch 
     client.release();
   }
 }
+
+export { claimNextPhase2Task, processGatewayModelSyncTask, failPhase2Task };
 
 function logWorkerHeartbeat(logger: Pick<Console, 'log'> = console) {
   const capabilities = adapter.getCapabilities();
@@ -781,7 +1008,7 @@ export function startWorker(options: WorkerOptions) {
         JSON.stringify({
           service: 'worker',
           status: 'error',
-          message: error instanceof Error ? error.message : 'WORKER_POLL_FAILED',
+          message: normalizeWorkerErrorCode(error),
           timestamp: new Date().toISOString()
         })
       );

@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aieo/security": "0.1.0",
     "@aieo/ai-providers": "0.1.0",
     "@aieo/cms-adapters": "0.1.0",
     "pg": "^8.22.0",

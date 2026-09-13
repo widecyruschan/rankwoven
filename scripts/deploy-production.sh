@@ -82,6 +82,8 @@ wait_for_authenticated_url() {
 }
 
 require_env "DEPLOY_HOST"
+require_env "DEPLOY_SMOKE_EMAIL"
+require_env "DEPLOY_SMOKE_PASSWORD"
 
 DEPLOY_USER="${DEPLOY_USER:-root}"
 DEPLOY_PATH="${DEPLOY_PATH:-/docker/rankwoven}"
@@ -92,8 +94,8 @@ DEPLOY_REF="${DEPLOY_REF:-HEAD}"
 DEPLOY_HEALTH_URL="${DEPLOY_HEALTH_URL:-https://api.rankwoven.com/health}"
 DEPLOY_SMOKE_URL="${DEPLOY_SMOKE_URL:-https://api.rankwoven.com/api/v1/site-connections}"
 DEPLOY_SMOKE_LOGIN_URL="${DEPLOY_SMOKE_LOGIN_URL:-https://api.rankwoven.com/api/v1/auth/login}"
-DEPLOY_SMOKE_EMAIL="${DEPLOY_SMOKE_EMAIL:-demo@rankwoven.com}"
-DEPLOY_SMOKE_PASSWORD="${DEPLOY_SMOKE_PASSWORD:-rankwoven}"
+DEPLOY_SMOKE_EMAIL="${DEPLOY_SMOKE_EMAIL}"
+DEPLOY_SMOKE_PASSWORD="${DEPLOY_SMOKE_PASSWORD}"
 REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 DEPLOY_COMMIT="$(git rev-parse "$DEPLOY_REF")"
 
