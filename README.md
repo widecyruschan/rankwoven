@@ -5365,3 +5365,39 @@ Docker BuildKit、Docker Compose、GitHub Actions、Hostinger VPS。
 ### 下一步行動清單
 
 - 推送 build 優化並完成最後一次 GitHub Actions deployment、health 及登入 smoke check。
+
+## 會話總結（2026-09-13）— 修復本地 Docker 登入 CORS 錯誤
+
+### 會話主要目的
+
+修復本地 Docker Web 登入頁出現 `Failed to fetch`，導致無法登入的問題。
+
+### 完成的主要任務
+
+- 使用真實瀏覽器在 `http://localhost:8082/login` 重現登入請求的 `TypeError: Failed to fetch`。
+- 確認根因是 API 預設 `CORS_ORIGINS` 遺漏 Docker production-style Web 使用的 `http://localhost:8082`，同時也遺漏文件慣例的 `http://localhost:8080`。
+- 補上兩個本地 Docker origin 到 API 預設 allowlist，並同步更新 `.env.example`。
+- 新增 CORS regression test；local Docker preflight 現在返回 204，瀏覽器 fetch 改為正常收到 HTTP 401，而不是網路層 Failed to fetch。
+- 另確認 `https://rankwoven.com/login` 對 production API 的相同瀏覽器 fetch 已正常取得 HTTP 401，production 不是本次 CORS 根因。
+
+### 使用的技術棧
+
+Fastify CORS、TypeScript、Vitest、Docker Compose、agent-browser。
+
+### 新增或修改文件
+
+- `apps/api/src/config.ts`
+- `apps/api/tests/health.test.ts`
+- `.env.example`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test -w @aieo/api -- health.test.ts` 通過，10 項測試成功。
+- `npm run build -w @aieo/api` 通過。
+- 瀏覽器實測 localhost Docker login API request 不再拋出 `Failed to fetch`。
+
+### 下一步行動清單
+
+- 推送 CORS 修復到 `main`，由 GitHub Actions 部署至 production。

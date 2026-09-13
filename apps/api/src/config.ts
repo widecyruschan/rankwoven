@@ -56,7 +56,9 @@ export const apiConfigSchema = z.object({
   SERPAPI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(250),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_TIME_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
-  CORS_ORIGINS: z.string().default('http://localhost:5173,https://rankwoven.com,https://app.rankwoven.com'),
+  CORS_ORIGINS: z
+    .string()
+    .default('http://localhost:5173,http://localhost:8080,http://localhost:8082,https://rankwoven.com,https://app.rankwoven.com'),
   TRUST_PROXY: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   ALLOW_LOCAL_LIGHTHOUSE_FALLBACK: z.enum(['true', 'false']).default('false').transform((value) => value === 'true')
 }).superRefine((config, context) => {

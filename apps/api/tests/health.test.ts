@@ -36,6 +36,22 @@ describe('api health route', () => {
     expect(response.statusCode).toBe(204);
     expect(response.headers['access-control-allow-methods']).toContain('PUT');
   });
+
+  it('allows the local Docker Web origin through CORS preflight', async () => {
+    const server = createServer();
+    const response = await server.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/auth/login',
+      headers: {
+        origin: 'http://localhost:8082',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type'
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:8082');
+  });
 });
 
 describe('api provider route', () => {
