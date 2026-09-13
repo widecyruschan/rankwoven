@@ -5294,3 +5294,43 @@ TypeScript、Zod、Vitest、Node.js crypto 設定策略。
 ### 下一步行動清單
 
 - 驗證通過後提交並推送 `main`，重新執行 production deployment。
+
+## 會話總結（2026-09-13）— PH2-02 至 PH2-04 生產部署完成
+
+### 會話主要目的
+
+完成 PH2-02、PH2-03、PH2-04 驗證、GitHub 推送、生產密鑰配置、舊密碼摘要遷移及 Hostinger VPS 部署。
+
+### 完成的主要任務
+
+- GitHub `production` Environment 已配置 smoke 登入 Secrets，VPS 已配置兩組 64 字符 production secrets；密鑰未寫入 Git 或一般日誌。
+- 修復 production ESM 啟動方式、長時間 Docker build 的 SSH keepalive，以及合法 256-bit hex secret 被字符多樣性規則誤拒的問題。
+- demo 生產帳號透過臨時 `LEGACY_PASSWORD_HMAC_SECRET` 登入一次，已由舊 HMAC 摘要漸進升級為 salted scrypt；資料庫確認 1／1 用戶完成遷移後，legacy key 已立即從 VPS `.env` 移除。
+- GitHub Actions run `34763193166` 最終重跑成功，包含 Verify、SSH、部署前資料庫備份、migration、Docker build／recreate、公開 health 與已認證 smoke check。
+
+### 使用的技術棧
+
+GitHub Actions、Node.js 22、TypeScript、tsx、Vitest、Docker Compose、PostgreSQL、OpenSSH、Hostinger VPS。
+
+### 新增或修改文件
+
+- `apps/api/package.json`
+- `apps/worker/package.json`
+- `apps/api/src/config.ts`
+- `apps/api/tests/securityHardening.test.ts`
+- `docker-compose.prod.yml`
+- `.github/workflows/production-deploy.yml`
+- `scripts/deploy-production.sh`
+- `README.md`
+
+### 驗證結果
+
+- GitHub Actions Lint、Test、Build、Security Audit 全部通過。
+- 生產資料庫 migration `0001` 至 `0014` 完成或安全跳過已套用版本，並建立部署前備份。
+- `rankwoven-api-1`、`rankwoven-worker-1`、`rankwoven-web-1`、`rankwoven-postgres-1`、`rankwoven-redis-1` 全部運行；Web、PostgreSQL、Redis 健康檢查通過。
+- `https://api.rankwoven.com/health`、`https://rankwoven.com/`、demo 登入及受保護 `/api/v1/site-connections` 均返回 HTTP 200。
+
+### 下一步行動清單
+
+- 由於 WordPress 憑據加密密鑰已從舊本地 fallback 輪換為正式 key，現有站點的 WordPress Application Password 應在客戶後台重新錄入，確保後續 Worker 寫回可解密。
+- 後續進入 PH2-05 前，完成 privacy／legal reviewer 對資料保留及營運地區責任的確認。
