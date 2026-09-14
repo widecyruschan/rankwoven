@@ -299,6 +299,31 @@ describe('phase 2 contract routes', () => {
     expect(usage.json().data.activeReservedUnits).toBe(2);
   });
 
+  it('queues a content optimization snapshot and keeps CMS apply disabled', async () => {
+    const repository = createInMemoryPhase2Repository();
+    const siteConnectionRepository = createInMemorySiteConnectionRepository();
+    const site = await siteConnectionRepository.create({ platform: 'wordpress', name: 'Content Run Site', siteUrl: 'https://content-run.example.test' });
+    await repository.saveGatewayProfile({ gateway: 'wenwen', profileKey: 'text.high_quality', modelId: 'content-model', version: 1, status: 'active', updatedAt: new Date().toISOString() });
+    await repository.saveGatewayPriceSnapshot({ id: '00000000-0000-4000-8000-000000000251', gateway: 'wenwen', modelId: 'content-model', inputPrice: 0, outputPrice: 0, currency: 'USD', effectiveAt: new Date(Date.now() - 60_000).toISOString(), verifiedAt: new Date().toISOString(), sourceRef: 'fixture' });
+    await repository.saveEntitlement({ id: '00000000-0000-4000-8000-000000000252', workspaceId, featureKey: 'content_optimization', limitValue: 5, period: 'monthly', source: 'fixture', effectiveAt: new Date(Date.now() - 60_000).toISOString() });
+    const server = createServer({ phase2Repository: repository, siteConnectionRepository });
+    const token = await login(server);
+    const created = await server.inject({
+      method: 'POST',
+      url: '/api/v1/content-optimizations',
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'content-run-1' },
+      payload: { siteId: site.site.id, content: '<p>內容優化教學提供可執行步驟。</p>', focusKeyword: '內容優化' }
+    });
+    expect(created.statusCode).toBe(202);
+    const runId = created.json<{ data: { runId: string } }>().data.runId;
+    const detail = await server.inject({ method: 'GET', url: `/api/v1/content-optimizations/${runId}`, headers: { authorization: `Bearer ${token}` } });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data.snapshot.contentText).toContain('內容優化');
+    const apply = await server.inject({ method: 'POST', url: `/api/v1/content-optimizations/${runId}/apply`, headers: { authorization: `Bearer ${token}` } });
+    expect(apply.statusCode).toBe(409);
+    expect(apply.json().error.code).toBe('CMS_WRITE_DISABLED');
+  });
+
   it('hard-stops unconfigured content optimization and unsigned webhooks', async () => {
     const repository = createInMemoryPhase2Repository();
     const siteConnectionRepository = createInMemorySiteConnectionRepository();
@@ -313,7 +338,7 @@ describe('phase 2 contract routes', () => {
       method: 'POST',
       url: '/api/v1/content-optimizations',
       headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'content-optimization-1' },
-      payload: { siteId: site.site.id, content: 'A short article for review.' }
+      payload: { siteId: site.site.id, content: 'A short article for review.', focusKeyword: '內容優化' }
     });
     expect(content.statusCode).toBe(503);
     expect(content.json().error.code).toBe('PROVIDER_UNAVAILABLE');

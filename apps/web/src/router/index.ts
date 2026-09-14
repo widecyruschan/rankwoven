@@ -9,9 +9,12 @@ import { i18n } from '../i18n';
 import {
   activeRouteEntries,
   getRoutePath,
+  getRouteById,
   type RouteRegistryEntry
 } from '../constants/routeRegistry';
 import { updateSeoHead } from '../utils/seoHead';
+import { getSiteConnections } from '../api/siteConnections';
+import { hasRequiredRole, type WorkspaceRole } from '../utils/roles';
 
 const componentLoaders = {
   MarketingHomeView: () => import('../views/MarketingHomeView.vue'),
@@ -40,6 +43,7 @@ const componentLoaders = {
   AdminUsageView: () => import('../views/AdminUsageView.vue'),
   AdminOperationsView: () => import('../views/AdminOperationsView.vue'),
   AdminSettingsView: () => import('../views/AdminSettingsView.vue')
+  ,ContentOptimizerView: () => import('../views/ContentOptimizerView.vue')
 };
 
 function buildRoute(entry: RouteRegistryEntry): RouteRecordRaw {
@@ -62,6 +66,8 @@ function buildRoute(entry: RouteRegistryEntry): RouteRecordRaw {
       routeId: entry.id,
       area: entry.area,
       sitemapGroup: entry.sitemapGroup
+      ,siteScope: entry.siteScope ?? 'none'
+      ,legacyTargetId: entry.legacyTargetId
     }
   };
 }
@@ -100,7 +106,27 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAuth && !(await authStore.restoreSession())) {
     return { path: loginPath, query: { redirect: to.fullPath } };
   }
-  if (to.meta.requiresRole === 'admin' && authStore.user?.role !== 'admin') return appDashboardPath;
+  if (!hasRequiredRole(authStore.user?.role, to.meta.requiresRole as WorkspaceRole | undefined)) return appDashboardPath;
+  const siteScope = to.meta.siteScope;
+  if (siteScope === 'required') {
+    const siteId = typeof to.params.siteId === 'string' ? to.params.siteId : '';
+    if (!/^[0-9a-f-]{36}$/i.test(siteId)) return getRoutePath('app-sites');
+    try {
+      const result = await getSiteConnections();
+      if (!result.sites.some((site) => site.id === siteId)) return getRoutePath('app-sites');
+    } catch {
+      return getRoutePath('app-sites');
+    }
+  }
+  const legacyTargetId = typeof to.meta.legacyTargetId === 'string' ? to.meta.legacyTargetId : undefined;
+  if (legacyTargetId) {
+    const target = getRouteById(legacyTargetId);
+    const siteId = typeof to.query.siteId === 'string' ? to.query.siteId : undefined;
+    if (target.siteScope === 'required' && siteId && /^[0-9a-f-]{36}$/i.test(siteId)) {
+      return { path: getRoutePath(target.id, { siteId }), replace: true };
+    }
+    return { path: target.siteScope === 'required' ? getRoutePath('app-sites') : getRoutePath(target.id), replace: true };
+  }
   if (to.path === loginPath && authStore.isLoggedIn) return appDashboardPath;
   const authOnlyPaths = [
     loginPath,

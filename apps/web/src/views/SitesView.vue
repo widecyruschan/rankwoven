@@ -184,6 +184,11 @@ function goToSitePage(path: string, siteId: string) {
   void router.push({ path, query: { siteId } });
 }
 
+function goToScopedSitePage(routeId: string, siteId: string) {
+  selectedSite.value = null;
+  void router.push(getRoutePath(routeId, { siteId }));
+}
+
 function openDeleteConfirm(site: SiteConnection) {
   if (isDeleting.value) {
     return;
@@ -316,9 +321,16 @@ onMounted(() => {
               <a-button
                 v-if="record.status === 'connected'"
                 type="link"
-                @click="router.push({ path: getRoutePath('app-site-audit'), query: { siteId: record.id } })"
+                @click="goToScopedSitePage('app-site-audit-scoped', record.id)"
               >
                 {{ t('nav.siteAudit') }}
+              </a-button>
+              <a-button
+                v-if="record.status === 'connected'"
+                type="link"
+                @click="goToScopedSitePage('app-site-content-optimizer', record.id)"
+              >
+                {{ t('contentOptimizer.title') }}
               </a-button>
               <a-button
                 type="link"

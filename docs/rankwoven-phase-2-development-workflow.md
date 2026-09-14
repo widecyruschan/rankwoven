@@ -283,6 +283,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **批准門檻**：Content Reviewer、Security、QA；引用完整率、schema pass rate 及虛構事實 gate 全部達標。
 
+**PH2-07 狀態（2026-09-14）**：`APPROVED / CORE IMPLEMENTATION COMPLETE`。核檢與實作結果見 `docs/approvals/phase-2/PH2-07-content-optimizer-evaluation.md`。已完成 Content Optimizer 的五維 deterministic score、Breakout gateway Structured Output、Claim Ledger、七種 rewrite scope、batch plan 資料結構、locale golden fixture、來源／虛構事實 gate 與 CMS write disabled 邊界。批量計劃 API orchestration 與工作台併入 PH2-08；PH2-08 前不對外顯示新頁面或選單，PH2-09 前不啟用任何 CMS 寫入。
+
 ### PH2-08：前台、客戶後台、管理後台實作
 
 **前台**：按 `docs/rankwoven-phase-2-prd.md` 11.3.6 的產品、工具、資源、定價、帳戶與 Footer manifest 實作首頁、Tools hub、八個固定工具詳情、Extension、Pricing、Blog、Blog category／article、404；初始 HTML 含 H1、正文、breadcrumb、相關連結。工具 query state 不可成為可索引薄頁，公開 audit runtime 仍受 PH2-10 gate。
@@ -302,6 +304,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 - [ ] route registry 的 `navigationSurface`、role、feature flag、availability phase 與 legacy resolver 經 unit test 驗證；未啟用功能不出現在任何選單。
 
 **批准門檻**：Design、SEO、Accessibility、Product、QA。
+
+**PH2-08 狀態（2026-09-14）**：`APPROVED / CORE IMPLEMENTATION COMPLETE`。核檢與實作結果見 `docs/approvals/phase-2/PH2-08-navigation-routes-workspaces.md`。已完成 manifest-driven navigation／breadcrumb、site-scoped guard、Content Optimizer／Site Audit 首批路由與公開 header／footer manifest；公開 SEO link graph 仍為零孤島。未完成 route、workspace switch、legacy resolver、public runtime 與後台功能繼續保持 disabled，待對應 API gate 完成。
 
 ### PH2-09：CMS 寫回與發布後驗證
 

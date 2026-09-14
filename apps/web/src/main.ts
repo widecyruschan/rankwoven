@@ -2,6 +2,7 @@ import { computed, createApp, defineComponent, h } from 'vue';
 import { createPinia } from 'pinia';
 import {
   Alert,
+  Breadcrumb,
   Button,
   Card,
   Col,
@@ -48,6 +49,7 @@ app.use(createPinia());
 app.use(router);
 [
   Alert,
+  Breadcrumb,
   Button,
   Card,
   Col,

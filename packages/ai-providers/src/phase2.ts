@@ -672,8 +672,96 @@ export interface ContentOptimizationRun {
   gatewayModel: string;
   taskId?: string;
   status: Phase2TaskStatus;
+  sourceKind?: 'article' | 'inline' | 'public_url';
+  sourceUrl?: string;
+  contentLocale?: string;
+  targetMarket?: string;
+  dialect?: string;
+  focusKeyword?: string;
+  secondaryKeywords?: string[];
+  score?: number;
+  confidence?: number;
+  parentRunId?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ContentOptimizationSnapshot {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  sourceKind: 'article' | 'inline' | 'public_url';
+  sourceUrl?: string;
+  contentText: string;
+  contentHash: string;
+  metadata: Record<string, unknown>;
+  capturedAt: string;
+}
+
+export interface ContentScoreCheckRecord {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  code: string;
+  dimension: string;
+  sourceType: 'deterministic_check' | 'ai_inferred' | 'user_asserted';
+  status: 'pass' | 'warning' | 'fail' | 'not_applicable';
+  weight: number;
+  score?: number;
+  evidence?: string;
+  evidenceJson: Record<string, unknown>;
+  recommendation?: string;
+}
+
+export interface ContentClaim {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  claimText: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  sourceHash?: string;
+  sourceExcerptHash?: string;
+  sourceType: 'first_party_observed' | 'user_asserted' | 'source_required';
+  verificationStatus: 'unverified' | 'verified' | 'rejected' | 'source_required' | 'blocked';
+  blockedReason?: string;
+}
+
+export interface ContentRewriteSuggestion {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  taskId?: string;
+  scope: 'title' | 'meta' | 'opening' | 'paragraph' | 'section' | 'outline' | 'full_document';
+  selector?: string;
+  beforeText: string;
+  beforeHash: string;
+  suggestedText?: string;
+  diff: Record<string, unknown>;
+  riskFlags: string[];
+  status: 'queued' | 'draft' | 'approved' | 'rejected' | 'blocked' | 'failed';
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnqueueContentOptimizationRunInput extends EnqueueCostedTaskInput {
+  sourceKind: 'article' | 'inline' | 'public_url';
+  sourceUrl?: string;
+  contentText: string;
+  contentHash: string;
+  metadata?: Record<string, unknown>;
+  articleId?: number;
+  locale: string;
+  targetMarket?: string;
+  dialect?: string;
+  focusKeyword: string;
+  secondaryKeywords: string[];
+  rulesVersion: string;
+  promptVersion: string;
+  schemaVersion: string;
+  gatewayModel: string;
+  parentRunId?: string;
 }
 
 export interface GatewayTextRequest {
@@ -820,6 +908,13 @@ export interface Phase2Repository {
   createContentBrief(input: CreateContentBriefInput): Promise<ContentBrief>;
   createContentOptimizationRun(input: Omit<ContentOptimizationRun, 'id' | 'createdAt' | 'updatedAt'>): Promise<ContentOptimizationRun>;
   findContentOptimizationRun(runId: string, workspaceId: string): Promise<ContentOptimizationRun | undefined>;
+  findContentOptimizationRunByInput(siteId: string, workspaceId: string, inputHash: string, gatewayModel: string): Promise<ContentOptimizationRun | undefined>;
+  enqueueContentOptimizationRun(input: EnqueueContentOptimizationRunInput, createResponse: (task: Phase2Task, run: ContentOptimizationRun) => Pick<IdempotencyRecord, 'statusCode' | 'responseBody'>): Promise<{ task?: Phase2Task; run?: ContentOptimizationRun; replay?: IdempotencyRecord }>;
+  getContentOptimizationDetails(runId: string, workspaceId: string): Promise<{ run: ContentOptimizationRun; snapshot?: ContentOptimizationSnapshot; scoreChecks: ContentScoreCheckRecord[]; claims: ContentClaim[]; suggestions: ContentRewriteSuggestion[] } | undefined>;
+  saveContentScoreChecks(workspaceId: string, runId: string, checks: Omit<ContentScoreCheckRecord, 'id' | 'workspaceId' | 'runId'>[], score: number, confidence: number, status: Phase2TaskStatus): Promise<void>;
+  saveContentClaim(input: Omit<ContentClaim, 'id' | 'workspaceId'> & { workspaceId: string }): Promise<ContentClaim>;
+  createContentRewriteSuggestion(input: Omit<ContentRewriteSuggestion, 'id' | 'createdAt' | 'updatedAt'>): Promise<ContentRewriteSuggestion>;
+  updateContentRewriteSuggestion(runId: string, suggestionId: string, workspaceId: string, patch: Pick<ContentRewriteSuggestion, 'status'> & Partial<Pick<ContentRewriteSuggestion, 'suggestedText' | 'riskFlags'>>): Promise<ContentRewriteSuggestion | undefined>;
   recordAttempt(attempt: Omit<TaskAttempt, 'id'>): Promise<TaskAttempt>;
   recordAudit(event: Omit<AuditEvent, 'id' | 'createdAt'> & { createdAt?: string }): Promise<AuditEvent>;
   listGatewayModels(): Promise<GatewayModel[]>;
@@ -848,6 +943,10 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
   const gapSnapshots = new Map<string, KeywordGapSnapshot>();
   const briefs = new Map<string, ContentBrief>();
   const contentRuns = new Map<string, ContentOptimizationRun>();
+  const contentSnapshots = new Map<string, ContentOptimizationSnapshot>();
+  const contentChecks = new Map<string, ContentScoreCheckRecord[]>();
+  const contentClaims = new Map<string, ContentClaim[]>();
+  const contentSuggestions = new Map<string, ContentRewriteSuggestion[]>();
 
   const idempotencyKey = (input: Pick<IdempotencyRecord, 'workspaceId' | 'method' | 'route' | 'key'>) =>
     `${input.workspaceId}:${input.method}:${input.route}:${input.key}`;
@@ -1384,6 +1483,78 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
     async findContentOptimizationRun(runId, workspaceId) {
       const run = contentRuns.get(runId);
       return run?.workspaceId === workspaceId ? run : undefined;
+    },
+    async findContentOptimizationRunByInput(siteId, workspaceId, inputHash, gatewayModel) {
+      return [...contentRuns.values()]
+        .filter((run) => run.siteId === siteId && run.workspaceId === workspaceId && run.inputHash === inputHash && run.gatewayModel === gatewayModel)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    },
+    async enqueueContentOptimizationRun(input, createResponse) {
+      const runId = randomUUID();
+      const result = await this.enqueueCostedTask({ ...input, providerKey: input.providerKey ?? 'wenwen' }, (task) => createResponse(task, {
+        id: runId, workspaceId: input.workspaceId, siteId: input.siteId!, articleId: input.articleId,
+        inputHash: input.contentHash, locale: input.locale, rulesVersion: input.rulesVersion,
+        promptVersion: input.promptVersion, schemaVersion: input.schemaVersion, gatewayModel: input.gatewayModel,
+        taskId: task.id, status: 'queued', sourceKind: input.sourceKind, sourceUrl: input.sourceUrl,
+        contentLocale: input.locale, targetMarket: input.targetMarket, dialect: input.dialect,
+        focusKeyword: input.focusKeyword, secondaryKeywords: input.secondaryKeywords, parentRunId: input.parentRunId,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      }));
+      if (result.replay || !result.task) return result;
+      const now = new Date().toISOString();
+      const run: ContentOptimizationRun = {
+        id: runId, workspaceId: input.workspaceId, siteId: input.siteId!, articleId: input.articleId,
+        inputHash: input.contentHash, locale: input.locale, rulesVersion: input.rulesVersion,
+        promptVersion: input.promptVersion, schemaVersion: input.schemaVersion, gatewayModel: input.gatewayModel,
+        taskId: result.task.id, status: 'queued', sourceKind: input.sourceKind, sourceUrl: input.sourceUrl,
+        contentLocale: input.locale, targetMarket: input.targetMarket, dialect: input.dialect,
+        focusKeyword: input.focusKeyword, secondaryKeywords: input.secondaryKeywords, parentRunId: input.parentRunId,
+        createdAt: now, updatedAt: now
+      };
+      contentRuns.set(run.id, run);
+      contentSnapshots.set(run.id, {
+        id: randomUUID(), workspaceId: input.workspaceId, runId: run.id, sourceKind: input.sourceKind,
+        sourceUrl: input.sourceUrl, contentText: input.contentText, contentHash: input.contentHash,
+        metadata: input.metadata ?? {}, capturedAt: now
+      });
+      return { task: result.task, run };
+    },
+    async getContentOptimizationDetails(runId, workspaceId) {
+      const run = contentRuns.get(runId);
+      if (!run || run.workspaceId !== workspaceId) return undefined;
+      return {
+        run,
+        snapshot: contentSnapshots.get(runId),
+        scoreChecks: contentChecks.get(runId) ?? [],
+        claims: contentClaims.get(runId) ?? [],
+        suggestions: contentSuggestions.get(runId) ?? []
+      };
+    },
+    async saveContentScoreChecks(workspaceId, runId, checks, score, confidence, status) {
+      const run = contentRuns.get(runId);
+      if (!run || run.workspaceId !== workspaceId) throw new Error('WORKSPACE_RESOURCE_NOT_FOUND');
+      contentChecks.set(runId, checks.map((item) => ({ ...item, id: randomUUID(), workspaceId, runId })));
+      contentRuns.set(runId, { ...run, score, confidence, status, updatedAt: new Date().toISOString() });
+    },
+    async saveContentClaim(input) {
+      const claim: ContentClaim = { ...input, id: randomUUID() };
+      contentClaims.set(input.runId, [...(contentClaims.get(input.runId) ?? []), claim]);
+      return claim;
+    },
+    async createContentRewriteSuggestion(input) {
+      const now = new Date().toISOString();
+      const suggestion: ContentRewriteSuggestion = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
+      contentSuggestions.set(input.runId, [...(contentSuggestions.get(input.runId) ?? []), suggestion]);
+      return suggestion;
+    },
+    async updateContentRewriteSuggestion(runId, suggestionId, workspaceId, patch) {
+      const suggestions = contentSuggestions.get(runId) ?? [];
+      const index = suggestions.findIndex((suggestion) => suggestion.id === suggestionId && suggestion.workspaceId === workspaceId);
+      if (index < 0) return undefined;
+      const updated = { ...suggestions[index], ...patch, updatedAt: new Date().toISOString() };
+      suggestions[index] = updated;
+      contentSuggestions.set(runId, suggestions);
+      return updated;
     },
     async recordAttempt(input) {
       const attempt: TaskAttempt = { ...input, id: randomUUID() };

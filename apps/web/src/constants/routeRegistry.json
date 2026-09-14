@@ -15,7 +15,7 @@
       "titleKey": "marketing.homeTitle",
       "descriptionKey": "marketing.homeDescription",
       "keywordKey": "marketing.homeKeyword",
-      "nav": true
+      "nav": false
     },
     {
       "id": "public-features",
@@ -32,7 +32,11 @@
       "titleKey": "publicPages.features.title",
       "descriptionKey": "publicPages.features.body",
       "keywordKey": "publicPages.features.keyword",
-      "nav": true
+      "nav": true,
+      "navigationSurface": "marketing_header",
+      "navigationGroup": "product",
+      "navigationOrder": 10,
+      "navLabelKey": "marketing.nav.features"
     },
     {
       "id": "public-docs",
@@ -49,7 +53,11 @@
       "titleKey": "publicPages.docs.title",
       "descriptionKey": "publicPages.docs.body",
       "keywordKey": "publicPages.docs.keyword",
-      "nav": true
+      "nav": true,
+      "navigationSurface": "marketing_header",
+      "navigationGroup": "resources",
+      "navigationOrder": 30,
+      "navLabelKey": "marketing.nav.docs"
     },
     {
       "id": "public-help",
@@ -66,7 +74,11 @@
       "titleKey": "publicPages.help.title",
       "descriptionKey": "publicPages.help.body",
       "keywordKey": "publicPages.help.keyword",
-      "nav": true
+      "nav": true,
+      "navigationSurface": "marketing_header",
+      "navigationGroup": "resources",
+      "navigationOrder": 40,
+      "navLabelKey": "marketing.nav.help"
     },
     {
       "id": "public-about",
@@ -83,7 +95,11 @@
       "titleKey": "publicPages.about.title",
       "descriptionKey": "publicPages.about.body",
       "keywordKey": "publicPages.about.keyword",
-      "nav": false
+      "nav": false,
+      "navigationSurface": "marketing_footer",
+      "navigationGroup": "company",
+      "navigationOrder": 10,
+      "navLabelKey": "marketing.nav.about"
     },
     {
       "id": "public-contact",
@@ -100,7 +116,11 @@
       "titleKey": "publicPages.contact.title",
       "descriptionKey": "publicPages.contact.body",
       "keywordKey": "publicPages.contact.keyword",
-      "nav": false
+      "nav": false,
+      "navigationSurface": "marketing_footer",
+      "navigationGroup": "company",
+      "navigationOrder": 20,
+      "navLabelKey": "marketing.nav.contact"
     },
     {
       "id": "public-privacy",
@@ -117,7 +137,11 @@
       "titleKey": "publicPages.privacy.title",
       "descriptionKey": "publicPages.privacy.body",
       "keywordKey": "publicPages.privacy.keyword",
-      "nav": false
+      "nav": false,
+      "navigationSurface": "marketing_footer",
+      "navigationGroup": "legal",
+      "navigationOrder": 30,
+      "navLabelKey": "marketing.footer.privacy"
     },
     {
       "id": "public-terms",
@@ -134,7 +158,11 @@
       "titleKey": "publicPages.terms.title",
       "descriptionKey": "publicPages.terms.body",
       "keywordKey": "publicPages.terms.keyword",
-      "nav": false
+      "nav": false,
+      "navigationSurface": "marketing_footer",
+      "navigationGroup": "legal",
+      "navigationOrder": 40,
+      "navLabelKey": "marketing.footer.terms"
     },
     {
       "id": "public-blog",
@@ -150,7 +178,11 @@
       "titleKey": "publicPages.blog.title",
       "descriptionKey": "publicPages.blog.body",
       "keywordKey": "publicPages.blog.keyword",
-      "nav": true
+      "nav": true,
+      "navigationSurface": "marketing_header",
+      "navigationGroup": "resources",
+      "navigationOrder": 20,
+      "navLabelKey": "marketing.nav.blog"
     },
     {
       "id": "public-blog-article",
@@ -181,7 +213,11 @@
       "titleKey": "marketing.pricingTitle",
       "descriptionKey": "marketing.pricingDescription",
       "keywordKey": "marketing.pricingKeyword",
-      "nav": true
+      "nav": true,
+      "navigationSurface": "marketing_header",
+      "navigationGroup": "pricing",
+      "navigationOrder": 50,
+      "navLabelKey": "marketing.nav.pricing"
     },
     {
       "id": "public-tools",
@@ -653,10 +689,17 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "parentId": "app-site-content",
-      "titleKey": "nav.keywords"
+      "enabled": true,
+      "availabilityPhase": "PH2-07",
+      "featureKey": "content_optimization",
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "navigationGroup": "current_site",
+      "navigationOrder": 40,
+      "parentId": "app-sites",
+      "titleKey": "contentOptimizer.title",
+      "navLabelKey": "contentOptimizer.title",
+      "componentKey": "ContentOptimizerView"
     },
     {
       "id": "app-site-audit-scoped",
@@ -665,10 +708,15 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "parentId": "app-sites-scoped",
-      "titleKey": "nav.siteAudit"
+      "enabled": true,
+      "availabilityPhase": "PH2-05",
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "navigationGroup": "current_site",
+      "navigationOrder": 50,
+      "parentId": "app-sites",
+      "titleKey": "nav.siteAudit",
+      "componentKey": "SiteAuditView"
     },
     {
       "id": "app-site-analytics-scoped",

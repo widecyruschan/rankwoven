@@ -5806,3 +5806,137 @@ Node.js、TypeScript、Vue/Vite、Fastify、Vitest、Docker Compose、GitHub Act
 - `https://rankwoven.com` 與 `https://www.rankwoven.com` 返回 HTTP 200。
 - `www.rankwoven.com` 到 API 的 CORS 預檢返回 HTTP 204；apex 與 `www` 來源的 demo 登入均返回 HTTP 200。
 - 驗證過程未輸出或提交任何 token、密碼或 `.env` 內容。
+
+## 會話總結（2026-09-14）— 進入 PH2-07 Content Optimizer 核檢
+
+### 會話主要目的
+
+進入 PH2-07，為 Content Optimizer 與 AI 評測建立可批准的實作範圍、資料契約、風險邊界及驗收標準。
+
+### 完成的主要任務
+
+- 盤點現有 editor SEO score、Phase 2 content optimization skeleton API、預留資料表、AI gateway 與 Worker 能力。
+- 建立 PH2-07 核檢草案，定義五維 deterministic score、七種 rewrite scope、Claim Ledger、Structured Output、批量計劃、locale golden set、任務治理及測試 gate。
+- 固定本階段不實作公開頁、PH2-08 導覽、CMS 寫入、發布或新 AI provider；所有 AI 請求只經既有 Breakout gateway 的 server-side profile。
+
+### 關鍵決策和解決方案
+
+- AI 分析永不覆蓋規則分；缺少維度一律顯示 confidence，不靜默補分。
+- `SOURCE_REQUIRED`、未驗證 claim 與虛構事實一律阻止建議批准；PH2-07 的 apply 僅做 stale snapshot preflight，CMS write 保持 disabled，留待 PH2-09。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-07-content-optimizer-evaluation.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- 本次僅完成規劃與核檢文件，未修改 runtime 程式碼、資料庫、容器或生產環境；因此未執行程式測試。
+
+### 下一步行動清單
+
+- 等待 `APPROVE PH2-07`，再依核檢草案開始 migration、API、Worker、評測與測試實作。
+
+## 會話總結（2026-09-14）— PH2-07 Content Optimizer 實作完成
+
+### 會話主要目的
+
+在 `APPROVE PH2-07` 後，完成 Content Optimizer 的資料、API、Worker、Claim Ledger、Structured Output 與評測基線。
+
+### 完成的主要任務
+
+- 新增 `0017_phase2_content_optimizer.sql`，保存不可變內容快照、五維 checks、claim 支持資料、rewrite diff／revision 與批量計劃資料結構。
+- 建立共享 deterministic scorer，提供 On-page、Query alignment、Topical coverage、Readability、Trust & citability 分數與 confidence。
+- 啟用內容分析、rewrite、approve／reject、recheck 及 stale snapshot apply preflight API；CMS 寫入維持 `CMS_WRITE_DISABLED`。
+- Worker 接入內容分析與改寫 task、Breakout JSON output、Zod runtime validation、一次 schema repair、Claim Ledger、`SOURCE_REQUIRED` 與 PH2-05 用量治理。
+- 更新 Phase 2 OpenAPI、核檢文件與 API／shared-package 回歸測試。
+
+### 驗證結果
+
+- `npm run db:migrate` 首次套用 `0017` 成功，第二次重放成功。
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過。
+- 重建本機 API／Worker 後，`http://localhost:3011/health` 返回 HTTP 200；未配置高品質模型 profile 時內容分析正確返回 `PROVIDER_UNAVAILABLE`，不繞過 gateway／價格／entitlement gate。
+
+### 下一步行動清單
+
+- 進入 PH2-08，實作 Content Optimizer 的客戶後台頁面、導航、route manifest、i18n、diff 視圖、批量計劃 API orchestration 與行動端狀態。
+- PH2-09 前維持 CMS 寫入關閉；內部 canary 前配置已核驗 model profile、價格快照和 content optimization entitlement。
+
+## 會話總結（2026-09-14）— 進入 PH2-08 導航與路由核檢
+
+### 會話主要目的
+
+進入 PH2-08，規劃公開前台、客戶後台與管理後台的 manifest-first 導航、site-scoped route、SEO 防孤島與權限隔離。
+
+### 完成的主要任務
+
+- 盤點現有 route registry、Router、手寫 App navigation、公開 SEO generator、private flat route 與 planned route。
+- 建立 PH2-08 核檢草案，定義 route manifest 欄位、三層導航、legacy resolver、site context、feature gate、i18n、WCAG AA 與 SEO 驗收。
+- 明確記錄工作區切換 API 尚未存在，因此本階段不能把未驗證 workspace ID 當作前端切換狀態。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-08-navigation-routes-workspaces.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- 本次只完成核檢文件，未修改 Router、views、runtime、資料庫、容器或生產環境；未執行程式測試。
+
+### 下一步行動清單
+
+- 等待 `APPROVE PH2-08`，再開始 manifest、layout、site context、legacy resolver、頁面與 SEO／accessibility 測試實作。
+
+## 會話總結（2026-09-14）— PH2-08 核心導航與工作台實作
+
+### 會話主要目的
+
+在 `APPROVE PH2-08` 後，完成 manifest-first 導航、site-scoped route guard、Content Optimizer 工作台入口及公開導航可達性。
+
+### 完成的主要任務
+
+- 擴展 route registry metadata，讓導航、group、breadcrumb、site scope、feature key 與 availability phase 有集中契約。
+- 移除 App.vue 手寫導航陣列；公開 header／footer、客戶／管理 sidebar 與 breadcrumb 改由 manifest 生成。
+- 新增 site-scoped Content Optimizer view 及 API client，並從站點列表導入 Content Optimizer／Site Audit。
+- 深層 site route 在登入後以 workspace-scoped sites API 驗證 `siteId`，失敗安全返回 `/app/sites`。
+- 保持未完成 public tools、Billing、Backlinks、Monitors、Developers、workspace switch 與 CMS 寫入完全關閉。
+
+### 驗證結果
+
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 通過。
+- Build 生成 96 個 public canonical URL，驗證 86 篇 Blog 與 10 個公開頁導入連結，route graph 為零孤島。
+- 本機 Docker Web／API 啟動正常；browser 驗證公開導航、功能頁跳轉與未登入 site-scoped deep link 導向登入頁；已儲存本機視覺快照 `/tmp/rankwoven-ph2-08-home.png`。
+
+### 下一步行動清單
+
+- 補齊 workspace switch API 後完成安全切換；以同一 manifest 實作完整 legacy resolver 與其餘 site-scoped wrapper。
+- 對照各功能 API gate 分批啟用 public tools、批量計劃、管理入口與 PH2-09 CMS draft workflow。
+
+## 會話總結（2026-09-14）— 修復 Owner 無法進入管理後台
+
+### 會話主要目的
+
+修復具 `owner` 角色的使用者無法訪問 `/admin/` 的前端路由權限錯誤。
+
+### 根因與解決方案
+
+- 本機 demo 帳戶角色為 `owner`，但前端 Router 原先只允許 `role === 'admin'`，與後端既有的 `viewer < editor < admin < owner` 權限階層不一致。
+- 新增共用角色排序 helper，讓 `owner` 繼承 admin route 權限，同時維持 editor／viewer 被拒絕。
+
+### 新增或修改文件
+
+- `apps/web/src/utils/roles.ts`
+- `apps/web/src/router/index.ts`
+- `apps/web/tests/roles.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- owner 存取管理 API 返回 HTTP 200，未輸出 token。
+- Web lint、14 項 Web 測試與 Web build 通過；公開 SEO route graph 維持零孤島。
+
+### 下一步行動清單
+
+- 等待明確授權後，連同 PH2-07／PH2-08 已驗證變更一起 commit、push 與部署。

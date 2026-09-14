@@ -204,6 +204,15 @@ describe('web smoke test', () => {
     );
     expect(plannedRouteEntries.some((route) => route.id === 'app-site-research')).toBe(true);
     expect(plannedRouteEntries.every((route) => route.enabled === false)).toBe(true);
+    const contentOptimizer = activeRouteEntries.find((route) => route.id === 'app-site-content-optimizer');
+    expect(contentOptimizer).toMatchObject({
+      siteScope: 'required',
+      featureKey: 'content_optimization',
+      parentId: 'app-sites',
+      navigationSurface: 'customer_sidebar'
+    });
+    expect(activeRouteEntries.some((route) => route.id === 'public-tools')).toBe(false);
+    expect(activeRouteEntries.some((route) => route.id === 'app-billing')).toBe(false);
   });
 
   it('assigns one unique localized keyword to every indexable public page', () => {

@@ -23,7 +23,7 @@ import rankwovenLogo from './assets/rankwoven-logo.svg';
 import rankwovenLogoDark from './assets/rankwoven-logo-dark.svg';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
 import ThemeSwitcher from './components/ThemeSwitcher.vue';
-import { getRoutePath } from './constants/routeRegistry';
+import { getBreadcrumbRoutes, getNavigationGroups, getRoutePath } from './constants/routeRegistry';
 import { useTheme } from './composables/useTheme';
 import { useAuthStore } from './stores/auth';
 
@@ -35,46 +35,38 @@ const authStore = useAuthStore();
 const isNavigationOpen = ref(false);
 const rankwovenLogoSource = computed(() => (isDark.value ? rankwovenLogoDark : rankwovenLogo));
 
-const marketingItems = [
-  { routeId: 'public-features', labelKey: 'marketing.nav.features' },
-  { routeId: 'public-pricing', labelKey: 'marketing.nav.pricing' },
-  { routeId: 'public-blog', labelKey: 'marketing.nav.blog' },
-  { routeId: 'public-docs', labelKey: 'marketing.nav.docs' },
-  { routeId: 'public-help', labelKey: 'marketing.nav.help' },
-  { routeId: 'auth-login', labelKey: 'marketing.nav.login' }
-].map((item) => ({ to: getRoutePath(item.routeId), labelKey: item.labelKey }));
+const navigationIcons = {
+  'app-dashboard': LayoutDashboard, 'app-sites': Waypoints, 'app-analytics': BarChart3,
+  'app-keywords': Search, 'app-media': Image, 'app-links': Link2, 'app-tasks': ListChecks,
+  'app-cms-adapters': PlugZap, 'app-lighthouse': Gauge, 'app-settings': Settings,
+  'admin-overview': BarChart3, 'admin-customers': Users, 'admin-usage': CreditCard,
+  'admin-operations': Activity, 'admin-settings': Settings
+} as const;
 
-const appNavigationItems = [
-  { routeId: 'app-dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
-  { routeId: 'app-sites', labelKey: 'nav.sites', icon: Waypoints },
-  { routeId: 'app-analytics', labelKey: 'nav.analytics', icon: BarChart3 },
-  { routeId: 'app-keywords', labelKey: 'nav.keywords', icon: Search },
-  { routeId: 'app-media', labelKey: 'nav.media', icon: Image },
-  { routeId: 'app-links', labelKey: 'nav.links', icon: Link2 },
-  { routeId: 'app-tasks', labelKey: 'nav.tasks', icon: ListChecks },
-  { routeId: 'app-cms-adapters', labelKey: 'nav.cmsAdapters', icon: PlugZap },
-  { routeId: 'app-lighthouse', labelKey: 'nav.lighthouse', icon: Gauge },
-  { routeId: 'app-settings', labelKey: 'nav.settings', icon: Settings }
-].map((item) => ({ to: getRoutePath(item.routeId), labelKey: item.labelKey, icon: item.icon }));
-
-const adminNavigationItems = [
-  { routeId: 'admin-overview', labelKey: 'admin.nav.overview', icon: BarChart3 },
-  { routeId: 'admin-customers', labelKey: 'admin.nav.customers', icon: Users },
-  { routeId: 'admin-usage', labelKey: 'admin.nav.usage', icon: CreditCard },
-  { routeId: 'admin-operations', labelKey: 'admin.nav.operations', icon: Activity },
-  { routeId: 'admin-settings', labelKey: 'admin.nav.settings', icon: Settings }
-].map((item) => ({ to: getRoutePath(item.routeId), labelKey: item.labelKey, icon: item.icon }));
+const marketingItems = computed(() => getNavigationGroups('marketing_header').flatMap((group) => group.routes));
+const marketingFooterItems = computed(() => getNavigationGroups('marketing_footer').flatMap((group) => group.routes));
 
 const currentTitle = computed(() => t(String(route.meta.titleKey ?? 'nav.dashboard')));
 const currentLayout = computed(() => String(route.meta.layout ?? 'app'));
 const isMarketingLayout = computed(() => currentLayout.value === 'marketing');
 const isAdminLayout = computed(() => currentLayout.value === 'admin');
-const navigationItems = computed(() => (isAdminLayout.value ? adminNavigationItems : appNavigationItems));
+const currentSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
+const navigationGroups = computed(() => getNavigationGroups(isAdminLayout.value ? 'admin_sidebar' : 'customer_sidebar')
+  .map((group) => ({ ...group, routes: group.routes.filter((item) => item.siteScope !== 'required' || Boolean(currentSiteId.value)) }))
+  .filter((group) => group.routes.length > 0));
+const breadcrumbs = computed(() => {
+  const routeId = typeof route.meta.routeId === 'string' ? route.meta.routeId : '';
+  return routeId ? getBreadcrumbRoutes(routeId) : [];
+});
 const shellSubtitle = computed(() => (isAdminLayout.value ? t('admin.subtitle') : t('app.brandSubtitle')));
 const topbarPhase = computed(() => (isAdminLayout.value ? t('admin.phase') : t('app.phase')));
 const selectedMenuKeys = computed(() => [route.path]);
 const marketingEntryLink = computed(() => (authStore.isLoggedIn ? getRoutePath('app-dashboard') : getRoutePath('auth-login')));
 const marketingEntryLabelKey = computed(() => (authStore.isLoggedIn ? 'marketing.nav.dashboard' : 'marketing.nav.login'));
+
+function navigationPath(routeId: string, siteScoped = false) {
+  return siteScoped && currentSiteId.value ? getRoutePath(routeId, { siteId: currentSiteId.value }) : getRoutePath(routeId);
+}
 
 watch(
   locale,
@@ -110,12 +102,12 @@ function logout() {
       <nav class="marketing-nav" :aria-label="t('app.mainNavigation')">
         <RouterLink
           v-for="item in marketingItems"
-          :key="item.to"
-          :to="item.to"
+          :key="item.id"
+          :to="getRoutePath(item.id)"
           active-class=""
           exact-active-class="router-link-active"
         >
-          {{ t(item.labelKey) }}
+          {{ t(item.navLabelKey ?? item.titleKey ?? '') }}
         </RouterLink>
       </nav>
       <div class="marketing-actions">
@@ -135,10 +127,9 @@ function logout() {
         <span>{{ t('marketing.footer.tagline') }}</span>
       </div>
       <nav :aria-label="t('marketing.footer.legal')">
-        <RouterLink :to="getRoutePath('public-about')">{{ t('marketing.nav.about') }}</RouterLink>
-        <RouterLink :to="getRoutePath('public-contact')">{{ t('marketing.nav.contact') }}</RouterLink>
-        <RouterLink :to="getRoutePath('public-privacy')">{{ t('marketing.footer.privacy') }}</RouterLink>
-        <RouterLink :to="getRoutePath('public-terms')">{{ t('marketing.footer.terms') }}</RouterLink>
+        <RouterLink v-for="item in marketingFooterItems" :key="item.id" :to="getRoutePath(item.id)">
+          {{ t(item.navLabelKey ?? item.titleKey ?? '') }}
+        </RouterLink>
       </nav>
     </footer>
   </div>
@@ -157,12 +148,16 @@ function logout() {
         :aria-label="t('app.mainNavigation')"
         @click="navigateToMenuItem"
       >
-        <a-menu-item v-for="item in navigationItems" :key="item.to">
-          <template #icon>
-            <component :is="item.icon" :size="17" aria-hidden="true" />
-          </template>
-          {{ t(item.labelKey) }}
-        </a-menu-item>
+        <template v-for="group in navigationGroups" :key="group.group">
+          <a-menu-item-group :title="t(`navigationGroups.${group.group}`)">
+            <a-menu-item v-for="item in group.routes" :key="navigationPath(item.id, item.siteScope === 'required')">
+              <template #icon>
+                <component :is="navigationIcons[item.id as keyof typeof navigationIcons] ?? LayoutDashboard" :size="17" aria-hidden="true" />
+              </template>
+              {{ t(item.navLabelKey ?? item.titleKey ?? '') }}
+            </a-menu-item>
+          </a-menu-item-group>
+        </template>
       </a-menu>
     </a-layout-sider>
 
@@ -174,6 +169,9 @@ function logout() {
         <div>
           <p>{{ topbarPhase }}</p>
           <h1>{{ currentTitle }}</h1>
+          <a-breadcrumb v-if="breadcrumbs.length > 1" class="app-breadcrumb">
+            <a-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.id">{{ t(crumb.titleKey ?? '') }}</a-breadcrumb-item>
+          </a-breadcrumb>
         </div>
         <div class="topbar-actions">
           <RouterLink class="icon-link-button" :to="getRoutePath('marketing-home')">

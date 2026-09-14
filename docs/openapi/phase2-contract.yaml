@@ -230,11 +230,15 @@ paths:
   /api/v1/content-optimizations:
     post:
       summary: Request an asynchronous content optimization run
-      description: Requires an active verified model profile, a price snapshot, entitlement and PH2-07 worker enablement.
+      description: >-
+        Accepts exactly one workspace-scoped source: a synced article, inline content,
+        or a validated public URL. Requires focusKeyword, an active text.high_quality
+        profile, price snapshot and entitlement. Content is snapshotted before queueing.
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '202': { $ref: '#/components/responses/TaskAccepted' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '429': { $ref: '#/components/responses/QuotaExceeded' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
@@ -251,25 +255,33 @@ paths:
       summary: Request a scoped rewrite task
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+      responses:
+        '202': { $ref: '#/components/responses/TaskAccepted' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
   /api/v1/content-optimizations/{runId}/suggestions/{suggestionId}:
     patch:
       summary: Update a content optimization suggestion decision
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+      responses:
+        '200': { $ref: '#/components/responses/ContentOptimizationResponse' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /api/v1/content-optimizations/{runId}/apply:
     post:
-      summary: Create a CMS draft application task
+      summary: Validate the source snapshot before a future CMS apply
+      description: PH2-07 always returns CMS_WRITE_DISABLED after stale-snapshot validation; CMS write is deferred to PH2-09.
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+      responses:
+        '409': { $ref: '#/components/responses/ConflictError' }
   /api/v1/content-optimizations/{runId}/recheck:
     post:
       summary: Recheck a content optimization run
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
-      responses: { '503': { $ref: '#/components/responses/ProviderUnavailable' } }
+      responses:
+        '202': { $ref: '#/components/responses/TaskAccepted' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
   /api/v1/webhooks/{provider}:
     post:
       summary: Receive a signed billing provider webhook

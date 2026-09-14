@@ -26,6 +26,11 @@ import {
   type ContentBrief,
   type CreateContentBriefInput,
   type ContentOptimizationRun,
+  type ContentOptimizationSnapshot,
+  type ContentScoreCheckRecord,
+  type ContentClaim,
+  type ContentRewriteSuggestion,
+  type EnqueueContentOptimizationRunInput,
   type CreateKeywordResearchProjectInput,
   type PaginationInput,
   type Phase2Repository,
@@ -266,6 +271,83 @@ function mapContentOptimizationRun(row: QueryResultRow): ContentOptimizationRun 
     gatewayModel: row.gateway_model,
     taskId: row.task_id ?? undefined,
     status: row.status,
+    sourceKind: row.source_kind ?? undefined,
+    sourceUrl: row.source_url ?? undefined,
+    contentLocale: row.content_locale ?? undefined,
+    targetMarket: row.target_market ?? undefined,
+    dialect: row.dialect ?? undefined,
+    focusKeyword: row.focus_keyword ?? undefined,
+    secondaryKeywords: Array.isArray(row.secondary_keywords) ? row.secondary_keywords : [],
+    score: row.score === null || row.score === undefined ? undefined : Number(row.score),
+    confidence: row.confidence === null || row.confidence === undefined ? undefined : Number(row.confidence),
+    parentRunId: row.parent_run_id ?? undefined,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString()
+  };
+}
+
+function mapContentSnapshot(row: QueryResultRow): ContentOptimizationSnapshot {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    runId: row.run_id,
+    sourceKind: row.source_kind,
+    sourceUrl: row.source_url ?? undefined,
+    contentText: row.content_text,
+    contentHash: row.content_hash,
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+    capturedAt: new Date(row.captured_at).toISOString()
+  };
+}
+
+function mapContentScoreCheck(row: QueryResultRow): ContentScoreCheckRecord {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    runId: row.run_id,
+    code: row.code,
+    dimension: row.dimension,
+    sourceType: row.source_type,
+    status: row.status,
+    weight: Number(row.weight),
+    score: row.score === null ? undefined : Number(row.score),
+    evidence: row.evidence ?? undefined,
+    evidenceJson: row.evidence_json && typeof row.evidence_json === 'object' ? row.evidence_json : {},
+    recommendation: row.recommendation ?? undefined
+  };
+}
+
+function mapContentClaim(row: QueryResultRow): ContentClaim {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    runId: row.run_id,
+    claimText: row.claim_text,
+    sourceUrl: row.source_url ?? undefined,
+    sourceTitle: row.source_title ?? undefined,
+    sourceHash: row.source_hash ?? undefined,
+    sourceExcerptHash: row.source_excerpt_hash ?? undefined,
+    sourceType: row.source_type,
+    verificationStatus: row.verification_status,
+    blockedReason: row.blocked_reason ?? undefined
+  };
+}
+
+function mapContentRewriteSuggestion(row: QueryResultRow): ContentRewriteSuggestion {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    runId: row.run_id,
+    taskId: row.task_id ?? undefined,
+    scope: row.scope,
+    selector: row.selector ?? undefined,
+    beforeText: row.before_text,
+    beforeHash: row.before_hash,
+    suggestedText: row.suggested_text ?? undefined,
+    diff: row.diff && typeof row.diff === 'object' ? row.diff : {},
+    riskFlags: Array.isArray(row.risk_flags) ? row.risk_flags : [],
+    status: row.status,
+    revision: Number(row.revision),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString()
   };
@@ -1486,9 +1568,13 @@ export class PostgresPhase2Repository implements Phase2Repository {
       `
         INSERT INTO content_optimization_runs (
           id, workspace_id, site_id, article_id, input_hash, locale,
-          rules_version, prompt_version, schema_version, gateway_model, task_id, status
+          rules_version, prompt_version, schema_version, gateway_model, task_id, status,
+          source_kind, source_url, content_locale, target_market, dialect, focus_keyword,
+          secondary_keywords, score, confidence, parent_run_id
         )
-        SELECT $1, $2, sc.id, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        SELECT $1, $2, sc.id, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+               COALESCE($12, 'inline'), $13, COALESCE($14, $5), $15, $16, COALESCE($17, ''),
+               COALESCE($18::jsonb, '[]'::jsonb), $19, $20, $21
         FROM site_connections sc
         WHERE sc.id = $12 AND sc.workspace_id = $2
         RETURNING *
@@ -1505,6 +1591,16 @@ export class PostgresPhase2Repository implements Phase2Repository {
         input.gatewayModel,
         input.taskId ?? null,
         input.status,
+        input.sourceKind ?? null,
+        input.sourceUrl ?? null,
+        input.contentLocale ?? null,
+        input.targetMarket ?? null,
+        input.dialect ?? null,
+        input.focusKeyword ?? null,
+        JSON.stringify(input.secondaryKeywords ?? []),
+        input.score ?? null,
+        input.confidence ?? null,
+        input.parentRunId ?? null,
         input.siteId
       ]
     );
@@ -1518,6 +1614,104 @@ export class PostgresPhase2Repository implements Phase2Repository {
       [runId, workspaceId]
     );
     return result.rows[0] ? mapContentOptimizationRun(result.rows[0]) : undefined;
+  }
+
+  async findContentOptimizationRunByInput(siteId: string, workspaceId: string, inputHash: string, gatewayModel: string) {
+    const result = await this.pool.query(
+      `SELECT * FROM content_optimization_runs
+       WHERE site_id = $1 AND workspace_id = $2 AND input_hash = $3 AND gateway_model = $4
+       ORDER BY created_at DESC LIMIT 1`,
+      [siteId, workspaceId, inputHash, gatewayModel]
+    );
+    return result.rows[0] ? mapContentOptimizationRun(result.rows[0]) : undefined;
+  }
+
+  async enqueueContentOptimizationRun(input: EnqueueContentOptimizationRunInput, createResponse: (task: Phase2Task, run: ContentOptimizationRun) => Pick<IdempotencyRecord, 'statusCode' | 'responseBody'>) {
+    const runId = randomUUID();
+    const result = await this.enqueueCostedTask({ ...input, providerKey: input.providerKey ?? 'wenwen' }, (task) => createResponse(task, {
+      id: runId, workspaceId: input.workspaceId, siteId: input.siteId!, articleId: input.articleId,
+      inputHash: input.contentHash, locale: input.locale, rulesVersion: input.rulesVersion,
+      promptVersion: input.promptVersion, schemaVersion: input.schemaVersion, gatewayModel: input.gatewayModel,
+      taskId: task.id, status: 'queued', sourceKind: input.sourceKind, sourceUrl: input.sourceUrl,
+      contentLocale: input.locale, targetMarket: input.targetMarket, dialect: input.dialect,
+      focusKeyword: input.focusKeyword, secondaryKeywords: input.secondaryKeywords, parentRunId: input.parentRunId,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    }));
+    if (result.replay || !result.task) return result;
+    const run = await this.createContentOptimizationRun({
+      workspaceId: input.workspaceId, siteId: input.siteId!, articleId: input.articleId,
+      inputHash: input.contentHash, locale: input.locale, rulesVersion: input.rulesVersion,
+      promptVersion: input.promptVersion, schemaVersion: input.schemaVersion, gatewayModel: input.gatewayModel,
+      taskId: result.task.id, status: 'queued', sourceKind: input.sourceKind, sourceUrl: input.sourceUrl,
+      contentLocale: input.locale, targetMarket: input.targetMarket, dialect: input.dialect,
+      focusKeyword: input.focusKeyword, secondaryKeywords: input.secondaryKeywords, parentRunId: input.parentRunId
+    });
+    await this.pool.query(
+      `INSERT INTO content_optimization_input_snapshots (
+         id, workspace_id, run_id, source_kind, source_url, content_text, content_hash, metadata
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+      [randomUUID(), input.workspaceId, run.id, input.sourceKind, input.sourceUrl ?? null, input.contentText, input.contentHash, JSON.stringify(input.metadata ?? {})]
+    );
+    return { task: result.task, run };
+  }
+
+  async getContentOptimizationDetails(runId: string, workspaceId: string) {
+    const run = await this.findContentOptimizationRun(runId, workspaceId);
+    if (!run) return undefined;
+    const [snapshot, checks, claims, suggestions] = await Promise.all([
+      this.pool.query(`SELECT * FROM content_optimization_input_snapshots WHERE run_id = $1 AND workspace_id = $2 LIMIT 1`, [runId, workspaceId]),
+      this.pool.query(`SELECT * FROM content_score_checks WHERE run_id = $1 AND workspace_id = $2 ORDER BY code`, [runId, workspaceId]),
+      this.pool.query(`SELECT * FROM content_claims WHERE run_id = $1 AND workspace_id = $2 ORDER BY created_at`, [runId, workspaceId]),
+      this.pool.query(`SELECT * FROM content_rewrite_suggestions WHERE run_id = $1 AND workspace_id = $2 ORDER BY created_at`, [runId, workspaceId])
+    ]);
+    return { run, snapshot: snapshot.rows[0] ? mapContentSnapshot(snapshot.rows[0]) : undefined, scoreChecks: checks.rows.map(mapContentScoreCheck), claims: claims.rows.map(mapContentClaim), suggestions: suggestions.rows.map(mapContentRewriteSuggestion) };
+  }
+
+  async saveContentScoreChecks(workspaceId: string, runId: string, checks: Omit<ContentScoreCheckRecord, 'id' | 'workspaceId' | 'runId'>[], score: number, confidence: number, status: Phase2TaskStatus) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM content_score_checks WHERE workspace_id = $1 AND run_id = $2`, [workspaceId, runId]);
+      for (const item of checks) {
+        await client.query(
+          `INSERT INTO content_score_checks (id, workspace_id, run_id, code, dimension, source_type, status, weight, score, evidence, evidence_json, recommendation)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)`,
+          [randomUUID(), workspaceId, runId, item.code, item.dimension, item.sourceType, item.status, item.weight, item.score ?? null, item.evidence ?? null, JSON.stringify(item.evidenceJson ?? {}), item.recommendation ?? null]
+        );
+      }
+      await client.query(`UPDATE content_optimization_runs SET score = $3, confidence = $4, status = $5, updated_at = now() WHERE id = $1 AND workspace_id = $2`, [runId, workspaceId, score, confidence, status]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async saveContentClaim(input: Omit<ContentClaim, 'id' | 'workspaceId'> & { workspaceId: string }) {
+    const result = await this.pool.query(
+      `INSERT INTO content_claims (id, workspace_id, run_id, claim_text, source_url, source_title, source_hash, source_excerpt_hash, source_type, verification_status, blocked_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [randomUUID(), input.workspaceId, input.runId, input.claimText, input.sourceUrl ?? null, input.sourceTitle ?? null, input.sourceHash ?? null, input.sourceExcerptHash ?? null, input.sourceType, input.verificationStatus, input.blockedReason ?? null]
+    );
+    return mapContentClaim(result.rows[0]);
+  }
+
+  async createContentRewriteSuggestion(input: Omit<ContentRewriteSuggestion, 'id' | 'createdAt' | 'updatedAt'>) {
+    const result = await this.pool.query(
+      `INSERT INTO content_rewrite_suggestions (id, workspace_id, run_id, task_id, scope, selector, before_text, before_hash, suggested_text, diff, risk_flags, status, revision)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13) RETURNING *`,
+      [randomUUID(), input.workspaceId, input.runId, input.taskId ?? null, input.scope, input.selector ?? null, input.beforeText, input.beforeHash, input.suggestedText ?? null, JSON.stringify(input.diff), JSON.stringify(input.riskFlags), input.status, input.revision]
+    );
+    return mapContentRewriteSuggestion(result.rows[0]);
+  }
+
+  async updateContentRewriteSuggestion(runId: string, suggestionId: string, workspaceId: string, patch: Pick<ContentRewriteSuggestion, 'status'> & Partial<Pick<ContentRewriteSuggestion, 'suggestedText' | 'riskFlags'>>) {
+    const result = await this.pool.query(
+      `UPDATE content_rewrite_suggestions SET status = $4, suggested_text = COALESCE($5, suggested_text), risk_flags = COALESCE($6::jsonb, risk_flags), updated_at = now()
+       WHERE id = $1 AND run_id = $2 AND workspace_id = $3 RETURNING *`,
+      [suggestionId, runId, workspaceId, patch.status, patch.suggestedText ?? null, patch.riskFlags ? JSON.stringify(patch.riskFlags) : null]
+    );
+    return result.rows[0] ? mapContentRewriteSuggestion(result.rows[0]) : undefined;
   }
 
   async recordAttempt(input: Omit<TaskAttempt, 'id'>) {

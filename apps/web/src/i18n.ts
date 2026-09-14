@@ -61,6 +61,15 @@ const messages = {
       selectAll: 'Select All',
       cancel: 'Cancel'
     },
+    navigationGroups: {
+      default: 'Workspace'
+    },
+    contentOptimizer: {
+      title: 'Content Optimizer', body: 'Analyze a content snapshot before creating any CMS draft.',
+      focusKeyword: 'Focus keyword', content: 'Content', analyze: 'Analyze content', score: 'Score', confidence: 'Confidence',
+      dimension: 'Dimension', status: 'Status', recommendation: 'Recommendation',
+      errors: { PROVIDER_UNAVAILABLE: 'Content analysis is unavailable until an approved model profile is configured.', REQUEST_FAILED: 'Unable to create the content analysis task.' }
+    },
     marketing: {
       homeTitle: 'SEO Tutorials | Website SEO and AI Optimization',
       homeKeyword: 'SEO tutorials',
@@ -1151,6 +1160,15 @@ const messages = {
       viewDetails: '查看詳情',
       selectAll: '全選',
       cancel: '取消'
+    },
+    navigationGroups: {
+      default: '工作區'
+    },
+    contentOptimizer: {
+      title: '內容優化器', body: '建立 CMS 草稿前，先分析內容快照與可解釋 SEO 檢查。',
+      focusKeyword: '焦點關鍵詞', content: '內容', analyze: '分析內容', score: '分數', confidence: '信心度',
+      dimension: '維度', status: '狀態', recommendation: '建議',
+      errors: { PROVIDER_UNAVAILABLE: '尚未配置已核驗模型 profile，內容分析暫不可用。', REQUEST_FAILED: '無法建立內容分析任務。' }
     },
     marketing: {
       homeTitle: 'SEO 教學｜網站 SEO 整合 AI 優化教程',

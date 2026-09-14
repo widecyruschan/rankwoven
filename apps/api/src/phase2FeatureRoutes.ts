@@ -3,11 +3,14 @@ import { z } from 'zod';
 import {
   createDeterministicUuid,
   hashRequestBody,
+  hashContentSnapshot,
+  sanitizeContentSnapshot,
   normalizePagination,
   type ApiResponse,
   type Phase2Repository,
   type KeywordResearchProvider
 } from '@aieo/ai-providers';
+import { fetchValidatedPublicUrl, UnsafeTargetUrlError, validatePublicUrl } from '@aieo/security';
 import type { AuthService } from './auth';
 import type { SiteConnectionRepository } from './siteConnections';
 import {
@@ -74,12 +77,29 @@ const createContentOptimizationSchema = z.object({
   siteId: z.string().uuid(),
   articleId: z.number().int().positive().optional(),
   content: z.string().trim().min(1).max(500_000).optional(),
+  sourceUrl: z.string().url().max(2_048).optional(),
+  focusKeyword: z.string().trim().min(1).max(300),
+  secondaryKeywords: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
   locale: z.string().trim().min(2).max(20).default('zh-Hant'),
+  targetMarket: z.string().trim().min(2).max(80).optional(),
+  dialect: z.string().trim().min(2).max(40).optional(),
+  audience: z.string().trim().max(500).optional(),
+  funnelStage: z.string().trim().max(80).optional(),
   rulesVersion: z.string().trim().min(1).max(80).default('phase2-v1'),
   promptVersion: z.string().trim().min(1).max(80).default('phase2-v1'),
   schemaVersion: z.string().trim().min(1).max(80).default('phase2-v1')
-}).refine((input) => Boolean(input.articleId || input.content), {
-  message: '必須提供已同步文章 ID 或內容文字'
+}).refine((input) => [input.articleId, input.content, input.sourceUrl].filter(Boolean).length === 1, {
+  message: '必須且只能提供已同步文章 ID、內容文字或公開 URL'
+});
+
+const createContentRewriteSchema = z.object({
+  scope: z.enum(['title', 'meta', 'opening', 'paragraph', 'section', 'outline', 'full_document']),
+  selector: z.string().trim().max(300).optional()
+});
+
+const updateContentSuggestionSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  suggestedText: z.string().trim().min(1).max(500_000).optional()
 });
 
 const webhookParamsSchema = z.object({ provider: z.enum(['stripe', 'paypal']) });
@@ -144,6 +164,47 @@ function normalizeDomain(value: string) {
   } catch {
     return undefined;
   }
+}
+
+async function resolveContentSource(
+  input: z.infer<typeof createContentOptimizationSchema>,
+  siteConnectionRepository: SiteConnectionRepository
+) {
+  if (input.content) {
+    const contentText = sanitizeContentSnapshot(input.content);
+    return { sourceKind: 'inline' as const, contentText, metadata: { inputType: 'inline' } };
+  }
+  if (input.articleId) {
+    const articles = await siteConnectionRepository.listArticles(input.siteId, { page: 1, pageSize: 100 });
+    const article = articles.items.find((item) => Number(item.cmsId) === input.articleId);
+    const contentText = sanitizeContentSnapshot(article?.contentHtml ?? '');
+    if (!article || !contentText) throw new Error('CONTENT_SNAPSHOT_UNAVAILABLE');
+    return {
+      sourceKind: 'article' as const,
+      contentText,
+      sourceUrl: article.url,
+      metadata: { inputType: 'article', title: article.title, metaDescription: article.metaDescription ?? '', cmsId: article.cmsId }
+    };
+  }
+  if (!input.sourceUrl) throw new Error('CONTENT_SOURCE_INVALID');
+  const target = await validatePublicUrl(input.sourceUrl);
+  const response = await fetchValidatedPublicUrl(target, { headers: { Accept: 'text/html,application/xhtml+xml' } });
+  if (!response.ok) throw new Error('CONTENT_SOURCE_INVALID');
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) throw new Error('CONTENT_SOURCE_INVALID');
+  const contentText = sanitizeContentSnapshot(await response.text());
+  if (!contentText) throw new Error('CONTENT_SNAPSHOT_UNAVAILABLE');
+  return { sourceKind: 'public_url' as const, sourceUrl: target.url.toString(), contentText, metadata: { inputType: 'public_url', contentType } };
+}
+
+function sendContentError(reply: FastifyReply, error: unknown) {
+  const code = error instanceof UnsafeTargetUrlError ? 'CONTENT_SOURCE_UNSAFE' : error instanceof Error ? error.message : 'CONTENT_SOURCE_INVALID';
+  const statusCode = code === 'CONTENT_SOURCE_UNSAFE' ? 400 : code === 'ENTITLEMENT_REQUIRED' ? 403 : code === 'QUOTA_EXCEEDED' ? 429 : 400;
+  return reply.status(statusCode).send({
+    success: false,
+    message: code === 'CONTENT_SOURCE_UNSAFE' ? '內容來源不符合安全抓取規則' : '內容優化任務無法建立',
+    error: { code }
+  });
 }
 
 export function registerPhase2FeatureRoutes(
@@ -445,28 +506,44 @@ export function registerPhase2FeatureRoutes(
       return sendWorkspaceNotFound(reply);
     }
     const profile = (await repository.listGatewayProfiles()).find(
-      (candidate) => candidate.profileKey === 'text.default' && candidate.status === 'active'
+      (candidate) => candidate.profileKey === 'text.high_quality' && candidate.status === 'active'
     );
     if (!profile) return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
     const priceSnapshot = await repository.findActiveGatewayPriceSnapshot(profile.modelId);
     if (!priceSnapshot) return sendProviderUnavailable(reply, 'PRICE_SNAPSHOT_UNAVAILABLE');
-    const entitlement = await repository.findActiveEntitlement(user.workspaceId, 'content_optimization');
-    if (!entitlement) {
-      return reply.status(403).send({
-        success: false,
-        message: '目前套餐未包含內容優化額度',
-        error: { code: 'ENTITLEMENT_REQUIRED' }
+    try {
+      const source = await resolveContentSource(parsed.data, siteConnectionRepository);
+      const inputHash = hashRequestBody({
+        contentHash: hashContentSnapshot(source.contentText), focusKeyword: parsed.data.focusKeyword,
+        secondaryKeywords: parsed.data.secondaryKeywords, locale: parsed.data.locale,
+        targetMarket: parsed.data.targetMarket, dialect: parsed.data.dialect, rulesVersion: parsed.data.rulesVersion,
+        promptVersion: parsed.data.promptVersion, schemaVersion: parsed.data.schemaVersion, modelId: profile.modelId
       });
-    }
-    const usedUnits = await repository.getPeriodUsageUnits(user.workspaceId, 'content_optimization', entitlement.period);
-    if (usedUnits + 1 > entitlement.limitValue) {
-      return reply.status(429).send({
-        success: false,
-        message: '內容優化額度已達上限',
-        error: { code: 'QUOTA_EXCEEDED' }
-      });
-    }
-    return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
+      const cachedRun = await repository.findContentOptimizationRunByInput(parsed.data.siteId, user.workspaceId, inputHash, profile.modelId);
+      if (cachedRun) {
+        const task = cachedRun.taskId ? await repository.findTask(cachedRun.taskId, user.workspaceId) : undefined;
+        const body = { success: true, message: '已返回相同內容快照的分析', data: { taskId: task?.id ?? cachedRun.taskId, runId: cachedRun.id, status: task?.status ?? cachedRun.status, progress: task?.progress ?? 0, cacheHit: true } };
+        const saved = await saveIdempotentResponse(repository, request, user.workspaceId, idempotency.key, idempotency.requestHash, 202, body);
+        return reply.status(saved.statusCode).send(saved.responseBody);
+      }
+      const result = await repository.enqueueContentOptimizationRun({
+        workspaceId: user.workspaceId, siteId: parsed.data.siteId, kind: 'content_optimization', estimatedCredits: 1,
+        operation: 'content_optimization', featureKey: 'content_optimization', units: 1,
+        costEstimate: Number(priceSnapshot.inputPrice ?? 0), provider: 'wenwen', providerKey: 'wenwen',
+        gatewayModel: profile.modelId, priceSnapshotId: priceSnapshot.id, requestHash: inputHash,
+        sourceKind: source.sourceKind, sourceUrl: source.sourceUrl, contentText: source.contentText, contentHash: inputHash,
+        metadata: { ...source.metadata, audience: parsed.data.audience ?? '', funnelStage: parsed.data.funnelStage ?? '' },
+        articleId: parsed.data.articleId, locale: parsed.data.locale, targetMarket: parsed.data.targetMarket, dialect: parsed.data.dialect,
+        focusKeyword: parsed.data.focusKeyword, secondaryKeywords: parsed.data.secondaryKeywords,
+        rulesVersion: parsed.data.rulesVersion, promptVersion: parsed.data.promptVersion, schemaVersion: parsed.data.schemaVersion,
+        record: { workspaceId: user.workspaceId, method: request.method, route: getRouteKey(request), key: idempotency.key, requestHash: idempotency.requestHash, statusCode: 202, createdAt: new Date().toISOString() },
+        actorId: user.id, requestId: request.id, priority: 50
+      }, (task, run) => ({ statusCode: 202, responseBody: { success: true, message: '內容分析任務已建立', data: { taskId: task.id, runId: run.id, status: task.status, progress: task.progress, cacheHit: false } } }));
+      if (result.replay) return reply.status(result.replay.statusCode).send(result.replay.responseBody);
+      if (!result.task || !result.run) throw new Error('CONTENT_SNAPSHOT_UNAVAILABLE');
+      await repository.recordAudit({ workspaceId: user.workspaceId, actorType: 'user', actorId: user.id, action: 'content_optimization.created', resourceType: 'content_optimization_run', resourceId: result.run.id, requestId: request.id });
+      return reply.status(202).send({ success: true, message: '內容分析任務已建立', data: { taskId: result.task.id, runId: result.run.id, status: result.task.status, progress: result.task.progress, cacheHit: false } });
+    } catch (error) { return sendContentError(reply, error); }
   });
 
   app.get('/api/v1/content-optimizations/:runId', async (request, reply) => {
@@ -474,43 +551,101 @@ export function registerPhase2FeatureRoutes(
     if (!user) return reply;
     const parsed = contentRunParamsSchema.safeParse(request.params);
     if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
-    const run = await repository.findContentOptimizationRun(parsed.data.runId, user.workspaceId);
-    if (!run) return sendWorkspaceNotFound(reply);
-    return { success: true, message: '操作成功', data: { run, scoreChecks: [], claims: [], suggestions: [] } };
+    const details = await repository.getContentOptimizationDetails(parsed.data.runId, user.workspaceId);
+    if (!details) return sendWorkspaceNotFound(reply);
+    return { success: true, message: '操作成功', data: details };
   });
 
-  for (const path of [
-    '/api/v1/content-optimizations/:runId/rewrites',
-    '/api/v1/content-optimizations/:runId/apply',
-    '/api/v1/content-optimizations/:runId/recheck'
-  ]) {
-    app.post(path, async (request, reply) => {
-      const user = await requireRole(authService, request, reply, 'editor');
-      if (!user) return reply;
-      const parsed = contentRunParamsSchema.safeParse(request.params);
-      if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
-      if (!(await repository.findContentOptimizationRun(parsed.data.runId, user.workspaceId))) {
-        return sendWorkspaceNotFound(reply);
+  app.post('/api/v1/content-optimizations/:runId/rewrites', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'editor');
+    if (!user) return reply;
+    const params = contentRunParamsSchema.safeParse(request.params);
+    const parsed = createContentRewriteSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return sendValidationError(reply, params.error?.issues ?? parsed.error?.issues);
+    const idempotency = await readIdempotency(repository, request, createRequestContext(request, user));
+    if (sendIdempotencyError(reply, idempotency)) return reply;
+    if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
+    const details = await repository.getContentOptimizationDetails(params.data.runId, user.workspaceId);
+    if (!details?.snapshot) return sendWorkspaceNotFound(reply);
+    const profile = (await repository.listGatewayProfiles()).find((candidate) => candidate.profileKey === 'text.high_quality' && candidate.status === 'active');
+    const priceSnapshot = profile ? await repository.findActiveGatewayPriceSnapshot(profile.modelId) : undefined;
+    if (!profile) return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
+    if (!priceSnapshot) return sendProviderUnavailable(reply, 'PRICE_SNAPSHOT_UNAVAILABLE');
+    try {
+      const result = await repository.enqueueCostedTask({
+        workspaceId: user.workspaceId, siteId: details.run.siteId, kind: 'content_rewrite', estimatedCredits: 1,
+        operation: 'content_optimization', featureKey: 'content_optimization', units: 1, costEstimate: Number(priceSnapshot.inputPrice ?? 0),
+        provider: 'wenwen', providerKey: 'wenwen', gatewayModel: profile.modelId, priceSnapshotId: priceSnapshot.id,
+        record: { workspaceId: user.workspaceId, method: request.method, route: getRouteKey(request), key: idempotency.key, requestHash: idempotency.requestHash, statusCode: 202, createdAt: new Date().toISOString() }, actorId: user.id, requestId: request.id
+      }, (task) => ({ statusCode: 202, responseBody: { success: true, message: '內容改寫任務已建立', data: { taskId: task.id } } }));
+      if (result.replay) return reply.status(result.replay.statusCode).send(result.replay.responseBody);
+      if (!result.task) throw new Error('CONTENT_SNAPSHOT_UNAVAILABLE');
+      const suggestion = await repository.createContentRewriteSuggestion({ workspaceId: user.workspaceId, runId: details.run.id, taskId: result.task.id, scope: parsed.data.scope, selector: parsed.data.selector, beforeText: details.snapshot.contentText, beforeHash: hashContentSnapshot(details.snapshot.contentText), diff: {}, riskFlags: [], status: 'queued', revision: 1 });
+      return reply.status(202).send({ success: true, message: '內容改寫任務已建立', data: { taskId: result.task.id, suggestionId: suggestion.id } });
+    } catch (error) { return sendContentError(reply, error); }
+  });
+
+  app.post('/api/v1/content-optimizations/:runId/apply', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'editor');
+    if (!user) return reply;
+    const parsed = contentRunParamsSchema.safeParse(request.params);
+    if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
+    const details = await repository.getContentOptimizationDetails(parsed.data.runId, user.workspaceId);
+    if (!details?.snapshot) return sendWorkspaceNotFound(reply);
+    if (details.run.sourceKind === 'article' && details.run.articleId) {
+      const articles = await siteConnectionRepository.listArticles(details.run.siteId, { page: 1, pageSize: 100 });
+      const article = articles.items.find((item) => Number(item.cmsId) === details.run.articleId);
+      if (!article || hashContentSnapshot(article.contentHtml ?? '') !== hashContentSnapshot(details.snapshot.contentText)) {
+        return reply.status(409).send({ success: false, message: '內容快照已變更，請重新比較', error: { code: 'STALE_CONTENT_SNAPSHOT' } });
       }
-      const idempotency = await readIdempotency(repository, request, createRequestContext(request, user));
-      if (sendIdempotencyError(reply, idempotency)) return reply;
-      if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
-      return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
-    });
-  }
+    }
+    return reply.status(409).send({ success: false, message: 'CMS 寫入尚未啟用', error: { code: 'CMS_WRITE_DISABLED' } });
+  });
+
+  app.post('/api/v1/content-optimizations/:runId/recheck', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'editor');
+    if (!user) return reply;
+    const parsed = contentRunParamsSchema.safeParse(request.params);
+    if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
+    const idempotency = await readIdempotency(repository, request, createRequestContext(request, user));
+    if (sendIdempotencyError(reply, idempotency)) return reply;
+    if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
+    const details = await repository.getContentOptimizationDetails(parsed.data.runId, user.workspaceId);
+    if (!details?.snapshot) return sendWorkspaceNotFound(reply);
+    const profile = (await repository.listGatewayProfiles()).find((candidate) => candidate.profileKey === 'text.high_quality' && candidate.status === 'active');
+    const priceSnapshot = profile ? await repository.findActiveGatewayPriceSnapshot(profile.modelId) : undefined;
+    if (!profile) return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
+    if (!priceSnapshot) return sendProviderUnavailable(reply, 'PRICE_SNAPSHOT_UNAVAILABLE');
+    try {
+      const runHash = hashRequestBody({ parentRunId: details.run.id, contentHash: details.snapshot.contentHash, profile: profile.modelId, timestamp: Date.now() });
+      const result = await repository.enqueueContentOptimizationRun({
+        workspaceId: user.workspaceId, siteId: details.run.siteId, kind: 'content_optimization', estimatedCredits: 1, operation: 'content_optimization', featureKey: 'content_optimization', units: 1, costEstimate: Number(priceSnapshot.inputPrice ?? 0), provider: 'wenwen', providerKey: 'wenwen', gatewayModel: profile.modelId, priceSnapshotId: priceSnapshot.id, requestHash: runHash,
+        sourceKind: details.snapshot.sourceKind, sourceUrl: details.snapshot.sourceUrl, contentText: details.snapshot.contentText, contentHash: runHash, metadata: details.snapshot.metadata, articleId: details.run.articleId, locale: details.run.contentLocale ?? details.run.locale, targetMarket: details.run.targetMarket, dialect: details.run.dialect, focusKeyword: details.run.focusKeyword ?? '', secondaryKeywords: details.run.secondaryKeywords ?? [], rulesVersion: details.run.rulesVersion, promptVersion: details.run.promptVersion, schemaVersion: details.run.schemaVersion, parentRunId: details.run.id,
+        record: { workspaceId: user.workspaceId, method: request.method, route: getRouteKey(request), key: idempotency.key, requestHash: idempotency.requestHash, statusCode: 202, createdAt: new Date().toISOString() }, actorId: user.id, requestId: request.id
+      }, (task, run) => ({ statusCode: 202, responseBody: { success: true, message: '內容重新分析任務已建立', data: { taskId: task.id, runId: run.id } } }));
+      if (result.replay) return reply.status(result.replay.statusCode).send(result.replay.responseBody);
+      return reply.status(202).send({ success: true, message: '內容重新分析任務已建立', data: { taskId: result.task?.id, runId: result.run?.id } });
+    } catch (error) { return sendContentError(reply, error); }
+  });
 
   app.patch('/api/v1/content-optimizations/:runId/suggestions/:suggestionId', async (request, reply) => {
     const user = await requireRole(authService, request, reply, 'editor');
     if (!user) return reply;
     const parsed = contentRunParamsSchema.safeParse(request.params);
     if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
+    const body = updateContentSuggestionSchema.safeParse(request.body);
+    if (!body.success) return sendValidationError(reply, body.error.issues);
     if (!(await repository.findContentOptimizationRun(parsed.data.runId, user.workspaceId))) {
       return sendWorkspaceNotFound(reply);
     }
     const idempotency = await readIdempotency(repository, request, createRequestContext(request, user));
     if (sendIdempotencyError(reply, idempotency)) return reply;
     if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
-    return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
+    const suggestion = await repository.updateContentRewriteSuggestion(parsed.data.runId, String((request.params as { suggestionId?: string }).suggestionId ?? ''), user.workspaceId, body.data);
+    if (!suggestion) return sendWorkspaceNotFound(reply);
+    const response = { success: true, message: '內容建議已更新', data: { suggestion } };
+    const saved = await saveIdempotentResponse(repository, request, user.workspaceId, idempotency.key, idempotency.requestHash, 200, response);
+    return reply.status(saved.statusCode).send(saved.responseBody);
   });
 
   app.post('/api/v1/webhooks/:provider', async (request, reply) => {
