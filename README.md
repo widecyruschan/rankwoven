@@ -6410,6 +6410,29 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 - 在本機客戶後台手動新增一個公開測試網站，確認站點切換後所有 customer menu 均保持該 site context。
 - 使用者明確授權後才提交、推送或部署。
 
+## 會話總結（2026-09-15）— PH2 站點工作區生產部署
+
+### 會話主要目的
+
+將已完成的 PH2 站點工作區、手動網站接入、Site Audit、Ahrefs 設定、監控與 WordPress 後台更新推送至 GitHub `main` 並部署至 Hostinger VPS。
+
+### 完成的主要任務
+
+- 提交 `f5566d5` 並推送至 `main`。
+- GitHub Actions `Production Deploy`（run `34871353307`）完成 Verify 與 Hostinger VPS Deploy。
+- 生產部署腳本完成備份、migration、Docker Compose 重建、公開 health 與已登入站點 API smoke check。
+
+### 驗證結果
+
+- GitHub Actions Verify：lint、test、build、security audit 全部成功。
+- `https://api.rankwoven.com/health` 返回 HTTP 200。
+- 生產登入及 `GET /api/v1/site-connections` 返回 HTTP 200，回應包含 `connectionMode` 與 `canWriteBack` 能力欄位。
+
+### 下一步行動清單
+
+- 在客戶後台手動新增公開測試網站，確認全域 site switcher 與手動修復流程。
+- 為需要一鍵優化的 WordPress 站點完成插件連接與 Application Password 配置。
+
 ## 會話總結（2026-09-15）— 手動 URL 與同步內容只讀 SEO 分析
 
 ### 會話主要目的
