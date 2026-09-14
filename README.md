@@ -5940,3 +5940,22 @@ Node.js、TypeScript、Vue/Vite、Fastify、Vitest、Docker Compose、GitHub Act
 ### 下一步行動清單
 
 - 等待明確授權後，連同 PH2-07／PH2-08 已驗證變更一起 commit、push 與部署。
+
+## 會話總結（2026-09-14）— PH2-07／08 與管理權限生產部署
+
+### 會話主要目的
+
+將已驗證的 PH2-07 Content Optimizer、PH2-08 核心導航與 owner 管理後台權限修復推送至 GitHub `main` 並部署到 Hostinger VPS。
+
+### 完成的主要任務
+
+- 提交並推送 `3364803 feat(phase2): add content workflows and routed workspaces`。
+- GitHub Actions Production Deploy 完成 Verify 與 Hostinger VPS Deploy。
+- 驗證 API health、主網域／`www` 的 `/admin/` 入口，以及 owner 管理 API 存取。
+
+### 驗證結果
+
+- Production Deploy workflow `34815881196` 成功。
+- `https://api.rankwoven.com/health` 返回 HTTP 200。
+- `https://rankwoven.com/admin/`、`https://www.rankwoven.com/admin/` 返回 HTTP 200。
+- demo owner 的管理 API 請求返回 HTTP 200；驗證過程未輸出 token、密碼或 `.env`。
