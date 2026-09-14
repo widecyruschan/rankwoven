@@ -5401,3 +5401,398 @@ Fastify CORS、TypeScript、Vitest、Docker Compose、agent-browser。
 ### 下一步行動清單
 
 - 推送 CORS 修復到 `main`，由 GitHub Actions 部署至 production。
+
+## 會話總結（2026-09-14）— 啟動 PH2-05 基礎資料、用量與任務治理核檢
+
+### 會話主要目的
+
+依第二階段開發流程啟動 PH2-05，盤點資料治理、用量帳本、任務隊列、限流與可觀測性現況，並建立批准前的實作契約。
+
+### 完成的主要任務
+
+- 對照 `0010`–`0014` migration、Phase 2 Repository、Worker、API route 與既有測試，確認研究／內容資料、append-only ledger、entitlement、task attempt、workspace trigger 和 global IP rate limit 均已有基礎。
+- 識別目前缺口：用量 reserve 與 task 建立尚未原子化、release 未從週期 quota 排除、Phase 2 Worker 只執行模型目錄同步、缺少 lease／公平排程／provider limiter／circuit breaker／dead-letter disposition 與完整 attempt telemetry。
+- 建立 PH2-05 核檢文件，定義 PostgreSQL durable queue、Redis 限流邊界、reserve→finalize/release 不變量、租約重試、取消、dead-letter replay／ignore、資料最小化與驗收測試。
+
+### 關鍵決策和解決方案
+
+- PostgreSQL 繼續作 task、ledger、entitlement 與 audit 的唯一事實來源；Redis 只用於跨實例 provider rate limit 與 circuit breaker。
+- 成本型任務必須在同一交易中完成 idempotency、quota、reserve、task 與 audit；Stripe 不可作 request-time quota 真相。
+- 真實 Provider、公開 audit、CMS 寫回、付款與外部副作用仍關閉，必須先取得 `APPROVE PH2-05` 並在後續功能 gate 批准後才可啟用。
+
+### 使用的技術棧
+
+PostgreSQL、Redis、Fastify、Node.js、TypeScript、Vitest、Docker Compose。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-05-data-usage-task-governance.md`
+- `README.md`
+
+### 驗證結果
+
+- 本次為批准前設計與文件盤點，未修改 runtime、migration、環境變數或 production 資源；因此未執行全倉 build／test。
+- 已確認使用者既有未提交前端／WordPress 文件與樣式修改仍保留且未混入本次範圍。
+
+### 下一步行動清單
+
+- 等待 `APPROVE PH2-05`。
+- 批准後依核檢文件順序實作 `0015` migration、原子 enqueue／quota、worker lease／retry、Redis limiter／circuit、dead-letter 與測試。
+
+## 會話總結（2026-09-14）— 第二階段三層選單與路由重新規劃
+
+### 會話主要目的
+
+依最新第二階段 PRD 重整公開前台、客戶後台與管理後台的選單、canonical route、舊路由遷移與未完成項目排期。
+
+### 完成的主要任務
+
+- 新增 PRD 11.3.6，定義公開產品／工具／資源／定價／帳戶及 Footer 導覽、工具 hub 與完整公開 route inventory。
+- 定義客戶後台的工作區導覽、站點內容導覽、內容子頁、監控與外鏈、工作區操作選單，並統一以 `/app/sites/:siteId/*` 作站點上下文。
+- 定義管理後台的平台總覽、客戶與資源、執行與成本、治理、系統選單與完整內部 route inventory。
+- 修正舊規劃中 `/app/tasks` 的衝突：它保留為跨站 task canonical；單站 task 改用 `/app/sites/:siteId/tasks`。所有舊私有 route 由驗證 workspace／site 後的 resolver 處理，避免 static redirect 遺失站點上下文。
+- 補充 PH2-08 工作流及前端頁面規格的 menu manifest、可達性、feature flag、i18n 與公開 SEO 孤島驗收要求。
+
+### 關鍵決策和解決方案
+
+- 公開、客戶與管理 route 嚴格分成三個 namespace；私有頁不參與 sitemap，公開頁必須通過 parent／related link 的孤島 gate。
+- Router、menu、breadcrumb、legacy resolver、SEO head 與 sitemap 將由同一份 Route + Navigation Manifest 生成，避免各處手寫連結後漂移。
+- 新規劃只更新未完成 PRD 與實作標準，不啟用任何新 route、選單或功能；仍由 PH2-08 及相關功能階段批准後實作。
+
+### 使用的技術棧
+
+Vue Router、Vue I18n、TypeScript、route registry、靜態 SEO 生成與 Sitemap。
+
+### 新增或修改文件
+
+- `docs/rankwoven-phase-2-prd.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證結果
+
+- 本次只修改 PRD／流程／頁面規格，未修改 Router、前端元件、API、migration 或 production。
+- `git diff --check` 通過；已對照既有 route registry、PH2-08 工作流與 PRD，確認 v2 規格明確覆蓋舊 redirect 衝突。
+- 不需要執行 build／test，因本次沒有程式碼或建置設定變更。
+
+### 下一步行動清單
+
+- 保持 PH2-05 為等待批准狀態。
+- 進入 PH2-08 前，以新 11.3.6 作 menu manifest、route registry、legacy resolver、i18n 與 SEO／可達性測試的唯一規格。
+
+## 會話總結（2026-09-14）— PH2-05 基礎資料、用量與任務治理實作完成
+
+### 會話主要目的
+
+在取得 `APPROVE PH2-05` 後，完成第二階段的資料治理、用量帳本、任務隊列、限流、熔斷、死信與可觀測性底座。
+
+### 完成的主要任務
+
+- 新增 `0015_phase2_task_governance.sql`，擴充 task lease、排程、取消、replay、priority、usage trace、attempt telemetry 與 dead-letter action；本機既有資料庫升級成功且重跑可安全跳過。
+- 實作 append-only reserve→finalize/release、active reservation quota、原子 costed task contract、queued cancel release、running cancellation request、workspace-scoped dead-letter list/replay/ignore。
+- 將 Phase 2 Worker 改為 workspace-aware due-task selection、lease recovery、15 秒 heartbeat、jitter retry、provider limiter／circuit 與結構化 task event；仍只允許已批准的 gateway model sync 出站。
+- 新增 Redis Lua token bucket／circuit breaker，套用到模型同步與已連接站點 audit；production 缺 Redis 時拒絕新增成本型 provider task。
+- 同步 OpenAPI、API／Worker／shared package 回歸測試與本地 Docker dependency volume。
+
+### 關鍵決策和解決方案
+
+- PostgreSQL 保持 task、ledger、entitlement 與 audit 的唯一事實來源；Redis 只負責跨實例 rate limit 與 circuit state。
+- task retry 永不再 reserve；一個 reservation 最多一筆 finalize 或 release，重跑 dead-letter 不覆寫原歷史。
+- 真實 SEO Provider、公開 audit、內容生成、CMS 寫回、付款 webhook 和 email 保持關閉，交由 PH2-06 至 PH2-11 獨立批准。
+
+### 使用的技術棧
+
+PostgreSQL、Redis、Fastify、Node.js、TypeScript、Vitest、Docker Compose、OpenAPI。
+
+### 新增或修改文件
+
+- `db/migrations/0015_phase2_task_governance.sql`
+- `packages/ai-providers/src/phase2.ts`
+- `packages/ai-providers/src/taskGovernance.ts`
+- `apps/api/src/phase2Repository.ts`
+- `apps/api/src/phase2Routes.ts`
+- `apps/api/src/siteAudit.ts`
+- `apps/worker/src/index.ts`
+- `apps/worker/src/phase2TaskState.ts`
+- `docs/approvals/phase-2/PH2-05-data-usage-task-governance.md`
+- `docs/openapi/phase2-contract.yaml`
+
+### 驗證結果
+
+- PostgreSQL migration upgrade、重跑 skip、3 項 Repository integration（含並發 quota advisory lock）、Redis Lua smoke、本機 API health 全部通過。
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過。
+
+### 下一步行動清單
+
+- 等待使用者決定是否推送 PH2-05 到 GitHub。
+- 可進入 `PH2-06` Keyword Intelligence；真實 DataForSEO 出站前先依 Provider fixture 與正式 rate／retry contract 核實。
+
+## 會話總結（2026-09-14）— 啟動 PH2-06 Keyword Intelligence 核檢
+
+### 會話主要目的
+
+依已批准的 PH2-05 任務治理，盤點現有關鍵詞建議服務與 Provider 接入，並建立 Keyword Intelligence 的研究、競品 Gap、聚類、來源標籤與驗收規格。
+
+### 完成的主要任務
+
+- 確認 `keywordSuggestions.ts` 已有 AI／模板候選、DataForSEO、Ahrefs、Semrush、generic enrichment 與 GSC merge，但目前是一次性回應，沒有持久化研究快照。
+- 建立 `PH2-06-keyword-intelligence.md`，定義 project／run 輸入上限、DataForSEO 主 Provider、Ahrefs／Semrush BYOK、Breakout AI 語義擴展、GSC first-party 分離、競品 Top 100、Missing／Weak／Strong／Shared、Opportunity Score、cache、成本、partial 與安全邊界。
+- 明確規劃 `0016` 的 `keyword_metrics`、`keyword_observations`、`keyword_gap_snapshots` 和 run metadata 擴展，以及 API／Worker／品質評測順序。
+
+### 關鍵決策和解決方案
+
+- AI 只產生候選詞、intent、cluster 和內容角度，不補造搜尋量、CPC、difficulty、排名、ETV 或流量。
+- 研究請求必須先經 PH2-05 atomic quota／idempotency／task governance；同一 snapshot cache hit 不重複出站或扣費。
+- 本次只完成核檢設計，未接出站 SEO Provider、未啟用新研究 runtime、未修改 migration 或前端頁面。
+
+### 使用的技術棧
+
+Fastify、Node.js、TypeScript、PostgreSQL、Redis、Breakout API gateway、GSC、DataForSEO／Ahrefs／Semrush adapter、Vitest。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-06-keyword-intelligence.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- 已完成現有 route／Provider／migration／Repository 對照；本次只有文件更新，不需要執行 build／test。
+- PH2-06 文件狀態為 `PENDING_APPROVAL`，沒有外部 API 請求或成本產生。
+
+### 下一步行動清單
+
+- 等待使用者回覆 `APPROVE PH2-06`。
+- 批准後先建立 `0016` migration 與 Provider sandbox fixture，再按文件順序實作 run、worker、gap、brief 和回歸測試。
+
+## 會話總結（2026-09-14）— PH2-06 Keyword Intelligence 實作完成
+
+### 會話主要目的
+
+在取得 `APPROVE PH2-06` 後，將一次性關鍵詞建議升級為可持久化、可重跑、可追溯的研究工作流。
+
+### 完成的主要任務
+
+- 新增 `0016_phase2_keyword_intelligence.sql`：`keyword_metrics`、`keyword_observations`、`keyword_gap_snapshots`、run context、score 欄位，以及 workspace 複合外鍵與 trigger。
+- 新增 DataForSEO、Ahrefs、Semrush Keyword Research adapters，統一 provider snapshot、sourceType、metrics、ranked keywords、Top 100 cap、timeout 與錯誤脫敏。
+- 研究 API 支援 seed／market／language／device／競品輸入、workspace／quota／idempotency、相同輸入 cache hit、keywords／gaps 分頁篩選與 content brief 建立。
+- Worker 支援 Provider metrics、Breakout AI 或 deterministic 候選擴展、競品 observations、Missing gap、Opportunity Score、run／usage 結算與重試治理。
+- 將既有 keyword provider 環境變數安全傳入 API／Worker；未提交任何 `.env`、密碼、Token 或 API key。
+
+### 關鍵決策和解決方案
+
+- DataForSEO 是平台主 Provider；Ahrefs／Semrush 只在 server-side BYOK 配置後出站，指標不混用。
+- AI 只產生候選詞、意圖、cluster 前置資料與內容角度，不生成搜尋量、CPC、難度、排名或流量。
+- 同一 project／正規化輸入／Provider 的既有 run 直接 cache hit，不重複建立 reserve 或外部請求；缺資料明確標記 unavailable／partial。
+
+### 使用的技術棧
+
+Fastify、Node.js、TypeScript、PostgreSQL、Redis、Breakout API gateway、DataForSEO／Ahrefs／Semrush adapters、Vitest、OpenAPI。
+
+### 新增或修改文件
+
+- `db/migrations/0016_phase2_keyword_intelligence.sql`
+- `packages/ai-providers/src/phase2.ts`
+- `packages/ai-providers/src/keywordResearch.ts`
+- `packages/ai-providers/src/index.ts`
+- `packages/ai-providers/tests/keywordResearch.test.ts`
+- `apps/api/src/keywordResearchService.ts`
+- `apps/api/src/phase2Repository.ts`
+- `apps/api/src/phase2FeatureRoutes.ts`
+- `apps/api/src/server.ts`
+- `apps/api/tests/phase2Repository.postgres.test.ts`
+- `apps/api/tests/phase2Routes.test.ts`
+- `apps/worker/src/index.ts`
+- `apps/worker/src/phase2TaskState.ts`
+- `apps/worker/tests/worker.test.ts`
+- `docker-compose.yml`
+- `docker-compose.prod.yml`
+- `docs/openapi/phase2-contract.yaml`
+- `docs/approvals/phase-2/PH2-06-keyword-intelligence.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- `0016` migration upgrade／重放、全新臨時資料庫 migration、PostgreSQL 4 項 Repository integration、Redis smoke、Provider／API／Worker fixtures 均通過。
+- 全倉 `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 通過；本機 Docker API `/health` 正常。
+
+### 下一步行動清單
+
+- 可進入 `PH2-07` Content Optimizer 與 AI 評測。
+- 真實 Provider 出站前核實正式 ranked-keyword endpoint、rate／retry-after、row cost、pricing snapshot 與 server-side key；GSC own-rank task 及公開工具仍由後續 gate 處理。
+
+## 會話總結（2026-09-14）— PH2-06 Keyword Intelligence 實作完成
+
+### 會話主要目的
+
+在取得 `APPROVE PH2-06` 後，完成可持久化、可重跑、可追溯的 Keyword Intelligence 研究流程。
+
+### 完成的主要任務
+
+- 新增 `0016_phase2_keyword_intelligence.sql`，建立 keyword metrics、own／competitor observation、Gap snapshot、score 與研究輸入 context，並加上 workspace 複合外鍵與觸發器。
+- 實作 DataForSEO、Ahrefs、Semrush provider adapter；統一 snapshot hash、Top 100、來源標籤、timeout 與錯誤脫敏。
+- 研究 API 支援 seed／market／language／device／競品輸入、Provider 選擇、PH2-05 quota／idempotency、同輸入 cache hit、分頁 filter、Gap 與 content brief。
+- Worker 支援 Provider metrics、Breakout AI／deterministic keyword expansion、競品 observations、Missing Gap、Opportunity Score、run 狀態與 usage finalize。
+- 補齊 PostgreSQL／In-memory Repository、API／Worker／Provider fixtures、migration integration、研究 route cache 與 workspace isolation 測試。
+- Docker Compose 已把 keyword provider 設定安全傳入 Worker；未提交任何 `.env`、密鑰或 API key。
+
+### 關鍵決策和解決方案
+
+- AI 只產生候選詞、意圖、聚類前置資料與內容角度，不生成搜尋量、CPC、難度、排名或流量。
+- DataForSEO 作平台主 Provider；Ahrefs／Semrush 只在 server-side BYOK 配置後出站，Provider 指標不混用。
+- 同一研究輸入命中既有 run 時直接返回 cache，不重複建立 task、reserve 或 Provider 請求；無資料顯示 unavailable／partial，不以 0 代替。
+
+### 使用的技術棧
+
+Fastify、Node.js、TypeScript、PostgreSQL、Redis、Breakout API gateway、DataForSEO／Ahrefs／Semrush adapters、Vue I18n contract、Vitest、OpenAPI。
+
+### 新增或修改文件
+
+- `db/migrations/0016_phase2_keyword_intelligence.sql`
+- `packages/ai-providers/src/keywordResearch.ts`
+- `packages/ai-providers/src/phase2.ts`
+- `packages/ai-providers/src/index.ts`
+- `packages/ai-providers/tests/keywordResearch.test.ts`
+- `apps/api/src/keywordResearchService.ts`
+- `apps/api/src/phase2Repository.ts`
+- `apps/api/src/phase2FeatureRoutes.ts`
+- `apps/api/src/server.ts`
+- `apps/api/tests/phase2Repository.postgres.test.ts`
+- `apps/api/tests/phase2Routes.test.ts`
+- `apps/worker/src/index.ts`
+- `apps/worker/src/phase2TaskState.ts`
+- `apps/worker/tests/worker.test.ts`
+- `docker-compose.yml`
+- `docker-compose.prod.yml`
+- `docs/openapi/phase2-contract.yaml`
+- `docs/approvals/phase-2/PH2-06-keyword-intelligence.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- `0016` migration upgrade／重放、臨時新資料庫 migration、Provider fixtures、API／Worker／Repository integration 全部通過。
+- 全倉 `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過；本地 Docker API health 正常。
+
+### 下一步行動清單
+
+- 可進入 `PH2-07` Content Optimizer 與 AI 評測。
+- 真實 Provider 出站前核實正式 endpoint、rate／retry-after、row cost、pricing snapshot 與 server-side key；公開工具與內容生成仍不自動開啟。
+
+## 會話總結（2026-09-14）— 修復本地 Docker 登入與 Worker 查詢錯誤
+
+### 會話主要目的
+
+處理本地 Docker Web 登入顯示 `Failed to fetch`，並確認 PH2-06 變更後的 API／Worker 容器狀態。
+
+### 完成的主要任務
+
+- 確認 `localhost:8082` 使用 production-style Nginx Web 容器；Vite bundle 原先內嵌 `https://api.rankwoven.com`，runtime 的 `VITE_API_BASE_URL=http://localhost:3011` 因此不起作用。
+- 在 `docker-compose.prod.yml` 加入 `VITE_API_BASE_URL` build arg，使用本地 API 地址重新建立 Web image；bundle 已驗證只包含 `http://localhost:3011`。
+- 修正 Worker 研究任務查詢引用不存在的 `keyword_research_runs.reservation_id` 欄位，避免 PostgreSQL 反覆報錯並令 Worker 進入失敗循環。
+- 重啟本地 API／Worker，確認服務重新監聽且無新的欄位錯誤。
+
+### 關鍵決策和解決方案
+
+- 前端 API URL 是 build-time 變數；本地 production-style 測試必須先傳 build arg，再啟動 `localhost:8082`。
+- API CORS 保留 `localhost:8082` allowlist；不透過放寬跨來源或修改認證來繞過登入錯誤。
+
+### 使用的技術棧
+
+Docker Compose、Dockerfile.web、Vite、Nginx、Fastify、PostgreSQL、curl。
+
+### 新增或修改文件
+
+- `docker-compose.prod.yml`
+- `apps/worker/src/index.ts`
+- `docs/deployment.md`
+- `README.md`
+
+### 驗證結果
+
+- `http://localhost:3011/health` 返回 HTTP 200；`http://localhost:8082/login` 返回 HTTP 200。
+- `localhost:8082` 到 API 的 CORS 預檢返回 HTTP 204，demo 登入請求返回 HTTP 200；未輸出 token。
+- Web bundle 已驗證 API 地址為本地 `http://localhost:3011`；Worker／PostgreSQL／Redis 容器運行正常。
+
+### 下一步行動清單
+
+- 本次未 commit、push 或部署 production。
+- 重新測試登入後可繼續 `PH2-07`；若切換 production-style build，按 `docs/deployment.md` 使用正確 build arg。
+
+## 會話總結（2026-09-14）— 追查伺服器與本地 Docker 登入錯誤
+
+### 會話主要目的
+
+處理本地 Docker 與伺服器登入頁出現 `Failed to fetch`／CORS 錯誤。
+
+### 完成的主要任務
+
+- 確認本地 production-style Web bundle 原先內嵌 production API；加入 `docker-compose.prod.yml` build arg 後重建為 `http://localhost:3011`。
+- 確認本地 API／Worker 使用開發 Compose 設定，避免合併 production override 後把 `CORS_ORIGINS` 收窄至 production host。
+- 修正 Worker 研究任務查詢錯誤：移除不存在的 `keyword_research_runs.reservation_id` 引用。
+- 檢查公開 DNS 與 CORS：`rankwoven.com` 可登入，但 `www.rankwoven.com` 原先不在 production allowlist，預檢返回 `CORS_ORIGIN_DENIED`；已在程式、`.env.example` 與 production Compose 預設加入 `https://www.rankwoven.com`。
+
+### 關鍵決策和解決方案
+
+- Vite API 地址是 build-time 值，不能只修改容器 runtime environment。
+- CORS 只擴展至已知 canonical host，不使用萬用 `*`；production VPS 需要重新部署 allowlist 修改後，`www` 才會恢復登入。
+
+### 使用的技術棧
+
+Docker Compose、Dockerfile.web、Vite、Nginx、Fastify CORS、PostgreSQL、Worker、curl。
+
+### 新增或修改文件
+
+- `docker-compose.prod.yml`
+- `apps/api/src/config.ts`
+- `.env.example`
+- `apps/api/tests/health.test.ts`
+- `apps/worker/src/index.ts`
+- `docs/deployment.md`
+- `README.md`
+
+### 驗證結果
+
+- 本地 `http://localhost:8082/login` 返回 200，bundle 只引用 `http://localhost:3011`。
+- 本地 API health 200、CORS 預檢 204、demo 登入 200。
+- Production `https://rankwoven.com` health／CORS／demo 登入均正常；`https://www.rankwoven.com` 在部署前仍返回 CORS 500。
+- Worker 重啟後沒有新的資料庫欄位錯誤；既有重啟產生的 exit 143 是正常終止舊 watch 進程。
+
+### 下一步行動清單
+
+- 等待明確授權後 commit、push `main` 並部署 production，使 `www.rankwoven.com` allowlist 修復生效。
+- 未授權前不修改 VPS `.env`、不重啟 production、不執行 GitHub push。
+
+## 會話總結（2026-09-14）— PH2-05/PH2-06 推送與部署
+
+### 會話主要目的
+
+將已核准的 PH2-05、PH2-06 基礎資料／用量治理與關鍵詞智能功能，以及本地／`www` 登入修復推送至 GitHub `main` 並部署至生產環境。
+
+### 完成的主要任務
+
+- 重新執行完整測試、建置與高嚴重度安全掃描。
+- 確認 staged 變更未包含 `.env`、密碼、Token 或 API key；保留其他未相關 dirty worktree 不作提交。
+- 準備提交並觸發既有 GitHub Actions 生產部署流程。
+
+### 關鍵決策和解決方案
+
+- 只提交已 stage 的 35 個相關檔案，避免使用 `git add .` 將使用者其他修改帶入。
+- 生產部署沿用 GitHub Actions 與 `scripts/deploy-production.sh`，部署後驗證公開 API、Web 與兩個網域的 CORS／登入。
+
+### 使用的技術棧
+
+Node.js、TypeScript、Vue/Vite、Fastify、Vitest、Docker Compose、GitHub Actions。
+
+### 驗證結果
+
+- `npm run test` 通過。
+- `npm run build` 通過並生成 96 個 SEO fallback HTML，路由圖 96 nodes／1365 edges。
+- `npm run security:audit` 通過，未發現高嚴重度漏洞。
+
+### 下一步行動清單
+
+- 等待 GitHub Actions Production Deploy 完成。
+- 部署後檢查 `https://api.rankwoven.com/health`、`rankwoven.com` 與 `www.rankwoven.com` 登入及 CORS。

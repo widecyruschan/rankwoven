@@ -645,6 +645,123 @@ AI 不直接持有 CMS 寫權限、付款權限或任意 HTTP 工具。套用操
 | `/app/tasks`        | `/app/sites/:siteId/tasks`                               |
 | `/app/cms-adapters` | `/app/integrations`                                      |
 
+#### 11.3.6 三層選單與路由規格 v2（未完成項目優先規格）
+
+> 本節是 2026-09-14 重新規劃的實作規格，優先於本章前面的早期 route 草案與靜態 redirect 表。它只規劃尚未啟用的頁面與導覽，不會把 route 加入 Router、sitemap 或 production。實作時須在 `PH2-08` 取得批准，並對新公開 URL 重新執行 PH2-01 的 route／SEO graph 核檢。
+
+三個產品表面必須完全分離：公開前台用於可索引的產品教育與轉化；`/app/*` 只服務已登入工作區；`/admin/*` 只服務平台內部操作。不得在公開 HTML、sitemap、footer 或 JSON-LD 洩露客戶／管理端 URL，也不得把客戶或管理端的功能名稱當成公開頁面關鍵詞。
+
+**共用導覽規則**：route registry 擴展為唯一的 `Route + Navigation Manifest`，每個 entry 除既有 route metadata 外，新增 `navigationSurface`、`navigationGroup`、`navigationOrder`、`parentRouteId`、`labelKey`、`iconKey`、`availabilityPhase`、`featureFlag`、`siteScoped` 與 `deprecated`。所有可見選單文案必須走 Vue I18n；無權限、未開通 feature 或未有 active site 時隱藏入口，不能顯示必然 403／404 的選單項。相同 path prefix 的固定子頁（如 `content/optimizer`、`content/review`）必須優先於 `content/:contentId` 登錄並設 route test，避免動態參數攔截固定頁。
+
+##### 11.3.6.1 前台選單與公開路由
+
+公開 header 維持精簡的一級導覽，桌面版使用 dropdown，行動版使用同一資料來源的 drawer。Footer 是公開頁的第二層導覽，並承擔法律、公司及所有可索引 hub 的導入連結。
+
+| 選單群組 | 一級入口 | 二級入口／路由 | 用途與導入責任 | Phase |
+| --- | --- | --- | --- | --- |
+| 產品 | `/features` | `/extension` | 功能總覽與 CMS 整合；首頁、Docs 與 Footer 必須導入。 | 已有／PH2-08 |
+| 工具 | `/tools` | `/tools/keyword-research`、`/tools/content-optimizer`、`/tools/site-audit`、`/tools/title-generator`、`/tools/meta-description-generator`、`/tools/faq-generator`、`/tools/content-rewriter`、`/tools/competitor-gap` | `/tools` 是所有工具頁父 hub；每個工具頁連回 hub、相關工具、Features 與至少一篇相關 Blog。 | PH2-08；公開 audit runtime 受 PH2-10 gate |
+| 資源 | `/blog` | `/docs`、`/help`、`/blog/category/:category` | Blog、文件與支援互相導入；分類頁只有符合 11.4 門檻才可索引。 | 已有／PH2-08 |
+| 定價 | `/pricing` | 無 | 所有工具、Features、登入 CTA 與 Footer 導入。 | 已有 |
+| 帳戶 | `/login` | `/register`、`/forgot-password` | 只顯示登入與開始使用 CTA；認證 route 一律 noindex。 | 已有 |
+| Footer：公司 | 無 | `/about`、`/contact` | 由首頁與 Footer 導入，不佔用主導覽。 | 已有 |
+| Footer：法律 | 無 | `/privacy`、`/terms` | 每個公開頁 Footer 必達。 | 已有 |
+
+公開 canonical route inventory：
+
+| 路由 | 類型 | 索引與父頁 | 狀態 |
+| --- | --- | --- | --- |
+| `/` | 首頁 | `index,follow`；公開 root hub | 已啟用 |
+| `/features`、`/pricing` | 產品／轉化 | `index,follow`；首頁、Footer、工具 CTA 導入 | 已啟用 |
+| `/tools` | 工具 hub | `index,follow`；首頁、Features、Blog 導入 | 計劃 |
+| `/tools/:toolSlug` | 八個固定工具頁 | `index,follow`；只能使用上述 allowlist slug，不以任意動態 slug 建頁 | 計劃 |
+| `/extension` | CMS 整合 | `index,follow`；Features、Docs、首頁導入 | 計劃 |
+| `/blog`、`/blog/:slug` | 內容 hub／文章 | `index,follow`；文章須有 Blog、breadcrumb、相關文章、前後篇導入 | 已啟用 |
+| `/blog/category/:category` | 分類 | 符合 11.4 門檻才 `index,follow`，否則 `noindex,follow` | 計劃 |
+| `/docs`、`/help`、`/about`、`/contact`、`/privacy`、`/terms` | 資源／公司／法律 | `index,follow`；按上表的 header 或 Footer 導入 | 已啟用 |
+| `/login`、`/register`、`/forgot-password`、`/reset-password/:token`、`/verify-email/:token` | 認證 | `noindex,nofollow,noarchive`；不進 sitemap | 部分計劃 |
+| `/:pathMatch(.*)*` | 404 | `noindex,nofollow`、HTTP 404；不得回傳首頁內容或 canonical | PH2-08 |
+
+公開工具使用 query string 保存未持久化的輸入與結果排序，但 query、hash、錯誤結果與登入 redirect 都不可進 sitemap 或形成新的 canonical。工具結果一旦保存，必須轉至登入後工作區資源，不建立公開薄內容頁。
+
+##### 11.3.6.2 客戶後台選單與路由
+
+客戶後台採「工作區導覽 + 站點內容導覽」兩層結構。全域 App header 固定提供 workspace switcher、active site switcher、通知／Alerts、Help、語言／主題與帳戶選單；沒有 active site 時只顯示工作區導覽及引導新增站點。站點頁一律把 `siteId` 放在 path，而不是只放 query，從根源避免多站點資料混用。
+
+| 側欄群組 | 選單項與 route | 顯示條件 | 用途 | Phase |
+| --- | --- | --- | --- | --- |
+| 工作區 | 總覽 `/app`、站點 `/app/sites`、研究專案 `/app/research` | 所有登入成員 | 工作區 KPI、連接站點、跨站研究專案與建立入口。 | 已有／PH2-06、08 |
+| 目前站點 | 站點總覽 `/app/sites/:siteId`、關鍵詞與 Gap `/app/sites/:siteId/research`、內容庫 `/app/sites/:siteId/content`、媒體 `/app/sites/:siteId/media`、內部連結 `/app/sites/:siteId/links`、技術體檢 `/app/sites/:siteId/site-audit`、分析 `/app/sites/:siteId/analytics`、站點任務 `/app/sites/:siteId/tasks`、站點整合 `/app/sites/:siteId/integrations` | 已選取且可存取的站點 | site breadcrumb 由 `站點 > 頁面` 生成；此群組是所有站點操作的唯一入口。 | PH2-06 至 PH2-10、08 |
+| 內容子頁 | 內容詳情 `/app/sites/:siteId/content/:contentId`、優化器 `/app/sites/:siteId/content/optimizer`、審核與套用 `/app/sites/:siteId/content/review` | 從內容庫／站點頁進入 | 不列為全域選單；由內容 tab、breadcrumb、返回連結與任務結果導入。 | PH2-07、08、09 |
+| 監控與外鏈 | 監控 `/app/monitors`、AI 可見度 `/app/visibility`、告警 `/app/alerts`、Backlink 機會 `/app/backlinks` | feature flag 與 entitlement 允許 | 跨站長期監控、alert inbox 與外鏈機會／草稿；不可自動寄送或發布。 | PH2-10、2C |
+| 工作區操作 | 任務中心 `/app/tasks`、整合 `/app/integrations`、用量與帳單 `/app/billing`、開發者 `/app/developers`、設定 `/app/settings` | 角色與 entitlement 決定；帳單僅 owner | 跨站任務、Provider／CMS 連線、計費、API key 與個人／工作區偏好。 | PH2-05、PH2-11、2C、08 |
+
+客戶 canonical route inventory：
+
+| 路由模式 | 名稱 | 權限／SEO | 導覽規則 |
+| --- | --- | --- | --- |
+| `/app` | 工作區總覽 | `viewer+`；`noindex,nofollow,noarchive` | App shell root；必須可到站點、研究與任務。 |
+| `/app/sites`、`/app/sites/:siteId` | 站點列表／單站總覽 | `viewer+`；workspace + site ownership | `:siteId` 不屬於目前 workspace 時固定 404。 |
+| `/app/sites/:siteId/research` | 單站 Keyword Intelligence | `viewer+`；site scope | 連至跨站研究專案與單次 run／brief。 |
+| `/app/research`、`/app/research/:projectId` | 跨站研究與專案詳情 | `viewer+`；workspace scope | 專案詳情回鏈到關聯 site research。 |
+| `/app/sites/:siteId/content`、`/app/sites/:siteId/content/:contentId` | 內容庫／內容詳情 | `viewer+`；site scope | 詳情可到 optimizer、review 或返回內容庫。 |
+| `/app/sites/:siteId/content/optimizer`、`/app/sites/:siteId/content/review` | 分析與人工審核 | `editor+` 建立／修改，`viewer+` 讀取 | 由內容詳情和 task result 導入，不能成為孤立 modal。 |
+| `/app/sites/:siteId/media`、`/app/sites/:siteId/links` | 媒體 SEO／內部連結 | `viewer+`；site scope | 屬於內容群組，互相回鏈至內容庫。 |
+| `/app/sites/:siteId/site-audit`、`/app/sites/:siteId/analytics` | 技術修復／成效 | `viewer+`；site scope | Audit 問題必須能建立任務與回到站點總覽。 |
+| `/app/sites/:siteId/tasks`、`/app/tasks` | 站點任務／跨站任務中心 | `viewer+`；workspace scope | `/app/tasks` 保持跨站 canonical，不 redirect 到單站 task。 |
+| `/app/sites/:siteId/integrations`、`/app/integrations` | 單站／跨站整合 | `editor+` 變更，`viewer+` 讀取 | CMS 與 Google 連線須由站點或整合 hub 可達。 |
+| `/app/monitors`、`/app/visibility`、`/app/alerts` | 監控、AI 可見度、告警 | `viewer+` + feature flag | 由 header notification 與側欄互鏈。 |
+| `/app/backlinks` | Backlink 機會 | `editor+`；feature flag | 只保存機會、草稿與人工批准；不自動出站。 |
+| `/app/billing` | 帳單與用量 | `owner` | 只從工作區操作群組及 pricing CTA 導入。 |
+| `/app/developers` | API key、Webhook、文件 | `owner`／授權 developer | 不顯示或回傳 key secret；入口受 scope gate。 |
+| `/app/settings` | 個人、工作區、通知偏好 | 依 tab 採 `viewer+`／`owner` | 個人設定與 workspace 設定以 tab role gate 分離。 |
+
+所有客戶 route 都要求 Loading、空、無權限、quota、provider unavailable、partial、重試／取消狀態，以及 breadcrumb／返回父頁。這是私有頁的「可達性」門檻，雖然它們不參與公開 SEO 孤島計算。
+
+##### 11.3.6.3 管理後台選單與路由
+
+管理後台不與客戶後台共用側欄，只有具有平台角色的人可由帳戶選單進入 `/admin`。管理 header 顯示環境、全域告警、操作人與返回客戶工作區；所有頁面 `noindex,nofollow,noarchive`，禁止進 sitemap、公開 footer 和公開 HTML。
+
+| 側欄群組 | 選單項與 route | 最低角色 | Phase |
+| --- | --- | --- | --- |
+| 平台總覽 | `/admin` | `admin` | 已有 |
+| 客戶與資源 | `/admin/workspaces`、`/admin/customers`、`/admin/sites` | `admin` | PH2-08 |
+| 執行與成本 | `/admin/tasks`、`/admin/usage`、`/admin/providers` | `admin`；敏感 Provider secret 操作需 `owner` | PH2-05、06、11、08 |
+| 治理 | `/admin/content-policies`、`/admin/operations` | `admin`；policy publish 與 feature flag 變更需 `owner` | PH2-07、10、08 |
+| 系統 | `/admin/settings` | `owner` | 已有／PH2-08 |
+
+管理 canonical route inventory：`/admin`、`/admin/workspaces`、`/admin/customers`、`/admin/sites`、`/admin/tasks`、`/admin/usage`、`/admin/providers`、`/admin/content-policies`、`/admin/operations`、`/admin/settings`。其中 `/admin/tasks` 是全平台 queue／dead-letter 操作中心，絕不能顯示客戶 plaintext、CMS credential、prompt 或 provider raw payload；所有跨 workspace 檢視與高風險處置均必須寫 audit event。
+
+##### 11.3.6.4 舊路由 resolver 與遷移規則
+
+私有 route 不使用固定字串 redirect 來猜測站點。`LegacyRouteResolver` 必須先驗證 query／已選取的 `siteId` 屬於目前 workspace，再 replace 到新 route；無合法 site context 時導向 `/app/sites` 或相應跨站 hub。以下 mapping 取代 11.3.5 的衝突項目：
+
+| 舊路由 | 解析後目標 |
+| --- | --- |
+| `/app/keywords` | 有合法 siteId 時 `/app/sites/:siteId/research`；否則 `/app/research`。 |
+| `/app/analytics` | 有合法 siteId 時 `/app/sites/:siteId/analytics`；否則 `/app/sites`。 |
+| `/app/lighthouse`、`/app/site-audit` | 有合法 siteId 時 `/app/sites/:siteId/site-audit?tab=performance`；否則 `/app/sites`。 |
+| `/app/media` | 有合法 siteId 時 `/app/sites/:siteId/media`；否則 `/app/sites`。 |
+| `/app/apply`、`/app/suggestions`、`/app/article-suggestions`、`/app/review` | 有合法 siteId 時 `/app/sites/:siteId/content/review`；否則 `/app/sites`。 |
+| `/app/links` | 有合法 siteId 時 `/app/sites/:siteId/links`；否則 `/app/sites`。 |
+| `/app/tasks` | 保留為跨站 canonical；新增 `/app/sites/:siteId/tasks` 才是單站 task view。 |
+| `/app/cms-adapters` | `/app/integrations`。 |
+| `/app/articles`、`/app/article-sync` | `/app/sites` 或在合法 siteId 下導向 `/app/sites/:siteId/content`／`tasks`。 |
+
+舊 private route 使用 Vue `replace`，不產生可索引 HTTP 301；公開舊 URL 才能在確認 canonical 對應後做單跳 301。所有 resolver、選單 route 和 breadcrumb 均從同一 manifest 生成，禁止在 component 內手寫路徑。
+
+##### 11.3.6.5 實作排期與完成定義
+
+| 工作 | 承接階段 | 完成定義 |
+| --- | --- | --- |
+| 前台 header／footer、Tools hub、工具／Extension 頁、404、公開 link graph | PH2-08；公開 audit 行為由 PH2-10 | 所有公開 indexable URL 有初始 HTML、H1、正文、canonical、唯一 focus keyword、parent／related link；孤島數為 0。 |
+| App shell、workspace／site switcher、site-scoped route、legacy resolver、private breadcrumb | PH2-08 | 深層 route 可還原同一 workspace／site context；所有私有 route 有父頁或 App shell 可達，不以 query 作唯一 site identity。 |
+| Research、Content Optimizer、Review 選單項與頁面 | PH2-06、PH2-07、PH2-08 | 對應 API、quota、task、partial／error state 通過；未開啟功能不顯示選單。 |
+| Task、Usage、Provider、dead-letter 管理入口 | PH2-05、PH2-08 | permission、workspace isolation、用量與 sanitized telemetry 斷言通過。 |
+| Audit、Analytics、Monitors、Visibility、Alerts | PH2-10、PH2-08 | 問題到修復任務到 recheck，並以來源類型區分實際／估算數據。 |
+| Billing、Developers、Backlinks、進階 Integrations | PH2-09、PH2-11、2C、PH2-08 | Stripe／API key／CMS／outreach 的各自安全與人工批准 gate 通過後才顯示。 |
+| Admin 菜單與平台頁 | PH2-08，依賴 PH2-05 至 PH2-11 數據 | 管理 route 與客戶 route 隔離，敏感資訊不回傳，所有高風險變更可審計。 |
+
 ### 11.4 SEO 孤島防護契約
 
 「孤島頁面」定義為可索引 URL 沒有任何其他可索引頁面的導入連結；只存在 sitemap、瀏覽器歷史或 JavaScript 動態請求不算導入連結。防護規則如下：

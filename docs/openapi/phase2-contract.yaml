@@ -27,10 +27,52 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200': { $ref: '#/components/responses/TaskResponse' }
+        '202': { $ref: '#/components/responses/TaskResponse' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/AuthError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+  /api/v1/tasks/dead-letter:
+    get:
+      summary: List workspace-scoped dead-letter tasks
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { $ref: '#/components/responses/DeadLetterTasksResponse' }
+        '401': { $ref: '#/components/responses/AuthError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/v1/tasks/{taskId}/replays:
+    post:
+      summary: Create an auditable replacement for a dead-letter task
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeadLetterActionRequest' }
+      responses:
+        '202': { $ref: '#/components/responses/DeadLetterReplayResponse' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/v1/tasks/{taskId}/dead-letter/ignore:
+    post:
+      summary: Record an ignore disposition for a dead-letter task
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeadLetterActionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/DeadLetterIgnoreResponse' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /api/v1/usage:
     get:
       summary: Read workspace usage ledger totals
@@ -139,13 +181,15 @@ paths:
   /api/v1/keyword-research/projects/{projectId}/runs:
     post:
       summary: Request a keyword research run
-      description: Returns PROVIDER_UNAVAILABLE until PH2-06 enables the canonical SEO provider worker.
+      description: Queues a workspace-scoped keyword research run after provider, entitlement and idempotency checks. Requires an enabled canonical SEO provider.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202': { $ref: '#/components/responses/TaskAccepted' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '429': { $ref: '#/components/responses/QuotaExceeded' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
   /api/v1/keyword-research/runs/{runId}:
     get:
@@ -175,7 +219,7 @@ paths:
   /api/v1/keyword-research/projects/{projectId}/briefs:
     post:
       summary: Create a content brief from a persisted keyword candidate
-      description: Returns PROVIDER_UNAVAILABLE until PH2-06 has populated keyword candidates.
+      description: Creates a draft content brief from a persisted keyword candidate.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ProjectId'
@@ -285,9 +329,14 @@ components:
         id: { type: string, format: uuid }
         siteId: { type: string, format: uuid, nullable: true }
         kind: { type: string, enum: [keyword_research, content_optimization, content_rewrite, gateway_model_sync, backlink_analysis, cms_publish] }
-        status: { type: string, enum: [queued, running, partial, completed, failed, cancelled, expired, dead_letter] }
+        status: { type: string, enum: [queued, running, partial, completed, failed, cancelled, cancellation_requested, expired, dead_letter] }
         progress: { type: integer, minimum: 0, maximum: 100 }
         estimatedCredits: { type: integer, minimum: 0 }
+        providerKey: { type: string, nullable: true }
+        availableAt: { type: string, format: date-time }
+        cancellationRequestedAt: { type: string, format: date-time, nullable: true }
+        replayOfTaskId: { type: string, format: uuid, nullable: true }
+        priority: { type: integer, minimum: 0, maximum: 100 }
         result: { type: object, additionalProperties: true, nullable: true }
         errorCode: { type: string, nullable: true }
         retryCount: { type: integer, minimum: 0 }
@@ -340,7 +389,10 @@ components:
           required: [taskId, status, progress, estimatedCredits]
           properties:
             taskId: { type: string, format: uuid }
-            status: { type: string, enum: [queued, running, partial, completed, failed, cancelled, expired, dead_letter] }
+            runId: { type: string, format: uuid, nullable: true }
+            provider: { type: string, enum: [dataforseo, ahrefs, semrush], nullable: true }
+            cacheHit: { type: boolean, default: false }
+            status: { type: string, enum: [queued, running, partial, completed, failed, cancelled, cancellation_requested, expired, dead_letter] }
             progress: { type: integer, minimum: 0, maximum: 100 }
             estimatedCredits: { type: integer, minimum: 0 }
     UsageResponse:
@@ -351,12 +403,65 @@ components:
         message: { type: string }
         data:
           type: object
-          required: [reservedUnits, reservedCost, finalizedCost, releasedCost]
+          required: [reservedUnits, activeReservedUnits, finalizedUnits, releasedUnits, reservedCost, finalizedCost, releasedCost]
           properties:
             reservedUnits: { type: number }
+            activeReservedUnits: { type: number }
+            finalizedUnits: { type: number }
+            releasedUnits: { type: number }
             reservedCost: { type: number }
             finalizedCost: { type: number }
             releasedCost: { type: number }
+    DeadLetterActionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    DeadLetterAction:
+      type: object
+      required: [id, taskId, action, reason, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        taskId: { type: string, format: uuid }
+        action: { type: string, enum: [replay, ignore] }
+        replacementTaskId: { type: string, format: uuid, nullable: true }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+    DeadLetterTasksResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [items, pagination]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Task' } }
+            pagination: { $ref: '#/components/schemas/Pagination' }
+    DeadLetterReplayResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [task, action]
+          properties:
+            task: { $ref: '#/components/schemas/Task' }
+            action: { $ref: '#/components/schemas/DeadLetterAction' }
+    DeadLetterIgnoreResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [action]
+          properties:
+            action: { $ref: '#/components/schemas/DeadLetterAction' }
     ModelsResponse:
       type: object
       required: [success, message, data]
@@ -502,6 +607,15 @@ components:
     TaskAccepted:
       description: Task accepted
       content: { application/json: { schema: { $ref: '#/components/schemas/TaskAcceptedResponse' } } }
+    DeadLetterTasksResponse:
+      description: Paginated dead-letter tasks in the current workspace
+      content: { application/json: { schema: { $ref: '#/components/schemas/DeadLetterTasksResponse' } } }
+    DeadLetterReplayResponse:
+      description: Replacement task and immutable replay disposition
+      content: { application/json: { schema: { $ref: '#/components/schemas/DeadLetterReplayResponse' } } }
+    DeadLetterIgnoreResponse:
+      description: Immutable ignore disposition
+      content: { application/json: { schema: { $ref: '#/components/schemas/DeadLetterIgnoreResponse' } } }
     AuthError:
       description: Authentication failed
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

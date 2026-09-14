@@ -3,8 +3,10 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import {
   createNoopAiProviderRegistry,
+  createRedisTaskGovernance,
   createWenwenAiProviderRegistry,
-  type TextGenerationProvider
+  type TextGenerationProvider,
+  type TaskGovernance
 } from '@aieo/ai-providers';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import {
@@ -37,7 +39,8 @@ import {
 import { createDefaultPhase2Repository } from './phase2Repository';
 import { registerPhase2Routes } from './phase2Routes';
 import { registerPhase2FeatureRoutes } from './phase2FeatureRoutes';
-import type { Phase2Repository } from '@aieo/ai-providers';
+import { createKeywordResearchProviderFromConfig } from './keywordResearchService';
+import type { KeywordResearchProvider, Phase2Repository } from '@aieo/ai-providers';
 
 interface CreateServerOptions {
   siteConnectionRepository?: SiteConnectionRepository;
@@ -46,6 +49,8 @@ interface CreateServerOptions {
   siteAuditRepository?: SiteAuditRepository;
   textGenerationProvider?: TextGenerationProvider;
   phase2Repository?: Phase2Repository;
+  taskGovernance?: TaskGovernance;
+  keywordResearchProvider?: KeywordResearchProvider;
 }
 
 export function createServer(options: CreateServerOptions = {}) {
@@ -82,6 +87,9 @@ export function createServer(options: CreateServerOptions = {}) {
   const siteConnectionRepository =
     options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL);
   const phase2Repository = options.phase2Repository ?? createDefaultPhase2Repository(apiConfig.DATABASE_URL);
+  const taskGovernance = options.taskGovernance ?? (
+    apiConfig.REDIS_URL ? createRedisTaskGovernance(apiConfig.REDIS_URL) : undefined
+  );
 
   const allowedCorsOrigins = new Set(
     apiConfig.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
@@ -214,11 +222,12 @@ export function createServer(options: CreateServerOptions = {}) {
     app,
     siteConnectionRepository,
     options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL),
-    authService
+    authService,
+    taskGovernance
   );
 
-  registerPhase2Routes(app, phase2Repository, authService);
-  registerPhase2FeatureRoutes(app, phase2Repository, authService, siteConnectionRepository);
+  registerPhase2Routes(app, phase2Repository, authService, taskGovernance);
+  registerPhase2FeatureRoutes(app, phase2Repository, authService, siteConnectionRepository, options.keywordResearchProvider ?? createKeywordResearchProviderFromConfig());
 
   // 啟動站點稽核排程器（每 30 分鐘檢查一次）
   const stopScheduler = startSiteAuditScheduler(
@@ -226,6 +235,9 @@ export function createServer(options: CreateServerOptions = {}) {
   );
   app.addHook('onClose', () => {
     stopScheduler();
+  });
+  app.addHook('onClose', async () => {
+    await taskGovernance?.close();
   });
 
   return app;

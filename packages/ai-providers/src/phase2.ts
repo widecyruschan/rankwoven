@@ -14,7 +14,10 @@ export type Phase2ErrorCode =
   | 'PRICE_SNAPSHOT_UNAVAILABLE'
   | 'STALE_CONTENT_SNAPSHOT'
   | 'UNSAFE_TARGET_URL'
-  | 'SOURCE_VERIFICATION_FAILED';
+  | 'SOURCE_VERIFICATION_FAILED'
+  | 'RATE_LIMIT_UNAVAILABLE'
+  | 'TASK_LEASE_EXPIRED'
+  | 'CANCELLATION_REQUESTED';
 
 export interface ApiErrorShape {
   code: Phase2ErrorCode | string;
@@ -78,6 +81,7 @@ export type Phase2TaskStatus =
   | 'completed'
   | 'failed'
   | 'cancelled'
+  | 'cancellation_requested'
   | 'expired'
   | 'dead_letter';
 
@@ -100,6 +104,16 @@ export interface Phase2Task {
   reservationId?: string;
   idempotencyKey?: string;
   requestHash?: string;
+  providerKey?: string;
+  availableAt: string;
+  leaseOwner?: string;
+  leaseExpiresAt?: string;
+  startedAt?: string;
+  deadlineAt?: string;
+  cancellationRequestedAt?: string;
+  requestId?: string;
+  replayOfTaskId?: string;
+  priority: number;
   result?: Record<string, unknown>;
   errorCode?: string;
   retryCount: number;
@@ -118,11 +132,18 @@ export interface CreateTaskInput {
   idempotencyKey?: string;
   requestHash?: string;
   maxRetries?: number;
+  providerKey?: string;
+  availableAt?: string;
+  deadlineAt?: string;
+  requestId?: string;
+  replayOfTaskId?: string;
+  priority?: number;
 }
 
 export const phase2TaskTransitions: Record<Phase2TaskStatus, readonly Phase2TaskStatus[]> = {
   queued: ['running', 'cancelled', 'expired'],
-  running: ['partial', 'completed', 'failed', 'cancelled', 'expired'],
+  running: ['queued', 'partial', 'completed', 'failed', 'cancellation_requested', 'expired'],
+  cancellation_requested: ['cancelled', 'partial', 'failed', 'expired'],
   partial: ['completed', 'failed', 'cancelled', 'expired'],
   completed: [],
   failed: ['queued', 'dead_letter'],
@@ -148,6 +169,14 @@ export interface TaskAttempt {
   attemptNo: number;
   status: Phase2TaskStatus;
   providerRequestId?: string;
+  requestId?: string;
+  providerKey?: string;
+  gatewayModel?: string;
+  cacheState?: 'hit' | 'miss' | 'bypass';
+  fallbackFrom?: string;
+  retryAfterMs?: number;
+  latencyMs?: number;
+  estimatedCost?: number;
   errorCode?: string;
   startedAt: string;
   completedAt?: string;
@@ -165,6 +194,8 @@ export interface UsageLedgerEntry {
   provider?: string;
   gatewayModel?: string;
   priceSnapshotId?: string;
+  taskId?: string;
+  requestId?: string;
   units: number;
   costEstimate: number;
   actualCost?: number;
@@ -179,6 +210,8 @@ export interface ReserveUsageInput {
   provider?: string;
   gatewayModel?: string;
   priceSnapshotId?: string;
+  taskId?: string;
+  requestId?: string;
   units: number;
   costEstimate: number;
   idempotencyKey?: string;
@@ -186,9 +219,50 @@ export interface ReserveUsageInput {
 
 export interface Phase2UsageSummary {
   reservedUnits: number;
+  activeReservedUnits: number;
+  finalizedUnits: number;
+  releasedUnits: number;
   reservedCost: number;
   finalizedCost: number;
   releasedCost: number;
+}
+
+export interface EnqueueCostedTaskInput extends CreateTaskInput {
+  operation: string;
+  featureKey: string;
+  units: number;
+  costEstimate: number;
+  provider?: string;
+  gatewayModel?: string;
+  priceSnapshotId?: string;
+  record: Omit<IdempotencyRecord, 'responseBody'>;
+  actorId?: string;
+}
+
+export interface EnqueueKeywordResearchRunInput extends EnqueueCostedTaskInput {
+  projectId: string;
+  requestContextHash?: string;
+  providerMethodologyVersion?: string;
+  providerSnapshotId?: string;
+  locale: string;
+  collectedAt?: string;
+  seedKeywords?: string[];
+  ownDomain?: string;
+  competitorDomains?: string[];
+  productContext?: string;
+  audience?: string;
+  conversionGoal?: string;
+}
+
+export interface DeadLetterAction {
+  id: string;
+  taskId: string;
+  workspaceId: string;
+  action: 'replay' | 'ignore';
+  actorId: string;
+  replacementTaskId?: string;
+  reason: string;
+  createdAt: string;
 }
 
 export interface IdempotencyRecord {
@@ -325,9 +399,264 @@ export interface KeywordResearchRun {
   status: Phase2TaskStatus;
   costEstimate: number;
   actualCost?: number;
+  requestContextHash?: string;
+  providerMethodologyVersion?: string;
+  collectedAt?: string;
+  partialReason?: string;
+  seedKeywords?: string[];
+  ownDomain?: string;
+  competitorDomains?: string[];
+  locale?: string;
+  productContext?: string;
+  audience?: string;
+  conversionGoal?: string;
   startedAt?: string;
   completedAt?: string;
   createdAt: string;
+}
+
+export type KeywordMetricName =
+  | 'volume' | 'cpc_usd' | 'competition' | 'difficulty' | 'trend'
+  | 'gsc_clicks' | 'gsc_impressions' | 'gsc_ctr' | 'gsc_position';
+
+export interface KeywordMetric {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  candidateId: string;
+  metricName: KeywordMetricName;
+  numericValue?: number;
+  provider?: string;
+  sourceType: 'first_party_observed' | 'provider_estimated' | 'deterministic_check' | 'ai_inferred' | 'user_asserted';
+  providerSnapshotId?: string;
+  location?: string;
+  language?: string;
+  device?: string;
+  collectedAt: string;
+  providerUpdatedAt?: string;
+  methodologyVersion?: string;
+  confidence?: number;
+  rawResponseRef?: string;
+}
+
+export interface KeywordObservation {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  candidateId: string;
+  domainType: 'own' | 'competitor';
+  competitorId?: string;
+  domain: string;
+  rank?: number;
+  url?: string;
+  etv?: number;
+  serpFeatures: string[];
+  sourceType: 'first_party_observed' | 'provider_estimated';
+  provider: string;
+  providerSnapshotId?: string;
+  collectedAt: string;
+}
+
+export type KeywordGapClassification = 'missing' | 'weak' | 'strong' | 'shared';
+
+export interface KeywordGapSnapshot {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  candidateId: string;
+  classification: KeywordGapClassification;
+  ownBestRank?: number;
+  competitorBestRank?: number;
+  competitorIds: string[];
+  evidenceRefs: string[];
+  score?: number;
+  scoreConfidence?: number;
+  provider: string;
+  providerSnapshotId?: string;
+  collectedAt: string;
+}
+
+export interface KeywordResearchProviderCapabilities {
+  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  supportsKeywordMetrics: boolean;
+  supportsCompetitorRankedKeywords: boolean;
+  supportsBacklinkOpportunities: boolean;
+}
+
+export interface KeywordMetricsInput {
+  seeds: string[];
+  market: string;
+  language: string;
+  device: 'desktop' | 'mobile';
+  engine: 'google';
+}
+
+export interface KeywordMetricResult {
+  keyword: string;
+  volume?: number;
+  cpcUsd?: number;
+  competition?: number;
+  difficulty?: number;
+  trend?: number;
+  providerUpdatedAt?: string;
+}
+
+export interface KeywordMetricsResult {
+  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  providerSnapshotId: string;
+  methodologyVersion: string;
+  location: string;
+  language: string;
+  device: 'desktop' | 'mobile';
+  collectedAt: string;
+  providerUpdatedAt?: string;
+  sourceType: 'provider_estimated';
+  metrics: KeywordMetricResult[];
+  estimatedCost: number;
+  rawResponseHash?: string;
+}
+
+export interface CompetitorRankedKeywordsInput extends KeywordMetricsInput {
+  domain: string;
+  limit: number;
+}
+
+export interface RankedKeywordResult {
+  keyword: string;
+  rank?: number;
+  url?: string;
+  etv?: number;
+  serpFeatures?: string[];
+}
+
+export interface CompetitorRankedKeywordsResult {
+  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  providerSnapshotId: string;
+  methodologyVersion: string;
+  location: string;
+  language: string;
+  device: 'desktop' | 'mobile';
+  collectedAt: string;
+  sourceType: 'provider_estimated';
+  domain: string;
+  keywords: RankedKeywordResult[];
+  estimatedCost: number;
+  rawResponseHash?: string;
+}
+
+export interface KeywordResearchProvider {
+  readonly id: KeywordResearchProviderCapabilities['provider'];
+  getCapabilities(): Promise<KeywordResearchProviderCapabilities>;
+  discoverKeywordMetrics(input: KeywordMetricsInput): Promise<KeywordMetricsResult>;
+  getCompetitorRankedKeywords(input: CompetitorRankedKeywordsInput): Promise<CompetitorRankedKeywordsResult>;
+}
+
+export interface KeywordCandidate {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  normalizedKeyword: string;
+  displayKeyword: string;
+  locale: string;
+  intent?: string;
+  clusterId?: string;
+  sourceType: KeywordMetric['sourceType'];
+  sourceRef?: string;
+  volume?: number;
+  cpc?: number;
+  difficulty?: number;
+  confidence?: number;
+  opportunityScore?: number;
+  scoreConfidence?: number;
+  modelVersion?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateKeywordResearchRunInput {
+  workspaceId: string;
+  projectId: string;
+  taskId?: string;
+  inputHash: string;
+  requestContextHash?: string;
+  provider: KeywordResearchProviderCapabilities['provider'];
+  providerSnapshotId?: string;
+  providerMethodologyVersion?: string;
+  status: Phase2TaskStatus;
+  costEstimate: number;
+  collectedAt?: string;
+  partialReason?: string;
+  seedKeywords?: string[];
+  ownDomain?: string;
+  competitorDomains?: string[];
+  locale?: string;
+  productContext?: string;
+  audience?: string;
+  conversionGoal?: string;
+}
+
+export interface CreateKeywordCandidateInput {
+  workspaceId: string;
+  projectId: string;
+  normalizedKeyword: string;
+  displayKeyword: string;
+  locale: string;
+  intent?: string;
+  sourceType: KeywordMetric['sourceType'];
+  sourceRef?: string;
+  opportunityScore?: number;
+  scoreConfidence?: number;
+  modelVersion?: string;
+}
+
+export interface CreateKeywordMetricInput extends Omit<KeywordMetric, 'id' | 'collectedAt'> {
+  collectedAt?: string;
+}
+
+export interface CreateKeywordObservationInput extends Omit<KeywordObservation, 'id' | 'collectedAt'> {
+  collectedAt?: string;
+}
+
+export interface CreateKeywordGapSnapshotInput extends Omit<KeywordGapSnapshot, 'id' | 'collectedAt'> {
+  collectedAt?: string;
+}
+
+export interface KeywordCandidateFilters extends PaginationInput {
+  intent?: string;
+  clusterId?: string;
+  sourceType?: KeywordMetric['sourceType'];
+  minVolume?: number;
+  maxDifficulty?: number;
+  sort?: 'opportunity' | 'volume' | 'difficulty' | 'created';
+}
+
+export interface KeywordGapFilters extends PaginationInput {
+  classification?: KeywordGapClassification;
+  competitorId?: string;
+}
+
+export interface ContentBrief {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  primaryKeywordId: string;
+  audience?: string;
+  locale: string;
+  secondaryKeywords: string[];
+  outline: string[];
+  status: 'draft' | 'approved' | 'in_progress' | 'completed' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContentBriefInput {
+  workspaceId: string;
+  projectId: string;
+  primaryKeywordId: string;
+  audience?: string;
+  locale: string;
+  secondaryKeywords?: string[];
+  outline?: string[];
 }
 
 export interface ContentOptimizationRun {
@@ -453,20 +782,42 @@ export interface Phase2Repository {
     createResponse: (task: Phase2Task) => Pick<IdempotencyRecord, 'statusCode' | 'responseBody'>
   ): Promise<{ task?: Phase2Task; replay?: IdempotencyRecord }>;
   createTask(input: CreateTaskInput): Promise<Phase2Task>;
+  enqueueCostedTask(
+    input: EnqueueCostedTaskInput,
+    createResponse: (task: Phase2Task) => Pick<IdempotencyRecord, 'statusCode' | 'responseBody'>
+  ): Promise<{ task?: Phase2Task; replay?: IdempotencyRecord }>;
+  enqueueKeywordResearchRun(
+    input: EnqueueKeywordResearchRunInput,
+    createResponse: (task: Phase2Task, run: KeywordResearchRun) => Pick<IdempotencyRecord, 'statusCode' | 'responseBody'>
+  ): Promise<{ task?: Phase2Task; run?: KeywordResearchRun; replay?: IdempotencyRecord }>;
   findTask(taskId: string, workspaceId: string): Promise<Phase2Task | undefined>;
-  transitionTask(taskId: string, workspaceId: string, from: Phase2TaskStatus, to: Phase2TaskStatus, patch?: Partial<Pick<Phase2Task, 'progress' | 'result' | 'errorCode' | 'retryCount'>>): Promise<Phase2Task | undefined>;
+  transitionTask(taskId: string, workspaceId: string, from: Phase2TaskStatus, to: Phase2TaskStatus, patch?: Partial<Pick<Phase2Task, 'progress' | 'result' | 'errorCode' | 'retryCount' | 'availableAt' | 'cancellationRequestedAt'>>): Promise<Phase2Task | undefined>;
+  cancelTask(taskId: string, workspaceId: string): Promise<Phase2Task | undefined>;
   reserveUsage(input: ReserveUsageInput): Promise<UsageLedgerEntry>;
   finalizeUsage(workspaceId: string, reservationId: string, actualCost: number): Promise<UsageLedgerEntry | undefined>;
   releaseUsage(workspaceId: string, reservationId: string): Promise<UsageLedgerEntry | undefined>;
   getUsageSummary(workspaceId: string): Promise<Phase2UsageSummary>;
   getPeriodUsageUnits(workspaceId: string, operation: string, period: EntitlementAssignment['period']): Promise<number>;
   findActiveEntitlement(workspaceId: string, featureKey: string): Promise<EntitlementAssignment | undefined>;
+  saveEntitlement(entitlement: EntitlementAssignment): Promise<EntitlementAssignment>;
+  listDeadLetterTasks(workspaceId: string, pagination: Required<PaginationInput>): Promise<Paginated<Phase2Task>>;
+  replayDeadLetterTask(taskId: string, workspaceId: string, actorId: string, reason: string, requestId?: string): Promise<{ task: Phase2Task; action: DeadLetterAction } | undefined>;
+  ignoreDeadLetterTask(taskId: string, workspaceId: string, actorId: string, reason: string): Promise<DeadLetterAction | undefined>;
   findActiveGatewayPriceSnapshot(modelId: string): Promise<GatewayPriceSnapshot | undefined>;
   createKeywordResearchProject(input: CreateKeywordResearchProjectInput): Promise<KeywordResearchProject>;
   listKeywordResearchProjects(workspaceId: string, pagination: Required<PaginationInput>): Promise<Paginated<KeywordResearchProject>>;
   findKeywordResearchProject(projectId: string, workspaceId: string): Promise<KeywordResearchProject | undefined>;
-  createKeywordResearchRun(input: Omit<KeywordResearchRun, 'id' | 'createdAt'>): Promise<KeywordResearchRun>;
+  createKeywordResearchRun(input: CreateKeywordResearchRunInput): Promise<KeywordResearchRun>;
   findKeywordResearchRun(runId: string, workspaceId: string): Promise<KeywordResearchRun | undefined>;
+  findKeywordResearchRunByInput(projectId: string, workspaceId: string, inputHash: string, provider: KeywordResearchRun['provider']): Promise<KeywordResearchRun | undefined>;
+  findLatestKeywordResearchRun(projectId: string, workspaceId: string): Promise<KeywordResearchRun | undefined>;
+  listKeywordCandidates(projectId: string, workspaceId: string, filters: KeywordCandidateFilters): Promise<Paginated<KeywordCandidate>>;
+  listKeywordGaps(projectId: string, workspaceId: string, filters: KeywordGapFilters): Promise<Paginated<KeywordGapSnapshot>>;
+  saveKeywordCandidate(input: CreateKeywordCandidateInput): Promise<KeywordCandidate>;
+  saveKeywordMetric(input: CreateKeywordMetricInput): Promise<KeywordMetric>;
+  saveKeywordObservation(input: CreateKeywordObservationInput): Promise<KeywordObservation>;
+  saveKeywordGapSnapshot(input: CreateKeywordGapSnapshotInput): Promise<KeywordGapSnapshot>;
+  createContentBrief(input: CreateContentBriefInput): Promise<ContentBrief>;
   createContentOptimizationRun(input: Omit<ContentOptimizationRun, 'id' | 'createdAt' | 'updatedAt'>): Promise<ContentOptimizationRun>;
   findContentOptimizationRun(runId: string, workspaceId: string): Promise<ContentOptimizationRun | undefined>;
   recordAttempt(attempt: Omit<TaskAttempt, 'id'>): Promise<TaskAttempt>;
@@ -488,12 +839,28 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
   const prices: GatewayPriceSnapshot[] = [];
   const profiles = new Map<string, GatewayModelProfile>();
   const entitlements: EntitlementAssignment[] = [];
+  const deadLetterActions: DeadLetterAction[] = [];
   const projects = new Map<string, KeywordResearchProject>();
   const researchRuns = new Map<string, KeywordResearchRun>();
+  const candidates = new Map<string, KeywordCandidate>();
+  const metrics: KeywordMetric[] = [];
+  const observations: KeywordObservation[] = [];
+  const gapSnapshots = new Map<string, KeywordGapSnapshot>();
+  const briefs = new Map<string, ContentBrief>();
   const contentRuns = new Map<string, ContentOptimizationRun>();
 
   const idempotencyKey = (input: Pick<IdempotencyRecord, 'workspaceId' | 'method' | 'route' | 'key'>) =>
     `${input.workspaceId}:${input.method}:${input.route}:${input.key}`;
+
+  const getPeriodStart = (period: EntitlementAssignment['period']) => {
+    const now = new Date();
+    if (period === 'daily') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    if (period === 'monthly') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    return new Date(0).toISOString();
+  };
+
+  const hasTerminalUsageEvent = (reservationId: string) =>
+    usage.some((entry) => entry.reservationId === reservationId && entry.eventType !== 'reserve');
 
   return {
     async findIdempotency(input) {
@@ -538,6 +905,12 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
         reservationId: input.reservationId,
         idempotencyKey: input.idempotencyKey,
         requestHash: input.requestHash,
+        providerKey: input.providerKey,
+        availableAt: input.availableAt ?? now,
+        deadlineAt: input.deadlineAt,
+        requestId: input.requestId,
+        replayOfTaskId: input.replayOfTaskId,
+        priority: input.priority ?? 50,
         retryCount: 0,
         maxRetries: input.maxRetries ?? 3,
         createdAt: now,
@@ -545,6 +918,91 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
       };
       tasks.set(task.id, task);
       return task;
+    },
+    async enqueueCostedTask(input, createResponse) {
+      const existing = idempotency.get(idempotencyKey(input.record));
+      if (existing) {
+        if (existing.requestHash !== input.record.requestHash) throw new Error('IDEMPOTENCY_KEY_REUSED');
+        return { replay: existing };
+      }
+
+      const entitlement = await this.findActiveEntitlement(input.workspaceId, input.featureKey);
+      if (!entitlement) throw new Error('ENTITLEMENT_REQUIRED');
+      const usedUnits = await this.getPeriodUsageUnits(input.workspaceId, input.operation, entitlement.period);
+      if (usedUnits + input.units > entitlement.limitValue) throw new Error('QUOTA_EXCEEDED');
+
+      const reservation = await this.reserveUsage({
+        workspaceId: input.workspaceId,
+        operation: input.operation,
+        provider: input.provider,
+        gatewayModel: input.gatewayModel,
+        priceSnapshotId: input.priceSnapshotId,
+        units: input.units,
+        costEstimate: input.costEstimate,
+        idempotencyKey: `usage:${input.record.key}`,
+        requestId: input.requestId
+      });
+      const task = await this.createTask({ ...input, reservationId: reservation.reservationId });
+      const response = createResponse(task);
+      idempotency.set(idempotencyKey(input.record), { ...input.record, ...response });
+      return { task };
+    },
+    async enqueueKeywordResearchRun(input, createResponse) {
+      const runId = randomUUID();
+      const result = await this.enqueueCostedTask({
+        ...input,
+        kind: 'keyword_research',
+        providerKey: input.providerKey ?? input.provider,
+        requestId: input.requestId
+      }, (task) => {
+        const run: KeywordResearchRun = {
+          id: runId,
+          workspaceId: input.workspaceId,
+          projectId: input.projectId,
+          taskId: task.id,
+          inputHash: input.requestHash ?? input.record.requestHash,
+          provider: input.provider as KeywordResearchRun['provider'],
+          providerSnapshotId: input.providerSnapshotId,
+          status: 'queued',
+          costEstimate: input.costEstimate,
+          requestContextHash: input.requestContextHash,
+          providerMethodologyVersion: input.providerMethodologyVersion,
+          seedKeywords: input.seedKeywords,
+          ownDomain: input.ownDomain,
+          competitorDomains: input.competitorDomains,
+          locale: input.locale,
+          productContext: input.productContext,
+          audience: input.audience,
+          conversionGoal: input.conversionGoal,
+          createdAt: new Date().toISOString()
+        };
+        return createResponse(task, run);
+      });
+      if (result.replay) return { replay: result.replay };
+      if (!result.task) return result;
+      const run: KeywordResearchRun = {
+        id: runId,
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        taskId: result.task.id,
+        inputHash: input.requestHash ?? input.record.requestHash,
+        provider: input.provider as KeywordResearchRun['provider'],
+        providerSnapshotId: input.providerSnapshotId,
+        status: 'queued',
+        costEstimate: input.costEstimate,
+        requestContextHash: input.requestContextHash,
+        providerMethodologyVersion: input.providerMethodologyVersion,
+        seedKeywords: input.seedKeywords,
+        ownDomain: input.ownDomain,
+        competitorDomains: input.competitorDomains,
+        locale: input.locale,
+        productContext: input.productContext,
+        audience: input.audience,
+        conversionGoal: input.conversionGoal,
+        createdAt: new Date().toISOString()
+      };
+      researchRuns.set(run.id, run);
+      return { task: result.task, run };
     },
     async findTask(taskId, workspaceId) {
       const task = tasks.get(taskId);
@@ -567,6 +1025,32 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
       tasks.set(taskId, updated);
       return updated;
     },
+    async cancelTask(taskId, workspaceId) {
+      const task = tasks.get(taskId);
+      if (!task || task.workspaceId !== workspaceId) return undefined;
+      if (task.status === 'queued') {
+        const cancelled: Phase2Task = {
+          ...task,
+          status: 'cancelled',
+          updatedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString()
+        };
+        tasks.set(taskId, cancelled);
+        if (task.reservationId && !hasTerminalUsageEvent(task.reservationId)) {
+          await this.releaseUsage(workspaceId, task.reservationId);
+        }
+        return cancelled;
+      }
+      if (task.status !== 'running') return undefined;
+      const requested: Phase2Task = {
+        ...task,
+        status: 'cancellation_requested',
+        cancellationRequestedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      tasks.set(taskId, requested);
+      return requested;
+    },
     async reserveUsage(input) {
       if (input.idempotencyKey) {
         const existing = usage.find((entry) => entry.idempotencyKey === input.idempotencyKey && entry.workspaceId === input.workspaceId && entry.eventType === 'reserve');
@@ -581,6 +1065,8 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
         provider: input.provider,
         gatewayModel: input.gatewayModel,
         priceSnapshotId: input.priceSnapshotId,
+        taskId: input.taskId,
+        requestId: input.requestId,
         units: input.units,
         costEstimate: input.costEstimate,
         idempotencyKey: input.idempotencyKey,
@@ -616,27 +1102,55 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
       return entry;
     },
     async getUsageSummary(workspaceId) {
-      return usage
-        .filter((entry) => entry.workspaceId === workspaceId)
-        .reduce<Phase2UsageSummary>(
+      const workspaceUsage = usage.filter((entry) => entry.workspaceId === workspaceId);
+      const activeReservations = new Set(
+        workspaceUsage
+          .filter((entry) => entry.eventType === 'reserve' && !hasTerminalUsageEvent(entry.reservationId))
+          .map((entry) => entry.reservationId)
+      );
+      return workspaceUsage.reduce<Phase2UsageSummary>(
           (summary, entry) => {
             if (entry.eventType === 'reserve') {
               summary.reservedUnits += entry.units;
               summary.reservedCost += entry.costEstimate;
+              if (activeReservations.has(entry.reservationId)) {
+                summary.activeReservedUnits += entry.units;
+              }
             } else if (entry.eventType === 'finalize') {
+              summary.finalizedUnits += entry.units;
               summary.finalizedCost += entry.actualCost ?? 0;
             } else {
+              summary.releasedUnits += entry.units;
               summary.releasedCost += entry.costEstimate;
             }
             return summary;
           },
-          { reservedUnits: 0, reservedCost: 0, finalizedCost: 0, releasedCost: 0 }
+          {
+            reservedUnits: 0,
+            activeReservedUnits: 0,
+            finalizedUnits: 0,
+            releasedUnits: 0,
+            reservedCost: 0,
+            finalizedCost: 0,
+            releasedCost: 0
+          }
         );
     },
-    async getPeriodUsageUnits(workspaceId, operation) {
-      return usage
-        .filter((entry) => entry.workspaceId === workspaceId && entry.operation === operation && entry.eventType === 'reserve')
-        .reduce((total, entry) => total + entry.units, 0);
+    async getPeriodUsageUnits(workspaceId, operation, period) {
+      const periodStart = getPeriodStart(period);
+      const scoped = usage.filter(
+        (entry) => entry.workspaceId === workspaceId && entry.operation === operation && entry.createdAt >= periodStart
+      );
+      const activeReservations = new Set(
+        scoped
+          .filter((entry) => entry.eventType === 'reserve' && !hasTerminalUsageEvent(entry.reservationId))
+          .map((entry) => entry.reservationId)
+      );
+      return scoped.reduce((total, entry) => {
+        if (entry.eventType === 'finalize') return total + entry.units;
+        if (entry.eventType === 'reserve' && activeReservations.has(entry.reservationId)) return total + entry.units;
+        return total;
+      }, 0);
     },
     async findActiveEntitlement(workspaceId, featureKey) {
       const now = new Date().toISOString();
@@ -646,6 +1160,73 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
         entitlement.effectiveAt <= now &&
         (!entitlement.expiresAt || entitlement.expiresAt > now)
       );
+    },
+    async saveEntitlement(entitlement) {
+      const existingIndex = entitlements.findIndex((item) => item.id === entitlement.id);
+      if (existingIndex >= 0) entitlements.splice(existingIndex, 1, entitlement);
+      else entitlements.push(entitlement);
+      return entitlement;
+    },
+    async listDeadLetterTasks(workspaceId, pagination) {
+      const matched = [...tasks.values()]
+        .filter((task) => task.workspaceId === workspaceId && task.status === 'dead_letter')
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+      const offset = (pagination.page - 1) * pagination.pageSize;
+      return {
+        items: matched.slice(offset, offset + pagination.pageSize),
+        pagination: createPagination(pagination.page, pagination.pageSize, matched.length)
+      };
+    },
+    async replayDeadLetterTask(taskId, workspaceId, actorId, reason, requestId) {
+      const original = tasks.get(taskId);
+      if (!original || original.workspaceId !== workspaceId || original.status !== 'dead_letter') return undefined;
+      if (deadLetterActions.some((action) => action.taskId === taskId && action.action === 'replay')) return undefined;
+      const reservationId = original.reservationId && !hasTerminalUsageEvent(original.reservationId)
+        ? original.reservationId
+        : undefined;
+      const task = await this.createTask({
+        workspaceId,
+        siteId: original.siteId,
+        kind: original.kind,
+        estimatedCredits: original.estimatedCredits,
+        reservationId,
+        providerKey: original.providerKey,
+        requestId,
+        replayOfTaskId: original.id,
+        priority: original.priority,
+        maxRetries: original.maxRetries
+      });
+      const action: DeadLetterAction = {
+        id: randomUUID(),
+        taskId,
+        workspaceId,
+        action: 'replay',
+        actorId,
+        replacementTaskId: task.id,
+        reason,
+        createdAt: new Date().toISOString()
+      };
+      deadLetterActions.push(action);
+      return { task, action };
+    },
+    async ignoreDeadLetterTask(taskId, workspaceId, actorId, reason) {
+      const task = tasks.get(taskId);
+      if (!task || task.workspaceId !== workspaceId || task.status !== 'dead_letter') return undefined;
+      if (deadLetterActions.some((action) => action.taskId === taskId && action.action === 'ignore')) return undefined;
+      if (task.reservationId && !hasTerminalUsageEvent(task.reservationId)) {
+        await this.releaseUsage(workspaceId, task.reservationId);
+      }
+      const action: DeadLetterAction = {
+        id: randomUUID(),
+        taskId,
+        workspaceId,
+        action: 'ignore',
+        actorId,
+        reason,
+        createdAt: new Date().toISOString()
+      };
+      deadLetterActions.push(action);
+      return action;
     },
     async findActiveGatewayPriceSnapshot(modelId) {
       return prices
@@ -692,6 +1273,107 @@ export function createInMemoryPhase2Repository(): Phase2Repository {
     async findKeywordResearchRun(runId, workspaceId) {
       const run = researchRuns.get(runId);
       return run?.workspaceId === workspaceId ? run : undefined;
+    },
+    async findKeywordResearchRunByInput(projectId, workspaceId, inputHash, provider) {
+      return [...researchRuns.values()]
+        .filter((run) => run.projectId === projectId && run.workspaceId === workspaceId && run.inputHash === inputHash && run.provider === provider)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    },
+    async findLatestKeywordResearchRun(projectId, workspaceId) {
+      return [...researchRuns.values()]
+        .filter((run) => run.projectId === projectId && run.workspaceId === workspaceId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    },
+    async saveKeywordCandidate(input) {
+      const existing = [...candidates.values()].find(
+        (candidate) => candidate.projectId === input.projectId && candidate.normalizedKeyword === input.normalizedKeyword
+      );
+      const now = new Date().toISOString();
+      const candidate: KeywordCandidate = {
+        id: existing?.id ?? randomUUID(),
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        normalizedKeyword: input.normalizedKeyword,
+        displayKeyword: input.displayKeyword,
+        locale: input.locale,
+        intent: input.intent,
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        opportunityScore: input.opportunityScore,
+        scoreConfidence: input.scoreConfidence,
+        modelVersion: input.modelVersion,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+      candidates.set(candidate.id, candidate);
+      return candidate;
+    },
+    async saveKeywordMetric(input) {
+      const metric: KeywordMetric = { ...input, id: randomUUID(), collectedAt: input.collectedAt ?? new Date().toISOString() };
+      metrics.push(metric);
+      return metric;
+    },
+    async saveKeywordObservation(input) {
+      const observation: KeywordObservation = { ...input, id: randomUUID(), collectedAt: input.collectedAt ?? new Date().toISOString() };
+      observations.push(observation);
+      return observation;
+    },
+    async saveKeywordGapSnapshot(input) {
+      const key = `${input.runId}:${input.candidateId}`;
+      const snapshot: KeywordGapSnapshot = { ...input, id: gapSnapshots.get(key)?.id ?? randomUUID(), collectedAt: input.collectedAt ?? new Date().toISOString() };
+      gapSnapshots.set(key, snapshot);
+      return snapshot;
+    },
+    async listKeywordCandidates(projectId, workspaceId, filters) {
+      const matched = [...candidates.values()].filter((candidate) => {
+        if (candidate.projectId !== projectId || candidate.workspaceId !== workspaceId) return false;
+        if (filters.intent && candidate.intent !== filters.intent) return false;
+        if (filters.clusterId && candidate.clusterId !== filters.clusterId) return false;
+        if (filters.sourceType && candidate.sourceType !== filters.sourceType) return false;
+        return true;
+      }).sort((left, right) => {
+        if (filters.sort === 'created') return right.createdAt.localeCompare(left.createdAt);
+        return (right.opportunityScore ?? -1) - (left.opportunityScore ?? -1);
+      });
+      const page = filters.page ?? 1;
+      const pageSize = Math.min(filters.pageSize ?? 20, 100);
+      const offset = (page - 1) * pageSize;
+      return { items: matched.slice(offset, offset + pageSize), pagination: createPagination(page, pageSize, matched.length) };
+    },
+    async listKeywordGaps(projectId, workspaceId, filters) {
+      const projectRunIds = new Set([...researchRuns.values()].filter((run) => run.projectId === projectId && run.workspaceId === workspaceId).map((run) => run.id));
+      const matched = [...gapSnapshots.values()].filter((snapshot) =>
+        snapshot.workspaceId === workspaceId && projectRunIds.has(snapshot.runId) &&
+        (!filters.classification || snapshot.classification === filters.classification) &&
+        (!filters.competitorId || snapshot.competitorIds.includes(filters.competitorId))
+      ).sort((left, right) => (right.score ?? -1) - (left.score ?? -1));
+      const page = filters.page ?? 1;
+      const pageSize = Math.min(filters.pageSize ?? 20, 100);
+      const offset = (page - 1) * pageSize;
+      return { items: matched.slice(offset, offset + pageSize), pagination: createPagination(page, pageSize, matched.length) };
+    },
+    async createContentBrief(input) {
+      const project = projects.get(input.projectId);
+      const candidate = candidates.get(input.primaryKeywordId);
+      if (!project || project.workspaceId !== input.workspaceId || !candidate || candidate.workspaceId !== input.workspaceId || candidate.projectId !== input.projectId) {
+        throw new Error('WORKSPACE_RESOURCE_NOT_FOUND');
+      }
+      const now = new Date().toISOString();
+      const brief: ContentBrief = {
+        id: randomUUID(),
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        primaryKeywordId: input.primaryKeywordId,
+        audience: input.audience,
+        locale: input.locale,
+        secondaryKeywords: input.secondaryKeywords ?? [],
+        outline: input.outline ?? [],
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now
+      };
+      briefs.set(brief.id, brief);
+      return brief;
     },
     async createContentOptimizationRun(input) {
       const now = new Date().toISOString();

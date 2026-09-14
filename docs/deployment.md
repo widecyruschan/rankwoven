@@ -61,6 +61,17 @@ API 的 `CORS_ORIGINS` 使用逗號分隔 allowlist，`TRUST_PROXY=true` 只可�
 
 生產 `.env` 需要設定 `VITE_API_BASE_URL=https://api.rankwoven.com`，避免前端容器使用本地開發預設 API 地址。
 
+若在本機使用 production-style Nginx Web 容器測試，必須在 **build 階段**傳入本地 API 地址；runtime environment 不能覆蓋已由 Vite 內嵌的值：
+
+```bash
+VITE_API_BASE_URL=http://localhost:3011 \
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile data build web
+VITE_API_BASE_URL=http://localhost:3011 \
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile data up -d web
+```
+
+本機 production-style Web 入口為 `http://localhost:8082`；一般開發 Compose 入口為 `http://localhost:8080`。
+
 GA4 分析頁正式讀取 Google Analytics Data API 時，需要在生產 `.env` 或 GitHub Secrets 配置：
 
 ```text

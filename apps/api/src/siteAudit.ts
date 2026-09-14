@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
 import { validatePublicUrl } from '@aieo/security';
+import type { TaskGovernance } from '@aieo/ai-providers';
 import { requireAuth, type AuthService } from './auth';
 import type { SiteConnectionRepository } from './siteConnections';
 
@@ -73,6 +74,48 @@ export interface SiteAuditResultWithIssues extends SiteAuditResult {
     low: number;
     byCategory: Record<string, number>;
   };
+}
+
+async function enforceSiteAuditRateLimit(
+  reply: FastifyReply,
+  governance: TaskGovernance | undefined,
+  workspaceId: string,
+  actorId: string,
+  siteId: string
+) {
+  if (!governance) {
+    if (process.env.NODE_ENV !== 'production') return true;
+    reply.status(503).send({
+      success: false,
+      message: '稽核限流服務暫時不可用',
+      error: { code: 'RATE_LIMIT_UNAVAILABLE' }
+    });
+    return false;
+  }
+  try {
+    const [actor, workspace, site] = await Promise.all([
+      governance.consume(`actor:${actorId}:site-audit`, { capacity: 5, refillWindowMs: 60_000 }),
+      governance.consume(`workspace:${workspaceId}:site-audit`, { capacity: 20, refillWindowMs: 60_000 }),
+      governance.consume(`site:${siteId}:site-audit`, { capacity: 3, refillWindowMs: 86_400_000 })
+    ]);
+    if (actor.allowed && workspace.allowed && site.allowed) return true;
+    reply.status(429).send({
+      success: false,
+      message: '稽核建立過於頻繁，請稍後再試',
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfterSec: Math.ceil(Math.max(actor.retryAfterMs, workspace.retryAfterMs, site.retryAfterMs) / 1_000)
+      }
+    });
+    return false;
+  } catch {
+    reply.status(503).send({
+      success: false,
+      message: '稽核限流服務暫時不可用',
+      error: { code: 'RATE_LIMIT_UNAVAILABLE' }
+    });
+    return false;
+  }
 }
 
 // ── SerpApi Integration ──────────────────────────────────────────────────────
@@ -1041,7 +1084,8 @@ export function registerSiteAuditRoutes(
   app: FastifyInstance,
   siteRepository: SiteConnectionRepository,
   auditRepository: SiteAuditRepository,
-  authService: AuthService
+  authService: AuthService,
+  governance?: TaskGovernance
 ) {
   app.addHook('onClose', async () => {
     await auditRepository.close?.();
@@ -1141,6 +1185,8 @@ export function registerSiteAuditRoutes(
       if (!parsed.success) {
         return validationError(reply, parsed.error);
       }
+
+      if (!(await enforceSiteAuditRateLimit(reply, governance, user.workspaceId, user.id, site.id))) return reply;
 
       const config = await auditRepository.getConfig(site.id);
       const pageLimit = parsed.data?.pageLimit ?? config?.pageLimit ?? 100;

@@ -128,6 +128,82 @@ describe('worker adapter wiring', () => {
     }
   });
 
+  it('consumes a keyword research task and materializes provider metrics and competitor gaps', async () => {
+    const previousProvider = process.env.KEYWORD_VOLUME_PROVIDER;
+    const previousUrl = process.env.KEYWORD_VOLUME_API_URL;
+    const previousKey = process.env.KEYWORD_VOLUME_API_KEY;
+    process.env.KEYWORD_VOLUME_PROVIDER = 'dataforseo';
+    process.env.KEYWORD_VOLUME_API_URL = 'https://dataforseo.test';
+    process.env.KEYWORD_VOLUME_API_KEY = 'fixture-key';
+    const queries: string[] = [];
+    let candidateSequence = 0;
+    const client = {
+      async query(sql: string) {
+        queries.push(sql);
+        if (sql.includes('FROM phase2_tasks task')) {
+          return {
+            rows: [{
+              id: '00000000-0000-4000-8000-000000000306',
+              workspace_id: '00000000-0000-4000-8000-000000000001',
+              kind: 'keyword_research',
+              retry_count: 0,
+              max_retries: 3,
+              provider_key: 'dataforseo',
+              request_id: 'request-306',
+              project_id: '00000000-0000-4000-8000-000000000406',
+              run_id: '00000000-0000-4000-8000-000000000506',
+              reservation_id: '00000000-0000-4000-8000-000000000606',
+              seed_keywords: ['yoga mat'],
+              own_domain: null,
+              competitor_domains: ['competitor.example'],
+              market: 'US',
+              language: 'en',
+              device: 'desktop',
+              engine: 'google',
+              locale: 'en-US'
+            }]
+          };
+        }
+        if (sql.includes('INSERT INTO keyword_candidates')) {
+          candidateSequence += 1;
+          return { rows: [{ id: `00000000-0000-4000-8000-0000000004${String(candidateSequence).padStart(2, '0')}` }] };
+        }
+        if (sql.includes('INSERT INTO competitor_domains')) {
+          return { rows: [{ id: '00000000-0000-4000-8000-000000000706' }] };
+        }
+        if (sql.includes('SELECT status FROM phase2_tasks')) return { rows: [{}] };
+        return { rows: [] };
+      },
+      release: vi.fn()
+    };
+    const pool = { connect: vi.fn(async () => client) };
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('ranked_keywords')) {
+        return new Response(JSON.stringify({ tasks: [{ result: [{ keyword: 'best yoga mat', rank_absolute: 6, url: 'https://competitor.example/best-yoga-mat', etv: 42, serp_features: [] }] }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ tasks: [{ result: [{ keyword: 'yoga mat', search_volume: 1_000, cpc: 1.5, competition: 0.3, keyword_difficulty: 35 }] }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const task = await processNextQueuedTask(pool as never, fetchImpl, allowPublicTestUrl, undefined, 'worker-306');
+      expect(task).toMatchObject({ id: '00000000-0000-4000-8000-000000000306', kind: 'keyword_research' });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const queryLog = queries.join('\n').toLowerCase();
+      expect(queryLog).toContain('keyword_metrics');
+      expect(queryLog).toContain('keyword_observations');
+      expect(queryLog).toContain('keyword_gap_snapshots');
+      expect(queries.some((query) => query.includes("status = 'completed'"))).toBe(true);
+    } finally {
+      if (previousProvider === undefined) delete process.env.KEYWORD_VOLUME_PROVIDER;
+      else process.env.KEYWORD_VOLUME_PROVIDER = previousProvider;
+      if (previousUrl === undefined) delete process.env.KEYWORD_VOLUME_API_URL;
+      else process.env.KEYWORD_VOLUME_API_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.KEYWORD_VOLUME_API_KEY;
+      else process.env.KEYWORD_VOLUME_API_KEY = previousKey;
+    }
+  });
+
   it('appends internal link suggestions without replacing builder content', async () => {
     const suggestionValue = JSON.stringify({
       format: 'rankwoven-internal-links-v1',

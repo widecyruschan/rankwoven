@@ -52,6 +52,22 @@ describe('api health route', () => {
     expect(response.statusCode).toBe(204);
     expect(response.headers['access-control-allow-origin']).toBe('http://localhost:8082');
   });
+
+  it('allows the canonical www production Web origin through CORS preflight', async () => {
+    const server = createServer();
+    const response = await server.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/auth/login',
+      headers: {
+        origin: 'https://www.rankwoven.com',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type'
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe('https://www.rankwoven.com');
+  });
 });
 
 describe('api provider route', () => {

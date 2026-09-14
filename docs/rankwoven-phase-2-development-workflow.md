@@ -248,6 +248,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **批准門檻**：Tech Lead、QA Lead、Finance／Operations。
 
+**PH2-05 狀態（2026-09-14）**：`APPROVED / IMPLEMENTATION_COMPLETE`。已完成 `0015` queue／ledger governance migration、append-only reserve→finalize/release、原子 entitlement quota contract、workspace-aware PostgreSQL queue、lease recovery、jitter retry、cancellation requested、dead-letter replay／ignore、Redis token bucket／circuit breaker、模型同步與已連接站點 audit 限流、attempt telemetry、OpenAPI 與回歸測試。真實 SEO Provider、公開 audit、內容生成、CMS 寫回、Stripe webhook 與 email 仍由 PH2-06 至 PH2-11 的功能 gate 控制。
+
 ### PH2-06：Keyword Intelligence
 
 **工作流**：種子詞 → 語義／問題／實體／修飾詞 → 指標 enrichment → intent／embedding cluster → 競品 ranked keywords／gap → 保存快照 → brief。
@@ -262,6 +264,10 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 - [ ] 重跑形成新快照；相同輸入不重複扣費。
 
 **批准門檻**：Product、SEO／Content、Tech、QA。
+
+**PH2-06 核檢產物**：`docs/approvals/phase-2/PH2-06-keyword-intelligence.md`。文件先固定現有即時建議服務的相容邊界，再定義研究 project／run、DataForSEO 主 Provider、Ahrefs／Semrush BYOK、AI 語義擴展、GSC 分離、Top 100 gap、Opportunity Score、`0016` 資料模型、cache、quota、評測與停止條件。未收到 `APPROVE PH2-06` 前不可接出站 SEO Provider 或啟用新研究 runtime。
+
+**PH2-06 狀態（2026-09-14）**：`APPROVED / IMPLEMENTATION_COMPLETE`。已完成 `0016` Keyword Intelligence schema、DataForSEO／Ahrefs／Semrush adapters、Breakout AI／deterministic candidate expansion、Provider metrics、competitor observations、Missing gap、Opportunity Score、研究 API、cache、content brief、Worker materialization、quota／idempotency、workspace isolation、fixture／integration tests。真實 Provider 是否出站仍由 server-side key 與正式 provider contract 決定；公開工具、內容生成、CMS 寫回、付款與 email 由後續 gate 控制。
 
 ### PH2-07：Content Optimizer 與 AI 評測
 
@@ -279,11 +285,11 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 ### PH2-08：前台、客戶後台、管理後台實作
 
-**前台**：按 PH2-01 的公開 route registry 實作首頁、Tools hub、工具詳情、Extension、Pricing、Blog、Blog category／article；初始 HTML 含 H1、正文、breadcrumb、相關連結。
+**前台**：按 `docs/rankwoven-phase-2-prd.md` 11.3.6 的產品、工具、資源、定價、帳戶與 Footer manifest 實作首頁、Tools hub、八個固定工具詳情、Extension、Pricing、Blog、Blog category／article、404；初始 HTML 含 H1、正文、breadcrumb、相關連結。工具 query state 不可成為可索引薄頁，公開 audit runtime 仍受 PH2-10 gate。
 
-**客戶後台**：以 `/app/sites/:siteId/*` 為站點上下文；研究、內容、Audit、Analytics、Links、Media、Tasks、Integrations、Billing 均從 App shell、workspace switcher、site breadcrumb 可達。
+**客戶後台**：以「工作區導覽 + `/app/sites/:siteId/*` 站點內容導覽」實作 App shell、workspace switcher、site switcher、breadcrumb 與 LegacyRouteResolver。研究、內容、Audit、Analytics、Links、Media、Tasks、Integrations、Billing、Developers 只在對應功能 gate、角色與 entitlement 允許時顯示；`/app/tasks` 保持跨站 canonical，單站任務使用 `/app/sites/:siteId/tasks`。
 
-**管理後台**：以 `/admin/*` 為獨立管理 namespace；工作區、客戶、站點、Provider、用量、任務、政策、運營與設定只由管理導覽互鏈。
+**管理後台**：以 `/admin/*` 的平台總覽、客戶與資源、執行與成本、治理、系統五個選單群組實作；工作區、客戶、站點、Provider、用量、任務、政策、運營與設定只由管理導覽互鏈。admin 頁不可使用客戶 App shell，也不可回傳秘密、原文或 provider raw payload。
 
 **核檢**：
 
@@ -292,6 +298,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 - [ ] 表格、diff、圖表、來源 badge、亮／暗主題達 WCAG AA。
 - [ ] 全部可見文案走 i18n；內容 locale 與 UI locale 分開。
 - [ ] 任何公開頁新增都會觸發 route、sitemap、link graph、SEO HTML 測試。
+- [ ] 每個私有 route 由 manifest 的 menu、parent route、breadcrumb 或 task result 至少一條可達路徑導入；直接開啟深層 route 能安全恢復 workspace／site context。
+- [ ] route registry 的 `navigationSurface`、role、feature flag、availability phase 與 legacy resolver 經 unit test 驗證；未啟用功能不出現在任何選單。
 
 **批准門檻**：Design、SEO、Accessibility、Product、QA。
 

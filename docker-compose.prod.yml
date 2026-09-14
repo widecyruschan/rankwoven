@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.rankwoven.com}
     command: null
     ports: !override
       - '127.0.0.1:8082:80'
@@ -25,7 +27,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be configured for production}
       LEGACY_PASSWORD_HMAC_SECRET: ${LEGACY_PASSWORD_HMAC_SECRET:-}
       WORDPRESS_CREDENTIAL_ENCRYPTION_KEY: ${WORDPRESS_CREDENTIAL_ENCRYPTION_KEY:?WORDPRESS_CREDENTIAL_ENCRYPTION_KEY must be configured for production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://rankwoven.com,https://app.rankwoven.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://rankwoven.com,https://www.rankwoven.com,https://app.rankwoven.com}
       TRUST_PROXY: 'true'
       ALLOW_LOCAL_LIGHTHOUSE_FALLBACK: 'false'
 
@@ -40,3 +42,11 @@ services:
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be configured for production}
       WORDPRESS_CREDENTIAL_ENCRYPTION_KEY: ${WORDPRESS_CREDENTIAL_ENCRYPTION_KEY:?WORDPRESS_CREDENTIAL_ENCRYPTION_KEY must be configured for production}
+      KEYWORD_VOLUME_PROVIDER: ${KEYWORD_VOLUME_PROVIDER:-generic}
+      KEYWORD_VOLUME_API_URL: ${KEYWORD_VOLUME_API_URL:-}
+      KEYWORD_VOLUME_API_KEY: ${KEYWORD_VOLUME_API_KEY:-}
+      AHREFS_KEYWORD_METRICS_ENABLED: ${AHREFS_KEYWORD_METRICS_ENABLED:-false}
+      AHREFS_API_URL: ${AHREFS_API_URL:-}
+      AHREFS_API_KEY: ${AHREFS_API_KEY:-}
+      SEMRUSH_API_URL: ${SEMRUSH_API_URL:-}
+      SEMRUSH_API_KEY: ${SEMRUSH_API_KEY:-}

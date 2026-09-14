@@ -104,3 +104,13 @@
 - [ ] 正式上線前替換法律文件骨架，並接入 FAQPage / BlogPosting / Organization schema。
 - [ ] 正式上線前把聯絡表單接到 API，加入限流、垃圾訊息防護與同意記錄。
 - [ ] 若需要全球市場，補齊其餘 locale 的人工翻譯與 hreflang。
+
+## 7. 第二階段未完成選單與路由規劃
+
+最新、可實作的三層資訊架構以 `docs/rankwoven-phase-2-prd.md` 第 11.3.6 節為準；本節只記錄目前程式碼尚未啟用的實作邊界，避免把既有 flat `/app/*` 頁面誤當成第二階段最終路由。
+
+- 公開前台：主選單固定為產品、工具、資源、定價與帳戶；Footer 提供公司與法律入口。Tools hub 是八個工具頁的唯一父 hub，每個工具頁需有 parent、related content 與公開 link graph 導入。
+- 客戶後台：App shell 分為工作區、目前站點、監控與外鏈、工作區操作四組。所有站點功能遷移至 `/app/sites/:siteId/*`，內容詳情、優化器與審核為內容庫的子頁，不列成無上下文的全域選單。
+- 管理後台：獨立為平台總覽、客戶與資源、執行與成本、治理、系統五組；不可共用客戶後台側欄，也不可在公開頁輸出連結。
+- Route registry 後續擴展 `navigationSurface`、group、order、parent、i18n label、feature flag、availability phase 與 site scope，並由同一 manifest 產生 Router、menu、breadcrumb、legacy resolver、SEO head 與 sitemap。
+- 尚未開啟的 route 一律保留 `planned=true`、`enabled=false`，不進 sitemap、不出現在選單、不建立空白頁。實際實作須在 `PH2-08` 批准後進行，公開 route 另重跑 PH2-01 SEO／孤島 gate。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInMemoryPhase2Repository } from '@aieo/ai-providers';
+import { createInMemoryPhase2Repository, createInMemoryTaskGovernance, type KeywordResearchProvider } from '@aieo/ai-providers';
 import { createServer } from '../src/server';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
 
@@ -82,6 +82,45 @@ describe('phase 2 contract routes', () => {
     expect(profiles.json().data.profiles).toHaveLength(5);
   });
 
+  it('limits new provider tasks per actor without charging idempotent replays twice', async () => {
+    const repository = createInMemoryPhase2Repository();
+    const server = createServer({
+      phase2Repository: repository,
+      taskGovernance: createInMemoryTaskGovernance()
+    });
+    const token = await login(server);
+    for (let index = 0; index < 5; index += 1) {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/api/v1/admin/ai-gateway/models/sync',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'idempotency-key': `model-rate-limit-${index}`
+        }
+      });
+      expect(response.statusCode).toBe(202);
+    }
+    const limited = await server.inject({
+      method: 'POST',
+      url: '/api/v1/admin/ai-gateway/models/sync',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'idempotency-key': 'model-rate-limit-six'
+      }
+    });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error.code).toBe('RATE_LIMIT_EXCEEDED');
+    const replay = await server.inject({
+      method: 'POST',
+      url: '/api/v1/admin/ai-gateway/models/sync',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'idempotency-key': 'model-rate-limit-0'
+      }
+    });
+    expect(replay.statusCode).toBe(202);
+  });
+
   it('does not assign an unverified model to a gateway profile', async () => {
     const repository = createInMemoryPhase2Repository();
     const server = createServer({ phase2Repository: repository });
@@ -135,6 +174,49 @@ describe('phase 2 contract routes', () => {
     expect(usage.json().data).toMatchObject({ reservedUnits: 1, reservedCost: 0.3 });
   });
 
+  it('requests cancellation for running work and preserves dead-letter replay history', async () => {
+    const repository = createInMemoryPhase2Repository();
+    const server = createServer({ phase2Repository: repository });
+    const token = await login(server);
+    const runningTask = await repository.createTask({
+      workspaceId,
+      kind: 'gateway_model_sync',
+      estimatedCredits: 0
+    });
+    await repository.transitionTask(runningTask.id, workspaceId, 'queued', 'running');
+    const cancellation = await server.inject({
+      method: 'POST',
+      url: `/api/v1/tasks/${runningTask.id}/cancel`,
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'cancel-running-1' }
+    });
+    expect(cancellation.statusCode).toBe(202);
+    expect(cancellation.json().data.task.status).toBe('cancellation_requested');
+
+    const deadLetter = await repository.createTask({
+      workspaceId,
+      kind: 'keyword_research',
+      estimatedCredits: 1
+    });
+    await repository.transitionTask(deadLetter.id, workspaceId, 'queued', 'running');
+    await repository.transitionTask(deadLetter.id, workspaceId, 'running', 'failed');
+    await repository.transitionTask(deadLetter.id, workspaceId, 'failed', 'dead_letter');
+    const listed = await server.inject({
+      method: 'GET',
+      url: '/api/v1/tasks/dead-letter?page=1&pageSize=20',
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().data.items).toHaveLength(1);
+    const replay = await server.inject({
+      method: 'POST',
+      url: `/api/v1/tasks/${deadLetter.id}/replays`,
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'replay-dead-letter-1' },
+      payload: { reason: '供應商已恢復' }
+    });
+    expect(replay.statusCode).toBe(202);
+    expect(replay.json().data.task.replayOfTaskId).toBe(deadLetter.id);
+  });
+
   it('creates an idempotent workspace-scoped keyword research project', async () => {
     const repository = createInMemoryPhase2Repository();
     const siteConnectionRepository = createInMemorySiteConnectionRepository();
@@ -176,6 +258,45 @@ describe('phase 2 contract routes', () => {
     });
     expect(run.statusCode).toBe(503);
     expect(run.json().error.code).toBe('PROVIDER_UNAVAILABLE');
+  });
+
+  it('queues a keyword research run with provider metadata and quota governance', async () => {
+    const repository = createInMemoryPhase2Repository();
+    const siteConnectionRepository = createInMemorySiteConnectionRepository();
+    const site = await siteConnectionRepository.create({ platform: 'wordpress', name: 'Research Run Site', siteUrl: 'https://research-run.example.test' });
+    const project = await repository.createKeywordResearchProject({ workspaceId, siteId: site.site.id, name: 'Research', market: 'US', language: 'en' });
+    await repository.saveEntitlement({
+      id: '00000000-0000-4000-8000-000000000201',
+      workspaceId,
+      featureKey: 'keyword_research',
+      limitValue: 5,
+      period: 'monthly',
+      source: 'test',
+      effectiveAt: new Date(Date.now() - 1_000).toISOString()
+    });
+    const provider: KeywordResearchProvider = {
+      id: 'dataforseo',
+      async getCapabilities() { return { provider: 'dataforseo', supportsKeywordMetrics: true, supportsCompetitorRankedKeywords: true, supportsBacklinkOpportunities: false }; },
+      async discoverKeywordMetrics() { return { provider: 'dataforseo', providerSnapshotId: 'fixture-snapshot', methodologyVersion: 'fixture-v1', location: 'US', language: 'en', device: 'desktop', collectedAt: new Date().toISOString(), sourceType: 'provider_estimated', metrics: [], estimatedCost: 0 }; },
+      async getCompetitorRankedKeywords(input) { return { provider: 'dataforseo', providerSnapshotId: 'fixture-competitor', methodologyVersion: 'fixture-v1', location: input.market, language: input.language, device: input.device, collectedAt: new Date().toISOString(), sourceType: 'provider_estimated', domain: input.domain, keywords: [], estimatedCost: 0 }; }
+    };
+    const server = createServer({ phase2Repository: repository, siteConnectionRepository, keywordResearchProvider: provider });
+    const token = await login(server);
+    const headers = { authorization: `Bearer ${token}`, 'idempotency-key': 'research-run-1' };
+    const payload = { seedKeywords: ['eco-friendly yoga mat'], competitorDomains: ['competitor.example'], locale: 'en-US' };
+    const first = await server.inject({ method: 'POST', url: `/api/v1/keyword-research/projects/${project.id}/runs`, headers, payload });
+    const second = await server.inject({ method: 'POST', url: `/api/v1/keyword-research/projects/${project.id}/runs`, headers, payload });
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    expect(second.json()).toEqual(first.json());
+    expect(first.json().data.provider).toBe('dataforseo');
+    expect(first.json().data.estimatedCredits).toBe(2);
+    const cacheHit = await server.inject({ method: 'POST', url: `/api/v1/keyword-research/projects/${project.id}/runs`, headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'research-run-cache-hit' }, payload });
+    expect(cacheHit.statusCode).toBe(202);
+    expect(cacheHit.json().data.cacheHit).toBe(true);
+    expect(cacheHit.json().data.runId).toBe(first.json().data.runId);
+    const usage = await server.inject({ method: 'GET', url: '/api/v1/usage', headers: { authorization: `Bearer ${token}` } });
+    expect(usage.json().data.activeReservedUnits).toBe(2);
   });
 
   it('hard-stops unconfigured content optimization and unsigned webhooks', async () => {

@@ -13,5 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
-  "devDependencies": {}
+  "dependencies": {
+    "redis": "^4.7.1"
+  }
 }

@@ -2,6 +2,8 @@ export type AiTextProviderName = 'wenwen' | 'openai' | 'anthropic' | 'google' | 
 
 export * from './phase2.js';
 export * from './phase2Gateway.js';
+export * from './taskGovernance.js';
+export * from './keywordResearch.js';
 export type AiEmbeddingProviderName = 'wenwen' | 'openai' | 'google';
 export type AiImageProviderName =
   | 'wenwen'

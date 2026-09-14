@@ -2,17 +2,24 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   hashRequestBody,
+  normalizePagination,
   type ApiResponse,
   type GatewayModelProfile,
   type IdempotencyRecord,
   type Phase2Repository,
   type Phase2Task,
   type Phase2TaskStatus,
-  type RequestContext
+  type RequestContext,
+  type TaskGovernance
 } from '@aieo/ai-providers';
 import { requireAuth, type AuthService, type AuthUser } from './auth';
 
 const taskParamsSchema = z.object({ taskId: z.string().uuid() });
+const deadLetterActionSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+const taskPaginationSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20)
+});
 const taskIdempotencyHeader = z.string().trim().min(8).max(200);
 const gatewayProfileKeys = ['text.default', 'text.high_quality', 'text.batch', 'embedding.default', 'image.default'] as const;
 const gatewayProfileKeySchema = z.enum(gatewayProfileKeys);
@@ -34,6 +41,11 @@ function publicTask(task: Phase2Task) {
     status: task.status,
     progress: task.progress,
     estimatedCredits: task.estimatedCredits,
+    providerKey: task.providerKey,
+    availableAt: task.availableAt,
+    cancellationRequestedAt: task.cancellationRequestedAt,
+    replayOfTaskId: task.replayOfTaskId,
+    priority: task.priority,
     result: task.result,
     errorCode: task.errorCode,
     retryCount: task.retryCount,
@@ -77,6 +89,45 @@ export function createRequestContext(request: FastifyRequest, user: AuthUser, id
 
 export function getRouteKey(request: FastifyRequest) {
   return request.routeOptions.url ?? request.url.split('?')[0];
+}
+
+async function enforceProviderTaskRateLimit(
+  reply: FastifyReply,
+  governance: TaskGovernance | undefined,
+  workspaceId: string,
+  actorId: string,
+  operation: string
+) {
+  if (!governance) {
+    if (process.env.NODE_ENV !== 'production') return true;
+    reply.status(503).send({
+      success: false,
+      message: '任務限流服務暫時不可用',
+      error: { code: 'RATE_LIMIT_UNAVAILABLE' }
+    });
+    return false;
+  }
+  try {
+    const policy = { capacity: 5, refillWindowMs: 60_000 };
+    const [actor, workspace] = await Promise.all([
+      governance.consume(`actor:${actorId}:${operation}`, policy),
+      governance.consume(`workspace:${workspaceId}:${operation}`, { capacity: 20, refillWindowMs: 60_000 })
+    ]);
+    if (actor.allowed && workspace.allowed) return true;
+    reply.status(429).send({
+      success: false,
+      message: '任務建立過於頻繁，請稍後再試',
+      error: { code: 'RATE_LIMIT_EXCEEDED', retryAfterSec: Math.ceil(Math.max(actor.retryAfterMs, workspace.retryAfterMs) / 1000) }
+    });
+    return false;
+  } catch {
+    reply.status(503).send({
+      success: false,
+      message: '任務限流服務暫時不可用',
+      error: { code: 'RATE_LIMIT_UNAVAILABLE' }
+    });
+    return false;
+  }
 }
 
 export type IdempotencyCheck =
@@ -140,10 +191,135 @@ export function sendIdempotencyError(
 export function registerPhase2Routes(
   app: FastifyInstance,
   repository: Phase2Repository,
-  authService: AuthService
+  authService: AuthService,
+  governance?: TaskGovernance
 ) {
   app.addHook('onClose', async () => {
     await repository.close?.();
+  });
+
+  app.get('/api/v1/tasks/dead-letter', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'admin');
+    if (!user) return reply;
+    const parsed = taskPaginationSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        message: '分頁參數格式不正確',
+        error: { code: 'VALIDATION_ERROR', details: parsed.error.issues }
+      });
+    }
+    const result = await repository.listDeadLetterTasks(user.workspaceId, normalizePagination(parsed.data));
+    return {
+      success: true,
+      message: '操作成功',
+      data: { ...result, items: result.items.map(publicTask) }
+    };
+  });
+
+  app.post('/api/v1/tasks/:taskId/replays', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'admin');
+    if (!user) return reply;
+    const params = taskParamsSchema.safeParse(request.params);
+    const body = deadLetterActionSchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        success: false,
+        message: '重跑任務參數格式不正確',
+        error: { code: 'VALIDATION_ERROR', details: params.error?.issues ?? body.error?.issues }
+      });
+    }
+    const context = createRequestContext(request, user);
+    const idempotency = await readIdempotency(repository, request, context);
+    if (sendIdempotencyError(reply, idempotency)) return reply;
+    if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
+    const replay = await repository.replayDeadLetterTask(
+      params.data.taskId,
+      user.workspaceId,
+      user.id,
+      body.data.reason,
+      request.id
+    );
+    if (!replay) return reply.status(404).send({
+      success: false,
+      message: '找不到可重跑的死信任務',
+      error: { code: 'WORKSPACE_RESOURCE_NOT_FOUND' }
+    });
+    const response = {
+      success: true,
+      message: '死信任務已建立重跑項目',
+      data: { task: publicTask(replay.task), action: replay.action }
+    } satisfies ApiResponse<{ task: ReturnType<typeof publicTask>; action: typeof replay.action }>;
+    const saved = await repository.saveIdempotency({
+      workspaceId: user.workspaceId,
+      method: request.method,
+      route: getRouteKey(request),
+      key: idempotency.key,
+      requestHash: idempotency.requestHash,
+      statusCode: 202,
+      responseBody: response,
+      createdAt: new Date().toISOString()
+    });
+    await repository.recordAudit({
+      workspaceId: user.workspaceId,
+      actorType: 'user',
+      actorId: user.id,
+      action: 'task.dead_letter.replay',
+      resourceType: 'phase2_task',
+      resourceId: params.data.taskId,
+      requestId: request.id,
+      metadata: { replacementTaskId: replay.task.id }
+    });
+    return reply.status(saved.statusCode).send(saved.responseBody);
+  });
+
+  app.post('/api/v1/tasks/:taskId/dead-letter/ignore', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'admin');
+    if (!user) return reply;
+    const params = taskParamsSchema.safeParse(request.params);
+    const body = deadLetterActionSchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        success: false,
+        message: '忽略死信參數格式不正確',
+        error: { code: 'VALIDATION_ERROR', details: params.error?.issues ?? body.error?.issues }
+      });
+    }
+    const context = createRequestContext(request, user);
+    const idempotency = await readIdempotency(repository, request, context);
+    if (sendIdempotencyError(reply, idempotency)) return reply;
+    if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
+    const action = await repository.ignoreDeadLetterTask(params.data.taskId, user.workspaceId, user.id, body.data.reason);
+    if (!action) return reply.status(404).send({
+      success: false,
+      message: '找不到可忽略的死信任務',
+      error: { code: 'WORKSPACE_RESOURCE_NOT_FOUND' }
+    });
+    const response = {
+      success: true,
+      message: '死信任務已忽略',
+      data: { action }
+    } satisfies ApiResponse<{ action: typeof action }>;
+    const saved = await repository.saveIdempotency({
+      workspaceId: user.workspaceId,
+      method: request.method,
+      route: getRouteKey(request),
+      key: idempotency.key,
+      requestHash: idempotency.requestHash,
+      statusCode: 200,
+      responseBody: response,
+      createdAt: new Date().toISOString()
+    });
+    await repository.recordAudit({
+      workspaceId: user.workspaceId,
+      actorType: 'user',
+      actorId: user.id,
+      action: 'task.dead_letter.ignored',
+      resourceType: 'phase2_task',
+      resourceId: params.data.taskId,
+      requestId: request.id
+    });
+    return reply.status(saved.statusCode).send(saved.responseBody);
   });
 
   app.get('/api/v1/tasks/:taskId', async (request, reply) => {
@@ -194,7 +370,6 @@ export function registerPhase2Routes(
     if (idempotency.existing) {
       return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
     }
-
     const task = await repository.findTask(parsed.data.taskId, user.workspaceId);
     if (!task) {
       const body = {
@@ -234,13 +409,7 @@ export function registerPhase2Routes(
       return reply.status(saved.statusCode).send(saved.responseBody);
     }
 
-    const cancelled = await repository.transitionTask(
-      task.id,
-      user.workspaceId,
-      task.status,
-      'cancelled' satisfies Phase2TaskStatus,
-      { progress: task.progress }
-    );
+    const cancelled = await repository.cancelTask(task.id, user.workspaceId);
     if (!cancelled) {
       const replay = await repository.findIdempotency({
         workspaceId: user.workspaceId,
@@ -260,7 +429,7 @@ export function registerPhase2Routes(
 
     const body = {
       success: true,
-      message: '任務已取消',
+      message: cancelled.status === 'cancellation_requested' ? '任務取消請求已提交' : '任務已取消',
       data: { task: publicTask(cancelled) }
     } satisfies ApiResponse<{ task: ReturnType<typeof publicTask> }>;
     const saved = await repository.saveIdempotency({
@@ -269,7 +438,7 @@ export function registerPhase2Routes(
       route: getRouteKey(request),
       key: idempotency.key,
       requestHash: idempotency.requestHash,
-      statusCode: 200,
+      statusCode: cancelled.status === 'cancellation_requested' ? 202 : 200,
       responseBody: body,
       createdAt: new Date().toISOString()
     });
@@ -317,6 +486,7 @@ export function registerPhase2Routes(
     if (idempotency.existing) {
       return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
     }
+    if (!(await enforceProviderTaskRateLimit(reply, governance, user.workspaceId, user.id, 'gateway_model_sync'))) return reply;
 
     let createdBody: ApiResponse<{
       taskId: string;

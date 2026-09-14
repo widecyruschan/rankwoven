@@ -58,7 +58,7 @@ export const apiConfigSchema = z.object({
   RATE_LIMIT_TIME_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   CORS_ORIGINS: z
     .string()
-    .default('http://localhost:5173,http://localhost:8080,http://localhost:8082,https://rankwoven.com,https://app.rankwoven.com'),
+    .default('http://localhost:5173,http://localhost:8080,http://localhost:8082,https://rankwoven.com,https://www.rankwoven.com,https://app.rankwoven.com'),
   TRUST_PROXY: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   ALLOW_LOCAL_LIGHTHOUSE_FALLBACK: z.enum(['true', 'false']).default('false').transform((value) => value === 'true')
 }).superRefine((config, context) => {
