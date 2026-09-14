@@ -5,6 +5,7 @@ import {
   type RouteRecordRaw
 } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useSiteStore } from '../stores/site';
 import { i18n } from '../i18n';
 import {
   activeRouteEntries,
@@ -44,10 +45,22 @@ const componentLoaders = {
   AdminOperationsView: () => import('../views/AdminOperationsView.vue'),
   AdminSettingsView: () => import('../views/AdminSettingsView.vue')
   ,ContentOptimizerView: () => import('../views/ContentOptimizerView.vue')
+  ,KeywordResearchView: () => import('../views/KeywordResearchView.vue')
+  ,MonitorEventsView: () => import('../views/MonitorEventsView.vue')
+  ,AlertsView: () => import('../views/AlertsView.vue')
+  ,LegacyRouteView: () => import('../views/LegacyRouteView.vue')
 };
 
 function buildRoute(entry: RouteRegistryEntry): RouteRecordRaw {
-  if (entry.redirect) return { path: entry.path, name: entry.name, redirect: entry.redirect };
+  if (entry.redirect && !entry.legacyTargetId) return { path: entry.path, name: entry.name, redirect: entry.redirect };
+  if (entry.legacyTargetId) {
+    return {
+      path: entry.path,
+      name: entry.name,
+      component: componentLoaders.LegacyRouteView,
+      meta: { layout: entry.layout, requiresAuth: true, indexable: false, routeId: entry.id, area: entry.area, legacyTargetId: entry.legacyTargetId }
+    };
+  }
   if (!entry.componentKey) throw new Error(`Enabled route is missing a component: ${entry.id}`);
   return {
     path: entry.path,
@@ -121,7 +134,16 @@ router.beforeEach(async (to) => {
   const legacyTargetId = typeof to.meta.legacyTargetId === 'string' ? to.meta.legacyTargetId : undefined;
   if (legacyTargetId) {
     const target = getRouteById(legacyTargetId);
-    const siteId = typeof to.query.siteId === 'string' ? to.query.siteId : undefined;
+    const siteStore = useSiteStore();
+    try {
+      await siteStore.refreshSites();
+    } catch {
+      return getRoutePath('app-sites');
+    }
+    const querySiteId = typeof to.query.siteId === 'string' ? to.query.siteId : undefined;
+    const siteId = querySiteId && siteStore.sites.some((site) => site.id === querySiteId)
+      ? querySiteId
+      : siteStore.selectedSiteId;
     if (target.siteScope === 'required' && siteId && /^[0-9a-f-]{36}$/i.test(siteId)) {
       return { path: getRoutePath(target.id, { siteId }), replace: true };
     }

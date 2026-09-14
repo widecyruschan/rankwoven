@@ -5,10 +5,12 @@ import type { TableColumnsType } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { getRoutePath } from '../constants/routeRegistry';
-import { getSiteConnections, getSiteConnection, deleteSiteConnection, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
+import { createManualSite, getSiteConnections, getSiteConnection, deleteSiteConnection, type CmsPlatform, type SiteConnection } from '../api/siteConnections';
+import { useSiteStore } from '../stores/site';
 
 const { t, locale } = useI18n();
 const router = useRouter();
+const siteStore = useSiteStore();
 
 const apiSites = ref<SiteConnection[]>([]);
 const isLoading = ref(false);
@@ -19,11 +21,16 @@ const isDetailLoading = ref(false);
 const isDeleting = ref(false);
 const deletingSiteId = ref('');
 const sitePendingDelete = ref<SiteConnection | null>(null);
+const manualModalOpen = ref(false);
+const isCreatingManual = ref(false);
+const manualSiteName = ref('');
+const manualSiteUrl = ref('');
 
 const platformLabels: Record<CmsPlatform, string> = {
   wordpress: 'WordPress',
   joomla: 'Joomla',
-  opencart: 'OpenCart'
+  opencart: 'OpenCart',
+  manual: 'Manual website'
 };
 
 function normalizeSiteUrl(siteUrl: string): string {
@@ -42,7 +49,7 @@ const dedupedApiSites = computed(() => {
   const siteByKey = new Map<string, SiteConnection>();
 
   for (const site of apiSites.value) {
-    const key = `${site.platform}:${normalizeSiteUrl(site.siteUrl)}`;
+    const key = normalizeSiteUrl(site.siteUrl);
 
     if (!siteByKey.has(key)) {
       siteByKey.set(key, site);
@@ -158,10 +165,33 @@ async function loadSites() {
   try {
     const result = await getSiteConnections();
     apiSites.value = result.sites;
+    await siteStore.refreshSites();
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : t('sites.loadFailed');
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function createManualSiteConnection() {
+  if (!manualSiteUrl.value.trim()) return;
+  isCreatingManual.value = true;
+  try {
+    const result = await createManualSite({
+      siteUrl: manualSiteUrl.value.trim(),
+      ...(manualSiteName.value.trim() ? { name: manualSiteName.value.trim() } : {})
+    });
+    await loadSites();
+    siteStore.selectSite(result.site.id);
+    manualModalOpen.value = false;
+    manualSiteName.value = '';
+    manualSiteUrl.value = '';
+    message.success(t('sites.manualAdded'));
+    void router.push(getRoutePath('app-site-audit-scoped', { siteId: result.site.id }));
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : t('sites.manualAddFailed'));
+  } finally {
+    isCreatingManual.value = false;
   }
 }
 
@@ -177,11 +207,6 @@ async function openSiteDetail(site: SiteConnection) {
   } finally {
     isDetailLoading.value = false;
   }
-}
-
-function goToSitePage(path: string, siteId: string) {
-  selectedSite.value = null;
-  void router.push({ path, query: { siteId } });
 }
 
 function goToScopedSitePage(routeId: string, siteId: string) {
@@ -253,9 +278,12 @@ onMounted(() => {
         <h2>{{ t('sites.title') }}</h2>
         <p>{{ t('sites.body') }}</p>
       </div>
-      <a-button type="primary" :loading="isLoading" @click="loadSites">
-        {{ t('sites.refresh') }}
-      </a-button>
+      <a-space>
+        <a-button @click="manualModalOpen = true">{{ t('sites.addManual') }}</a-button>
+        <a-button type="primary" :loading="isLoading" @click="loadSites">
+          {{ t('sites.refresh') }}
+        </a-button>
+      </a-space>
     </div>
 
     <a-alert v-if="loadError" class="page-alert" type="error" show-icon :message="loadError" />
@@ -333,6 +361,13 @@ onMounted(() => {
                 {{ t('contentOptimizer.title') }}
               </a-button>
               <a-button
+                v-if="record.status === 'connected'"
+                type="link"
+                @click="goToScopedSitePage('app-site-research', record.id)"
+              >
+                {{ t('keywordResearch.title') }}
+              </a-button>
+              <a-button
                 type="link"
                 danger
                 :loading="isDeleting && deletingSiteId === record.id"
@@ -367,6 +402,13 @@ onMounted(() => {
             <dt>{{ t('sites.platform') }}</dt>
             <dd>{{ platformLabels[selectedSite.platform] }}</dd>
 
+            <dt>{{ t('sites.writebackStatus') }}</dt>
+            <dd>
+              <a-tag :color="selectedSite.canWriteBack ? 'green' : 'default'">
+                {{ selectedSite.canWriteBack ? t('sites.configured') : t('sites.manualMode') }}
+              </a-tag>
+            </dd>
+
             <dt>{{ t('sites.status') }}</dt>
             <dd>
               <a-tag :color="selectedSite.status === 'connected' ? 'blue' : 'default'">
@@ -387,17 +429,6 @@ onMounted(() => {
             <dt>{{ t('sites.mediaSynced') }}</dt>
             <dd>{{ selectedSite.lastSyncStats?.mediaReceived ?? 0 }}</dd>
 
-            <dt>{{ t('sites.writebackStatus') }}</dt>
-            <dd>
-              <a-tag :color="selectedSite.wordpressApplicationPasswordConfigured ? 'green' : 'orange'">
-                {{
-                  selectedSite.wordpressApplicationPasswordConfigured
-                    ? t('sites.configured')
-                    : t('sites.notConfigured')
-                }}
-              </a-tag>
-            </dd>
-
             <dt>{{ t('sites.analyticsStatus') }}</dt>
             <dd>
               <a-tag :color="selectedSite.googleAnalyticsPropertyId ? 'green' : 'orange'">
@@ -411,18 +442,37 @@ onMounted(() => {
           </dl>
 
           <div class="site-detail-actions">
-            <a-button type="primary" @click="goToSitePage('/app/site-audit', selectedSite.id)">
+            <a-button type="primary" @click="goToScopedSitePage('app-site-audit-scoped', selectedSite.id)">
               {{ t('sites.openSiteAudit') }}
             </a-button>
-            <a-button @click="goToSitePage('/app/tasks', selectedSite.id)">
+            <a-button @click="goToScopedSitePage('app-site-tasks-scoped', selectedSite.id)">
               {{ t('sites.openTaskQueue') }}
             </a-button>
-            <a-button @click="goToSitePage('/app/media', selectedSite.id)">
+            <a-button @click="goToScopedSitePage('app-site-media-scoped', selectedSite.id)">
               {{ t('sites.openMediaOptimization') }}
             </a-button>
           </div>
         </div>
       </a-spin>
+    </a-modal>
+
+    <a-modal
+      v-model:open="manualModalOpen"
+      :title="t('sites.manualTitle')"
+      :ok-text="t('sites.addManual')"
+      :cancel-text="t('common.cancel')"
+      :confirm-loading="isCreatingManual"
+      @ok="createManualSiteConnection"
+    >
+      <a-alert type="info" show-icon :message="t('sites.manualDescription')" />
+      <a-form layout="vertical" class="manual-site-form">
+        <a-form-item :label="t('sites.manualName')">
+          <a-input v-model:value="manualSiteName" />
+        </a-form-item>
+        <a-form-item :label="t('sites.manualUrl')" required>
+          <a-input v-model:value="manualSiteUrl" placeholder="https://example.com" />
+        </a-form-item>
+      </a-form>
     </a-modal>
 
     <a-modal

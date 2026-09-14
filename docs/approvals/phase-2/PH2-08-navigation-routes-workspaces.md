@@ -82,7 +82,7 @@ App shell 分為四個 groups，所有站點內容操作使用 `/app/sites/:site
 | 監控與外鏈 | `/app/monitors`、`/app/visibility`、`/app/alerts`、`/app/backlinks` | 只在對應 feature runtime 通過 gate 後顯示；否則完全隱藏。 |
 | 工作區操作 | `/app/billing`、`/app/developers`、`/app/integrations`、`/app/settings` | Billing／Developers 保持 hidden 至 PH2-11／2C；Settings 依 tab 作 owner gate。 |
 
-site switcher 的資料僅來自既有 workspace-scoped sites API；點選時以 `router.push` 更換合法 path parameter。工作區 switcher 在 server 提供受權 workspace list／switch contract 前只顯示 current workspace，不能虛構切換功能。所有 direct deep link 先完成 auth restore、site ownership 驗證，再顯示 loading 或 workspace-safe `not found`。
+site switcher 的資料僅來自既有 workspace-scoped sites API；點選時以 `router.push` 更換合法 `:siteId` path parameter，並將目前站點保存於本機 session，讓網站檢測、關鍵詞研究、內容優化、媒體、內部連結、流量與任務頁共享同一 context。手動加入網站使用 `manual` connection mode，只提供分析與人工修復建議；插件或 API 連接使用 `plugin`／`api` mode，可在既有 CMS 寫回 gate 下使用一鍵優化。工作區 switcher 在 server 提供受權 workspace list／switch contract 前只顯示 current workspace，不能虛構切換功能。所有 direct deep link 先完成 auth restore、site ownership 驗證，再顯示 loading 或 workspace-safe `not found`。
 
 ### 4.3 管理後台
 
@@ -139,9 +139,11 @@ site switcher 的資料僅來自既有 workspace-scoped sites API；點選時以
 ## 8. 核心實作結果（2026-09-14）
 
 - route registry 已支援 navigation surface、group、order、site scope、feature key、availability phase、legacy target 與 robots policy metadata；App.vue 的公開／客戶／管理導航與 breadcrumb 改為讀取 registry，而不是手寫 route list。
+- `LegacyRouteResolver` 已接管既有 `/app/articles`、`/app/article-sync`、`/app/suggestions`、`/app/article-suggestions`、`/app/review`；帶有效 site context 時導向新的 site-scoped target，沒有 context 時回到安全的跨站頁，不產生公開 redirect 或 sitemap entry。
 - Content Optimizer 與 site-scoped Site Audit 成為首批 enabled site route。Router 在 auth restore 後以現有 workspace-scoped sites API 驗證 `:siteId`；無效或無權限路徑回到 `/app/sites`。
+- 競品關鍵詞研究已成為 enabled site route。使用者只需輸入競品網址；API 驗證公開 hostname、推導初始 seed，並使用 PH2-06 Provider／Worker 產生競品排名詞、長尾候選與 Gap。Provider 未配置、quota、partial 或失敗狀態不會被前端偽裝成結果。
 - `/app/sites` 的已連接站點新增內容優化器與站點檢測入口，形成可達的 private parent path；Content Optimizer 使用 PH2-07 API，會顯示 provider unavailable 而不繞過 gateway／entitlement gate。
 - 公開 header／footer 已由 manifest 產生，公開 planned tools、Extension、category 與未完成 locale route 維持 disabled；build 仍產生 96 個 canonical URL，公開 link graph 孤島數為 0。
 - 已完成 manifest regression、Web build、全倉 test、light／dark public browser snapshot，以及未登入 deep link 導向 login 的 browser 驗證。
 
-未完成且保持關閉：工作區切換（缺安全 API contract）、完整 query-aware LegacyRouteResolver、其餘 site-scoped research／content／media／links／tasks wrapper、批量計劃 UI、public tools runtime、Billing／Backlinks／Monitors／Developers、其餘管理後台入口。它們必須隨對應 API 和 feature gate 再個別啟用，不能用空白頁補位。
+未完成且保持關閉：工作區切換（缺安全 API contract）、其餘 site-scoped content／media／links／tasks wrapper、批量計劃 UI、public tools runtime、Billing／Backlinks／Monitors／Developers、其餘管理後台入口。它們必須隨對應 API 和 feature gate 再個別啟用，不能用空白頁補位。

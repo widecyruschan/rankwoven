@@ -13,7 +13,8 @@ import { apiConfig } from './config';
 import { readGoogleCredentials } from './googleAuth';
 import { createSearchConsoleService } from './searchConsole';
 
-const cmsPlatformSchema = z.enum(['wordpress', 'joomla', 'opencart']);
+const cmsPlatformSchema = z.enum(['wordpress', 'joomla', 'opencart', 'manual']);
+const connectionModeSchema = z.enum(['plugin', 'api', 'manual']);
 
 const optionalAnalyticsPropertyIdSchema = z
   .string()
@@ -24,6 +25,7 @@ const optionalAnalyticsPropertyIdSchema = z
 
 const createConnectionSchema = z.object({
   platform: cmsPlatformSchema.default('wordpress'),
+  connectionMode: connectionModeSchema.default('plugin'),
   name: z.string().trim().min(1).max(160),
   siteUrl: z.url(),
   cmsVersion: z.string().trim().max(40).optional(),
@@ -32,6 +34,13 @@ const createConnectionSchema = z.object({
   wordpressAdminUsername: z.string().trim().min(1).max(160).optional(),
   wordpressApplicationPassword: z.string().trim().min(1).max(240).optional()
 }).superRefine((input, context) => {
+  if ((input.platform === 'manual') !== (input.connectionMode === 'manual')) {
+    context.addIssue({
+      code: 'custom',
+      message: '手動站點必須使用 manual 接入模式',
+      path: ['connectionMode']
+    });
+  }
   if (Boolean(input.wordpressAdminUsername) !== Boolean(input.wordpressApplicationPassword)) {
     context.addIssue({
       code: 'custom',
@@ -39,6 +48,11 @@ const createConnectionSchema = z.object({
       path: ['wordpressApplicationPassword']
     });
   }
+});
+
+const createManualConnectionSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  siteUrl: z.url()
 });
 
 const updateWordPressCredentialsSchema = z.object({
@@ -135,6 +149,7 @@ const mediaListQuerySchema = paginationQuerySchema.extend({
 });
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
+export type SiteConnectionMode = z.infer<typeof connectionModeSchema>;
 export type SyncedArticleType = z.infer<typeof syncedArticleTypeSchema>;
 export type SyncedArticle = z.infer<typeof syncedArticleSchema>;
 export type SyncedMedia = z.infer<typeof syncedMediaSchema>;
@@ -190,6 +205,7 @@ export interface SiteConnection {
   id: string;
   workspaceId?: string;
   platform: CreateConnectionInput['platform'];
+  connectionMode: SiteConnectionMode;
   name: string;
   siteUrl: string;
   cmsVersion?: string;
@@ -206,6 +222,7 @@ export interface SiteConnection {
   tokenPreview: string;
   wordpressAdminUsername?: string;
   wordpressApplicationPasswordConfigured: boolean;
+  canWriteBack: boolean;
 }
 
 export interface SaveSyncResult {
@@ -297,6 +314,7 @@ export interface SiteConnectionRepository {
     payload: SyncBatchPayload
   ): Promise<SaveSyncBatchResult | undefined>;
   listArticles(siteId: string, pagination?: ArticleListOptions): Promise<PaginatedResult<SyncedArticle>>;
+  findArticle(siteId: string, cmsId: string): Promise<SyncedArticle | undefined>;
   listMedia(siteId: string, pagination?: MediaListOptions): Promise<PaginatedResult<SyncedMedia>>;
   getWordPressCredentials(siteId: string): Promise<WordPressCredentials | undefined>;
   close?(): Promise<void>;
@@ -334,7 +352,8 @@ const siteConnectionMigrationSql = `
 CREATE TABLE IF NOT EXISTS site_connections (
   id uuid PRIMARY KEY,
   workspace_id uuid NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
-  platform text NOT NULL CHECK (platform IN ('wordpress', 'joomla', 'opencart')),
+  platform text NOT NULL CHECK (platform IN ('wordpress', 'joomla', 'opencart', 'manual')),
+  connection_mode text NOT NULL DEFAULT 'plugin' CHECK (connection_mode IN ('plugin', 'api', 'manual')),
   name varchar(160) NOT NULL,
   site_url text NOT NULL,
   cms_version varchar(40),
@@ -378,6 +397,23 @@ ALTER TABLE site_connections
 
 ALTER TABLE site_connections
   ADD COLUMN IF NOT EXISTS google_analytics_property_id varchar(80);
+
+ALTER TABLE site_connections
+  ADD COLUMN IF NOT EXISTS connection_mode varchar(20) NOT NULL DEFAULT 'plugin';
+
+ALTER TABLE site_connections
+  DROP CONSTRAINT IF EXISTS site_connections_connection_mode_check;
+
+ALTER TABLE site_connections
+  ADD CONSTRAINT site_connections_connection_mode_check
+  CHECK (connection_mode IN ('plugin', 'api', 'manual'));
+
+ALTER TABLE site_connections
+  DROP CONSTRAINT IF EXISTS site_connections_platform_check;
+
+ALTER TABLE site_connections
+  ADD CONSTRAINT site_connections_platform_check
+  CHECK (platform IN ('wordpress', 'joomla', 'opencart', 'manual'));
 
 CREATE INDEX IF NOT EXISTS idx_site_connections_last_token_used
   ON site_connections(last_token_used_at DESC);
@@ -651,6 +687,7 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
     id: connection.id,
     workspaceId: connection.workspaceId,
     platform: connection.platform,
+    connectionMode: connection.connectionMode,
     name: connection.name,
     siteUrl: connection.siteUrl,
     cmsVersion: connection.cmsVersion,
@@ -663,7 +700,8 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
     lastSyncStats: connection.lastSyncStats,
     tokenPreview: connection.tokenPreview,
     wordpressAdminUsername: connection.wordpressAdminUsername,
-    wordpressApplicationPasswordConfigured: Boolean(connection.wordpressApplicationPassword)
+    wordpressApplicationPasswordConfigured: Boolean(connection.wordpressApplicationPassword),
+    canWriteBack: connection.connectionMode !== 'manual' && Boolean(connection.wordpressApplicationPassword)
   };
 }
 
@@ -675,11 +713,19 @@ function normalizeSiteUrl(value: string) {
   return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}${path}`;
 }
 
-function dedupeSiteConnections<T extends { workspaceId?: string; platform: string; siteUrl: string; id: string; lastSyncAt?: string; lastSyncStats?: { articlesReceived: number; mediaReceived: number }; createdAt: string }>(sites: T[]): T[] {
+function getManualConnectionName(siteUrl: string) {
+  try {
+    return new URL(siteUrl).hostname;
+  } catch {
+    return siteUrl;
+  }
+}
+
+function dedupeSiteConnections<T extends { workspaceId?: string; siteUrl: string; id: string; lastSyncAt?: string; lastSyncStats?: { articlesReceived: number; mediaReceived: number }; createdAt: string }>(sites: T[]): T[] {
   const siteByKey = new Map<string, T>();
 
   for (const site of sites) {
-    const key = `${site.workspaceId ?? ''}:${site.platform}:${normalizeSiteUrl(site.siteUrl)}`;
+    const key = `${site.workspaceId ?? ''}:${normalizeSiteUrl(site.siteUrl)}`;
     const existingSite = siteByKey.get(key);
     if (!existingSite) {
       siteByKey.set(key, site);
@@ -708,6 +754,7 @@ function mapSiteRow(row: QueryResultRow): SiteConnection {
     id: row.id,
     workspaceId: row.workspace_id ?? undefined,
     platform: row.platform,
+    connectionMode: row.connection_mode ?? 'plugin',
     name: row.name,
     siteUrl: row.site_url,
     cmsVersion: row.cms_version ?? undefined,
@@ -720,7 +767,8 @@ function mapSiteRow(row: QueryResultRow): SiteConnection {
     lastSyncStats: toLastSyncStats(row.last_sync_stats),
     tokenPreview: row.token_preview,
     wordpressAdminUsername: row.wordpress_admin_username ?? undefined,
-    wordpressApplicationPasswordConfigured: Boolean(row.wordpress_application_password_encrypted)
+    wordpressApplicationPasswordConfigured: Boolean(row.wordpress_application_password_encrypted),
+    canWriteBack: (row.connection_mode ?? 'plugin') !== 'manual' && Boolean(row.wordpress_application_password_encrypted)
   };
 }
 
@@ -1041,7 +1089,7 @@ function mapWordPressMedia(item: WordPressMediaResponseItem): SyncedMedia {
   const attachedToCmsId =
     typeof item.post === 'number' && item.post > 0 ? String(item.post) : '';
   const modifiedAt = typeof item.modified_gmt === 'string' && item.modified_gmt !== ''
-    ? new Date(item.modified_gmt).toISOString()
+    ? normalizeWordPressGmtTimestamp(item.modified_gmt)
     : new Date().toISOString();
 
   return {
@@ -1063,13 +1111,19 @@ function normalizeSyncedArticleType(value: unknown): SyncedArticleType {
   return value === 'page' || value === 'portfolio' || value === 'product' ? value : 'post';
 }
 
+export function normalizeWordPressGmtTimestamp(value: string) {
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
 function mapWordPressContent(item: WordPressContentResponseItem): SyncedArticle {
   const contentType = normalizeSyncedArticleType(item.type);
   const updatedAt = typeof item.modified_gmt === 'string' && item.modified_gmt !== ''
-    ? new Date(item.modified_gmt).toISOString()
+    ? normalizeWordPressGmtTimestamp(item.modified_gmt)
     : new Date().toISOString();
   const publishedAt = typeof item.date_gmt === 'string' && item.date_gmt !== ''
-    ? new Date(item.date_gmt).toISOString()
+    ? normalizeWordPressGmtTimestamp(item.date_gmt)
     : updatedAt;
   const featuredImageId =
     typeof item.featured_media === 'number' && item.featured_media > 0
@@ -1536,6 +1590,7 @@ function createSiteConnection(
     id,
     workspaceId,
     platform: input.platform,
+    connectionMode: input.connectionMode,
     name: input.name,
     siteUrl: input.siteUrl,
     cmsVersion: input.cmsVersion,
@@ -1547,7 +1602,8 @@ function createSiteConnection(
     createdAt: new Date().toISOString(),
     wordpressAdminUsername: input.wordpressAdminUsername,
     wordpressApplicationPasswordConfigured: Boolean(input.wordpressApplicationPassword),
-    wordpressApplicationPassword: input.wordpressApplicationPassword
+    wordpressApplicationPassword: input.wordpressApplicationPassword,
+    canWriteBack: input.connectionMode !== 'manual' && Boolean(input.wordpressApplicationPassword)
   };
 }
 
@@ -1566,13 +1622,14 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       const existing = Array.from(sites.values()).find(
         (site) =>
           site.workspaceId === workspaceId &&
-          site.platform === input.platform &&
           normalizeSiteUrl(site.siteUrl) === normalizedUrl
       );
 
       if (existing) {
         existing.name = input.name;
         existing.siteUrl = input.siteUrl;
+        existing.platform = input.platform;
+        existing.connectionMode = input.connectionMode;
         existing.cmsVersion = input.cmsVersion ?? existing.cmsVersion;
         existing.pluginVersion = input.pluginVersion ?? existing.pluginVersion;
         existing.googleAnalyticsPropertyId =
@@ -1584,6 +1641,7 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
         );
         existing.wordpressApplicationPassword =
           input.wordpressApplicationPassword ?? existing.wordpressApplicationPassword;
+        existing.canWriteBack = existing.connectionMode !== 'manual' && Boolean(existing.wordpressApplicationPassword);
 
         return {
           site: toPublicConnection(existing),
@@ -2059,6 +2117,9 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
 
       return paginateItems(articles, options);
     },
+    async findArticle(siteId, cmsId) {
+      return articlesBySite.get(siteId)?.get(cmsId);
+    },
     async listMedia(siteId, options) {
       const siteArticles = articlesBySite.get(siteId) ?? new Map<string, SyncedArticle>();
       const media = filterMedia(
@@ -2120,7 +2181,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     await this.ensureSchema();
 
     const normalizedUrl = normalizeSiteUrl(input.siteUrl);
-    const existing = await this.findByUrl(normalizedUrl, input.platform, workspaceId);
+    const existing = await this.findByUrl(normalizedUrl, workspaceId);
 
     if (existing) {
       const result = await this.pool.query(
@@ -2129,18 +2190,22 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           SET
             name = $1,
             site_url = $2,
-            cms_version = COALESCE($3, cms_version),
-            plugin_version = COALESCE($4, plugin_version),
-            google_analytics_property_id = COALESCE($5, google_analytics_property_id),
-            wordpress_admin_username = COALESCE($6, wordpress_admin_username),
-            wordpress_application_password_encrypted = COALESCE($7, wordpress_application_password_encrypted),
+            platform = $3,
+            connection_mode = $4,
+            cms_version = COALESCE($5, cms_version),
+            plugin_version = COALESCE($6, plugin_version),
+            google_analytics_property_id = COALESCE($7, google_analytics_property_id),
+            wordpress_admin_username = COALESCE($8, wordpress_admin_username),
+            wordpress_application_password_encrypted = COALESCE($9, wordpress_application_password_encrypted),
             status = 'connected'
-          WHERE id = $8
+          WHERE id = $10
           RETURNING *
         `,
         [
           input.name,
           normalizedUrl,
+          input.platform,
+          input.connectionMode,
           input.cmsVersion ?? null,
           input.pluginVersion ?? null,
           input.googleAnalyticsPropertyId ?? null,
@@ -2167,6 +2232,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           id,
           workspace_id,
           platform,
+          connection_mode,
           name,
           site_url,
           cms_version,
@@ -2179,13 +2245,14 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
           wordpress_admin_username,
           wordpress_application_password_encrypted
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'connected', $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'connected', $11, $12, $13, $14)
         RETURNING *
       `,
       [
         id,
         workspaceId,
         input.platform,
+        input.connectionMode,
         input.name,
         normalizedUrl,
         input.cmsVersion ?? null,
@@ -2207,11 +2274,7 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     };
   }
 
-  async findByUrl(
-    siteUrl: string,
-    platform: string,
-    workspaceId = defaultWorkspaceId
-  ): Promise<SiteConnection | undefined> {
+  async findByUrl(siteUrl: string, workspaceId = defaultWorkspaceId): Promise<SiteConnection | undefined> {
     await this.ensureSchema();
 
     const result = await this.pool.query(
@@ -2219,11 +2282,10 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
         SELECT *
         FROM site_connections
         WHERE workspace_id = $1::uuid
-          AND platform = $2
-          AND site_url = $3
+          AND site_url = $2
         LIMIT 1
       `,
-      [workspaceId, platform, siteUrl]
+      [workspaceId, siteUrl]
     );
 
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
@@ -3182,6 +3244,15 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
     };
   }
 
+  async findArticle(siteId: string, cmsId: string): Promise<SyncedArticle | undefined> {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      'SELECT * FROM synced_articles WHERE site_id = $1 AND cms_id = $2 LIMIT 1',
+      [siteId, cmsId]
+    );
+    return result.rows[0] ? mapArticleRow(result.rows[0]) : undefined;
+  }
+
   async listMedia(siteId: string, options?: MediaListOptions) {
     await this.ensureSchema();
 
@@ -3655,6 +3726,46 @@ export function registerSiteConnectionRoutes(
         site: result.site,
         ...(result.apiToken ? { apiToken: result.apiToken } : {})
       }
+    });
+  });
+
+  app.post('/api/v1/site-connections/manual', async (request, reply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+    if (user.role === 'viewer') {
+      return reply.status(403).send({
+        success: false,
+        message: '沒有足夠權限建立站點連接',
+        error: { code: 'FORBIDDEN' }
+      });
+    }
+    const parsed = createManualConnectionSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+
+    try {
+      await validateConnectionTarget(parsed.data.siteUrl);
+    } catch (error) {
+      if (error instanceof UnsafeTargetUrlError) {
+        return reply.status(400).send({
+          success: false,
+          message: '目標網址不符合安全抓取規則',
+          error: { code: 'UNSAFE_TARGET_URL' }
+        });
+      }
+      throw error;
+    }
+
+    const result = await repository.create({
+      platform: 'manual',
+      connectionMode: 'manual',
+      name: parsed.data.name ?? getManualConnectionName(parsed.data.siteUrl),
+      siteUrl: parsed.data.siteUrl,
+      googleAnalyticsPropertyId: undefined
+    }, user.workspaceId);
+    return reply.status(201).send({
+      success: true,
+      message: '手動站點已加入；可使用分析與修復建議，但不支援自動寫回。',
+      data: { site: result.site }
     });
   });
 

@@ -457,11 +457,13 @@
       "name": "AppDashboard",
       "area": "customer",
       "layout": "app",
-      "componentKey": "DashboardView",
+      "componentKey": "SiteAuditView",
+      "legacyTargetId": "app-site-audit-scoped",
       "indexable": false,
       "canonicalPath": "/app",
-      "titleKey": "nav.dashboard",
-      "nav": true
+      "titleKey": "nav.siteAudit",
+      "navLabelKey": "nav.siteAudit",
+      "nav": false
     },
     {
       "id": "app-sites",
@@ -485,8 +487,9 @@
       "indexable": false,
       "canonicalPath": "/app/analytics",
       "migrationTargetId": "app-site-analytics-scoped",
+      "legacyTargetId": "app-site-analytics-scoped",
       "titleKey": "nav.analytics",
-      "nav": true
+      "nav": false
     },
     {
       "id": "app-keywords",
@@ -498,8 +501,9 @@
       "indexable": false,
       "canonicalPath": "/app/keywords",
       "migrationTargetId": "app-site-research",
+      "legacyTargetId": "app-site-research",
       "titleKey": "nav.keywords",
-      "nav": true
+      "nav": false
     },
     {
       "id": "app-media",
@@ -511,8 +515,9 @@
       "indexable": false,
       "canonicalPath": "/app/media",
       "migrationTargetId": "app-site-content",
+      "legacyTargetId": "app-site-media-scoped",
       "titleKey": "nav.media",
-      "nav": true
+      "nav": false
     },
     {
       "id": "app-apply",
@@ -524,6 +529,7 @@
       "indexable": false,
       "canonicalPath": "/app/apply",
       "migrationTargetId": "app-site-content-optimizer",
+      "legacyTargetId": "app-site-content-optimizer",
       "titleKey": "nav.apply"
     },
     {
@@ -536,8 +542,9 @@
       "indexable": false,
       "canonicalPath": "/app/links",
       "migrationTargetId": "app-site-content",
+      "legacyTargetId": "app-site-links-scoped",
       "titleKey": "nav.links",
-      "nav": true
+      "nav": false
     },
     {
       "id": "app-tasks",
@@ -549,8 +556,9 @@
       "indexable": false,
       "canonicalPath": "/app/tasks",
       "migrationTargetId": "app-site-content",
+      "legacyTargetId": "app-site-tasks-scoped",
       "titleKey": "nav.tasks",
-      "nav": true
+      "nav": false
     },
     {
       "id": "app-cms-adapters",
@@ -586,8 +594,9 @@
       "indexable": false,
       "canonicalPath": "/app/lighthouse",
       "migrationTargetId": "app-site-audit-scoped",
+      "legacyTargetId": "app-site-audit-scoped",
       "titleKey": "nav.lighthouse",
-      "nav": true
+      "nav": false
     },
     {
       "id": "app-site-audit",
@@ -599,6 +608,7 @@
       "indexable": false,
       "canonicalPath": "/app/site-audit",
       "migrationTargetId": "app-site-audit-scoped",
+      "legacyTargetId": "app-site-audit-scoped",
       "titleKey": "nav.siteAudit"
     },
     {
@@ -608,7 +618,8 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "redirect": "/app/sites"
+      "redirect": "/app/sites",
+      "legacyTargetId": "app-sites"
     },
     {
       "id": "app-article-sync-redirect",
@@ -617,7 +628,8 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "redirect": "/app/tasks"
+      "redirect": "/app/tasks",
+      "legacyTargetId": "app-tasks"
     },
     {
       "id": "app-suggestions-redirect",
@@ -626,7 +638,8 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "redirect": "/app/media"
+      "redirect": "/app/media",
+      "legacyTargetId": "app-site-content-optimizer"
     },
     {
       "id": "app-article-suggestions-redirect",
@@ -635,7 +648,8 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "redirect": "/app/media"
+      "redirect": "/app/media",
+      "legacyTargetId": "app-site-content-optimizer"
     },
     {
       "id": "app-review-redirect",
@@ -644,7 +658,8 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "redirect": "/app/media"
+      "redirect": "/app/media",
+      "legacyTargetId": "app-site-content-optimizer"
     },
     {
       "id": "app-sites-scoped",
@@ -665,10 +680,18 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "parentId": "app-sites-scoped",
-      "titleKey": "nav.keywords"
+      "enabled": true,
+      "availabilityPhase": "PH2-06",
+      "featureKey": "keyword_research",
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "nav": true,
+      "navigationGroup": "current_site",
+      "navigationOrder": 30,
+      "parentId": "app-sites",
+      "titleKey": "keywordResearch.title",
+      "navLabelKey": "keywordResearch.title",
+      "componentKey": "KeywordResearchView"
     },
     {
       "id": "app-site-content",
@@ -694,6 +717,7 @@
       "featureKey": "content_optimization",
       "siteScope": "required",
       "navigationSurface": "customer_sidebar",
+      "nav": true,
       "navigationGroup": "current_site",
       "navigationOrder": 40,
       "parentId": "app-sites",
@@ -712,6 +736,7 @@
       "availabilityPhase": "PH2-05",
       "siteScope": "required",
       "navigationSurface": "customer_sidebar",
+      "nav": true,
       "navigationGroup": "current_site",
       "navigationOrder": 50,
       "parentId": "app-sites",
@@ -725,10 +750,70 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "parentId": "app-sites-scoped",
-      "titleKey": "nav.analytics"
+      "enabled": true,
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "nav": true,
+      "navigationGroup": "current_site",
+      "navigationOrder": 60,
+      "parentId": "app-sites",
+      "titleKey": "nav.analytics",
+      "navLabelKey": "nav.analytics",
+      "componentKey": "AnalyticsView"
+    },
+    {
+      "id": "app-site-media-scoped",
+      "path": "/app/sites/:siteId/media",
+      "name": "AppSiteMediaScoped",
+      "area": "customer",
+      "layout": "app",
+      "indexable": false,
+      "enabled": true,
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "nav": true,
+      "navigationGroup": "current_site",
+      "navigationOrder": 70,
+      "parentId": "app-sites",
+      "titleKey": "nav.media",
+      "navLabelKey": "nav.media",
+      "componentKey": "MediaOptimizationView"
+    },
+    {
+      "id": "app-site-links-scoped",
+      "path": "/app/sites/:siteId/links",
+      "name": "AppSiteLinksScoped",
+      "area": "customer",
+      "layout": "app",
+      "indexable": false,
+      "enabled": true,
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "nav": true,
+      "navigationGroup": "current_site",
+      "navigationOrder": 80,
+      "parentId": "app-sites",
+      "titleKey": "nav.links",
+      "navLabelKey": "nav.links",
+      "componentKey": "LinksView"
+    },
+    {
+      "id": "app-site-tasks-scoped",
+      "path": "/app/sites/:siteId/tasks",
+      "name": "AppSiteTasksScoped",
+      "area": "customer",
+      "layout": "app",
+      "indexable": false,
+      "enabled": true,
+      "siteScope": "required",
+      "navigationSurface": "customer_sidebar",
+      "nav": true,
+      "navigationGroup": "current_site",
+      "navigationOrder": 90,
+      "parentId": "app-sites",
+      "titleKey": "nav.tasks",
+      "navLabelKey": "nav.tasks",
+      "componentKey": "TasksView"
     },
     {
       "id": "app-research",
@@ -748,9 +833,17 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "titleKey": "nav.analytics"
+      "enabled": true,
+      "availabilityPhase": "PH2-10",
+      "featureKey": "site_audit_monitoring",
+      "navigationSurface": "customer_sidebar",
+      "navigationGroup": "workspace",
+      "navigationOrder": 75,
+      "parentId": "app-sites",
+      "titleKey": "monitoring.title",
+      "navLabelKey": "monitoring.title",
+      "componentKey": "MonitorEventsView",
+      "nav": true
     },
     {
       "id": "app-visibility",
@@ -770,9 +863,17 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "titleKey": "nav.tasks"
+      "enabled": true,
+      "availabilityPhase": "PH2-10",
+      "featureKey": "site_audit_monitoring",
+      "navigationSurface": "customer_sidebar",
+      "navigationGroup": "workspace",
+      "navigationOrder": 76,
+      "parentId": "app-sites",
+      "titleKey": "monitoring.alertsTitle",
+      "navLabelKey": "monitoring.alertsTitle",
+      "componentKey": "AlertsView",
+      "nav": true
     },
     {
       "id": "app-backlinks",

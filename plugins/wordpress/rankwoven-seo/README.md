@@ -2,6 +2,8 @@
 
 WordPress 外掛：連接 RankWoven SaaS，同步文章／頁面／作品／商品與圖片媒體，並在後台管理搜尋外觀、Sitemap、SEO 分析與圖片屬性。
 
+外掛根頁現在直接開啟 **SEO 網站檢測**，展示最新審計摘要與問題列表；其他設定仍透過側欄子選單存取。
+
 目前版本為 **0.8.0**。自 **0.2.0** 起，原 `webp-image-optimizer` 的功能已合併進來。
 
 ## SEO 評分與 GEO 優化
@@ -11,6 +13,14 @@ WordPress 外掛：連接 RankWoven SaaS，同步文章／頁面／作品／商�
 「GEO 優化」分頁提供 AI 爬蟲存取、索引與摘要控制，以及 BCP 47 語言聲明、替代語言和 `x-default` hreflang 設定。啟用後會同步輸出 GEO robots 規則與前台 robots meta，協助搜尋引擎及生成式 AI 正確抓取和引用內容。
 
 GEO 設定亦包含可獨立關閉的 JSON-LD、Entity Schema、Content Schema 及 Author & Date Markup。前台會按頁面類型輸出 Organization、WebSite、Person、Article、WebPage、Product 和 BreadcrumbList；Organization 名稱、描述、Logo 與 `sameAs` 社交連結可在後台調整。GEO readiness 現以 AI Crawler Access、Machine Readability、Structured Data、Content & Citability 和 Trust & E-E-A-T 五組評分，並檢查標題層級、首段答案、引用、內容深度、作者日期、法律頁面和 HTTPS 等訊號。`x-default` 留空時會自動回退到網站首頁。
+
+## Ahrefs Site Audit 網站級檢測
+
+後台路徑：**RankWoven SEO -> SEO 網站檢測 -> Ahrefs Site Audit 資料來源**。
+
+每個已連接的 WordPress 站點可分別保存 Ahrefs `Project ID`、最新 crawl 日期和比較 crawl 日期。勾選啟用並執行檢測後，RankWoven 會以 SaaS 端的 Ahrefs API v3 憑證讀取該 Project 的網站級問題，將 Error、Warning、Notice、受影響頁面、變化量、分類與修復建議併入問題表；Ahrefs 回傳 Health Score 時會作為網站健康度分數來源。
+
+Ahrefs API key 只配置在 RankWoven SaaS 的 `AHREFS_API_KEY` 環境變數，絕不輸入、保存或回傳到 WordPress 外掛。若 Ahrefs 暫時無法讀取，檢測仍會保留 RankWoven 已觀測的內容規則，並在頁面提示 provider 錯誤碼；不會以本地分數冒充 Ahrefs 分數。
 
 ## 圖片優化（合併自 WebP Image Optimizer）
 
@@ -102,3 +112,13 @@ GEO 設定亦包含可獨立關閉的 JSON-LD、Entity Schema、Content Schema �
 - **修改文件**：`rankwoven-seo/rankwoven-seo.php`、本 README。
 - **驗證結果**：Docker WordPress PHP 8.2 parser 通過；本地測試站的 `/{key}.txt` 返回 `200` 及正確純文字 Key。尚待完成 API mock 與完整 npm 驗證。
 - **下一步行動**：在測試站以攔截 HTTP 請求方式驗證提交 JSON，再執行完整 lint／test／build。
+
+### 2026-09-11：調整後台導航間距
+
+- **會話目的**：改善 WordPress 插件後台頂部導航與 Overview 內容之間的視覺間距。
+- **完成任務**：將 `.rankwoven-admin-tabs.nav-tab-wrapper` 的下邊距由 `18px` 調整為 `34px`，讓紅框位置的導航與內容面板保持清晰分隔。
+- **關鍵決策**：只修改導航容器的外部下邊距，不改變標籤尺寸、卡片內距或其他頁面佈局。
+- **技術棧**：WordPress admin CSS。
+- **修改文件**：`rankwoven-seo/assets/admin.css`、本 README。
+- **驗證結果**：待在 WordPress 後台瀏覽器確認桌面及窄螢幕間距。
+- **下一步行動**：同步插件到測試站後檢查導航與 Overview 的實際視覺距離。

@@ -29,7 +29,11 @@ export type RouteComponentKey =
   | 'AdminUsageView'
   | 'AdminOperationsView'
   | 'AdminSettingsView'
-  | 'ContentOptimizerView';
+  | 'ContentOptimizerView'
+  | 'KeywordResearchView'
+  | 'MonitorEventsView'
+  | 'AlertsView'
+  | 'LegacyRouteView';
 
 export interface RouteRegistryEntry {
   id: string;

@@ -40,7 +40,7 @@ const createProjectSchema = z.object({
 });
 
 const createResearchRunSchema = z.object({
-  seedKeywords: z.array(z.string().trim().min(1).max(300)).min(1).max(20),
+  seedKeywords: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
   locale: z.string().trim().min(2).max(40).default('zh-Hant'),
   ownDomain: z.string().trim().max(253).optional(),
   competitorDomains: z.array(z.string().trim().min(1).max(253)).max(5).default([]),
@@ -164,6 +164,11 @@ function normalizeDomain(value: string) {
   } catch {
     return undefined;
   }
+}
+
+function deriveSeedKeywordFromDomain(domain: string) {
+  const label = domain.split('.')[0] ?? '';
+  return label.replace(/[-_]+/g, ' ').trim().slice(0, 300);
 }
 
 async function resolveContentSource(
@@ -298,7 +303,7 @@ export function registerPhase2FeatureRoutes(
     if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
     if (!keywordResearchProvider) return sendProviderUnavailable(reply, 'PROVIDER_UNAVAILABLE');
 
-    const seedKeywords = [...new Set(parsed.data.seedKeywords.map((keyword) => keyword.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+    const requestedSeedKeywords = [...new Set(parsed.data.seedKeywords.map((keyword) => keyword.replace(/\s+/g, ' ').trim()).filter(Boolean))];
     const ownDomain = parsed.data.ownDomain ? normalizeDomain(parsed.data.ownDomain) : undefined;
     const competitorDomains = [...new Set(parsed.data.competitorDomains.map(normalizeDomain).filter((domain): domain is string => Boolean(domain)))];
     if (parsed.data.ownDomain && !ownDomain) return sendValidationError(reply, [{ path: ['ownDomain'], message: '自有域名格式不正確' }]);
@@ -313,6 +318,12 @@ export function registerPhase2FeatureRoutes(
     }
     if (competitorDomains.length !== parsed.data.competitorDomains.length) {
       return sendValidationError(reply, [{ path: ['competitorDomains'], message: '競品域名只可包含公開 hostname，不可包含路徑或私人位址' }]);
+    }
+    const seedKeywords = requestedSeedKeywords.length > 0
+      ? requestedSeedKeywords
+      : [...new Set(competitorDomains.map(deriveSeedKeywordFromDomain).filter(Boolean))];
+    if (seedKeywords.length === 0) {
+      return sendValidationError(reply, [{ path: ['seedKeywords'], message: '必須提供核心關鍵詞或至少一個有效競品域名' }]);
     }
 
     const input = {

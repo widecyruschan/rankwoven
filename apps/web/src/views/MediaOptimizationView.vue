@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
@@ -21,6 +22,7 @@ import {
 } from '../api/siteConnections';
 
 const { t } = useI18n();
+const route = useRoute();
 
 type MediaFieldName = 'title' | 'caption' | 'description' | 'altText' | 'fileName';
 
@@ -56,9 +58,11 @@ const selectedMediaIds = ref<string[]>([]);
 const isBatchApplying = ref(false);
 
 const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
+const routedSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
 const canScanSelectedSite = computed(() =>
-  Boolean(selectedSite.value && selectedSite.value.wordpressApplicationPasswordConfigured)
+  Boolean(selectedSite.value && selectedSite.value.canWriteBack)
 );
+const canWriteBack = computed(() => Boolean(selectedSite.value?.canWriteBack));
 
 const siteOptions = computed(() =>
   sites.value.map((site) => ({
@@ -211,7 +215,9 @@ const mediaRowSelection = computed(() => ({
 async function loadSites() {
   const result = await getSiteConnections();
   sites.value = result.sites.filter((site) => site.status === 'connected');
-  selectedSiteId.value = selectedSiteId.value || sites.value[0]?.id || '';
+  selectedSiteId.value = sites.value.some((site) => site.id === routedSiteId.value)
+    ? routedSiteId.value
+    : selectedSiteId.value || sites.value[0]?.id || '';
 }
 
 async function loadMedia(nextPage = pagination.value.page, nextPageSize = pagination.value.pageSize) {
@@ -648,6 +654,12 @@ watch(selectedSiteId, () => {
   void refreshPageData(1, pagination.value.pageSize);
 });
 
+watch(routedSiteId, (siteId) => {
+  if (siteId && siteId !== selectedSiteId.value) {
+    selectedSiteId.value = siteId;
+  }
+});
+
 </script>
 
 <template>
@@ -659,6 +671,7 @@ watch(selectedSiteId, () => {
       </div>
       <div class="filter-toolbar">
         <a-select
+          v-if="!routedSiteId"
           v-model:value="selectedSiteId"
           class="toolbar-select"
           :options="siteOptions"
@@ -692,7 +705,7 @@ watch(selectedSiteId, () => {
         </a-tag>
         <a-button
           type="primary"
-          :disabled="selectedActionableSuggestions.length === 0"
+          :disabled="!canWriteBack || selectedActionableSuggestions.length === 0"
           :loading="isBatchApplying"
           @click="applySelectedMediaSuggestions"
         >

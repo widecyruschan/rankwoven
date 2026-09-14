@@ -238,7 +238,8 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /health`：服務健康檢查。
 - `GET /api/v1/cms-adapters`：查看 CMS 適配器狀態。
 - `GET /api/v1/ai-providers`：查看當前 AI、Embedding、圖片、媒體存儲與圖片優化 Provider 配置。
-- `POST /api/v1/site-connections`：建立 WordPress、Joomla 或 OpenCart 站點連接，MVP 先由 WordPress 插件使用。
+- `POST /api/v1/site-connections`：建立插件或 API 管理的站點連接，可使用既有 CMS 寫回流程。
+- `POST /api/v1/site-connections/manual`：手動加入網站網址，提供相同分析與修復建議，但永久停用 CMS 寫回。
 - `GET /api/v1/site-connections`：查看已連接站點列表，不返回完整 Token。
 - `GET /api/v1/site-connections/:siteId`：查看單個站點連接詳情。
 - `PUT /api/v1/site-connections/:siteId/wordpress-credentials`：保存 WordPress 管理員用戶名和應用程式密碼，用於後續以該管理員身份調用 WordPress REST API 寫回已批准修改。
@@ -254,6 +255,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /api/v1/site-connections/:siteId/media?page=&pageSize=`：帶 Bearer Token 或登入用戶權限查看已同步媒體分頁列表。
 - `POST /api/v1/site-connections/:siteId/audits`：以已同步文章與媒體執行第一批 SEO 規則審計，並產生可審核建議。
 - `GET /api/v1/site-connections/:siteId/audits`：查看站點 SEO 審計記錄和最近一次審計問題。
+- `POST /api/v1/site-connections/:siteId/site-audit/manual-runs`：對已連接站點的單一公開 URL，或已同步且已發布的文章／商品執行只讀檢測；只返回問題與手動修復建議，不建立 CMS 寫回任務。
 - `GET /api/v1/site-connections/:siteId/suggestions`：查看文章與媒體優化建議，並返回最近一次 SEO 審計分數、規則版本和問題數摘要。
 - `POST /api/v1/site-connections/:siteId/suggestions`：手動建立優化建議記錄。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/approve`：批准待處理建議。
@@ -5064,7 +5066,6 @@ Fastify、TypeScript、PostgreSQL、Docker Compose、GitHub Actions、Node.js cr
 - `packages/security/`
 - `apps/api/src/auth.ts`
 - `apps/api/src/config.ts`
-- `apps/api/src/lighthouse.ts`
 - `apps/api/src/server.ts`
 - `apps/api/src/siteConnections.ts`
 - `apps/worker/src/index.ts`
@@ -5959,3 +5960,495 @@ Node.js、TypeScript、Vue/Vite、Fastify、Vitest、Docker Compose、GitHub Act
 - `https://api.rankwoven.com/health` 返回 HTTP 200。
 - `https://rankwoven.com/admin/`、`https://www.rankwoven.com/admin/` 返回 HTTP 200。
 - demo owner 的管理 API 請求返回 HTTP 200；驗證過程未輸出 token、密碼或 `.env`。
+
+## 會話總結（2026-09-14）— PH2-08 補齊競品關鍵詞研究入口
+
+### 會話主要目的
+
+在 PH2-08 客戶後台補上競品網址分析，讓使用者查看競品關鍵詞、長尾關鍵詞與關鍵詞 Gap。
+
+### 完成的主要任務
+
+- 啟用 `/app/sites/:siteId/research`，新增競品關鍵詞研究工作台與站點列表入口。
+- 研究 API 現可在只提供合法競品網址時，從 hostname 推導初始 seed；仍要求至少有 seed 或競品域名，避免無輸入研究。
+- 工作台會建立 research project／run、輪詢任務狀態，顯示競品關鍵詞、長尾候選與 Gap；Provider 未配置、quota、partial 或失敗均顯示對應狀態。
+
+### 新增或修改文件
+
+- `apps/api/src/phase2FeatureRoutes.ts`
+- `apps/api/tests/phase2Routes.test.ts`
+- `apps/web/src/api/keywordResearch.ts`
+- `apps/web/src/views/KeywordResearchView.vue`
+- `apps/web/src/constants/routeRegistry.*`
+- `apps/web/src/views/SitesView.vue`
+- `apps/web/src/i18n.ts`
+- `docs/approvals/phase-2/PH2-08-navigation-routes-workspaces.md`
+- `README.md`
+
+### 驗證結果
+
+- API／Web build 與測試通過；競品網址-only API regression 通過。
+- browser 驗證未登入的 site research deep link 安全導向登入頁。
+- 公開 SEO fallback 仍為 96 個 canonical URL，route graph 孤島數為 0。
+
+### 下一步行動清單
+
+- 配置正式關鍵詞 Provider 後，在已連接站點輸入競品網址執行真實資料研究。
+- 等待明確授權後 commit、push 和部署本次 PH2-08 競品研究變更。
+
+## 會話總結（2026-09-14）— PH2-08 繼續：競品研究與 Legacy Resolver
+
+### 完成的主要任務
+
+- 啟用 site-scoped `競品關鍵詞研究`，支援只輸入競品網址並由合法 hostname 推導初始 seed。
+- 新增競品排名關鍵詞、長尾候選與 Gap 的客戶後台工作台，保留 Provider、quota、partial 與失敗狀態。
+- 實作 LegacyRouteResolver，讓舊 private route 在有合法 site context 時安全導向 site-scoped 工作台，否則回到跨站入口。
+
+### 驗證結果
+
+- API／Web build 與測試通過；Web 14 項測試通過。
+- 公開 SEO fallback 仍為 96 個 canonical URL，route graph 孤島數為 0。
+
+### 下一步行動清單
+
+- 進入下一個 PH2-08 site-scoped wrapper，優先處理內容庫／媒體／內部連結與跨站任務的 route context。
+- 等待明確授權後 commit、push 和部署本次 PH2-08 變更。
+
+## 會話總結（2026-09-14）— 進入 PH2-10 Site Audit 與監控核檢
+
+### 會話主要目的
+
+進入 PH2-10，盤點 Site Audit、Lighthouse、GSC、CrUX、SSRF、任務治理與告警能力，規劃 remediation closed loop 與 monitor contract。
+
+### 完成的主要任務
+
+- 確認現有 Site Audit 已有 SerpApi 索引查詢、SEO checks、排程與配額；Lighthouse、GSC 已可用，但 CrUX、page graph、issue fingerprint、recheck 與 monitor／alert 資料層未完成。
+- 建立 PH2-10 核檢草案，定義 `0019` migration、Audit／Monitor API、Lighthouse／CrUX 分區、partial run、issue → task → recheck、公開掃描防濫用、成本 hard stop 與告警去重。
+- 固定公開 `/tools/site-audit`、Email 告警、侵入式掃描與自動伺服器／DNS 修復在批准與驗收前保持關閉。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- 本次僅完成核檢與規劃文件，未修改 Site Audit／Monitor runtime、資料庫、容器或生產環境；未執行程式測試。
+
+### 下一步行動清單
+
+- 等待 `APPROVE PH2-10`，再開始 migration、Audit／CrUX／Monitor API、Worker remediation 與 E2E 實作。
+
+## 會話總結（2026-09-14）— 批准 PH2-10
+
+### 會話主要目的
+
+根據使用者 `APPROVE PH2-10`，進入 Site Audit remediation、CrUX 分區及監控告警的實作階段。
+
+### 完成的主要任务
+
+- 將 `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md` 狀態更新為 `APPROVED / IMPLEMENTATION IN PROGRESS`。
+- 保持公開掃描、Email 告警、侵入式掃描和自動伺服器／DNS 修復關閉，按已批准的安全和成本邊界實作。
+
+### 關鍵決策和解決方案
+
+- 複用現有 Fastify、PostgreSQL、Redis、Vue 3 與 Site Audit repository；新資料結構通過 `0019` migration 管理。
+- Lighthouse lab、CrUX field 和 GSC first-party 資料獨立保存及展示，不把 unavailable 轉成 0。
+
+### 使用的技术栈
+
+Fastify、TypeScript、Zod、PostgreSQL、Redis、Vue 3、Ant Design Vue、Vitest。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md`
+- `README.md`
+
+### 驗證結果
+
+本次僅更新批准狀態及文件，runtime 與資料庫尚未修改，測試尚未運行。
+
+### 下一步行動清單
+
+- 實作 `0019_phase2_site_audit_monitoring.sql`、Audit／CrUX／Monitor domain 與 API，並補齊安全、隔離、成本及重檢測試。
+
+## 會話總結（2026-09-14）— PH2-10 第一階段實作
+
+### 會話主要目的
+
+完成已批准 PH2-10 的第一階段 runtime：Site Audit remediation 資料閉環、CrUX field 資料分區、監控事件與告警基礎能力。
+
+### 完成的主要任務
+
+- 新增 `0019_phase2_site_audit_monitoring.sql`，建立 page、finding、recheck、metrics、monitor、event、alert 表及 workspace scope trigger。
+- 新增 `apps/api/src/siteAuditMonitoring.ts`，提供記憶體／PostgreSQL repository、穩定 issue fingerprint、canonical／死鏈／Schema／孤島頁確定性檢查、CrUX 28 日 adapter、finding ignore／recheck、monitor／alert API。
+- 接入 Fastify server 與 `CRUX_API_KEY`／`CRUX_API_URL` 配置；擴展 Site Audit 狀態為 `partial`／`cancelled`，保持舊 API 兼容。
+- 補充前端 Site Audit／Monitor API 型別和 Idempotency-Key helper。
+- 增加 PH2-10 單元及 API 合約測試，驗證 workspace isolation、事件去重、CrUX 無樣本和寫入冪等鍵 gate。
+
+### 關鍵決策和解決方案
+
+- Lighthouse lab、CrUX field、GSC first-party 指標以 `sourceType` 分開保存；CrUX 無樣本使用 `unavailable`，不轉換為 0。
+- 所有寫入 route 要求 Bearer JWT 與 Idempotency-Key；公開掃描、Email 發送和自動伺服器／DNS 修復繼續關閉。
+- 觸發器使用 `to_jsonb(NEW)` 讀取跨表欄位，避免 PL/pgSQL 在不同表結構下解析失敗。
+
+### 使用的技術棧
+
+Fastify、TypeScript、Zod、PostgreSQL、Vue 3、Vitest、Docker Compose。
+
+### 新增或修改文件
+
+- `db/migrations/0019_phase2_site_audit_monitoring.sql`
+- `apps/api/src/siteAuditMonitoring.ts`
+- `apps/api/src/siteAudit.ts`
+- `apps/api/src/config.ts`
+- `apps/api/src/server.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `.env.example`
+- `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 73 passed／8 skipped，Web 14 passed，Worker 11 passed，packages 全部通過。
+- `npm run build` 通過，SEO fallback 生成 96 個公開 URL，route graph 孤島數為 0。
+- `npm run security:audit` 通過，0 vulnerabilities。
+- `npm run db:migrate` 成功套用 `0019`，並二次運行確認可重放；PostgreSQL repository smoke 寫入／讀取通過。
+
+### 下一步行動清單
+
+- 在 PH2-12 QA gate 補真實 crawler worker、Lighthouse metric ingestion、monitor sample scheduler 及安全／成本壓力測試。
+- 在單獨批准後再開啟公開 `/tools/site-audit` 或 Email 通知。
+
+## 會話總結（2026-09-14）— PH2-10 Audit 與監控閉環完成
+
+### 會話主要目的
+
+完成已批准 PH2-10 的 Site Audit remediation、Lighthouse／CrUX 指標分區、監控採樣、告警和客戶後台入口。
+
+### 完成的主要任務
+
+- 實作受控連接站點 crawler：robots、sitemap、canonical、meta robots、Schema、死鏈和孤島頁檢查；強制 SSRF 驗證、redirect 重驗、MIME、大小、時間及 25 頁上限。
+- 實作 issue fingerprint、修復任務關聯、ignore、recheck 的 fixed／persisting／regressed／partial 狀態；寫入操作使用實際 idempotency replay。
+- Lighthouse lab 與 CrUX 28 日 field data 獨立落庫和展示；CrUX 無樣本標記 unavailable，不計為 audit failure。
+- 實作技術監控 scheduler、閾值、靜默期、in-app alert；未批准的競品／AI visibility Provider 只記錄 partial，不向第三方出站。
+- 新增 `/app/monitors` 建立和事件頁、`/app/alerts` 告警列表及 24 小時靜默操作，避免已實作能力成為後台孤島路由。
+
+### 關鍵決策和解決方案
+
+- 基礎 Site Audit 不再依賴 SerpApi；舊有 SerpApi route 繼續保留作兼容和索引補充。
+- 頁面正文僅用於本次解析，不寫入資料庫；監控長期只保存 URL、結構和指標資料。
+- 公開掃描、Email 告警、自動伺服器／DNS 修復和未批准 Provider 調用保持關閉。
+
+### 新增或修改文件
+
+- `db/migrations/0019_phase2_site_audit_monitoring.sql`
+- `apps/api/src/siteAuditMonitoring.ts`
+- `apps/api/src/siteAudit.ts`
+- `apps/api/src/config.ts`
+- `apps/api/src/server.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/views/MonitorEventsView.vue`
+- `apps/web/src/views/AlertsView.vue`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/constants/routeRegistry.ts`
+- `apps/web/src/constants/routeRegistry.json`
+- `apps/web/src/i18n.ts`
+- `.env.example`
+- `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- API／Web build、lint 與 API 增量測試通過。
+- crawler、fingerprint、recheck、CrUX no-sample、idempotency replay、monitor threshold 和 alert queue 均有測試。
+- 本機 PostgreSQL migration 已重放，repository 的 page／finding／monitor／alert 寫入讀取 smoke check 通過。
+- 登入後以瀏覽器確認 `/app/monitors`、`/app/alerts` 可訪問、i18n 文案正確且 API 請求成功。
+
+### 下一步行動清單
+
+- 執行 PH2-12 全量 QA、安全、成本及公開掃描 challenge gate。
+- 另行批准 Provider 後啟用競品／AI visibility 真實採樣；另行批准後開啟 Email 或公開 Site Audit。
+
+## 會話總結（2026-09-14）— 進入 PH2-09 CMS Draft 核檢
+
+### 會話主要目的
+
+進入 PH2-09，規劃已批准內容建議安全寫入 WordPress draft、回滾與發布後驗證。
+
+### 完成的主要任務
+
+- 盤點現有 WordPress credential encryption、SSRF fetch、SEO field apply snapshot、Worker 寫回與本機插件測試環境。
+- 建立 PH2-09 核檢草案，定義 content publish snapshot、publication、verification schema、draft-only API、task、claim gate、stale check、idempotency 與 WordPress E2E。
+- 固定 publish／schedule、第三方 CMS 與未批准內容保持 server-side disabled。
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-09-cms-draft-publish-verification.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- 本次僅完成 PH2-09 核檢文件，未修改 CMS runtime、WordPress 插件、資料庫、容器或生產環境；未執行程式測試。
+
+### 下一步行動清單
+
+- 等待 `APPROVE PH2-09`，再開始 migration、apply／publication API、Worker draft／verify／rollback 與 WordPress Docker E2E 實作。
+
+## 會話總結（2026-09-14）— PH2-09 Draft-Only 基礎實作
+
+### 完成的主要任務
+
+- 新增 `0018_phase2_cms_content_publications.sql`，建立內容 publication snapshot、draft lifecycle 與 verification 資料表。
+- WordPress 插件新增受權限保護的 draft REST endpoint，固定建立 `draft`，不提供 publish／schedule。
+- 將插件同步到本機 WordPress 測試站，完成 PHP syntax check。
+
+### 驗證結果
+
+- `npm run db:migrate` 成功套用 `0018`。
+- WordPress 容器內 `php -l` 通過。
+- 尚未開啟 API apply 或 Worker content publication task，因此沒有任何 CMS 寫入或發佈。
+
+### 下一步行動清單
+
+- 繼續實作 publication API、approved claim／stale snapshot gate、Worker draft／verify／rollback 與 WordPress Docker E2E。
+
+## 會話總結（2026-09-14）— 修復 WordPress 同步月份顯示錯誤
+
+### 會話主要目的
+
+修復 WordPress 同步日期因 GMT 字串缺少時區後綴而可能跨月顯示錯誤的問題。
+
+### 根因與解決方案
+
+- WordPress `date_gmt`／`modified_gmt` 不帶 `Z` 時，JavaScript 會按執行環境本地時區解析，再轉 ISO，月初或跨時區可能落到錯誤月份。
+- 新增 UTC 正規化 helper，僅為無時區後綴的 WordPress GMT 值補上 `Z`；已有 `Z` 或 offset 的值保持不變。
+
+### 新增或修改文件
+
+- `apps/api/src/siteConnections.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- 月初 `2026-01-01T00:30:00` regression 固定解析為 `2026-01-01T00:30:00.000Z`。
+- API build 與 75 項 API 測試通過。
+
+## 會話總結（2026-09-14）— PH2-10 實作完成記錄
+
+### 會話主要目的
+
+完成已批准的 Site Audit remediation、Lighthouse／CrUX 分區、技術監控、告警與客戶後台入口。
+
+### 完成的主要任務
+
+- 新增受控 crawler、finding／recheck／remediation task、CrUX field、Lighthouse lab、技術監控 scheduler、告警與靜默操作。
+- 啟用 `/app/monitors` 與 `/app/alerts`，並保留公開掃描、Email、未批准 Provider 出站與自動修復為關閉狀態。
+
+### 關鍵決策和解決方案
+
+- 所有 connected-site crawl 均經 SSRF、redirect、MIME、頁數和時間限制；不保存頁面原文。
+- 所有寫入均要求 JWT 與 Idempotency-Key；監控只在閾值觸發且不在靜默期時建立 in-app 告警。
+
+### 使用的技術棧
+
+Fastify、TypeScript、PostgreSQL、Vue 3、Ant Design Vue、Vitest、Docker Compose。
+
+### 新增或修改文件
+
+`0019` migration、Site Audit／Monitor API、Web Site Audit／Monitor／Alert 視圖、route registry、i18n、PH2-10 核檢及本 README。
+
+### 驗證結果
+
+已通過 lint、API／Web build、API 增量測試、PostgreSQL migration 重放與 browser route smoke；公開 SEO route graph 維持 0 個孤島頁。
+
+### 下一步行動清單
+
+進入 PH2-12 全量 QA、安全、成本與公開掃描 challenge gate；Provider 與 Email 啟用仍須另行批准。
+
+## 會話總結（2026-09-14）— SEO 網站檢測首頁與選單修正
+
+### 會話主要目的
+
+將 WordPress 插件及 SaaS 客戶後台首頁統一導向 SEO 網站檢測，修正側欄顯示未翻譯 i18n key 的問題。
+
+### 完成的主要任務
+
+- WordPress `RankWoven SEO` 根頁改為直接顯示 SEO 網站檢測摘要、問題表與檢測操作。
+- SaaS `/app` 首頁改用 `SiteAuditView`，側欄首頁改顯示「網站檢測」。
+- 新增 `workspace`／`current_site` 導覽群組翻譯及安全 fallback，避免顯示 `navigationGroups.workspace`。
+- 補齊網站檢測表的繁體中文欄位名稱與狀態文字。
+
+### 關鍵決策和解決方案
+
+- 截圖中的亂碼為 SaaS i18n key 缺失，不是 WordPress PHP 檔案編碼錯誤；PHP 檔案維持 UTF-8。
+- 保留現有 SEO 分析、設定和其他外掛子選單，僅調整根頁的預設工作內容。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `plugins/wordpress/rankwoven-seo/README.md`
+- `apps/web/src/constants/routeRegistry.json`
+- `apps/web/src/App.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint`、`npm run test -w @aieo/web`、`npm run build -w @aieo/web` 均通過；公開 route graph 維持 0 個孤島頁。
+- WordPress 測試容器 `php -l` 通過，插件同步檔案一致，測試站前台返回 HTTP 200。
+- 瀏覽器登入後確認 `/app` 直接載入 SEO 網站檢測，側欄與檢測表不再顯示未翻譯 key。
+
+### 下一步行動清單
+
+等待明確授權後才會提交、推送或部署本次變更。
+
+## 會話總結（2026-09-15）— Ahrefs Site Audit 資料接入驗證
+
+### 會話主要目的
+
+將 Ahrefs Site Audit 的網站級問題接入 RankWoven SEO 網站檢測，並以 Ckcprompt Project `10160561` 的 crawl 資訊驗證真實 API 資料讀取。
+
+### 完成的主要任務
+
+- 完成 Ahrefs Site Audit provider、每站 Project 設定、審計 metadata／問題欄位與 WordPress 網站檢測頁的整合驗證。
+- 補齊 WordPress 外掛說明與測試清單，明確規範 Ahrefs API key 僅可保存在 SaaS，外掛只保存 Project ID 和 crawl 日期。
+- 同步最新外掛至本機 WordPress 測試站，確認 SEO 網站檢測頁可載入，且未連接站點不會誤寫入 Ckcprompt Project。
+
+### 關鍵決策和解決方案
+
+- Ahrefs 資料不可用時保留 RankWoven 已觀測規則並顯示 provider 錯誤碼，不偽造 Ahrefs Health Score 或問題資料。
+- 使用與既有關鍵詞 API 相同的 Bearer 格式驗證目前 SaaS key；兩個 Ahrefs v3 端點均返回 `401`，因此根因是本機憑證無效、已撤銷或不是可用的 v3 key，而非 Project ID、crawl 日期或請求參數。
+
+### 使用的技術棧
+
+Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、Docker Compose 與 Ahrefs API v3。
+
+### 新增或修改文件
+
+- `apps/api/src/ahrefsSiteAudit.ts`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/ahrefsSiteAudit.test.ts`
+- `db/migrations/0020_phase2_ahrefs_site_audit.sql`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/README.md`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- Ahrefs Site Audit 請求與站點設定路由測試通過；本機實際 Ahrefs 呼叫安全返回 `401`，未輸出 API key。
+- `npm run db:migrate` 可重複執行，`0020` migration 已安全跳過。
+- `npm run lint`、`npm run test`、`npm run build`、`npm run security:audit` 全部通過。
+- WordPress PHP 語法檢查、插件同步、重啟後 HTTP 200 與後台 SEO 網站檢測頁面載入通過。
+
+### 下一步行動清單
+
+- 在 SaaS `.env` 以有效 Ahrefs API v3 key 更新 `AHREFS_API_KEY`，重建 API 容器後重試。
+- 連接 Ckcprompt 站點後，僅在該站點保存 Project `10160561`、最新與比較 crawl 日期，再執行網站檢測確認真實 Ahrefs 資料。
+- 使用者明確授權後才提交、推送或部署。
+
+## 會話總結（2026-09-15）— 全域站點工作區與手動網站接入
+
+### 會話主要目的
+
+將客戶後台改為 Google Search Console 式的全域站點工作區：先在頂部選取網站，所有站點功能自動使用同一站點；同時支援不安裝插件的手動網站分析。
+
+### 完成的主要任務
+
+- 新增 `plugin`、`api`、`manual` 站點接入模式及 `0021_site_connection_modes.sql` migration。
+- 新增手動網站建立 API 與站點管理彈窗；手動站點日後由相同 URL 的插件／API 接入時會升級同一筆站點資料。
+- 新增 Pinia 目前站點 store、頂部 site switcher、site-scoped canonical customer routes，以及舊 `/app/*` 入口的自動導向。
+- 網站檢測、關鍵詞研究、內容優化、流量、媒體、內部連結與任務頁改為使用路由 site context，不再要求逐頁重新選站。
+- 手動站點的 CMS 套用、批量套用與回滾由伺服器拒絕；前台同時隱藏或停用相關一鍵操作。
+
+### 關鍵決策和解決方案
+
+- 站點選擇保存為目前工作區狀態並同步至 `/app/sites/:siteId/*`，避免各頁 select 彼此不一致。
+- `manual` 模式可使用相同的公開網站檢測與建議，但不得建立寫回任務；`plugin`／`api` 模式保持原有自動化能力與憑證 gate。
+
+### 新增或修改文件
+
+- `apps/api/src/siteConnections.ts`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/stores/site.ts`
+- `apps/web/src/App.vue`
+- `apps/web/src/router/index.ts`
+- `apps/web/src/constants/routeRegistry.json`
+- `apps/web/src/views/SitesView.vue`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/views/AnalyticsView.vue`
+- `apps/web/src/views/MediaOptimizationView.vue`
+- `apps/web/src/views/LinksView.vue`
+- `apps/web/src/views/TasksView.vue`
+- `db/migrations/0021_site_connection_modes.sql`
+- `docs/approvals/phase-2/PH2-08-navigation-routes-workspaces.md`
+- `README.md`
+
+### 驗證結果
+
+- API 測試 85 項通過，覆蓋手動站點建立、同 URL 插件升級和手動模式寫回拒絕。
+- Web 測試 17 項、API／Web build、lint 與 migration `0021` 通過。
+
+### 下一步行動清單
+
+- 在本機客戶後台手動新增一個公開測試網站，確認站點切換後所有 customer menu 均保持該 site context。
+- 使用者明確授權後才提交、推送或部署。
+
+## 會話總結（2026-09-15）— 手動 URL 與同步內容只讀 SEO 分析
+
+### 會話主要目的
+
+為 SEO 網站檢測新增手動單頁分析，支援輸入已連接站點的公開 URL，或從已同步且已發布的文章／商品中選取分析對象；所有結果只供用戶手動修改網站。
+
+### 完成的主要任務
+
+- 新增 `POST /api/v1/site-connections/:siteId/site-audit/manual-runs`，要求 URL 或內容 ID 二選一、Bearer JWT、workspace／site scope 與 Idempotency-Key。
+- 新增已同步內容精確查詢；只允許 `post`／`product`、已發布且有公開 URL 的內容進入單頁分析。
+- 單頁 crawler 檢查 Title、Meta Description、H1、文字量、canonical、robots 與 Schema；不對單頁結果判定孤島頁，避免資料不足造成誤報。
+- 前台 SEO 網站檢測新增 URL 輸入、文章／商品選擇器與明確的「只讀分析，不會寫回網站」提示。
+
+### 關鍵決策和解決方案
+
+- 手動 URL 及所有 redirect 必須與已連接站點使用相同 origin，並沿用 SSRF、robots、MIME、timeout 與 redirect 上限。
+- 不建立 optimization suggestion、批准、CMS writeback、發布或同步任務；結果只保存審計記錄與手動修復建議。
+- 頁面正文只在本次請求中解析，不持久化。
+
+### 新增或修改文件
+
+- `apps/api/src/siteAuditMonitoring.ts`
+- `apps/api/src/siteConnections.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/tests/smoke.test.ts`
+- `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `README.md`
+
+### 驗證結果
+
+- API 單元／合約測試 84 項通過，包含同站單頁、外站 URL 拒絕、外站 redirect 停止、輸入二選一與非文章／商品拒絕。
+- Web 測試 16 項、API／Web TypeScript 建置與 lint 通過。
+- Docker API health check 正常；本機端點對空目標安全返回 `400 VALIDATION_ERROR`。
+
+### 下一步行動清單
+
+- 在已連接的生產站點選擇一篇文章或商品，驗證真實公開頁面的只讀檢測結果與人工修復流程。
+- 使用者明確授權後才提交、推送或部署。

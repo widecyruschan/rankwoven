@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import type { TableColumnsType } from 'ant-design-vue';
 import { Link2, RefreshCw, WandSparkles } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
@@ -16,6 +17,7 @@ import {
 } from '../api/siteConnections';
 
 const { t } = useI18n();
+const route = useRoute();
 
 const sites = ref<SiteConnection[]>([]);
 const selectedSiteId = ref('');
@@ -29,8 +31,9 @@ const successMessage = ref('');
 const errorMessage = ref('');
 
 const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
+const routedSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
 const canGenerateLinks = computed(() =>
-  Boolean(selectedSite.value && selectedSite.value.wordpressApplicationPasswordConfigured)
+  Boolean(selectedSite.value && selectedSite.value.canWriteBack)
 );
 
 const siteOptions = computed(() =>
@@ -111,7 +114,9 @@ const rowSelection = computed(() => ({
 async function loadSites() {
   const result = await getSiteConnections();
   sites.value = result.sites.filter((site) => site.status === 'connected');
-  selectedSiteId.value = selectedSiteId.value || sites.value[0]?.id || '';
+  selectedSiteId.value = sites.value.some((site) => site.id === routedSiteId.value)
+    ? routedSiteId.value
+    : selectedSiteId.value || sites.value[0]?.id || '';
 }
 
 async function loadSuggestions() {
@@ -287,6 +292,12 @@ watch(selectedSiteId, () => {
   errorMessage.value = '';
   void loadSuggestions();
 });
+
+watch(routedSiteId, (siteId) => {
+  if (siteId && siteId !== selectedSiteId.value) {
+    selectedSiteId.value = siteId;
+  }
+});
 </script>
 
 <template>
@@ -299,6 +310,7 @@ watch(selectedSiteId, () => {
       </div>
       <div class="filter-toolbar">
         <a-select
+          v-if="!routedSiteId"
           v-model:value="selectedSiteId"
           class="toolbar-select"
           :options="siteOptions"
@@ -344,7 +356,7 @@ watch(selectedSiteId, () => {
         </a-tag>
         <a-button
           type="primary"
-          :disabled="selectedActionableSuggestions.length === 0"
+          :disabled="!selectedSite?.canWriteBack || selectedActionableSuggestions.length === 0"
           :loading="isApplying"
           @click="applySelectedSuggestions"
         >
@@ -403,7 +415,7 @@ watch(selectedSiteId, () => {
           </template>
           <template v-else-if="column.key === 'action'">
             <a-button
-              v-if="isActionableSuggestion(record)"
+              v-if="selectedSite?.canWriteBack && isActionableSuggestion(record)"
               type="link"
               :loading="actionSuggestionId === record.id"
               @click="applySuggestion(record)"

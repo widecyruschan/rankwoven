@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
 const optionalUrlSchema = z.preprocess((value) => (value === '' ? undefined : value), z.url().optional());
+const optionalStringSchema = z.preprocess((value) => (value === '' ? undefined : value), z.string().trim().optional());
+const optionalDateTimeSchema = z.preprocess((value) => (value === '' ? undefined : value), z.string().datetime().optional());
+const ahrefsSiteAuditUrlSchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.url().default('https://api.ahrefs.com/v3/site-audit/issues')
+);
 
 export const apiConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -50,10 +56,18 @@ export const apiConfigSchema = z.object({
     .transform((value) => value === 'true'),
   AHREFS_API_URL: optionalUrlSchema,
   AHREFS_API_KEY: z.string().optional(),
+  AHREFS_SITE_AUDIT_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  AHREFS_SITE_AUDIT_API_URL: ahrefsSiteAuditUrlSchema,
+  AHREFS_SITE_AUDIT_PROJECT_ID: optionalStringSchema.transform((value) => value?.slice(0, 80)),
+  AHREFS_SITE_AUDIT_CRAWL_DATE: optionalDateTimeSchema,
+  AHREFS_SITE_AUDIT_COMPARISON_DATE: optionalDateTimeSchema,
   SEMRUSH_API_URL: optionalUrlSchema,
   SEMRUSH_API_KEY: z.string().optional(),
   SERPAPI_KEY: z.string().optional(),
   SERPAPI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(250),
+  CRUX_API_KEY: z.string().optional(),
+  CRUX_API_URL: optionalUrlSchema,
+  SITE_AUDIT_LIGHTHOUSE_ENABLED: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_TIME_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   CORS_ORIGINS: z

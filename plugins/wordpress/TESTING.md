@@ -54,9 +54,6 @@ cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/rankwoven-
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.js" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.js"
 
-cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/editor-seo.css" \
-   "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/editor-seo.css"
-
 cp "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/admin.css" \
    "/Volumes/Extreme SSD/gitCode/cyruschan.com/wp-content/plugins/rankwoven-seo/assets/admin.css"
 ```
@@ -89,7 +86,8 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 ### 1. 啟用與基礎設定
 
 - [ ] 後台 `Plugins` 頁能看到並啟用 `RankWoven SEO`，無 PHP 警告或白屏。
-- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，`儀表板`、`一般設定`、`搜尋外觀`、`網站地圖`、`GEO 優化`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
+- [ ] WordPress 後台側欄出現 `RankWoven SEO` 主選單，首個 `SEO 網站檢測`、`一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`工具類` 和 `診斷` 子選單可正常切換。
+- [ ] 打開 `RankWoven SEO` 根頁時，首頁直接顯示 `SEO 網站檢測` 的最新檢測摘要、問題分組表與檢測按鈕，不再顯示一般儀表板卡片。
 - [ ] `RankWoven SEO` 後台頁載入卡片化 UI：頂部 hero、連線狀態 pill、圓角 tabs、儀表板指標卡與快速操作按鈕樣式正常。
 - [ ] 插件主容器會自動鋪滿 WordPress 後台可用寬度；各頁列表、表單和設定卡會按內容區自適應，桌面寬螢幕不應留下大面積空白，小螢幕長文字可換行不撐破版面。
 - [ ] `Settings -> RankWoven SEO` 舊入口仍可打開並導向一般設定頁。
@@ -111,6 +109,14 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 - [ ] RankWoven Web 的同步內容中能保留 `post`、`page`、`portfolio`、`product` 類型，未啟用的 post type 不應造成同步失敗。
 - [ ] `RankWoven SEO -> SEO 分析` 載入最新審計後，問題列表按內容種類分組顯示文章、頁面、商品、Portfolio、圖片和其他媒體；分組表格不再顯示「種類」欄。
 - [ ] `SEO 分析` 每行問題都顯示 `修改` 按鈕；文章標題 / Meta Description、媒體 Title / Caption / Description / Alt Text 這類安全欄位顯示可用 `套用` 按鈕，其餘需人工檢查的問題保持 `套用` 停用。
+
+### 3A. SEO 網站檢測與 Ahrefs Site Audit
+
+- [ ] SaaS 環境只配置 `AHREFS_API_KEY`；WordPress 後台和瀏覽器回應不得包含、回顯或保存 Ahrefs API key。
+- [ ] 在 `RankWoven SEO -> SEO 網站檢測` 填入該站點的 Ahrefs Project ID，使用 ISO 8601 UTC 格式填入最新 crawl 日期與比較 crawl 日期，勾選啟用後保存。
+- [ ] 執行網站檢測後，Ahrefs 可用時顯示其 Health Score、已爬取 URL、最後 crawl 時間，並將 Error、Warning、Notice、受影響頁面、變化量與分類顯示在問題表。
+- [ ] Ahrefs 無法讀取時，頁面提示 provider 錯誤碼，並只顯示 RankWoven 已觀測規則；不得偽造 Ahrefs Health Score 或問題資料。
+- [ ] canonical、redirect、robots、Sitemap 與伺服器效能類問題只提供人工修復步驟；只有明確對應 WordPress 內容欄位的建議才可使用「一鍵套用」。
 
 ### 4. 圖片屬性與批量更新
 
@@ -170,12 +176,6 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 輸入 `Focus keyphrase` 後，點擊 `Generate & Apply SEO` 能生成並套用 SEO title、Slug 和 Meta description。
 - [ ] 無論 AI 回傳、手動輸入或 WordPress 原有 slug 是否包含中文、URL encode、數字、空格或連字號，保存後 Slug 都只包含英文小寫字母與下劃線，例如 `wordpress_seo_settings`。
 - [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
-- [ ] 文章、頁面和商品使用相同的 19 項檢查，總權重為 100；面板按紅色 `Problems`、黃色 `Warnings`、綠色 `Success` 分組顯示每項名稱與說明。
-- [ ] 檢查清單包含 Focus keyphrase、SEO title width、Keyphrase in SEO title、Meta description length、Keyphrase in meta description、Keyphrase in slug、Text length、Keyphrase density 和 Keyphrase in introduction。
-- [ ] 檢查清單包含 Outbound links、Internal links、Images、Image keyphrase、Consecutive sentences、Subheading distribution、Paragraph length、Passive voice、Sentence length 和 Previously used keyphrase。
-- [ ] 中文正文能按中文字元計算 Text length 和 Keyphrase density，不會因 `str_word_count()` 返回 0 而被誤判為空內容。
-- [ ] 本站相對 URL／同網域 URL 計入 Internal links，其他網域計入 Outbound links；`mailto:`、`tel:`、錨點和 `javascript:` 不計分。
-- [ ] 圖片 Alt Text 包含 Focus keyphrase 時更新 Image keyphrase 統計；在其他文章、頁面或商品使用相同 Focus keyphrase 時，Previously used keyphrase 顯示警告。
 - [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
 - [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。
 - [ ] 直接點擊 WordPress 原生 `Update` / `Publish` 後重新打開編輯頁，Keywords 仍能正確回顯。
@@ -199,9 +199,6 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] `RankWoven SEO -> 網站地圖` 頁籤可正常顯示 `sitemap.xml` URL 和最近生成 / 提交狀態。
 - [ ] 點擊 `Generate sitemap.xml` 後，`/sitemap.xml` 可在前台直接開啟，且 XML 內容包含已發佈的 Posts、Pages、Portfolio 和 Products。
 - [ ] 點擊 `Submit to Google` 後，插件會調用 SaaS 後端 `POST /api/v1/site-connections/:siteId/search-console/sitemaps`，並使用 Google Search Console API 提交 `sitemap.xml`。
-- [ ] `網站地圖` 頁籤顯示 Google、Bing、Yahoo、Baidu、Yandex、DuckDuckGo、Ask、AOL、Naver、Qwant、Sogou 和 Brave 的 Sitemap／站長工具連結。
-- [ ] 每個搜尋引擎連結會在新分頁開啟並帶有 `noopener noreferrer`；Google 連結帶入本站屬性，Brave 連結帶入當前 `sitemap.xml` URL。
-- [ ] 沒有獨立 Sitemap 提交工具的搜尋引擎，卡片會顯示透過 Bing、robots.txt 或官方收錄入口發現內容的說明，不誤標為直接提交。
 - [ ] `網站地圖` 頁籤的 `RSS Sitemap` 區塊可顯示 `/sitemap.rss` URL、啟用開關、貼文數量和 Post Types。
 - [ ] 啟用 RSS Sitemap 後，`/sitemap.rss` 返回 `application/rss+xml` 和合法 RSS 2.0，包含最新已發佈內容的標題、連結、發佈時間、摘要和正文。
 - [ ] 在瀏覽器開啟 `/sitemap.rss` 時會套用 `assets/rss-sitemap.xsl`，顯示藍色可點擊文章標題、發佈時間、摘要、縮略圖／站點圖標和分隔線。
@@ -224,18 +221,18 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] `post_types`、`taxonomies`、每種 URL 上限、排除文章 ID 和排除分類項 ID 保存後會影響輸出；草稿、私密文章、附件和排除項不會出現。
 - [ ] 啟用 Markdown 轉換後，公開文章固定連結追加 `.md` 可返回 `text/markdown`，正文中的標題、連結、圖片和列表能轉換為基本 Markdown。
 - [ ] `llms.txt`、`llms-full.txt` 和 `.md` 輸出不含 HTML、Script／Style 或 WordPress／Visual Composer shortcode 及樣式屬性，只保留可讀文字／Markdown 文字。
-- [ ] 每篇文章的 `URL` 與摘要內容來自同一篇文章；不應出現跨文章重複的「內容目錄／Toggle」摘要。
 - [ ] 關閉 Markdown 轉換或排除文章後，對應 `.md` 地址不會被插件輸出內容。
 - [ ] 若網站根目錄存在實體 `llms.txt` 或 `llms-full.txt`，後台會顯示提醒；如前台未變更，需檢查主機實體文件是否優先輸出。
 
-### 13. GEO 優化
+### 13. IndexNow
 
-- [ ] `RankWoven SEO -> GEO 優化` 顯示 GEO readiness、`AI Crawler Access` 和 `Machine Readability` 動態分數。
-- [ ] 三組 AI 爬蟲開關保存後，`/robots.txt` 會對應輸出 `Allow: /` 或 `Disallow: /`，並包含 GPTBot、OAI-SearchBot 和 ChatGPT-User 等 User-agent。
-- [ ] 關閉 `Indexability` 後，前台 `<head>` 輸出 `meta name="robots" content="noindex, nofollow"`；重新開啟後該標籤不再輸出。
-- [ ] 關閉 `Snippet Controls` 後，前台 `<head>` 輸出 `nosnippet`、`max-snippet:0` 和 `max-image-preview:none`。
-- [ ] 啟用 `Language Declaration` 並保存 `x-default URL` 後，前台 `<head>` 包含當前語言與 `hreflang="x-default"`；無效 URL 會被忽略，無效語言代碼會回退到 WordPress 網站語言。
-- [ ] `GEO 優化` 和 `診斷` 頁不顯示任何 Site Token、Application Password 或其他敏感憑據。
+- [ ] `RankWoven SEO -> 網站地圖` 顯示 IndexNow 設定、啟用、自動提交、內容類型和 API Key 欄位。
+- [ ] 啟用 IndexNow 並保存空白 API Key 後，插件自動生成 32 位 Key，Key 文件 `/{key}.txt` 返回純文字 Key。
+- [ ] IndexNow Key 只接受 8 至 128 位英數字與連字號；不合法值會被清空並要求重新生成。
+- [ ] 發佈或更新公開 Post、Page、Portfolio、Product 時，插件向 `https://api.indexnow.org/indexnow` 提交本站 URL；草稿、附件、Revision 和未選內容類型不會提交。
+- [ ] 將公開內容移到回收桶或刪除時，插件提交對應 URL 作為刪除通知；同一 URL 60 秒內不會重複提交。
+- [ ] 手動逐行提交 URL 時，只接受本站 http／https 地址，最多 10,000 個；外部 URL 和空行會被忽略。
+- [ ] IndexNow API 回傳 2xx 時，後台顯示成功狀態、時間和 URL 數量；網路錯誤或非 2xx 顯示錯誤訊息但不阻止內容保存。
 
 ## 回歸重點
 
@@ -245,6 +242,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 |---|---|
 | 設定頁 / 選項保存 | 清單 1、2 |
 | 同步邏輯 / 批次推送 | 清單 3 |
+| SEO 網站檢測 / Ahrefs Site Audit | 清單 3、3A |
 | 圖片屬性 / Bulk Updater | 清單 4 |
 | REST API 路由 | 清單 6 |
 | 寫回 / Application Password | 清單 7 |
@@ -253,7 +251,6 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 | 內容類型 Meta 預設 | 清單 10 |
 | Sitemap、RSS Sitemap 與 Google 提交 | 清單 11 |
 | LLMs.txt 與 Markdown 輸出 | 清單 12 |
-| GEO 優化設定與前台控制 | 清單 13 |
 | 任何改動 | PHP 語法檢查 + 後台頁面能打開 |
 
 ## 常見問題排錯

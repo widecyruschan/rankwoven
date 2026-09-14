@@ -63,16 +63,42 @@ describe('web smoke test', () => {
     }
   });
 
-  it('defaults traffic analytics to the first connected site', async () => {
+  it('prefers the site-scoped route context for traffic analytics', async () => {
     const analyticsViewSource = await readFile(resolve('src/views/AnalyticsView.vue'), 'utf8');
 
     expect(analyticsViewSource).toContain(
-      'const hasSelectedSite = sites.value.some((site) => site.id === selectedSiteId.value);'
+      "const routedSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');"
     );
-    expect(analyticsViewSource).toContain('selectedSiteId.value = sites.value[0].id;');
+    expect(analyticsViewSource).toContain("sites.value.some((site) => site.id === routedSiteId.value)");
+    expect(analyticsViewSource).toContain('v-if="!routedSiteId"');
     expect(analyticsViewSource.indexOf('await loadSites();')).toBeLessThan(
       analyticsViewSource.indexOf('await loadAnalytics();')
     );
+  });
+
+  it('keeps manual URL and synced-content audits read-only', async () => {
+    const auditViewSource = await readFile(resolve('src/views/SiteAuditView.vue'), 'utf8');
+    const auditApiSource = await readFile(resolve('src/api/siteConnections.ts'), 'utf8');
+
+    expect(auditViewSource).toContain('manualReadOnlyDescription');
+    expect(auditViewSource).toContain('handleManualUrlAudit');
+    expect(auditViewSource).toContain('handleSyncedContentAudit');
+    expect(auditViewSource).toContain("article.type === 'post' || article.type === 'product'");
+    expect(auditApiSource).toContain('/site-audit/manual-runs');
+    expect(auditApiSource).toContain('writebackEnabled: false');
+  });
+
+  it('keeps a single current-site context across customer navigation', async () => {
+    const appSource = await readFile(resolve('src/App.vue'), 'utf8');
+    const routerSource = await readFile(resolve('src/router/index.ts'), 'utf8');
+    const siteStoreSource = await readFile(resolve('src/stores/site.ts'), 'utf8');
+
+    expect(appSource).toContain('useSiteStore');
+    expect(appSource).toContain('global-site-switcher');
+    expect(appSource).toContain("'app-site-audit-scoped'");
+    expect(routerSource).toContain('siteStore.refreshSites()');
+    expect(siteStoreSource).toContain('rankwoven_current_site_id');
+    expect(siteStoreSource).toContain('site.status === \'connected\'');
   });
 
   it('keeps site details customer-facing and delete confirmation controlled', async () => {
@@ -196,13 +222,20 @@ describe('web smoke test', () => {
     expect(privateRoutes.every((route) => route.sitemapGroup === undefined)).toBe(true);
     expect(getNavigationRoutes('customer').every((route) => route.area === 'customer')).toBe(true);
     expect(getNavigationRoutes('admin').every((route) => route.area === 'admin')).toBe(true);
+    const appDashboard = activeRouteEntries.find((route) => route.id === 'app-dashboard');
+    expect(appDashboard).toMatchObject({ componentKey: 'SiteAuditView', titleKey: 'nav.siteAudit' });
     expect(routeRegistry.redirects).toEqual(
       expect.arrayContaining([
         { from: '/app/articles', to: '/app/sites' },
         { from: '/app/article-sync', to: '/app/tasks' }
       ])
     );
-    expect(plannedRouteEntries.some((route) => route.id === 'app-site-research')).toBe(true);
+    const siteResearch = activeRouteEntries.find((route) => route.id === 'app-site-research');
+    expect(siteResearch).toMatchObject({
+      siteScope: 'required',
+      featureKey: 'keyword_research',
+      parentId: 'app-sites'
+    });
     expect(plannedRouteEntries.every((route) => route.enabled === false)).toBe(true);
     const contentOptimizer = activeRouteEntries.find((route) => route.id === 'app-site-content-optimizer');
     expect(contentOptimizer).toMatchObject({
@@ -213,6 +246,25 @@ describe('web smoke test', () => {
     });
     expect(activeRouteEntries.some((route) => route.id === 'public-tools')).toBe(false);
     expect(activeRouteEntries.some((route) => route.id === 'app-billing')).toBe(false);
+  });
+
+  it('localizes navigation groups without exposing missing i18n keys', async () => {
+    const originalLocale = i18n.global.locale.value;
+    const appSource = await readFile(resolve('src/App.vue'), 'utf8');
+
+    try {
+      i18n.global.locale.value = 'en';
+      expect(i18n.global.t('navigationGroups.workspace')).toBe('Monitoring');
+      expect(i18n.global.t('navigationGroups.current_site')).toBe('Current Site');
+
+      i18n.global.locale.value = 'zh-Hant';
+      expect(i18n.global.t('navigationGroups.workspace')).toBe('監控');
+      expect(i18n.global.t('navigationGroups.current_site')).toBe('目前站點');
+      expect(appSource).toContain('function navigationGroupLabel(group: string)');
+      expect(appSource).toContain("t('navigationGroups.default')");
+    } finally {
+      i18n.global.locale.value = originalLocale;
+    }
   });
 
   it('assigns one unique localized keyword to every indexable public page', () => {

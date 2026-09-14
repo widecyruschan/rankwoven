@@ -324,6 +324,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **批准門檻**：Security、CMS Owner、QA；寫入功能必須先在測試站通過 E2E。
 
+**PH2-09 狀態（2026-09-14）**：`APPROVED / IMPLEMENTATION IN PROGRESS`。核檢草案見 `docs/approvals/phase-2/PH2-09-cms-draft-publish-verification.md`。已建立 publication schema 與 WordPress draft-only REST endpoint，並通過本機 migration／PHP syntax check；apply route、Worker content draft／verify／rollback 與 WordPress E2E 尚未完成，因此 PH2-07 content apply 仍保持 `CMS_WRITE_DISABLED`。
+
 ### PH2-10：Site Audit remediation 與監控
 
 **工作**：
@@ -337,6 +339,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 **核檢**：單 URL 失敗不丟整站結果；partial 可查看；CrUX 無樣本不算 Audit failure；監控重送不重複告警；公開 Audit 有 rate limit、challenge、page cap。
 
 **批准門檻**：SEO、Security、QA、Operations。
+
+**PH2-10 狀態（2026-09-15）**：`APPROVED / IMPLEMENTATION IN PROGRESS`。核檢文件見 `docs/approvals/phase-2/PH2-10-site-audit-monitoring.md`。已建立 `0019_phase2_site_audit_monitoring.sql`、Site Audit closed-loop repository／API、CrUX field 與 Lighthouse lab 分區、SSRF-safe crawler、確定性 page graph、remediation task／ignore／recheck、monitor scheduler、event／alert 去重及實際 Idempotency-Key replay；客戶後台已提供監控、告警及靜默入口，以及對同 origin URL 或已同步文章／商品的只讀單頁檢測。公開掃描、Email 告警、未批准 Provider 出站及自動伺服器／DNS 修復仍保持關閉，待 PH2-12 QA gate 後再申請啟用。
 
 ### PH2-11：Billing、Entitlement 與報告
 

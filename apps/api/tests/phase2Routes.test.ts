@@ -297,6 +297,16 @@ describe('phase 2 contract routes', () => {
     expect(cacheHit.json().data.runId).toBe(first.json().data.runId);
     const usage = await server.inject({ method: 'GET', url: '/api/v1/usage', headers: { authorization: `Bearer ${token}` } });
     expect(usage.json().data.activeReservedUnits).toBe(2);
+
+    const competitorOnly = await server.inject({
+      method: 'POST',
+      url: `/api/v1/keyword-research/projects/${project.id}/runs`,
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'research-run-competitor-only' },
+      payload: { seedKeywords: [], competitorDomains: ['competitor.example'], locale: 'en-US' }
+    });
+    expect(competitorOnly.statusCode).toBe(202);
+    const inferredRun = await repository.findKeywordResearchRun(competitorOnly.json().data.runId, workspaceId);
+    expect(inferredRun?.seedKeywords).toEqual(['competitor']);
   });
 
   it('queues a content optimization snapshot and keeps CMS apply disabled', async () => {

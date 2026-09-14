@@ -399,5 +399,5 @@
 }
 
 .nav-tab-wrapper, .wrap h2.nav-tab-wrapper, h1.nav-tab-wrapper{
-    padding-bottom: 15px;
+    padding-bottom: 15px!important;
 }

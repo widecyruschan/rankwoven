@@ -53,7 +53,8 @@ interface TaskStatusRow {
 const platformLabels: Record<CmsPlatform, string> = {
   wordpress: 'WordPress',
   joomla: 'Joomla',
-  opencart: 'OpenCart'
+  opencart: 'OpenCart',
+  manual: 'Manual website'
 };
 
 const syncRows = computed<SyncStatusRow[]>(() =>

@@ -37,6 +37,7 @@ final class RankWoven_SEO_Plugin
     private const OPTION_INDEXNOW_LAST_RESULT = 'rankwoven_indexnow_last_result';
     private const OPTION_CONTENT_META_SETTINGS = 'rankwoven_content_meta_settings';
     private const OPTION_IMAGE_ATTRIBUTE_SETTINGS = 'rankwoven_image_attribute_settings';
+    private const OPTION_AHREFS_SITE_AUDIT_SETTINGS = 'rankwoven_ahrefs_site_audit_settings';
     private const OPTION_IMAGE_BULK_LAST_ID = 'rankwoven_image_bulk_last_id';
     private const OPTION_IMAGE_BULK_LOG = 'rankwoven_image_bulk_log';
     private const META_EDITOR_FOCUS_KEYPHRASE = '_rankwoven_focus_keyphrase';
@@ -71,6 +72,7 @@ final class RankWoven_SEO_Plugin
         add_action('admin_post_rankwoven_submit_sitemap_google', [$this, 'handle_submit_sitemap_google']);
         add_action('admin_post_rankwoven_submit_indexnow', [$this, 'handle_submit_indexnow']);
         add_action('admin_post_rankwoven_run_seo_audit', [$this, 'handle_run_seo_audit']);
+        add_action('admin_post_rankwoven_save_ahrefs_site_audit', [$this, 'handle_save_ahrefs_site_audit']);
         add_action('admin_post_rankwoven_apply_audit_issue', [$this, 'handle_apply_audit_issue']);
         add_action('admin_post_rankwoven_manage_suggestions', [$this, 'handle_manage_suggestions']);
         add_action('admin_post_rankwoven_save_image_attributes', [$this, 'handle_save_image_attributes']);
@@ -165,7 +167,7 @@ final class RankWoven_SEO_Plugin
     {
         return [
             'dashboard' => [
-                'label' => __('儀表板', 'rankwoven-seo'),
+                'label' => __('SEO 網站檢測', 'rankwoven-seo'),
                 'slug' => 'rankwoven-seo'
             ],
             'connection' => [
@@ -2000,7 +2002,7 @@ final class RankWoven_SEO_Plugin
             <?php $this->render_admin_tabs($active_tab); ?>
 
             <?php if ($active_tab === 'dashboard') : ?>
-                <?php $this->render_dashboard_page(); ?>
+                <?php $this->render_seo_analysis_page(); ?>
         </div>
                 <?php return; ?>
             <?php endif; ?>
@@ -2347,14 +2349,43 @@ final class RankWoven_SEO_Plugin
     private function render_seo_analysis_page(): void
     {
         $audit_data = $this->is_saas_site_ready() ? $this->request_saas_site_api('GET', 'audits') : new WP_Error('rankwoven_not_connected', __('Please connect this site before running SEO Analysis.', 'rankwoven-seo'));
+        $ahrefs_settings = $this->get_ahrefs_site_audit_settings();
         ?>
-        <h2><?php echo esc_html__('SEO 分析', 'rankwoven-seo'); ?></h2>
+        <h2><?php echo esc_html__('SEO 網站檢測', 'rankwoven-seo'); ?></h2>
         <p>
-            <?php echo esc_html__('對已同步的 WordPress 內容執行 SaaS 端 SEO 分析，並在後台直接檢視最新問題。', 'rankwoven-seo'); ?>
+            <?php echo esc_html__('對已同步的 WordPress 內容執行 SaaS 端 SEO 網站檢測，並在後台直接檢視最新問題。', 'rankwoven-seo'); ?>
         </p>
         <p>
-            <?php $this->render_admin_post_button('rankwoven_run_seo_audit', 'rankwoven_run_seo_audit', __('執行 SEO 分析', 'rankwoven-seo'), 'primary'); ?>
+            <?php $this->render_admin_post_button('rankwoven_run_seo_audit', 'rankwoven_run_seo_audit', __('執行 SEO 網站檢測', 'rankwoven-seo'), 'primary'); ?>
         </p>
+
+        <details class="rankwoven-settings-card rankwoven-ahrefs-site-audit-settings">
+            <summary><?php echo esc_html__('Ahrefs Site Audit 資料來源', 'rankwoven-seo'); ?></summary>
+            <p class="description"><?php echo esc_html__('輸入此 WordPress 站點對應的 Ahrefs Project ID 與 crawl 日期。Ahrefs API key 只保存在 RankWoven SaaS，外掛不會讀取或保存 key。', 'rankwoven-seo'); ?></p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <?php wp_nonce_field('rankwoven_save_ahrefs_site_audit'); ?>
+                <input type="hidden" name="action" value="rankwoven_save_ahrefs_site_audit" />
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><?php echo esc_html__('啟用 Ahrefs Site Audit', 'rankwoven-seo'); ?></th>
+                        <td><label><input type="checkbox" name="rankwoven_ahrefs_site_audit[enabled]" value="1" <?php checked(!empty($ahrefs_settings['enabled'])); ?> /> <?php echo esc_html__('將 Ahrefs 網站級問題納入 SEO 健康度與檢測列表', 'rankwoven-seo'); ?></label></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="rankwoven_ahrefs_project_id"><?php echo esc_html__('Ahrefs Project ID', 'rankwoven-seo'); ?></label></th>
+                        <td><input id="rankwoven_ahrefs_project_id" class="regular-text" name="rankwoven_ahrefs_site_audit[projectId]" value="<?php echo esc_attr($ahrefs_settings['projectId']); ?>" inputmode="numeric" required /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="rankwoven_ahrefs_crawl_date"><?php echo esc_html__('最新 Crawl 日期', 'rankwoven-seo'); ?></label></th>
+                        <td><input id="rankwoven_ahrefs_crawl_date" class="regular-text code" name="rankwoven_ahrefs_site_audit[crawlDate]" value="<?php echo esc_attr($ahrefs_settings['crawlDate']); ?>" placeholder="2026-09-13T07:03:02Z" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="rankwoven_ahrefs_comparison_date"><?php echo esc_html__('比較 Crawl 日期', 'rankwoven-seo'); ?></label></th>
+                        <td><input id="rankwoven_ahrefs_comparison_date" class="regular-text code" name="rankwoven_ahrefs_site_audit[comparisonDate]" value="<?php echo esc_attr($ahrefs_settings['comparisonDate']); ?>" placeholder="2026-09-08T14:16:49Z" /></td>
+                    </tr>
+                </table>
+                <?php submit_button(__('儲存 Ahrefs Site Audit 設定', 'rankwoven-seo'), 'secondary'); ?>
+            </form>
+        </details>
 
         <?php if (is_wp_error($audit_data)) : ?>
             <div class="notice notice-warning inline"><p><?php echo esc_html($audit_data->get_error_message()); ?></p></div>
@@ -2364,23 +2395,38 @@ final class RankWoven_SEO_Plugin
         <?php
         $latest_audit = $this->get_latest_audit_from_data($audit_data);
         $issues = $this->get_audit_issues_from_data($audit_data);
-        $issue_groups = $this->group_audit_issues_by_content_type($issues);
+        $health_summary = $this->get_audit_health_summary($latest_audit, $issues);
+        $issue_groups = $this->group_audit_issues_by_category($issues);
         ?>
-        <h3><?php echo esc_html__('最新審計', 'rankwoven-seo'); ?></h3>
-        <table class="widefat striped">
-            <tbody>
-                <?php $this->render_diagnostic_row(__('分數', 'rankwoven-seo'), !empty($latest_audit['score']) ? sprintf('%d/100', (int) $latest_audit['score']) : __('尚未審計', 'rankwoven-seo')); ?>
-                <?php $this->render_diagnostic_row(__('規則版本', 'rankwoven-seo'), sanitize_text_field((string) ($latest_audit['rulesVersion'] ?? ''))); ?>
-                <?php $this->render_diagnostic_row(__('建立時間', 'rankwoven-seo'), sanitize_text_field((string) ($latest_audit['createdAt'] ?? ''))); ?>
-                <?php $this->render_diagnostic_row(__('問題數量', 'rankwoven-seo'), (string) count($issues)); ?>
-            </tbody>
-        </table>
+        <?php if ($health_summary['ahrefsErrorCode'] !== '') : ?>
+            <div class="notice notice-warning inline"><p><?php echo esc_html(sprintf(__('Ahrefs Site Audit 資料暫時未能載入（%s）。目前只顯示 RankWoven 已觀測規則。', 'rankwoven-seo'), $health_summary['ahrefsErrorCode'])); ?></p></div>
+        <?php endif; ?>
+        <section class="rankwoven-site-audit-summary">
+            <article class="rankwoven-health-score-card" data-tone="<?php echo esc_attr((string) $health_summary['tone']); ?>">
+                <span><?php echo esc_html__('SEO 健康度', 'rankwoven-seo'); ?></span>
+                <strong><?php echo esc_html(sprintf('%d/100', (int) $health_summary['score'])); ?></strong>
+                <small><?php echo esc_html((string) $health_summary['sourceLabel']); ?></small>
+            </article>
+            <div class="rankwoven-stat-grid rankwoven-site-audit-stats">
+                <?php $this->render_admin_metric_card(__('錯誤', 'rankwoven-seo'), (string) $health_summary['errors'], $health_summary['errors'] > 0 ? 'danger' : 'ready'); ?>
+                <?php $this->render_admin_metric_card(__('警告', 'rankwoven-seo'), (string) $health_summary['warnings'], $health_summary['warnings'] > 0 ? 'warning' : 'ready'); ?>
+                <?php $this->render_admin_metric_card(__('提示', 'rankwoven-seo'), (string) $health_summary['notices']); ?>
+                <?php $this->render_admin_metric_card(__('受影響頁面', 'rankwoven-seo'), (string) $health_summary['affectedPages']); ?>
+                <?php $this->render_admin_metric_card(__('已爬取 URL', 'rankwoven-seo'), $health_summary['crawledUrls'] === null ? __('未提供', 'rankwoven-seo') : (string) $health_summary['crawledUrls']); ?>
+                <?php $this->render_admin_metric_card(__('最後爬取時間', 'rankwoven-seo'), $health_summary['crawlDate'] !== '' ? $health_summary['crawlDate'] : __('尚未審計', 'rankwoven-seo')); ?>
+            </div>
+        </section>
 
-        <h3><?php echo esc_html__('問題列表', 'rankwoven-seo'); ?></h3>
+        <section class="rankwoven-panel rankwoven-site-audit-issues-panel">
+            <div class="rankwoven-section-heading">
+                <span class="rankwoven-eyebrow"><?php echo esc_html__('Issues overview', 'rankwoven-seo'); ?></span>
+                <h3><?php echo esc_html__('網站 SEO 問題', 'rankwoven-seo'); ?></h3>
+                <p><?php echo esc_html__('問題按網站級分類、嚴重程度、受影響頁面和與上次爬取的變化顯示。AI 建議只會對可安全寫回的內容欄位啟用一鍵套用；技術設定仍需管理員確認。', 'rankwoven-seo'); ?></p>
+            </div>
         <?php if (empty($issues)) : ?>
             <p><?php echo esc_html__('目前尚未找到問題。請先同步內容，再執行審計。', 'rankwoven-seo'); ?></p>
         <?php else : ?>
-            <div class="rankwoven-audit-type-summary" aria-label="<?php echo esc_attr__('SEO issue counts by content type', 'rankwoven-seo'); ?>">
+            <div class="rankwoven-audit-type-summary" aria-label="<?php echo esc_attr__('SEO issue counts by category', 'rankwoven-seo'); ?>">
                 <?php foreach ($issue_groups as $group) : ?>
                     <span class="rankwoven-audit-type-chip">
                         <?php echo esc_html((string) $group['label']); ?>
@@ -2398,21 +2444,27 @@ final class RankWoven_SEO_Plugin
                     <thead>
                         <tr>
                             <th><?php echo esc_html__('嚴重程度', 'rankwoven-seo'); ?></th>
-                            <th><?php echo esc_html__('目標內容', 'rankwoven-seo'); ?></th>
-                            <th><?php echo esc_html__('規則', 'rankwoven-seo'); ?></th>
-                            <th><?php echo esc_html__('訊息', 'rankwoven-seo'); ?></th>
-                            <th><?php echo esc_html__('建議', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('問題', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('受影響頁面', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('變化', 'rankwoven-seo'); ?></th>
+                            <th><?php echo esc_html__('AI 建議／修復步驟', 'rankwoven-seo'); ?></th>
                             <th><?php echo esc_html__('操作', 'rankwoven-seo'); ?></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($group['issues'] as $issue) : ?>
                             <tr>
-                                <td><?php echo esc_html((string) ($issue['severity'] ?? '')); ?></td>
-                                <td><?php echo esc_html($this->get_suggestion_target_label($issue)); ?></td>
-                                <td><code><?php echo esc_html((string) ($issue['ruleCode'] ?? '')); ?></code></td>
-                                <td><?php echo esc_html((string) ($issue['message'] ?? '')); ?></td>
-                                <td><?php echo esc_html($this->get_suggestion_summary_text((string) ($issue['suggestedValue'] ?? ''))); ?></td>
+                                <td><span class="rankwoven-audit-severity" data-severity="<?php echo esc_attr($this->get_audit_issue_severity_key($issue)); ?>"><?php echo esc_html($this->get_audit_issue_severity_label($issue)); ?></span></td>
+                                <td>
+                                    <strong><?php echo esc_html((string) ($issue['message'] ?? '')); ?></strong>
+                                    <code><?php echo esc_html((string) ($issue['ruleCode'] ?? '')); ?></code>
+                                </td>
+                                <td><?php echo esc_html($this->get_audit_issue_affected_pages_label($issue)); ?></td>
+                                <td><?php echo esc_html($this->get_audit_issue_change_label($issue)); ?></td>
+                                <td>
+                                    <span class="rankwoven-audit-recommendation-source" data-source="<?php echo esc_attr($this->get_audit_issue_recommendation_source($issue)); ?>"><?php echo esc_html($this->get_audit_issue_recommendation_source_label($issue)); ?></span>
+                                    <p class="rankwoven-audit-recommendation-text"><?php echo esc_html($this->get_suggestion_summary_text((string) ($issue['suggestedValue'] ?? ''))); ?></p>
+                                </td>
                                 <td><?php $this->render_audit_issue_actions($issue); ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -2420,6 +2472,7 @@ final class RankWoven_SEO_Plugin
                 </table>
             <?php endforeach; ?>
         <?php endif; ?>
+        </section>
         <?php
     }
 
@@ -2449,7 +2502,7 @@ final class RankWoven_SEO_Plugin
                     <input type="hidden" name="rankwoven_field_name" value="<?php echo esc_attr((string) $apply_payload['field_name']); ?>" />
                     <input type="hidden" name="rankwoven_suggested_value" value="<?php echo esc_attr((string) $apply_payload['suggested_value']); ?>" />
                     <button type="submit" class="button button-small button-primary">
-                        <?php echo esc_html__('套用', 'rankwoven-seo'); ?>
+                        <?php echo esc_html__('一鍵套用', 'rankwoven-seo'); ?>
                     </button>
                 </form>
             <?php else : ?>
@@ -2459,7 +2512,7 @@ final class RankWoven_SEO_Plugin
                     title="<?php echo esc_attr__('此問題需要人工檢查內容後修改，不能安全直接套用。', 'rankwoven-seo'); ?>"
                     disabled
                 >
-                    <?php echo esc_html__('套用', 'rankwoven-seo'); ?>
+                    <?php echo esc_html__('需手動修復', 'rankwoven-seo'); ?>
                 </button>
             <?php endif; ?>
         </div>
@@ -3997,11 +4050,33 @@ final class RankWoven_SEO_Plugin
 
         $result = $this->request_saas_site_api('POST', 'audits');
         if (is_wp_error($result)) {
-            $this->redirect_with_status('seo_audit_failed', 'seo_analysis');
+            $this->redirect_with_status('seo_audit_failed', 'dashboard');
         }
 
         delete_option(self::OPTION_LAST_ERROR);
-        $this->redirect_with_status('seo_audit_completed', 'seo_analysis');
+        $this->redirect_with_status('seo_audit_completed', 'dashboard');
+    }
+
+    public function handle_save_ahrefs_site_audit(): void
+    {
+        $this->assert_admin_action('rankwoven_save_ahrefs_site_audit');
+
+        $settings = $this->sanitize_ahrefs_site_audit_settings(
+            wp_unslash($_POST['rankwoven_ahrefs_site_audit'] ?? [])
+        );
+        update_option(self::OPTION_AHREFS_SITE_AUDIT_SETTINGS, $settings);
+
+        if (!$this->is_saas_site_ready()) {
+            $this->redirect_with_status('missing_site_credentials', 'dashboard');
+        }
+
+        $result = $this->request_saas_site_api('PUT', 'ahrefs-site-audit/config', $settings);
+        if (is_wp_error($result)) {
+            $this->redirect_with_status('ahrefs_site_audit_settings_failed', 'dashboard');
+        }
+
+        delete_option(self::OPTION_LAST_ERROR);
+        $this->redirect_with_status('ahrefs_site_audit_settings_saved', 'dashboard');
     }
 
     public function handle_apply_audit_issue(): void
@@ -4017,11 +4092,11 @@ final class RankWoven_SEO_Plugin
 
         $result = $this->apply_audit_issue_payload($payload);
         if (is_wp_error($result)) {
-            $this->redirect_with_status('audit_issue_apply_failed', 'seo_analysis');
+            $this->redirect_with_status('audit_issue_apply_failed', 'dashboard');
         }
 
         delete_option(self::OPTION_LAST_ERROR);
-        $this->redirect_with_status('audit_issue_applied', 'seo_analysis');
+        $this->redirect_with_status('audit_issue_applied', 'dashboard');
     }
 
     public function handle_manage_suggestions(): void
@@ -4355,6 +4430,12 @@ final class RankWoven_SEO_Plugin
             'permission_callback' => [$this, 'authorize_post_write_request']
         ]);
 
+        register_rest_route(self::REST_NAMESPACE, '/posts/draft', [
+            'methods' => 'POST',
+            'callback' => [$this, 'create_draft_post_rest_response'],
+            'permission_callback' => [$this, 'authorize_draft_post_request']
+        ]);
+
         register_rest_route(self::REST_NAMESPACE, '/media', [
             'methods' => 'GET',
             'callback' => [$this, 'get_media_rest_response'],
@@ -4387,6 +4468,11 @@ final class RankWoven_SEO_Plugin
     public function authorize_post_write_request(WP_REST_Request $request): bool
     {
         return current_user_can('edit_post', (int) $request->get_param('id'));
+    }
+
+    public function authorize_draft_post_request(WP_REST_Request $request): bool
+    {
+        return current_user_can('edit_posts');
     }
 
     public function authorize_media_write_request(WP_REST_Request $request): bool
@@ -4533,6 +4619,30 @@ final class RankWoven_SEO_Plugin
             'appliedAt' => gmdate('c'),
             'article' => $this->get_synced_article_by_id($post_id)
         ]);
+    }
+
+    public function create_draft_post_rest_response(WP_REST_Request $request): WP_REST_Response
+    {
+        $payload = $request->get_json_params();
+        $payload = is_array($payload) ? $payload : [];
+        $post_type = sanitize_key((string) ($payload['postType'] ?? 'post'));
+        if (!in_array($post_type, $this->get_supported_editor_post_types(), true)) {
+            return new WP_REST_Response(['success' => false, 'message' => __('Unsupported post type.', 'rankwoven-seo')], 400);
+        }
+
+        $post_id = wp_insert_post(wp_slash([
+            'post_type' => $post_type,
+            'post_status' => 'draft',
+            'post_title' => sanitize_text_field((string) ($payload['title'] ?? __('RankWoven Draft', 'rankwoven-seo'))),
+            'post_excerpt' => wp_kses_post((string) ($payload['excerpt'] ?? '')),
+            'post_content' => wp_kses_post((string) ($payload['contentHtml'] ?? ''))
+        ]), true);
+
+        if (is_wp_error($post_id)) {
+            return new WP_REST_Response(['success' => false, 'message' => $post_id->get_error_message()], 500);
+        }
+
+        return new WP_REST_Response(['success' => true, 'article' => $this->get_synced_article_by_id((int) $post_id)], 201);
     }
 
     public function apply_single_media_rest_response(WP_REST_Request $request): WP_REST_Response
@@ -5249,6 +5359,46 @@ final class RankWoven_SEO_Plugin
         }
 
         return $settings;
+    }
+
+    private function get_ahrefs_site_audit_settings(): array
+    {
+        $saved_settings = get_option(self::OPTION_AHREFS_SITE_AUDIT_SETTINGS, []);
+        $saved_settings = is_array($saved_settings) ? $saved_settings : [];
+
+        return [
+            'enabled' => !empty($saved_settings['enabled']),
+            'projectId' => sanitize_text_field((string) ($saved_settings['projectId'] ?? '')),
+            'crawlDate' => sanitize_text_field((string) ($saved_settings['crawlDate'] ?? '')),
+            'comparisonDate' => sanitize_text_field((string) ($saved_settings['comparisonDate'] ?? ''))
+        ];
+    }
+
+    private function sanitize_ahrefs_site_audit_settings($input): array
+    {
+        $input = is_array($input) ? $input : [];
+        $project_id = sanitize_text_field((string) ($input['projectId'] ?? ''));
+        $project_id = substr($project_id, 0, 80);
+        $crawl_date = $this->sanitize_ahrefs_site_audit_date((string) ($input['crawlDate'] ?? ''));
+        $comparison_date = $this->sanitize_ahrefs_site_audit_date((string) ($input['comparisonDate'] ?? ''));
+
+        return [
+            'enabled' => !empty($input['enabled']),
+            'projectId' => $project_id,
+            'crawlDate' => $crawl_date,
+            'comparisonDate' => $comparison_date
+        ];
+    }
+
+    private function sanitize_ahrefs_site_audit_date(string $value): string
+    {
+        $value = sanitize_text_field($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($value);
+        return $timestamp === false ? '' : gmdate('c', $timestamp);
     }
 
     private function sanitize_image_attribute_settings(array $input): array
@@ -7607,6 +7757,190 @@ final class RankWoven_SEO_Plugin
         return array_values(array_filter($issues, 'is_array'));
     }
 
+    private function get_audit_health_summary(array $audit, array $issues): array
+    {
+        $metadata = is_array($audit['metadata'] ?? null) ? $audit['metadata'] : [];
+        $health_score_source = sanitize_key((string) ($metadata['healthScoreSource'] ?? 'rankwoven_deterministic'));
+        $ahrefs_metadata = is_array($metadata['ahrefs'] ?? null) ? $metadata['ahrefs'] : [];
+        $severity_counts = ['error' => 0, 'warning' => 0, 'notice' => 0];
+        $affected_pages = 0;
+
+        foreach ($issues as $issue) {
+            $severity_key = $this->get_audit_issue_severity_key($issue);
+            $severity_counts[$severity_key] = ($severity_counts[$severity_key] ?? 0) + 1;
+            $affected_pages += max(0, (int) ($issue['affectedPages'] ?? 0));
+        }
+
+        $score = max(0, min(100, (int) ($audit['score'] ?? 0)));
+        $tone = $score >= 80 ? 'ready' : ($score >= 60 ? 'warning' : 'danger');
+
+        return [
+            'score' => $score,
+            'tone' => $tone,
+            'sourceLabel' => $health_score_source === 'ahrefs'
+                ? __('Ahrefs Site Audit Health Score', 'rankwoven-seo')
+                : __('RankWoven 已觀測規則分數', 'rankwoven-seo'),
+            'errors' => $severity_counts['error'],
+            'warnings' => $severity_counts['warning'],
+            'notices' => $severity_counts['notice'],
+            'affectedPages' => $affected_pages,
+            'crawledUrls' => isset($ahrefs_metadata['crawledUrls']) && is_numeric($ahrefs_metadata['crawledUrls'])
+                ? (int) $ahrefs_metadata['crawledUrls']
+                : null,
+            'crawlDate' => sanitize_text_field((string) ($ahrefs_metadata['crawlDate'] ?? $audit['createdAt'] ?? '')),
+            'ahrefsErrorCode' => sanitize_key((string) ($metadata['ahrefsErrorCode'] ?? ''))
+        ];
+    }
+
+    private function group_audit_issues_by_category(array $issues): array
+    {
+        $groups = [];
+
+        foreach ($issues as $issue) {
+            if (!is_array($issue)) {
+                continue;
+            }
+
+            $category = $this->get_audit_issue_category($issue);
+            $key = (string) $category['key'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'key' => $key,
+                    'label' => (string) $category['label'],
+                    'issues' => []
+                ];
+            }
+            $groups[$key]['issues'][] = $issue;
+        }
+
+        uasort($groups, function (array $left, array $right): int {
+            return $this->get_audit_issue_category_order((string) $left['key']) <=> $this->get_audit_issue_category_order((string) $right['key']);
+        });
+
+        return array_values($groups);
+    }
+
+    private function get_audit_issue_category(array $issue): array
+    {
+        $key = sanitize_key((string) ($issue['category'] ?? ''));
+        if ($key === '') {
+            $rule_code = strtoupper(sanitize_text_field((string) ($issue['ruleCode'] ?? '')));
+            if (str_contains($rule_code, 'INTERNAL_LINK')) {
+                $key = 'links';
+            } elseif (str_contains($rule_code, 'MEDIA_')) {
+                $key = 'images';
+            } elseif (str_contains($rule_code, 'TITLE') || str_contains($rule_code, 'META') || str_contains($rule_code, 'H1')) {
+                $key = 'content';
+            } else {
+                $key = 'other';
+            }
+        }
+
+        $labels = [
+            'indexability' => __('可索引性', 'rankwoven-seo'),
+            'ai_discoverability' => __('AI 可發現性', 'rankwoven-seo'),
+            'links' => __('連結', 'rankwoven-seo'),
+            'redirects' => __('重新導向', 'rankwoven-seo'),
+            'content' => __('內容', 'rankwoven-seo'),
+            'social_tags' => __('社交標籤', 'rankwoven-seo'),
+            'duplicates' => __('重複內容', 'rankwoven-seo'),
+            'localization' => __('在地化', 'rankwoven-seo'),
+            'performance' => __('可用性與效能', 'rankwoven-seo'),
+            'images' => __('圖片', 'rankwoven-seo'),
+            'javascript' => __('JavaScript', 'rankwoven-seo'),
+            'css' => __('CSS', 'rankwoven-seo'),
+            'sitemaps' => __('網站地圖', 'rankwoven-seo'),
+            'external_pages' => __('外部頁面', 'rankwoven-seo'),
+            'other' => __('其他', 'rankwoven-seo')
+        ];
+
+        return [
+            'key' => isset($labels[$key]) ? $key : 'other',
+            'label' => $labels[$key] ?? $labels['other']
+        ];
+    }
+
+    private function get_audit_issue_category_order(string $key): int
+    {
+        $order = [
+            'indexability' => 10,
+            'ai_discoverability' => 20,
+            'links' => 30,
+            'redirects' => 40,
+            'content' => 50,
+            'social_tags' => 60,
+            'duplicates' => 70,
+            'localization' => 80,
+            'performance' => 90,
+            'images' => 100,
+            'javascript' => 110,
+            'css' => 120,
+            'sitemaps' => 130,
+            'external_pages' => 140,
+            'other' => 999
+        ];
+
+        return $order[$key] ?? 999;
+    }
+
+    private function get_audit_issue_severity_key(array $issue): string
+    {
+        $metadata = is_array($issue['metadata'] ?? null) ? $issue['metadata'] : [];
+        $provider_severity = sanitize_key((string) ($metadata['providerSeverity'] ?? ''));
+        if (in_array($provider_severity, ['error', 'warning', 'notice'], true)) {
+            return $provider_severity;
+        }
+
+        return match (sanitize_key((string) ($issue['severity'] ?? 'low'))) {
+            'high' => 'error',
+            'medium' => 'warning',
+            default => 'notice'
+        };
+    }
+
+    private function get_audit_issue_severity_label(array $issue): string
+    {
+        return match ($this->get_audit_issue_severity_key($issue)) {
+            'error' => __('錯誤', 'rankwoven-seo'),
+            'warning' => __('警告', 'rankwoven-seo'),
+            default => __('提示', 'rankwoven-seo')
+        };
+    }
+
+    private function get_audit_issue_affected_pages_label(array $issue): string
+    {
+        if (isset($issue['affectedPages']) && is_numeric($issue['affectedPages'])) {
+            return (string) max(0, (int) $issue['affectedPages']);
+        }
+
+        return (int) ($issue['targetCmsId'] ?? 0) > 0 ? '1' : '—';
+    }
+
+    private function get_audit_issue_change_label(array $issue): string
+    {
+        if (!isset($issue['change']) || !is_numeric($issue['change'])) {
+            return '—';
+        }
+
+        $change = (int) $issue['change'];
+        return $change > 0 ? '+' . $change : (string) $change;
+    }
+
+    private function get_audit_issue_recommendation_source(array $issue): string
+    {
+        $metadata = is_array($issue['metadata'] ?? null) ? $issue['metadata'] : [];
+        return sanitize_key((string) ($metadata['recommendationSource'] ?? 'deterministic')) === 'ai'
+            ? 'ai'
+            : 'deterministic';
+    }
+
+    private function get_audit_issue_recommendation_source_label(array $issue): string
+    {
+        return $this->get_audit_issue_recommendation_source($issue) === 'ai'
+            ? __('AI 建議', 'rankwoven-seo')
+            : __('系統修復步驟', 'rankwoven-seo');
+    }
+
     private function group_audit_issues_by_content_type(array $issues): array
     {
         $groups = [];
@@ -8121,6 +8455,7 @@ final class RankWoven_SEO_Plugin
             'sitemap_submit_failed' => __('Sitemap submission failed. Please check the SaaS API and Google credentials.', 'rankwoven-seo'),
             'indexnow_submit_failed' => __('IndexNow submission failed. Please check the API Key and website URL.', 'rankwoven-seo'),
             'seo_audit_failed' => __('SEO Analysis failed. Please sync content, then check the SaaS API service.', 'rankwoven-seo'),
+            'ahrefs_site_audit_settings_failed' => __('Ahrefs Site Audit settings were saved locally, but RankWoven could not update the SaaS provider configuration.', 'rankwoven-seo'),
             'internal_links_rescan_failed' => __('Internal link rescan failed. Please check the SaaS API service and run sync again.', 'rankwoven-seo'),
             'audit_issue_apply_failed' => __('Audit issue could not be applied automatically. Please edit the content manually.', 'rankwoven-seo'),
             'suggestions_missing_selection' => __('Please select at least one suggestion first.', 'rankwoven-seo'),
@@ -8167,6 +8502,8 @@ final class RankWoven_SEO_Plugin
             'indexnow_submitted' => ['updated', __('URLs submitted to IndexNow successfully.', 'rankwoven-seo')],
             'geo_settings_saved' => ['updated', __('GEO 設定已保存。', 'rankwoven-seo')],
             'seo_audit_completed' => ['updated', __('SEO Analysis completed.', 'rankwoven-seo')],
+            'ahrefs_site_audit_settings_saved' => ['updated', __('Ahrefs Site Audit settings saved. Run the SEO site audit to retrieve the latest provider issues.', 'rankwoven-seo')],
+            'ahrefs_site_audit_settings_failed' => ['error', __('Ahrefs Site Audit settings could not be sent to the SaaS API. Please check the Site Token and API service.', 'rankwoven-seo')],
             'internal_links_rescan_completed' => ['updated', __('Internal links rescanned. Deleted content was removed from candidates and new suggestions were generated.', 'rankwoven-seo')],
             'internal_links_rescan_failed' => ['error', __('Internal link rescan failed. Please check the SaaS API service and Site Token.', 'rankwoven-seo')],
             'audit_issue_applied' => ['updated', __('SEO Analysis issue suggestion applied to WordPress content.', 'rankwoven-seo')],

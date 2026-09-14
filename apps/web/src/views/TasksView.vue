@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { Modal, message } from 'ant-design-vue';
 import { DownOutlined } from '@ant-design/icons-vue';
 import type { TableColumnsType } from 'ant-design-vue';
@@ -20,6 +21,8 @@ import {
 } from '../api/siteConnections';
 
 const { t, locale } = useI18n();
+const route = useRoute();
+const routedSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
 
 const tasks = ref<SyncTask[]>([]);
 const isLoading = ref(false);
@@ -250,6 +253,7 @@ async function loadTasks() {
 
   try {
     const result = await getSyncTasks({
+      siteId: routedSiteId.value || undefined,
       scope: (filterScope.value || undefined) as SyncTaskScope | undefined,
       status: (filterStatus.value || undefined) as SyncTaskStatus | undefined
     });
@@ -434,6 +438,10 @@ onMounted(() => {
   void loadDeadLetterAlert();
   void loadAlertConfig();
   startAutoRefresh();
+});
+
+watch(routedSiteId, () => {
+  void loadTasks();
 });
 
 onUnmounted(() => {

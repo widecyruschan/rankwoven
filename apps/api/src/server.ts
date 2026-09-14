@@ -32,6 +32,12 @@ import {
   startSiteAuditScheduler
 } from './siteAudit';
 import {
+  createDefaultSiteAuditMonitoringRepository,
+  type SiteAuditMonitoringRepository,
+  registerSiteAuditMonitoringRoutes,
+  startSiteAuditMonitoringScheduler
+} from './siteAuditMonitoring';
+import {
   createDefaultSiteConnectionRepository,
   type SiteConnectionRepository,
   registerSiteConnectionRoutes
@@ -47,6 +53,7 @@ interface CreateServerOptions {
   authRepository?: AuthRepository;
   seoOptimizationRepository?: SeoOptimizationRepository;
   siteAuditRepository?: SiteAuditRepository;
+  siteAuditMonitoringRepository?: SiteAuditMonitoringRepository;
   textGenerationProvider?: TextGenerationProvider;
   phase2Repository?: Phase2Repository;
   taskGovernance?: TaskGovernance;
@@ -87,6 +94,8 @@ export function createServer(options: CreateServerOptions = {}) {
   const siteConnectionRepository =
     options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL);
   const phase2Repository = options.phase2Repository ?? createDefaultPhase2Repository(apiConfig.DATABASE_URL);
+  const siteAuditRepository = options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL);
+  const siteAuditMonitoringRepository = options.siteAuditMonitoringRepository ?? createDefaultSiteAuditMonitoringRepository(apiConfig.DATABASE_URL);
   const taskGovernance = options.taskGovernance ?? (
     apiConfig.REDIS_URL ? createRedisTaskGovernance(apiConfig.REDIS_URL) : undefined
   );
@@ -221,8 +230,18 @@ export function createServer(options: CreateServerOptions = {}) {
   registerSiteAuditRoutes(
     app,
     siteConnectionRepository,
-    options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL),
+    siteAuditRepository,
     authService,
+    taskGovernance
+  );
+
+  registerSiteAuditMonitoringRoutes(
+    app,
+    siteConnectionRepository,
+    siteAuditRepository,
+    siteAuditMonitoringRepository,
+    authService,
+    phase2Repository,
     taskGovernance
   );
 
@@ -231,10 +250,12 @@ export function createServer(options: CreateServerOptions = {}) {
 
   // 啟動站點稽核排程器（每 30 分鐘檢查一次）
   const stopScheduler = startSiteAuditScheduler(
-    options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL)
+    siteAuditRepository
   );
+  const stopMonitoringScheduler = startSiteAuditMonitoringScheduler(siteAuditMonitoringRepository);
   app.addHook('onClose', () => {
     stopScheduler();
+    stopMonitoringScheduler();
   });
   app.addHook('onClose', async () => {
     await taskGovernance?.close();

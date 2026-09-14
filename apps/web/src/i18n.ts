@@ -54,6 +54,15 @@ const messages = {
       siteAudit: 'Site Audit',
       settings: 'Settings'
     },
+    monitoring: {
+      title: 'Monitoring', alertsTitle: 'Alerts', description: 'Review competitor, AI visibility, and technical monitoring events.',
+      refresh: 'Refresh', empty: 'No monitoring events yet.', loadFailed: 'Unable to load monitoring events.',
+      eventType: 'Event', severity: 'Severity', source: 'Source', change: 'Change', detectedAt: 'Detected at', notAvailable: 'Unavailable',
+      alertsDescription: 'Review in-app alert delivery and mute recurring notifications.', alertsEmpty: 'No alerts yet.', alertLoadFailed: 'Unable to load alerts.',
+      channel: 'Channel', status: 'Status', action: 'Action', mute: 'Mute 24 hours', muted: 'Alert muted for 24 hours.', muteFailed: 'Unable to mute alert.',
+      createTitle: 'Create monitoring', site: 'Site', selectSite: 'Select site', kind: 'Type', kindTechnical: 'Technical', kindCompetitor: 'Competitor', kindAiVisibility: 'AI visibility',
+      frequency: 'Frequency', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', threshold: 'Alert threshold', create: 'Create monitor', createFailed: 'Unable to create monitor.'
+    },
     common: {
       totalItems: '{total} items',
       untitled: 'Untitled',
@@ -62,13 +71,21 @@ const messages = {
       cancel: 'Cancel'
     },
     navigationGroups: {
-      default: 'Workspace'
+      default: 'Workspace',
+      workspace: 'Monitoring',
+      current_site: 'Current Site'
     },
     contentOptimizer: {
       title: 'Content Optimizer', body: 'Analyze a content snapshot before creating any CMS draft.',
       focusKeyword: 'Focus keyword', content: 'Content', analyze: 'Analyze content', score: 'Score', confidence: 'Confidence',
       dimension: 'Dimension', status: 'Status', recommendation: 'Recommendation',
       errors: { PROVIDER_UNAVAILABLE: 'Content analysis is unavailable until an approved model profile is configured.', REQUEST_FAILED: 'Unable to create the content analysis task.' }
+    },
+    keywordResearch: {
+      title: 'Competitor Keyword Research', body: 'Enter a competitor URL to discover ranked keywords, long-tail opportunities, and keyword gaps.',
+      competitorUrl: 'Competitor URL', analyze: 'Analyze competitor', status: 'Task status', competitorKeywords: 'Competitor keywords',
+      longTailKeywords: 'Long-tail keywords', gaps: 'Keyword gaps', keyword: 'Keyword', intent: 'Intent', opportunity: 'Opportunity',
+      errors: { PROVIDER_UNAVAILABLE: 'Keyword provider is not configured.', RUN_FAILED: 'The competitor research task did not complete.', REQUEST_FAILED: 'Unable to start competitor research.' }
     },
     marketing: {
       homeTitle: 'SEO Tutorials | Website SEO and AI Optimization',
@@ -559,7 +576,7 @@ const messages = {
     },
     siteAudit: {
       title: 'SEO Site Audit',
-      description: 'Comprehensive SEO analysis of your website powered by SerpApi.',
+      description: 'Run a capped, read-only SEO audit for connected sites and individual public pages.',
       noSiteSelected: 'Please select a site to audit from the dropdown above.',
       configure: 'Configure Audit',
       runNow: 'Run Audit Now',
@@ -605,6 +622,7 @@ const messages = {
       severity_low: 'Low',
       status_queued: 'Queued',
       status_running: 'Running',
+      status_partial: 'Partially completed',
       status_completed: 'Completed',
       status_failed: 'Failed',
       lastAudit: 'Last Audit',
@@ -621,13 +639,33 @@ const messages = {
       errorRunAudit: 'Failed to start audit.',
       errorLoadResults: 'Failed to load audit results.',
       confirmationTitle: 'Start Audit',
-      confirmationContent: 'Running an audit will consume SerpApi search credits (approx. 1 credit per page analyzed). Continue?',
+      confirmationContent: 'Run a safe, capped crawl of the connected site and record deterministic findings. Continue?',
       confirm: 'Start',
       cancel: 'Cancel',
       issueDescription: 'Description',
       issueRecommendation: 'How to Fix',
       issueAffectedUrl: 'Affected URL',
-      issueAffectedCount: 'Affected Count'
+      issueAffectedCount: 'Affected Count',
+      category: 'Category', severity: 'Severity', issueTitle: 'Title', url: 'URL', affected: 'Affected', date: 'Date', status: 'Status', score: 'Score', pages: 'Pages', issues: 'Issues',
+      metricsBySource: 'Performance data by source', metric: 'Metric', source: 'Source', value: 'Value', unavailable: 'Unavailable',
+      sourceLighthouseLab: 'Lighthouse lab', sourceCruxField: 'CrUX field (28 days)'
+      ,manualTitle: 'Single Page Analysis'
+      ,manualReadOnlyTitle: 'Read-only analysis'
+      ,manualReadOnlyDescription: 'Results provide diagnostic findings and manual remediation guidance only. RankWoven will not edit or publish anything on your website.'
+      ,manualUrlLabel: 'Connected-site URL'
+      ,manualUrlPlaceholder: 'https://example.com/article-or-product/'
+      ,manualUrlHint: 'Only public URLs on the selected connected site are accepted.'
+      ,manualAnalyzeUrl: 'Analyze URL'
+      ,manualContentLabel: 'Synced article or product'
+      ,manualContentPlaceholder: 'Choose a published article or product'
+      ,manualContentHint: 'Only published synced content with a public URL is listed.'
+      ,manualAnalyzeContent: 'Analyze content'
+      ,manualContentArticle: 'Article'
+      ,manualContentProduct: 'Product'
+      ,manualUrlRequired: 'Enter a URL to analyze first.'
+      ,manualContentRequired: 'Choose a published article or product first.'
+      ,manualCompleted: 'Single page analysis completed. Apply changes manually in your website.'
+      ,manualFailed: 'Unable to analyze this page.'
     },
     keywords: {
       title: 'Keyword Suggestions',
@@ -685,8 +723,18 @@ const messages = {
     },
     sites: {
       title: 'Site Management',
-      body: 'Connect WordPress, Joomla, OpenCart, and other websites, then monitor sync status.',
+      body: 'Add a website once, select it from the workspace switcher, then use every SEO workflow in that site context.',
       primaryAction: 'Connect site',
+      addManual: 'Add website manually',
+      manualMode: 'Manual',
+      pluginMode: 'Plugin',
+      apiMode: 'API',
+      manualTitle: 'Add a website manually',
+      manualDescription: 'Manual sites receive the same audits and recommendations, but changes stay manual because no CMS writeback is connected.',
+      manualName: 'Website name',
+      manualUrl: 'Website URL',
+      manualAdded: 'Website added. Select it to start analysis.',
+      manualAddFailed: 'Unable to add website.',
       refresh: 'Refresh',
       connectedCount: 'Connected',
       readySites: 'Ready to sync',
@@ -1154,6 +1202,15 @@ const messages = {
       siteAudit: '網站檢測',
       settings: '設定'
     },
+    monitoring: {
+      title: '監控事件', alertsTitle: '告警', description: '查看競品、AI 可見度及技術監控事件。',
+      refresh: '重新整理', empty: '暫未有監控事件。', loadFailed: '無法載入監控事件。',
+      eventType: '事件', severity: '嚴重程度', source: '來源', change: '變化', detectedAt: '發現時間', notAvailable: '暫不可用',
+      alertsDescription: '查看站內告警投遞狀態，並對重複通知靜默處理。', alertsEmpty: '暫未有告警。', alertLoadFailed: '無法載入告警。',
+      channel: '渠道', status: '狀態', action: '操作', mute: '靜默 24 小時', muted: '告警已靜默 24 小時。', muteFailed: '無法靜默告警。',
+      createTitle: '建立監控', site: '站點', selectSite: '選擇站點', kind: '類型', kindTechnical: '技術檢測', kindCompetitor: '競品', kindAiVisibility: 'AI 可見度',
+      frequency: '頻率', daily: '每日', weekly: '每週', monthly: '每月', threshold: '告警閾值', create: '建立監控', createFailed: '無法建立監控。'
+    },
     common: {
       totalItems: '共 {total} 項',
       untitled: '未命名',
@@ -1162,13 +1219,21 @@ const messages = {
       cancel: '取消'
     },
     navigationGroups: {
-      default: '工作區'
+      default: '工作區',
+      workspace: '監控',
+      current_site: '目前站點'
     },
     contentOptimizer: {
       title: '內容優化器', body: '建立 CMS 草稿前，先分析內容快照與可解釋 SEO 檢查。',
       focusKeyword: '焦點關鍵詞', content: '內容', analyze: '分析內容', score: '分數', confidence: '信心度',
       dimension: '維度', status: '狀態', recommendation: '建議',
       errors: { PROVIDER_UNAVAILABLE: '尚未配置已核驗模型 profile，內容分析暫不可用。', REQUEST_FAILED: '無法建立內容分析任務。' }
+    },
+    keywordResearch: {
+      title: '競品關鍵詞研究', body: '輸入競品網址，自動整理排名關鍵詞、長尾關鍵詞與關鍵詞差距。',
+      competitorUrl: '競品網址', analyze: '分析競品', status: '任務狀態', competitorKeywords: '競品關鍵詞',
+      longTailKeywords: '長尾關鍵詞', gaps: '關鍵詞差距', keyword: '關鍵詞', intent: '搜尋意圖', opportunity: '機會分數',
+      errors: { PROVIDER_UNAVAILABLE: '尚未配置關鍵詞資料 Provider。', RUN_FAILED: '競品研究任務未能完成。', REQUEST_FAILED: '無法建立競品研究任務。' }
     },
     marketing: {
       homeTitle: 'SEO 教學｜網站 SEO 整合 AI 優化教程',
@@ -1656,7 +1721,7 @@ const messages = {
     },
     siteAudit: {
       title: 'SEO 網站檢測',
-      description: '通過 SerpApi 對您的網站進行全面的 SEO 分析。',
+      description: '對已連接網站及單一公開頁面執行受限、唯讀的 SEO 檢測。',
       noSiteSelected: '請從上方下拉選單中選擇要檢測的網站。',
       configure: '配置檢測',
       runNow: '立即執行檢測',
@@ -1702,6 +1767,7 @@ const messages = {
       severity_low: '低',
       status_queued: '排隊中',
       status_running: '執行中',
+      status_partial: '部分完成',
       status_completed: '已完成',
       status_failed: '失敗',
       lastAudit: '上次檢測',
@@ -1718,13 +1784,33 @@ const messages = {
       errorRunAudit: '啟動檢測失敗。',
       errorLoadResults: '載入檢測結果失敗。',
       confirmationTitle: '開始檢測',
-      confirmationContent: '執行檢測將消耗 SerpApi 搜尋點數（每個分析頁面約 1 點）。確認繼續？',
+      confirmationContent: '將對已連接站點執行受限安全爬取，並保存可重現的檢測結果。確認繼續？',
       confirm: '開始',
       cancel: '取消',
       issueDescription: '問題描述',
       issueRecommendation: '修復建議',
       issueAffectedUrl: '受影響 URL',
-      issueAffectedCount: '影響數量'
+      issueAffectedCount: '影響數量',
+      category: '分類', severity: '嚴重程度', issueTitle: '標題', url: '網址', affected: '影響數量', date: '日期', status: '狀態', score: '分數', pages: '頁面', issues: '問題',
+      metricsBySource: '按來源分列的效能數據', metric: '指標', source: '來源', value: '數值', unavailable: '暫不可用',
+      sourceLighthouseLab: 'Lighthouse 實驗室數據', sourceCruxField: 'CrUX 現場數據（28 日）'
+      ,manualTitle: '單頁分析'
+      ,manualReadOnlyTitle: '只讀分析，不會寫回網站'
+      ,manualReadOnlyDescription: '結果只提供診斷問題與手動修復建議；RankWoven 不會修改、發布或寫回任何網站內容。'
+      ,manualUrlLabel: '已連接站點網址'
+      ,manualUrlPlaceholder: 'https://example.com/article-or-product/'
+      ,manualUrlHint: '只接受目前已選連接站點的公開網址。'
+      ,manualAnalyzeUrl: '分析網址'
+      ,manualContentLabel: '已同步文章或商品'
+      ,manualContentPlaceholder: '選擇已發佈的文章或商品'
+      ,manualContentHint: '只列出有公開網址的已發佈同步內容。'
+      ,manualAnalyzeContent: '分析內容'
+      ,manualContentArticle: '文章'
+      ,manualContentProduct: '商品'
+      ,manualUrlRequired: '請先輸入要分析的網址。'
+      ,manualContentRequired: '請先選擇已發佈的文章或商品。'
+      ,manualCompleted: '單頁分析完成，請在網站後台手動修改。'
+      ,manualFailed: '無法分析此頁面。'
     },
     keywords: {
       title: '關鍵詞建議',
@@ -1782,8 +1868,18 @@ const messages = {
     },
     sites: {
       title: '站點管理',
-      body: '此頁將用於連接 WordPress、Joomla、OpenCart 等網站，並展示同步狀態。',
+      body: '先加入網站並在工作區切換器選取；其後所有 SEO 功能均固定使用該站點資料。',
       primaryAction: '連接站點',
+      addManual: '手動新增網站',
+      manualMode: '手動',
+      pluginMode: '插件',
+      apiMode: 'API',
+      manualTitle: '手動新增網站',
+      manualDescription: '手動站點可使用相同的檢測與修復建議；由於未連接 CMS 寫回，所有修改需由用戶自行處理。',
+      manualName: '網站名稱',
+      manualUrl: '網站網址',
+      manualAdded: '網站已加入，請選取後開始分析。',
+      manualAddFailed: '無法新增網站。',
       refresh: '刷新',
       connectedCount: '已連接',
       readySites: '可同步站點',

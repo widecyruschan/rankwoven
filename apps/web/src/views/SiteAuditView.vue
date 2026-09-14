@@ -6,12 +6,13 @@ import {
   Modal,
   Card,
   Button,
-  Select,
   Spin,
   RadioGroup,
   RadioButton,
   Switch,
   InputNumber,
+  Input,
+  Alert,
   Progress,
   Tag,
   Table,
@@ -29,9 +30,12 @@ import {
   getSiteConnections,
   getSiteAuditConfig,
   updateSiteAuditConfig,
-  runSiteAudit,
+  runSiteAuditMonitoring,
+  runManualSiteAudit,
   getSiteAuditResults,
-  getAdminSerpapiUsage
+  getSiteAuditMonitoringRun,
+  getAdminSerpapiUsage,
+  getSyncedArticles
 } from '../api/siteConnections';
 import type {
   SiteConnection,
@@ -41,7 +45,9 @@ import type {
   SiteAuditIssue,
   SiteAuditSchedule,
   SiteAuditCrawlSource,
-  SerpapiUsageStats
+  SiteAuditMetric,
+  SerpapiUsageStats,
+  SyncedArticle
 } from '../api/siteConnections';
 
 const { t } = useI18n();
@@ -53,13 +59,18 @@ const selectedSiteId = ref<string>('');
 const loadingConfig = ref(false);
 const loadingResults = ref(false);
 const runningAudit = ref(false);
+const runningManualAudit = ref(false);
 const savingConfig = ref(false);
 const configModalOpen = ref(false);
 
 const config = ref<SiteAuditConfig | null>(null);
 const results = ref<SiteAuditResult[]>([]);
 const latestResult = ref<SiteAuditResultWithIssues | null>(null);
+const latestMetrics = ref<SiteAuditMetric[]>([]);
 const quotaStats = ref<SerpapiUsageStats | null>(null);
+const syncedContent = ref<SyncedArticle[]>([]);
+const manualTargetUrl = ref('');
+const manualContentCmsId = ref<string>();
 
 // ── form model ──
 const formSchedule = ref<SiteAuditSchedule>('disabled');
@@ -69,11 +80,13 @@ const formEmailNotification = ref<boolean>(false);
 
 // ── computed ──
 const hasSite = computed(() => !!selectedSiteId.value);
-const siteOptions = computed(() =>
-  sites.value.map((s) => ({
-    value: s.id,
-    label: s.name || s.siteUrl || s.id
-  }))
+const manualContentOptions = computed(() =>
+  syncedContent.value
+    .filter((article) => (article.type === 'post' || article.type === 'product') && article.status === 'publish' && article.url)
+    .map((article) => ({
+      value: article.cmsId,
+      label: `[${article.type === 'product' ? tc('manualContentProduct') : tc('manualContentArticle')}] ${article.title}`
+    }))
 );
 
 const scoreColor = computed(() => {
@@ -86,6 +99,7 @@ const scoreColor = computed(() => {
 const statusColor = computed(() => {
   const s = latestResult.value?.status;
   if (s === 'completed') return 'success';
+  if (s === 'partial') return 'warning';
   if (s === 'running' || s === 'queued') return 'processing';
   if (s === 'failed') return 'error';
   return 'default';
@@ -98,71 +112,71 @@ const severityColorMap: Record<string, string> = {
   low: '#52c41a'
 };
 
-const issueColumns = [
+const issueColumns = computed(() => [
   {
-    title: 'Category',
+    title: tc('category'),
     dataIndex: 'category',
     key: 'category',
     width: 160
   },
   {
-    title: 'Severity',
+    title: tc('severity'),
     dataIndex: 'severity',
     key: 'severity',
     width: 100
   },
   {
-    title: 'Title',
+    title: tc('issueTitle'),
     dataIndex: 'title',
     key: 'title',
     ellipsis: true
   },
   {
-    title: 'URL',
+    title: tc('url'),
     dataIndex: 'url',
     key: 'url',
     ellipsis: true,
     width: 200
   },
   {
-    title: 'Affected',
+    title: tc('affected'),
     dataIndex: 'affectedCount',
     key: 'affectedCount',
     width: 100
   }
-];
+]);
 
-const historyColumns = [
+const historyColumns = computed(() => [
   {
-    title: 'Date',
+    title: tc('date'),
     dataIndex: 'createdAt',
     key: 'createdAt',
     width: 180
   },
   {
-    title: 'Status',
+    title: tc('status'),
     dataIndex: 'status',
     key: 'status',
     width: 110
   },
   {
-    title: 'Score',
+    title: tc('score'),
     dataIndex: 'overallScore',
     key: 'overallScore',
     width: 80
   },
   {
-    title: 'Pages',
+    title: tc('pages'),
     dataIndex: 'pagesCrawled',
     key: 'pagesCrawled',
     width: 80
   },
   {
-    title: 'Issues',
+    title: tc('issues'),
     key: 'issues',
     width: 80
   }
-];
+]);
 
 // ── methods ──
 async function loadConfig() {
@@ -189,11 +203,31 @@ async function loadResults() {
     const res = await getSiteAuditResults(selectedSiteId.value);
     results.value = res.results;
     latestResult.value = res.latest;
+    latestMetrics.value = [];
+    if (res.latest) {
+      try {
+        const bundle = await getSiteAuditMonitoringRun(res.latest.id);
+        latestMetrics.value = bundle.metrics;
+      } catch {
+        // Legacy audit runs may not have PH2-10 metrics.
+      }
+    }
   } catch {
     results.value = [];
     latestResult.value = null;
+    latestMetrics.value = [];
   } finally {
     loadingResults.value = false;
+  }
+}
+
+async function loadSyncedContent() {
+  if (!selectedSiteId.value) return;
+  try {
+    const result = await getSyncedArticles(selectedSiteId.value, { page: 1, pageSize: 100, status: 'publish' });
+    syncedContent.value = result.articles;
+  } catch {
+    syncedContent.value = [];
   }
 }
 
@@ -229,11 +263,6 @@ async function saveConfig() {
 
 function handleRunAudit() {
   if (!selectedSiteId.value) return;
-  // Check quota before even showing the dialog
-  if (quotaStats.value && quotaStats.value.remaining <= 0) {
-    message.warning(tc('quotaExceeded').replace('{used}', String(quotaStats.value.totalCreditsUsed)).replace('{limit}', String(quotaStats.value.monthlyLimit)));
-    return;
-  }
   Modal.confirm({
     title: tc('confirmationTitle'),
     content: tc('confirmationContent'),
@@ -244,26 +273,59 @@ function handleRunAudit() {
       // Keep old latestResult visible while re-audit runs;
       // set reauditPending to show a "re-detecting" badge on the existing card
       try {
-        const result = await runSiteAudit(selectedSiteId.value, formPageLimit.value);
-        latestResult.value = result;
+        const bundle = await runSiteAuditMonitoring(selectedSiteId.value, Math.min(formPageLimit.value, 25));
+        latestMetrics.value = bundle.metrics;
         const res = await getSiteAuditResults(selectedSiteId.value);
+        latestResult.value = res.latest;
         results.value = res.results;
         message.success(tc('status_completed'));
-        loadQuota(); // Refresh quota after successful audit
       } catch (e: unknown) {
-        // Check for quota exceeded error
         const errMsg = e instanceof Error ? e.message : '';
-        if (errMsg.includes('配額') || errMsg.includes('quota') || errMsg.includes('SERPAPI_QUOTA')) {
-          message.warning(errMsg);
-          loadQuota(); // Refresh quota display
-        } else {
-          message.error(errMsg || tc('errorRunAudit'));
-        }
+        message.error(errMsg || tc('errorRunAudit'));
       } finally {
         runningAudit.value = false;
       }
     }
   });
+}
+
+async function refreshManualAuditResult() {
+  const res = await getSiteAuditResults(selectedSiteId.value);
+  latestResult.value = res.latest;
+  results.value = res.results;
+}
+
+async function handleManualUrlAudit() {
+  const targetUrl = manualTargetUrl.value.trim();
+  if (!targetUrl) {
+    message.warning(tc('manualUrlRequired'));
+    return;
+  }
+  await runManualAudit({ targetUrl });
+}
+
+async function handleSyncedContentAudit() {
+  if (!manualContentCmsId.value) {
+    message.warning(tc('manualContentRequired'));
+    return;
+  }
+  await runManualAudit({ contentCmsId: manualContentCmsId.value });
+}
+
+async function runManualAudit(input: { targetUrl: string } | { contentCmsId: string }) {
+  if (!selectedSiteId.value) return;
+  runningManualAudit.value = true;
+  try {
+    const result = await runManualSiteAudit(selectedSiteId.value, input);
+    latestMetrics.value = result.bundle?.metrics ?? [];
+    await refreshManualAuditResult();
+    message.success(tc('manualCompleted'));
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '';
+    message.error(errorMessage || tc('manualFailed'));
+  } finally {
+    runningManualAudit.value = false;
+  }
 }
 
 async function loadQuota() {
@@ -324,25 +386,36 @@ watch(selectedSiteId, () => {
     loadQuota();
     loadConfig();
     loadResults();
+    loadSyncedContent();
   } else {
     config.value = null;
     results.value = [];
     latestResult.value = null;
+    latestMetrics.value = [];
+    syncedContent.value = [];
+    manualTargetUrl.value = '';
+    manualContentCmsId.value = undefined;
   }
 });
+
+watch(
+  () => route.params.siteId,
+  (siteId) => {
+    if (typeof siteId === 'string') {
+      selectedSiteId.value = siteId;
+    }
+  }
+);
 
 onMounted(async () => {
   try {
     const result = await getSiteConnections();
     sites.value = result.sites;
 
-    // Pre-select site from query param (e.g. /app/site-audit?siteId=xxx)
-    const querySiteId = route.query.siteId as string | undefined;
-    if (querySiteId && sites.value.some((s) => s.id === querySiteId)) {
-      selectedSiteId.value = querySiteId;
-    } else if (sites.value.length > 0) {
-      selectedSiteId.value = sites.value[0].id;
-    }
+    const routeSiteId = typeof route.params.siteId === 'string' ? route.params.siteId : '';
+    selectedSiteId.value = sites.value.some((site) => site.id === routeSiteId)
+      ? routeSiteId
+      : sites.value[0]?.id ?? '';
   } catch {
     // silently fail - site list will be empty
   }
@@ -356,16 +429,6 @@ onMounted(async () => {
       <div class="header-left">
         <h2>{{ tc('title') }}</h2>
         <p class="subtitle">{{ tc('description') }}</p>
-      </div>
-      <div class="header-right">
-        <Select
-          v-model:value="selectedSiteId"
-          :options="siteOptions"
-          :placeholder="t('sites.selectSite')"
-          style="width: 280px"
-          show-search
-          option-filter-prop="label"
-        />
       </div>
     </div>
 
@@ -383,10 +446,9 @@ onMounted(async () => {
           <Button
             type="primary"
             :loading="runningAudit"
-            :disabled="quotaStats?.remaining != null && quotaStats.remaining <= 0"
             @click="handleRunAudit"
           >
-            {{ runningAudit ? tc('running') : quotaStats?.remaining != null && quotaStats.remaining <= 0 ? tc('quotaBlocked') : tc('runNow') }}
+            {{ runningAudit ? tc('running') : tc('runNow') }}
           </Button>
           <span v-if="quotaStats" class="quota-badge" :style="{ color: quotaStats.remaining <= 10 ? '#ff4d4f' : quotaStats.remaining <= 50 ? '#faad14' : undefined }">
             {{ tc('quotaRemaining').replace('{remaining}', String(quotaStats.remaining)).replace('{limit}', String(quotaStats.monthlyLimit)) }}
@@ -397,6 +459,44 @@ onMounted(async () => {
             {{ tc('nextAudit') }}: {{ formatDate(config?.nextAuditAt) }}
           </span>
         </div>
+
+        <Card :title="tc('manualTitle')" class="manual-audit-card" size="small">
+          <Alert
+            :message="tc('manualReadOnlyTitle')"
+            :description="tc('manualReadOnlyDescription')"
+            type="info"
+            show-icon
+          />
+          <div class="manual-audit-grid">
+            <div class="manual-audit-control">
+              <label>{{ tc('manualUrlLabel') }}</label>
+              <Input
+                v-model:value="manualTargetUrl"
+                :placeholder="tc('manualUrlPlaceholder')"
+                @press-enter="handleManualUrlAudit"
+              />
+              <span class="hint">{{ tc('manualUrlHint') }}</span>
+              <Button type="primary" :loading="runningManualAudit" @click="handleManualUrlAudit">
+                {{ tc('manualAnalyzeUrl') }}
+              </Button>
+            </div>
+            <div class="manual-audit-control">
+              <label>{{ tc('manualContentLabel') }}</label>
+              <Select
+                v-model:value="manualContentCmsId"
+                :options="manualContentOptions"
+                :placeholder="tc('manualContentPlaceholder')"
+                show-search
+                allow-clear
+                option-filter-prop="label"
+              />
+              <span class="hint">{{ tc('manualContentHint') }}</span>
+              <Button :loading="runningManualAudit" @click="handleSyncedContentAudit">
+                {{ tc('manualAnalyzeContent') }}
+              </Button>
+            </div>
+          </div>
+        </Card>
 
         <!-- metrics row -->
         <Row v-if="latestResult" :gutter="16" class="metrics-row">
@@ -513,6 +613,21 @@ onMounted(async () => {
           <div v-if="latestResult.status === 'failed' && latestResult.errorMessage" class="error-msg">
             {{ latestResult.errorMessage }}
           </div>
+        </Card>
+
+        <Card v-if="latestMetrics.length > 0" :title="tc('metricsBySource')" class="result-card" size="small">
+          <Table :data-source="latestMetrics" :pagination="false" size="small" row-key="id">
+            <a-table-column key="metricName" :title="tc('metric')" data-index="metricName" />
+            <a-table-column key="sourceType" :title="tc('source')" data-index="sourceType">
+              <template #default="{ record }">
+                {{ record.sourceType === 'lighthouse_lab' ? tc('sourceLighthouseLab') : record.sourceType === 'crux_field' ? tc('sourceCruxField') : record.sourceType }}
+              </template>
+            </a-table-column>
+            <a-table-column key="value" :title="tc('value')" data-index="value">
+              <template #default="{ record }">{{ record.value ?? tc('unavailable') }}</template>
+            </a-table-column>
+            <a-table-column key="status" :title="tc('status')" data-index="status" />
+          </Table>
         </Card>
 
         <!-- no results -->
@@ -716,6 +831,38 @@ onMounted(async () => {
 
 .history-card {
   margin-bottom: 20px;
+}
+
+.manual-audit-card {
+  margin-bottom: 20px;
+}
+
+.manual-audit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.manual-audit-control {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.manual-audit-control label {
+  font-weight: 600;
+}
+
+.manual-audit-control .hint {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .manual-audit-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .config-form {

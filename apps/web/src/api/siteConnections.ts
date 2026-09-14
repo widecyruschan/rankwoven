@@ -1,5 +1,6 @@
 export type SiteConnectionStatus = 'connected' | 'revoked';
-export type CmsPlatform = 'wordpress' | 'joomla' | 'opencart';
+export type CmsPlatform = 'wordpress' | 'joomla' | 'opencart' | 'manual';
+export type SiteConnectionMode = 'plugin' | 'api' | 'manual';
 export type SyncTaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'dead_letter';
 export type SyncTaskScope =
   | 'full'
@@ -26,6 +27,7 @@ export type SuggestionType =
 export interface SiteConnection {
   id: string;
   platform: CmsPlatform;
+  connectionMode: SiteConnectionMode;
   name: string;
   siteUrl: string;
   cmsVersion?: string;
@@ -42,6 +44,7 @@ export interface SiteConnection {
   tokenPreview: string;
   wordpressAdminUsername?: string;
   wordpressApplicationPasswordConfigured: boolean;
+  canWriteBack: boolean;
 }
 
 export interface SyncTask {
@@ -253,10 +256,21 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data;
 }
 
+function createIdempotencyKey() {
+  return globalThis.crypto?.randomUUID?.() ?? `rw-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export async function getSiteConnections() {
   return requestApi<{
     sites: SiteConnection[];
   }>('/api/v1/site-connections');
+}
+
+export async function createManualSite(input: { siteUrl: string; name?: string }) {
+  return requestApi<{ site: SiteConnection }>('/api/v1/site-connections/manual', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
 }
 
 /** GET /api/v1/site-connections/:siteId — fetch a single site connection */
@@ -614,7 +628,7 @@ export async function deleteSiteConnection(siteId: string): Promise<void> {
 
 export type SiteAuditSchedule = 'weekly' | 'monthly' | 'disabled';
 export type SiteAuditCrawlSource = 'website' | 'sitemap' | 'robots_txt';
-export type SiteAuditStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type SiteAuditStatus = 'queued' | 'running' | 'partial' | 'completed' | 'failed' | 'cancelled';
 export type SiteAuditIssueCategory =
   | 'meta_tags'
   | 'headings'
@@ -720,6 +734,151 @@ export async function getSiteAuditResultDetail(siteId: string, auditId: string) 
   return requestApi<SiteAuditResultWithIssues>(
     `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/results/${encodeURIComponent(auditId)}`
   );
+}
+
+export type AuditFindingStatus = 'open' | 'ignored' | 'fixed' | 'persisting' | 'regressed' | 'partial';
+export type AuditDisposition = 'fixed' | 'persisting' | 'regressed' | 'partial';
+
+export interface SiteAuditFinding {
+  id: string;
+  workspaceId: string;
+  siteId: string;
+  auditId: string;
+  pageId?: string;
+  fingerprint: string;
+  category: string;
+  severity: SiteAuditIssueSeverity;
+  title: string;
+  description: string;
+  evidence: Record<string, unknown>;
+  recommendation?: string;
+  status: AuditFindingStatus;
+  ignoredReason?: string;
+  ignoredUntil?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SiteAuditMetric {
+  metricName: string;
+  sourceType: 'lighthouse_lab' | 'crux_field' | 'gsc_first_party' | 'deterministic_check';
+  provider?: string;
+  device?: string;
+  window?: string;
+  value?: number;
+  status: 'available' | 'unavailable' | 'error';
+  estimated: boolean;
+  collectedAt: string;
+}
+
+export interface SiteAuditBundle {
+  audit: SiteAuditResult;
+  pages: Array<Record<string, unknown>>;
+  findings: SiteAuditFinding[];
+  rechecks: Array<Record<string, unknown>>;
+  metrics: SiteAuditMetric[];
+  partialReasons: string[];
+}
+
+export interface ManualSiteAuditResult {
+  bundle?: SiteAuditBundle;
+  target:
+    | { kind: 'manual_url'; url: string }
+    | { kind: 'synced_content'; cmsId: string; contentType: 'post' | 'product'; url: string };
+  writebackEnabled: false;
+}
+
+export async function runSiteAuditMonitoring(siteId: string, pageLimit?: number) {
+  return requestApi<SiteAuditBundle>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/runs`,
+    { method: 'POST', headers: { 'Idempotency-Key': createIdempotencyKey() }, body: JSON.stringify({ pageLimit }) }
+  );
+}
+
+export async function runManualSiteAudit(
+  siteId: string,
+  input: { targetUrl: string } | { contentCmsId: string }
+) {
+  return requestApi<ManualSiteAuditResult>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/site-audit/manual-runs`,
+    { method: 'POST', headers: { 'Idempotency-Key': createIdempotencyKey() }, body: JSON.stringify(input) }
+  );
+}
+
+export async function getSiteAuditMonitoringRun(runId: string) {
+  return requestApi<SiteAuditBundle>(`/api/v1/site-audit/runs/${encodeURIComponent(runId)}`);
+}
+
+export async function ignoreSiteAuditFinding(findingId: string, reason: string, until?: string) {
+  return requestApi<{ finding: SiteAuditFinding }>(
+    `/api/v1/site-audit/findings/${encodeURIComponent(findingId)}/ignore`,
+    { method: 'POST', headers: { 'Idempotency-Key': createIdempotencyKey() }, body: JSON.stringify({ reason, until }) }
+  );
+}
+
+export async function recheckSiteAuditFinding(findingId: string, found: boolean, partial = false) {
+  return requestApi<{ finding: SiteAuditFinding; recheck: { disposition: AuditDisposition } }>(
+    `/api/v1/site-audit/findings/${encodeURIComponent(findingId)}/recheck`,
+    { method: 'POST', headers: { 'Idempotency-Key': createIdempotencyKey() }, body: JSON.stringify({ found, partial }) }
+  );
+}
+
+export interface MonitorEvent {
+  id: string;
+  siteId: string;
+  configId: string;
+  fingerprint: string;
+  eventType: string;
+  severity: 'info' | 'warning' | 'critical';
+  baseline?: number;
+  currentValue?: number;
+  delta?: number;
+  sourceType: string;
+  recommendation?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function createSiteMonitor(input: {
+  siteId: string;
+  kind: 'competitor' | 'ai_visibility' | 'technical';
+  targetUrl?: string;
+  frequency?: 'daily' | 'weekly' | 'monthly';
+  timezone?: string;
+  threshold?: number;
+  quietPeriodMinutes?: number;
+}) {
+  return requestApi<{ monitor: Record<string, unknown> }>('/api/v1/monitors', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function getMonitorEvents(siteId?: string, page = 1, pageSize = 20) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (siteId) params.set('siteId', siteId);
+  return requestApi<{ items: MonitorEvent[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>(`/api/v1/monitor-events?${params.toString()}`);
+}
+
+export interface MonitoringAlert {
+  id: string;
+  eventId: string;
+  channel: 'in_app' | 'queue' | 'email';
+  status: 'queued' | 'read' | 'muted' | 'sent';
+  mutedUntil?: string;
+  sentAt?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export async function getMonitoringAlerts(page = 1, pageSize = 20) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return requestApi<{ items: MonitoringAlert[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>(`/api/v1/alerts?${params.toString()}`);
+}
+
+export async function muteAlert(alertId: string) {
+  return requestApi<{ alert: Record<string, unknown> }>(`/api/v1/alerts/${encodeURIComponent(alertId)}/mute`, { method: 'POST', headers: { 'Idempotency-Key': createIdempotencyKey() } });
 }
 
 // ── Admin SerpApi Usage ──────────────────────────────────────────────────────

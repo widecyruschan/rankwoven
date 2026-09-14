@@ -1,7 +1,7 @@
 import type { TextGenerationProvider, TextGenerationResult } from '@aieo/ai-providers';
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
-import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
+import { createInMemorySiteConnectionRepository, normalizeWordPressGmtTimestamp } from '../src/siteConnections';
 import { createInMemorySeoOptimizationRepository } from '../src/seoOptimization';
 
 interface CreateSiteConnectionResponse {
@@ -134,6 +134,10 @@ function createStubTextProvider(rewriteHandler: (request: { title?: string; html
 }
 
 describe('site connection routes', () => {
+  it('treats WordPress GMT values without a timezone suffix as UTC', () => {
+    expect(normalizeWordPressGmtTimestamp('2026-01-01T00:30:00')).toBe('2026-01-01T00:30:00.000Z');
+    expect(normalizeWordPressGmtTimestamp('2026-01-01T00:30:00Z')).toBe('2026-01-01T00:30:00.000Z');
+  });
   it('rejects unauthenticated site connection creation', async () => {
     const server = createServer({ siteConnectionRepository: createInMemorySiteConnectionRepository() });
     const response = await server.inject({

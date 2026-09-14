@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
 import { getBearerToken, requireAuth, type AuthService } from './auth';
+import { fetchAhrefsSiteAuditReport, type AhrefsSiteAuditIssue, type AhrefsSiteAuditReport } from './ahrefsSiteAudit';
+import { apiConfig } from './config';
 import type {
   SiteConnectionRepository,
   SyncedArticle,
@@ -30,6 +32,7 @@ export interface SeoAudit {
   status: 'completed';
   score: number;
   rulesVersion: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -45,7 +48,21 @@ export interface SeoAuditIssue {
   currentValue?: string;
   suggestedValue?: string;
   fieldName: string;
+  source?: 'rankwoven' | 'ahrefs';
+  category?: string;
+  affectedPages?: number;
+  change?: number;
+  metadata?: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface AhrefsSiteAuditProjectConfig {
+  siteId: string;
+  enabled: boolean;
+  projectId: string;
+  crawlDate?: string;
+  comparisonDate?: string;
+  updatedAt: string;
 }
 
 export interface OptimizationSuggestion {
@@ -111,6 +128,11 @@ export interface SeoOptimizationRepository {
   ): Promise<{ audit: SeoAudit; issues: SeoAuditIssue[] }>;
   listAudits(siteId: string): Promise<SeoAudit[]>;
   listIssues(auditId: string): Promise<SeoAuditIssue[]>;
+  getAhrefsSiteAuditConfig(siteId: string): Promise<AhrefsSiteAuditProjectConfig | undefined>;
+  upsertAhrefsSiteAuditConfig(
+    siteId: string,
+    input: Omit<AhrefsSiteAuditProjectConfig, 'siteId' | 'updatedAt'>
+  ): Promise<AhrefsSiteAuditProjectConfig>;
   createSuggestion(siteId: string, input: CreateSuggestionInput, auditIssueId?: string): Promise<OptimizationSuggestion>;
   listSuggestions(siteId: string, options?: ListSuggestionOptions): Promise<OptimizationSuggestion[]>;
   findSuggestion(siteId: string, suggestionId: string): Promise<OptimizationSuggestion | undefined>;
@@ -243,6 +265,13 @@ const internalLinkGenerationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)
 });
 
+const ahrefsSiteAuditConfigSchema = z.object({
+  enabled: z.boolean(),
+  projectId: z.string().trim().min(1).max(80),
+  crawlDate: z.string().datetime().optional(),
+  comparisonDate: z.string().datetime().optional()
+});
+
 const defaultRulesVersion = '2026-08-04.image-context-1';
 const auditBatchSize = 100;
 
@@ -253,6 +282,7 @@ CREATE TABLE IF NOT EXISTS seo_audits (
   status text NOT NULL CHECK (status IN ('completed')),
   score integer NOT NULL CHECK (score >= 0 AND score <= 100),
   rules_version varchar(80) NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -271,11 +301,32 @@ CREATE TABLE IF NOT EXISTS seo_audit_issues (
   current_value text,
   suggested_value text,
   field_name varchar(80) NOT NULL,
+  source varchar(40) NOT NULL DEFAULT 'rankwoven',
+  category varchar(80),
+  affected_pages integer,
+  change_count integer,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_seo_audit_issues_site_target
   ON seo_audit_issues(site_id, target_type, target_cms_id);
+
+CREATE TABLE IF NOT EXISTS ahrefs_site_audit_configs (
+  site_id uuid PRIMARY KEY REFERENCES site_connections(id) ON DELETE CASCADE,
+  enabled boolean NOT NULL DEFAULT false,
+  project_id varchar(80) NOT NULL,
+  crawl_date timestamptz,
+  comparison_date timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE seo_audits ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE seo_audit_issues ADD COLUMN IF NOT EXISTS source varchar(40) NOT NULL DEFAULT 'rankwoven';
+ALTER TABLE seo_audit_issues ADD COLUMN IF NOT EXISTS category varchar(80);
+ALTER TABLE seo_audit_issues ADD COLUMN IF NOT EXISTS affected_pages integer;
+ALTER TABLE seo_audit_issues ADD COLUMN IF NOT EXISTS change_count integer;
+ALTER TABLE seo_audit_issues ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS optimization_suggestions (
   id uuid PRIMARY KEY,
@@ -352,6 +403,7 @@ function mapAuditRow(row: QueryResultRow): SeoAudit {
     status: row.status,
     score: Number(row.score),
     rulesVersion: row.rules_version,
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : undefined,
     createdAt: toIsoString(row.created_at) ?? ''
   };
 }
@@ -369,7 +421,23 @@ function mapIssueRow(row: QueryResultRow): SeoAuditIssue {
     currentValue: row.current_value ?? undefined,
     suggestedValue: row.suggested_value ?? undefined,
     fieldName: row.field_name,
+    source: row.source === 'ahrefs' ? 'ahrefs' : 'rankwoven',
+    category: row.category ?? undefined,
+    affectedPages: row.affected_pages === null || row.affected_pages === undefined ? undefined : Number(row.affected_pages),
+    change: row.change_count === null || row.change_count === undefined ? undefined : Number(row.change_count),
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : undefined,
     createdAt: toIsoString(row.created_at) ?? ''
+  };
+}
+
+function mapAhrefsSiteAuditConfigRow(row: QueryResultRow): AhrefsSiteAuditProjectConfig {
+  return {
+    siteId: row.site_id,
+    enabled: Boolean(row.enabled),
+    projectId: row.project_id,
+    crawlDate: toIsoString(row.crawl_date),
+    comparisonDate: toIsoString(row.comparison_date),
+    updatedAt: toIsoString(row.updated_at) ?? ''
   };
 }
 
@@ -583,6 +651,142 @@ async function buildSeoIssues(
   }
 
   return issues;
+}
+
+type NewSeoAuditIssue = Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>;
+
+function getConfiguredAhrefsSiteAuditRequest(siteConfig?: AhrefsSiteAuditProjectConfig) {
+  const isSiteConfigEnabled = siteConfig?.enabled === true;
+  const isEnvironmentConfigEnabled = apiConfig.AHREFS_SITE_AUDIT_ENABLED;
+  const projectId = siteConfig?.projectId ?? apiConfig.AHREFS_SITE_AUDIT_PROJECT_ID;
+  const crawlDate = siteConfig?.crawlDate ?? apiConfig.AHREFS_SITE_AUDIT_CRAWL_DATE;
+  const comparisonDate = siteConfig?.comparisonDate ?? apiConfig.AHREFS_SITE_AUDIT_COMPARISON_DATE;
+  if (
+    (!isSiteConfigEnabled && !isEnvironmentConfigEnabled) ||
+    !apiConfig.AHREFS_API_KEY ||
+    !apiConfig.AHREFS_SITE_AUDIT_API_URL ||
+    !projectId
+  ) {
+    return undefined;
+  }
+  return {
+    apiUrl: apiConfig.AHREFS_SITE_AUDIT_API_URL,
+    apiKey: apiConfig.AHREFS_API_KEY,
+    projectId,
+    crawlDate,
+    comparisonDate
+  };
+}
+
+function mapAhrefsSeverity(severity: AhrefsSiteAuditIssue['severity']): IssueSeverity {
+  if (severity === 'error') return 'high';
+  if (severity === 'warning') return 'medium';
+  return 'low';
+}
+
+function slugifyAhrefsIssueId(value: string) {
+  return value
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48)
+    .toUpperCase() || 'UNNAMED';
+}
+
+function createAhrefsAuditIssue(issue: AhrefsSiteAuditIssue, recommendation: string, recommendationSource: 'ai' | 'deterministic'): NewSeoAuditIssue {
+  return {
+    targetType: 'article',
+    targetCmsId: '0',
+    ruleCode: `AHREFS_${slugifyAhrefsIssueId(issue.id)}`,
+    severity: mapAhrefsSeverity(issue.severity),
+    message: issue.title,
+    currentValue: String(issue.affectedPages),
+    suggestedValue: recommendation,
+    fieldName: 'siteAudit',
+    source: 'ahrefs',
+    category: issue.category,
+    affectedPages: issue.affectedPages,
+    change: issue.change,
+    metadata: {
+      provider: 'ahrefs',
+      providerSeverity: issue.severity,
+      recommendationSource,
+      providerIssueId: issue.id
+    }
+  };
+}
+
+function parseAiRecommendationMap(value: string): Map<string, string> {
+  const objectText = extractJsonObject(value);
+  try {
+    const parsed = JSON.parse(objectText) as { recommendations?: unknown };
+    const records = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+    const result = new Map<string, string>();
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      const item = record as Record<string, unknown>;
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      const recommendation = normalizeAiTextValue(item.recommendation, 500);
+      if (id && recommendation) result.set(id, recommendation);
+    }
+    return result;
+  } catch {
+    return new Map();
+  }
+}
+
+async function generateAhrefsAiRecommendations(
+  report: AhrefsSiteAuditReport,
+  options: BuildSeoIssueOptions
+) {
+  if (!options.textProvider || report.issues.length === 0) return new Map<string, string>();
+  const issues = report.issues.slice(0, 12).map((issue) => ({
+    id: issue.id,
+    issue: issue.title,
+    severity: issue.severity,
+    category: issue.category,
+    affectedPages: issue.affectedPages,
+    change: issue.change
+  }));
+  try {
+    const response = await options.textProvider.rewriteContent({
+      siteId: options.siteId,
+      userId: options.userId,
+      locale: options.locale ?? 'zh-Hant',
+      promptVersion: '2026-09-14.ahrefs-site-audit-recommendation-v1',
+      title: 'Return JSON only as {"recommendations":[{"id":"...","recommendation":"..."}]}. ' +
+        'Act as an SEO technical reviewer. For each supplied Ahrefs issue, write one concise Traditional Chinese remediation step. ' +
+        'Do not claim you inspected unprovided URLs, do not invent metrics, do not include credentials or commands that delete data, and clearly state when the fix requires hosting, redirects, robots, or sitemap review instead of content editing.',
+      html: JSON.stringify({ projectId: report.projectId, crawlDate: report.crawlDate, issues })
+    });
+    return parseAiRecommendationMap(response.text);
+  } catch {
+    return new Map<string, string>();
+  }
+}
+
+async function buildAhrefsSiteAuditIssues(options: BuildSeoIssueOptions, siteConfig?: AhrefsSiteAuditProjectConfig) {
+  const request = getConfiguredAhrefsSiteAuditRequest(siteConfig);
+  if (!request) return { report: undefined, issues: [] as NewSeoAuditIssue[], errorCode: undefined };
+  try {
+    const report = await fetchAhrefsSiteAuditReport(request);
+    const aiRecommendations = await generateAhrefsAiRecommendations(report, options);
+    const issues = report.issues.map((issue) => {
+      const aiRecommendation = aiRecommendations.get(issue.id);
+      return createAhrefsAuditIssue(issue, aiRecommendation ?? issue.recommendation, aiRecommendation ? 'ai' : 'deterministic');
+    });
+    return { report, issues, errorCode: undefined };
+  } catch (error) {
+    const errorCode = error instanceof Error && /^AHREFS_SITE_AUDIT_/.test(error.message)
+      ? error.message
+      : 'AHREFS_SITE_AUDIT_UNAVAILABLE';
+    return { report: undefined, issues: [] as NewSeoAuditIssue[], errorCode };
+  }
+}
+
+function calculateRankWovenAuditScore(issues: NewSeoAuditIssue[]) {
+  const weights: Record<IssueSeverity, number> = { high: 12, medium: 6, low: 2 };
+  const penalty = issues.reduce((total, issue) => total + weights[issue.severity], 0);
+  return Math.max(0, 100 - Math.min(100, penalty));
 }
 
 function normalizeInternalLinkTerms(values: string[]) {
@@ -2099,9 +2303,14 @@ function removeExistingActionableSuggestions(
   }
 }
 
+function canCreateAuditSuggestion(issue: SeoAuditIssue) {
+  return Boolean(issue.suggestedValue) && issue.source !== 'ahrefs' && issue.targetCmsId !== '0';
+}
+
 export function createInMemorySeoOptimizationRepository(): SeoOptimizationRepository {
   const audits = new Map<string, SeoAudit>();
   const issues = new Map<string, SeoAuditIssue>();
+  const ahrefsSiteAuditConfigs = new Map<string, AhrefsSiteAuditProjectConfig>();
   const suggestions = new Map<string, OptimizationSuggestion>();
   const applySnapshots = new Map<string, ApplySnapshot>();
 
@@ -2124,7 +2333,7 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
       audits.set(audit.id, audit);
       for (const issue of savedIssues) {
         issues.set(issue.id, issue);
-        if (issue.suggestedValue) {
+        if (canCreateAuditSuggestion(issue)) {
           removeExistingActionableSuggestions(
             suggestions,
             siteId,
@@ -2147,6 +2356,18 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
     },
     async listIssues(auditId) {
       return Array.from(issues.values()).filter((issue) => issue.auditId === auditId);
+    },
+    async getAhrefsSiteAuditConfig(siteId) {
+      return ahrefsSiteAuditConfigs.get(siteId);
+    },
+    async upsertAhrefsSiteAuditConfig(siteId, input) {
+      const config: AhrefsSiteAuditProjectConfig = {
+        siteId,
+        ...input,
+        updatedAt: new Date().toISOString()
+      };
+      ahrefsSiteAuditConfigs.set(siteId, config);
+      return config;
     },
     async createSuggestion(siteId, input, auditIssueId) {
       removeExistingActionableSuggestions(
@@ -2311,11 +2532,11 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
       await client.query('BEGIN');
       const auditResult = await client.query(
         `
-          INSERT INTO seo_audits (id, site_id, status, score, rules_version)
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO seo_audits (id, site_id, status, score, rules_version, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6::jsonb)
           RETURNING *
         `,
-        [crypto.randomUUID(), siteId, auditInput.status, auditInput.score, auditInput.rulesVersion]
+        [crypto.randomUUID(), siteId, auditInput.status, auditInput.score, auditInput.rulesVersion, JSON.stringify(auditInput.metadata ?? {})]
       );
       const audit = mapAuditRow(auditResult.rows[0]);
       const savedIssues: SeoAuditIssue[] = [];
@@ -2325,9 +2546,10 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
           `
             INSERT INTO seo_audit_issues (
               id, audit_id, site_id, target_type, target_cms_id, rule_code, severity,
-              message, current_value, suggested_value, field_name
+              message, current_value, suggested_value, field_name, source, category,
+              affected_pages, change_count, metadata
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
             RETURNING *
           `,
           [
@@ -2341,20 +2563,25 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
             issueInput.message,
             issueInput.currentValue ?? null,
             issueInput.suggestedValue ?? null,
-            issueInput.fieldName
+            issueInput.fieldName,
+            issueInput.source ?? 'rankwoven',
+            issueInput.category ?? null,
+            issueInput.affectedPages ?? null,
+            issueInput.change ?? null,
+            JSON.stringify(issueInput.metadata ?? {})
           ]
         );
         const issue = mapIssueRow(issueResult.rows[0]);
         savedIssues.push(issue);
 
-        if (issue.suggestedValue) {
+        if (canCreateAuditSuggestion(issue)) {
           await this.insertSuggestion(client, siteId, {
             targetType: issue.targetType,
             targetCmsId: issue.targetCmsId,
             suggestionType: toSuggestionType(issue),
             fieldName: issue.fieldName,
             currentValue: issue.currentValue,
-            suggestedValue: issue.suggestedValue
+            suggestedValue: issue.suggestedValue!
           }, issue.id);
         }
       }
@@ -2396,6 +2623,32 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
       [auditId]
     );
     return result.rows.map(mapIssueRow);
+  }
+
+  async getAhrefsSiteAuditConfig(siteId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query('SELECT * FROM ahrefs_site_audit_configs WHERE site_id = $1', [siteId]);
+    return result.rows[0] ? mapAhrefsSiteAuditConfigRow(result.rows[0]) : undefined;
+  }
+
+  async upsertAhrefsSiteAuditConfig(
+    siteId: string,
+    input: Omit<AhrefsSiteAuditProjectConfig, 'siteId' | 'updatedAt'>
+  ) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      `INSERT INTO ahrefs_site_audit_configs (site_id, enabled, project_id, crawl_date, comparison_date)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (site_id) DO UPDATE SET
+         enabled = EXCLUDED.enabled,
+         project_id = EXCLUDED.project_id,
+         crawl_date = EXCLUDED.crawl_date,
+         comparison_date = EXCLUDED.comparison_date,
+         updated_at = now()
+       RETURNING *`,
+      [siteId, input.enabled, input.projectId, input.crawlDate ?? null, input.comparisonDate ?? null]
+    );
+    return mapAhrefsSiteAuditConfigRow(result.rows[0]);
   }
 
   async createSuggestion(siteId: string, input: CreateSuggestionInput, auditIssueId?: string) {
@@ -2846,6 +3099,18 @@ async function ensureSiteTokenOrWorkspaceAccess(
   return site;
 }
 
+function ensureSiteCanWriteBack(reply: FastifyReply, site: { connectionMode: string }) {
+  if (site.connectionMode === 'manual') {
+    reply.status(403).send({
+      success: false,
+      message: '手動加入的站點只提供分析與修復建議，請自行在網站後台修改。',
+      error: { code: 'CMS_WRITEBACK_NOT_AVAILABLE' }
+    });
+    return false;
+  }
+  return true;
+}
+
 async function listAllArticlesForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
   const articles: SyncedArticle[] = [];
   let page = 1;
@@ -3130,19 +3395,38 @@ export function registerSeoOptimizationRoutes(
 
       const articles = await listAllArticlesForAudit(siteRepository, site.id);
       const media = await listAllMediaForAudit(siteRepository, site.id);
-      const issues = await buildSeoIssues(articles, media, {
+      const auditOptions = {
         siteId: site.id,
         userId: site.id,
         locale: 'zh-Hant',
         textProvider
-      });
-      const score = Math.max(0, 100 - issues.length * 8);
+      } satisfies BuildSeoIssueOptions;
+      const localIssues = await buildSeoIssues(articles, media, auditOptions);
+      const ahrefsSiteAuditConfig = await seoRepository.getAhrefsSiteAuditConfig(site.id);
+      const ahrefs = await buildAhrefsSiteAuditIssues(auditOptions, ahrefsSiteAuditConfig);
+      const issues = [...localIssues, ...ahrefs.issues];
+      const score = ahrefs.report?.healthScore ?? calculateRankWovenAuditScore(issues);
       const result = await seoRepository.saveAudit(
         site.id,
         {
           status: 'completed',
           score,
-          rulesVersion: defaultRulesVersion
+          rulesVersion: ahrefs.report ? '2026-09-14.ahrefs-site-audit-v1' : defaultRulesVersion,
+          metadata: {
+            healthScoreSource: ahrefs.report?.healthScore === undefined ? 'rankwoven_deterministic' : 'ahrefs',
+            ahrefs: ahrefs.report
+              ? {
+                  projectId: ahrefs.report.projectId,
+                  crawlDate: ahrefs.report.crawlDate,
+                  comparisonDate: ahrefs.report.comparisonDate,
+                  crawledUrls: ahrefs.report.crawledUrls,
+                  issueCount: ahrefs.report.issues.length,
+                  rawResponseHash: ahrefs.report.rawResponseHash,
+                  collectedAt: ahrefs.report.collectedAt
+                }
+              : undefined,
+            ahrefsErrorCode: ahrefs.errorCode
+          }
         },
         issues
       );
@@ -3179,6 +3463,58 @@ export function registerSeoOptimizationRoutes(
           audits,
           issues: latestAudit ? await seoRepository.listIssues(latestAudit.id) : []
         }
+      };
+    }
+  );
+
+  app.get<{ Params: { siteId: string } }>(
+    '/api/v1/site-connections/:siteId/ahrefs-site-audit/config',
+    async (request, reply) => {
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
+      if (!site) return reply;
+
+      const config = await seoRepository.getAhrefsSiteAuditConfig(site.id);
+      return {
+        success: true,
+        message: '操作成功',
+        data: {
+          config: config ?? {
+            siteId: site.id,
+            enabled: false,
+            projectId: '',
+            updatedAt: ''
+          }
+        }
+      };
+    }
+  );
+
+  app.put<{ Params: { siteId: string } }>(
+    '/api/v1/site-connections/:siteId/ahrefs-site-audit/config',
+    async (request, reply) => {
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
+      if (!site) return reply;
+
+      const parsed = ahrefsSiteAuditConfigSchema.safeParse(request.body);
+      if (!parsed.success) return validationError(reply, parsed.error);
+
+      const config = await seoRepository.upsertAhrefsSiteAuditConfig(site.id, parsed.data);
+      return {
+        success: true,
+        message: 'Ahrefs Site Audit 設定已儲存',
+        data: { config }
       };
     }
   );
@@ -3612,6 +3948,9 @@ export function registerSeoOptimizationRoutes(
       if (!site) {
         return reply;
       }
+      if (!ensureSiteCanWriteBack(reply, site)) {
+        return reply;
+      }
 
       let suggestion = await seoRepository.findSuggestion(site.id, request.params.suggestionId);
       if (!suggestion) {
@@ -3682,6 +4021,9 @@ export function registerSeoOptimizationRoutes(
         request.params.siteId
       );
       if (!site) {
+        return reply;
+      }
+      if (!ensureSiteCanWriteBack(reply, site)) {
         return reply;
       }
 
@@ -3772,6 +4114,9 @@ export function registerSeoOptimizationRoutes(
         request.params.siteId
       );
       if (!site) {
+        return reply;
+      }
+      if (!ensureSiteCanWriteBack(reply, site)) {
         return reply;
       }
 

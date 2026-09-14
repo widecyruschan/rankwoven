@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { ColumnsType } from 'ant-design-vue/es/table';
 import type { EChartsOption } from 'echarts';
@@ -8,10 +9,12 @@ import { getAnalyticsOverview, type AnalyticsOverview } from '../api/appInsights
 import { getSiteConnections, type SiteConnection } from '../api/siteConnections';
 
 const { t } = useI18n();
+const route = useRoute();
 
 const overview = ref<AnalyticsOverview | null>(null);
 const sites = ref<SiteConnection[]>([]);
 const selectedSiteId = ref('');
+const routedSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
 const startDate = ref(getDateOffsetValue(6));
 const endDate = ref(getDateOffsetValue(0));
 const isLoading = ref(false);
@@ -114,11 +117,9 @@ async function loadAnalytics() {
 async function loadSites() {
   const result = await getSiteConnections();
   sites.value = result.sites;
-  const hasSelectedSite = sites.value.some((site) => site.id === selectedSiteId.value);
-
-  if (!hasSelectedSite && sites.value.length > 0) {
-    selectedSiteId.value = sites.value[0].id;
-  }
+  selectedSiteId.value = sites.value.some((site) => site.id === routedSiteId.value)
+    ? routedSiteId.value
+    : selectedSiteId.value || sites.value[0]?.id || '';
 }
 
 async function loadAnalyticsPage() {
@@ -144,6 +145,13 @@ function getDateOffsetValue(daysAgo: number) {
 onMounted(() => {
   void loadAnalyticsPage();
 });
+
+watch(routedSiteId, (siteId) => {
+  if (siteId && siteId !== selectedSiteId.value) {
+    selectedSiteId.value = siteId;
+    void loadAnalytics();
+  }
+});
 </script>
 
 <template>
@@ -155,6 +163,7 @@ onMounted(() => {
       </div>
       <div class="analytics-filter-row">
         <a-select
+          v-if="!routedSiteId"
           v-model:value="selectedSiteId"
           class="analytics-site-select"
           :options="siteOptions"

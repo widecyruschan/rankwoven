@@ -39,7 +39,7 @@ export interface SiteAuditConfig {
 export interface SiteAuditResult {
   id: string;
   siteId: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'partial' | 'completed' | 'failed' | 'cancelled';
   overallScore?: number;
   pagesCrawled: number;
   pagesIndexed: number;

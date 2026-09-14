@@ -26,12 +26,14 @@ import ThemeSwitcher from './components/ThemeSwitcher.vue';
 import { getBreadcrumbRoutes, getNavigationGroups, getRoutePath } from './constants/routeRegistry';
 import { useTheme } from './composables/useTheme';
 import { useAuthStore } from './stores/auth';
+import { useSiteStore } from './stores/site';
 
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
 const { isDark } = useTheme();
 const authStore = useAuthStore();
+const siteStore = useSiteStore();
 const isNavigationOpen = ref(false);
 const rankwovenLogoSource = computed(() => (isDark.value ? rankwovenLogoDark : rankwovenLogo));
 
@@ -50,7 +52,11 @@ const currentTitle = computed(() => t(String(route.meta.titleKey ?? 'nav.dashboa
 const currentLayout = computed(() => String(route.meta.layout ?? 'app'));
 const isMarketingLayout = computed(() => currentLayout.value === 'marketing');
 const isAdminLayout = computed(() => currentLayout.value === 'admin');
-const currentSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
+const currentSiteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : siteStore.selectedSiteId);
+const siteOptions = computed(() => siteStore.sites.map((site) => ({
+  value: site.id,
+  label: `${site.name || site.siteUrl}${site.connectionMode === 'manual' ? ` (${t('sites.manualMode')})` : ''}`
+})));
 const navigationGroups = computed(() => getNavigationGroups(isAdminLayout.value ? 'admin_sidebar' : 'customer_sidebar')
   .map((group) => ({ ...group, routes: group.routes.filter((item) => item.siteScope !== 'required' || Boolean(currentSiteId.value)) }))
   .filter((group) => group.routes.length > 0));
@@ -68,6 +74,32 @@ function navigationPath(routeId: string, siteScoped = false) {
   return siteScoped && currentSiteId.value ? getRoutePath(routeId, { siteId: currentSiteId.value }) : getRoutePath(routeId);
 }
 
+async function refreshSiteContext() {
+  if (!authStore.isLoggedIn || isAdminLayout.value || isMarketingLayout.value) return;
+  try {
+    await siteStore.refreshSites();
+    const routeSiteId = typeof route.params.siteId === 'string' ? route.params.siteId : '';
+    if (routeSiteId && siteStore.sites.some((site) => site.id === routeSiteId)) {
+      siteStore.selectSite(routeSiteId);
+    }
+  } catch {
+    siteStore.clear();
+  }
+}
+
+function changeCurrentSite(siteId: string) {
+  siteStore.selectSite(siteId);
+  const currentRouteId = typeof route.meta.routeId === 'string' ? route.meta.routeId : '';
+  const destinationId = route.meta.siteScope === 'required' ? currentRouteId : 'app-site-audit-scoped';
+  void router.push(getRoutePath(destinationId, { siteId }));
+}
+
+function navigationGroupLabel(group: string) {
+  const key = `navigationGroups.${group}`;
+  const translated = String(t(key));
+  return translated === key ? String(t('navigationGroups.default')) : translated;
+}
+
 watch(
   locale,
   (value) => {
@@ -76,6 +108,27 @@ watch(
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => authStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      void refreshSiteContext();
+    } else {
+      siteStore.clear();
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => route.params.siteId,
+  (siteId) => {
+    if (typeof siteId === 'string' && siteId && siteId !== siteStore.selectedSiteId) {
+      siteStore.selectSite(siteId);
+    }
+  }
 );
 
 function toggleNavigation() {
@@ -149,7 +202,7 @@ function logout() {
         @click="navigateToMenuItem"
       >
         <template v-for="group in navigationGroups" :key="group.group">
-          <a-menu-item-group :title="t(`navigationGroups.${group.group}`)">
+          <a-menu-item-group :title="navigationGroupLabel(group.group)">
             <a-menu-item v-for="item in group.routes" :key="navigationPath(item.id, item.siteScope === 'required')">
               <template #icon>
                 <component :is="navigationIcons[item.id as keyof typeof navigationIcons] ?? LayoutDashboard" :size="17" aria-hidden="true" />
@@ -174,6 +227,15 @@ function logout() {
           </a-breadcrumb>
         </div>
         <div class="topbar-actions">
+          <a-select
+            v-if="!isAdminLayout && siteOptions.length > 0"
+            class="global-site-switcher"
+            :value="siteStore.selectedSiteId"
+            :options="siteOptions"
+            :loading="siteStore.isLoading"
+            :placeholder="t('sites.selectSite')"
+            @change="changeCurrentSite"
+          />
           <RouterLink class="icon-link-button" :to="getRoutePath('marketing-home')">
             {{ t('app.publicSite') }}
           </RouterLink>
