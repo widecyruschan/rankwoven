@@ -20,6 +20,12 @@ export interface KeywordGap {
   competitorBestRank?: number;
 }
 
+export interface KeywordResearchRunState {
+  status: string;
+  progress: number;
+  errorCode?: string;
+}
+
 function getToken() {
   try {
     return JSON.parse(localStorage.getItem(authStorageKey) ?? '{}').token as string | undefined;
@@ -54,8 +60,17 @@ export async function runCompetitorResearch(projectId: string, competitorDomain:
   });
 }
 
-export function getResearchRun(runId: string) {
-  return request<{ status: string; progress: number }>(`/api/v1/keyword-research/runs/${runId}`, { method: 'GET' });
+export async function getResearchRun(runId: string): Promise<KeywordResearchRunState> {
+  const detail = await request<{
+    run: { status: string; partialReason?: string };
+    task?: { status: string; progress: number; errorCode?: string };
+  }>(`/api/v1/keyword-research/runs/${runId}`, { method: 'GET' });
+  const task = detail.task;
+  return {
+    status: task?.status ?? detail.run.status,
+    progress: task?.progress ?? (detail.run.status === 'completed' ? 100 : 0),
+    errorCode: task?.errorCode ?? detail.run.partialReason
+  };
 }
 
 export function getResearchKeywords(projectId: string) {

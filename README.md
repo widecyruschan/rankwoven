@@ -6475,3 +6475,43 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 
 - 在已連接的生產站點選擇一篇文章或商品，驗證真實公開頁面的只讀檢測結果與人工修復流程。
 - 使用者明確授權後才提交、推送或部署。
+
+## 會話總結（2026-09-15）— 競品關鍵詞研究 Provider 修復
+
+### 會話主要目的
+
+修復競品關鍵詞研究任務失敗，並讓前端正確顯示背景任務的安全錯誤原因。
+
+### 完成的主要任務
+
+- 專案型關鍵詞研究在既有 `generic` 設定直接指向 DataForSEO 時，自動選用 DataForSEO 的排名關鍵詞端點。
+- 移除 Ahrefs Keyword Explorer overview 設定作為競品研究 fallback，避免向不相容的路徑發出請求。
+- 前端輪詢改為讀取 API 回傳的 `run`／`task` 實際層級，保留安全的 Provider 錯誤碼。
+- 補齊繁體中文與英文的驗證失敗、速率限制、逾時與無效回應提示。
+- 新增 generic DataForSEO URL 的 Provider 選擇回歸測試。
+
+### 關鍵決策和解決方案
+
+- Ahrefs 保持供既有單關鍵詞指標與 Site Audit 功能使用，但不再被錯誤地用作競品排名關鍵詞 Provider。
+- 未進行真實 DataForSEO 呼叫，以避免在非必要驗證時產生成本；以 Provider 合約測試與 API／Worker 建置驗證資料流。
+
+### 新增或修改文件
+
+- `packages/ai-providers/src/keywordResearch.ts`
+- `packages/ai-providers/tests/keywordResearch.test.ts`
+- `apps/api/src/keywordResearchService.ts`
+- `apps/worker/src/index.ts`
+- `apps/web/src/api/keywordResearch.ts`
+- `apps/web/src/views/KeywordResearchView.vue`
+- `apps/web/src/i18n.ts`
+- `README.md`
+
+### 驗證結果
+
+- DataForSEO Provider 合約測試 4 項通過。
+- API 關鍵詞研究／健康測試 21 項通過；Worker 研究任務測試 11 項通過。
+- API、Worker、Web TypeScript 建置與 lint 通過。
+
+### 下一步行動清單
+
+- 推送並部署後，以已連接站點在客戶後台提交一次競品研究，確認 DataForSEO 返回排名與長尾關鍵詞。

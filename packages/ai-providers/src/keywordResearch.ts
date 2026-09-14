@@ -23,6 +23,27 @@ function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/+$/, '');
 }
 
+/**
+ * The established generic metric configuration may point directly to DataForSEO.
+ * Project-based research must retain that compatibility without falling back to
+ * an unrelated Ahrefs Keyword Explorer overview endpoint.
+ */
+export function isDataForSeoKeywordResearchConfiguration(
+  provider: string | undefined,
+  baseUrl: string | undefined,
+  apiKey: string | undefined
+) {
+  if (!baseUrl || !apiKey) return false;
+  if (provider === 'dataforseo') return true;
+  if (provider !== 'generic') return false;
+
+  try {
+    return new URL(baseUrl).hostname.toLowerCase() === 'api.dataforseo.com';
+  } catch {
+    return false;
+  }
+}
+
 function normalizeKeyword(value: unknown) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
 }

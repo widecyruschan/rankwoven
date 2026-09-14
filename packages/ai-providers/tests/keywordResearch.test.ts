@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createAhrefsKeywordResearchProvider,
   createDataForSeoKeywordResearchProvider,
-  createSemrushKeywordResearchProvider
+  createSemrushKeywordResearchProvider,
+  isDataForSeoKeywordResearchConfiguration
 } from '../src/keywordResearch';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -13,6 +14,12 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('Keyword Research Provider adapters', () => {
+  it('uses DataForSEO for research when the established generic URL points to DataForSEO', () => {
+    expect(isDataForSeoKeywordResearchConfiguration('generic', 'https://api.dataforseo.com/v3', 'fixture-key')).toBe(true);
+    expect(isDataForSeoKeywordResearchConfiguration('generic', 'https://keywords.example.test/v1', 'fixture-key')).toBe(false);
+    expect(isDataForSeoKeywordResearchConfiguration('generic', 'https://api.dataforseo.com/v3', undefined)).toBe(false);
+  });
+
   it('normalizes DataForSEO metrics and ranked keywords with a snapshot', async () => {
     const requests: Request[] = [];
     const provider = createDataForSeoKeywordResearchProvider({

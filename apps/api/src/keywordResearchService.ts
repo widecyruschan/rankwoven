@@ -1,7 +1,7 @@
 import {
-  createAhrefsKeywordResearchProvider,
   createDataForSeoKeywordResearchProvider,
   createSemrushKeywordResearchProvider,
+  isDataForSeoKeywordResearchConfiguration,
   type KeywordResearchProvider
 } from '@aieo/ai-providers';
 import { apiConfig } from './config';
@@ -22,18 +22,17 @@ function getLocationCode(market: string) {
 
 export function createKeywordResearchProviderFromConfig(): KeywordResearchProvider | undefined {
   const provider = apiConfig.KEYWORD_VOLUME_PROVIDER;
-  if (provider === 'dataforseo' && apiConfig.KEYWORD_VOLUME_API_URL && apiConfig.KEYWORD_VOLUME_API_KEY) {
+  const apiUrl = apiConfig.KEYWORD_VOLUME_API_URL;
+  const apiKey = apiConfig.KEYWORD_VOLUME_API_KEY;
+  if (isDataForSeoKeywordResearchConfiguration(provider, apiUrl, apiKey) && apiUrl && apiKey) {
     return createDataForSeoKeywordResearchProvider({
-      baseUrl: apiConfig.KEYWORD_VOLUME_API_URL,
-      apiKey: apiConfig.KEYWORD_VOLUME_API_KEY,
+      baseUrl: apiUrl,
+      apiKey,
       locationCode: getLocationCode('US')
     });
   }
   if (provider === 'semrush' && apiConfig.SEMRUSH_API_URL && apiConfig.SEMRUSH_API_KEY) {
     return createSemrushKeywordResearchProvider({ baseUrl: apiConfig.SEMRUSH_API_URL, apiKey: apiConfig.SEMRUSH_API_KEY });
-  }
-  if (apiConfig.AHREFS_KEYWORD_METRICS_ENABLED && apiConfig.AHREFS_API_URL && apiConfig.AHREFS_API_KEY) {
-    return createAhrefsKeywordResearchProvider({ baseUrl: apiConfig.AHREFS_API_URL, apiKey: apiConfig.AHREFS_API_KEY });
   }
   return undefined;
 }

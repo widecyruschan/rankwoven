@@ -2,11 +2,11 @@ import { createDecipheriv, createHash } from 'node:crypto';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import {
   createAiGatewayAdapter,
-  createAhrefsKeywordResearchProvider,
   createDataForSeoKeywordResearchProvider,
   createRedisTaskGovernance,
   createSemrushKeywordResearchProvider,
   hashContentSnapshot,
+  isDataForSeoKeywordResearchConfiguration,
   parseContentRewriteOutput,
   scoreContent,
   type GatewayModel,
@@ -489,20 +489,13 @@ function createKeywordResearchProviderFromEnvironment(fetchImpl: typeof fetch): 
   const provider = process.env.KEYWORD_VOLUME_PROVIDER;
   const apiUrl = process.env.KEYWORD_VOLUME_API_URL;
   const apiKey = process.env.KEYWORD_VOLUME_API_KEY;
-  if (provider === 'dataforseo' && apiUrl && apiKey) {
+  if (isDataForSeoKeywordResearchConfiguration(provider, apiUrl, apiKey) && apiUrl && apiKey) {
     return createDataForSeoKeywordResearchProvider({ baseUrl: apiUrl, apiKey, fetchImpl });
   }
   if (provider === 'semrush' && process.env.SEMRUSH_API_URL && process.env.SEMRUSH_API_KEY) {
     return createSemrushKeywordResearchProvider({
       baseUrl: process.env.SEMRUSH_API_URL,
       apiKey: process.env.SEMRUSH_API_KEY,
-      fetchImpl
-    });
-  }
-  if (process.env.AHREFS_KEYWORD_METRICS_ENABLED === 'true' && process.env.AHREFS_API_URL && process.env.AHREFS_API_KEY) {
-    return createAhrefsKeywordResearchProvider({
-      baseUrl: process.env.AHREFS_API_URL,
-      apiKey: process.env.AHREFS_API_KEY,
       fetchImpl
     });
   }

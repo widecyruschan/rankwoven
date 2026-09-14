@@ -14,6 +14,19 @@ const errorCode = ref('');
 const keywords = ref<ResearchKeyword[]>([]);
 const gaps = ref<KeywordGap[]>([]);
 let pollTimer: number | null = null;
+
+const taskErrorCodes = new Set([
+  'PROVIDER_UNAVAILABLE',
+  'KEYWORD_PROVIDER_HTTP_401',
+  'KEYWORD_PROVIDER_HTTP_429',
+  'KEYWORD_PROVIDER_TIMEOUT',
+  'KEYWORD_PROVIDER_RESPONSE_INVALID'
+]);
+
+function resolveTaskErrorCode(value?: string) {
+  return value && taskErrorCodes.has(value) ? value : 'RUN_FAILED';
+}
+
 const siteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
 const longTailKeywords = computed(() => keywords.value.filter((item) => item.displayKeyword.trim().split(/\s+/).length >= 3 || [...item.displayKeyword].length >= 12));
 
@@ -50,7 +63,7 @@ async function analyzeCompetitor() {
         } else if (['failed', 'cancelled', 'dead_letter'].includes(current.status)) {
           stopPolling();
           isLoading.value = false;
-          errorCode.value = 'RUN_FAILED';
+          errorCode.value = resolveTaskErrorCode(current.errorCode);
         }
       } catch {
         stopPolling();
@@ -59,7 +72,7 @@ async function analyzeCompetitor() {
       }
     }, 2500);
   } catch (error) {
-    errorCode.value = error instanceof ApiError ? error.code ?? 'REQUEST_FAILED' : 'REQUEST_FAILED';
+    errorCode.value = error instanceof ApiError ? resolveTaskErrorCode(error.code) : 'REQUEST_FAILED';
     isLoading.value = false;
   }
 }

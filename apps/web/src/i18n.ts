@@ -85,7 +85,15 @@ const messages = {
       title: 'Competitor Keyword Research', body: 'Enter a competitor URL to discover ranked keywords, long-tail opportunities, and keyword gaps.',
       competitorUrl: 'Competitor URL', analyze: 'Analyze competitor', status: 'Task status', competitorKeywords: 'Competitor keywords',
       longTailKeywords: 'Long-tail keywords', gaps: 'Keyword gaps', keyword: 'Keyword', intent: 'Intent', opportunity: 'Opportunity',
-      errors: { PROVIDER_UNAVAILABLE: 'Keyword provider is not configured.', RUN_FAILED: 'The competitor research task did not complete.', REQUEST_FAILED: 'Unable to start competitor research.' }
+      errors: {
+        PROVIDER_UNAVAILABLE: 'Keyword research requires a configured provider with ranked-keyword support.',
+        KEYWORD_PROVIDER_HTTP_401: 'The keyword provider rejected the configured credentials.',
+        KEYWORD_PROVIDER_HTTP_429: 'The keyword provider rate limit was reached. Please try again later.',
+        KEYWORD_PROVIDER_TIMEOUT: 'The keyword provider did not respond in time. Please try again.',
+        KEYWORD_PROVIDER_RESPONSE_INVALID: 'The keyword provider returned an unreadable response.',
+        RUN_FAILED: 'The competitor research task did not complete.',
+        REQUEST_FAILED: 'Unable to start competitor research.'
+      }
     },
     marketing: {
       homeTitle: 'SEO Tutorials | Website SEO and AI Optimization',
@@ -1233,7 +1241,15 @@ const messages = {
       title: '競品關鍵詞研究', body: '輸入競品網址，自動整理排名關鍵詞、長尾關鍵詞與關鍵詞差距。',
       competitorUrl: '競品網址', analyze: '分析競品', status: '任務狀態', competitorKeywords: '競品關鍵詞',
       longTailKeywords: '長尾關鍵詞', gaps: '關鍵詞差距', keyword: '關鍵詞', intent: '搜尋意圖', opportunity: '機會分數',
-      errors: { PROVIDER_UNAVAILABLE: '尚未配置關鍵詞資料 Provider。', RUN_FAILED: '競品研究任務未能完成。', REQUEST_FAILED: '無法建立競品研究任務。' }
+      errors: {
+        PROVIDER_UNAVAILABLE: '競品研究需要已配置且支援排名關鍵詞的資料 Provider。',
+        KEYWORD_PROVIDER_HTTP_401: '關鍵詞資料 Provider 拒絕目前的憑據，請核對設定。',
+        KEYWORD_PROVIDER_HTTP_429: '關鍵詞資料 Provider 已達速率限制，請稍後重試。',
+        KEYWORD_PROVIDER_TIMEOUT: '關鍵詞資料 Provider 回應逾時，請稍後重試。',
+        KEYWORD_PROVIDER_RESPONSE_INVALID: '關鍵詞資料 Provider 回傳無法讀取的內容。',
+        RUN_FAILED: '競品研究任務未能完成。',
+        REQUEST_FAILED: '無法建立競品研究任務。'
+      }
     },
     marketing: {
       homeTitle: 'SEO 教學｜網站 SEO 整合 AI 優化教程',
