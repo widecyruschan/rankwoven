@@ -6515,3 +6515,25 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 ### 下一步行動清單
 
 - 推送並部署後，以已連接站點在客戶後台提交一次競品研究，確認 DataForSEO 返回排名與長尾關鍵詞。
+
+## 會話總結（2026-09-15）— 競品關鍵詞研究修復生產部署
+
+### 會話主要目的
+
+將競品關鍵詞研究 Provider 修復部署至 RankWoven 生產環境並驗證公開服務。
+
+### 完成的主要任務
+
+- 提交 `a7880ee` 並推送至 GitHub `main`。
+- GitHub Actions `Production Deploy` 完成雲端 lint、測試、建置與安全稽核。
+- Hostinger VPS 部署完成，包含服務重建與部署腳本的已登入 API smoke check。
+
+### 驗證結果
+
+- [Production Deploy](https://github.com/widecyruschan/rankwoven/actions/runs/34873481240) 的 Verify 與 Deploy jobs 均成功。
+- `https://api.rankwoven.com/health` 與 `https://rankwoven.com/` 均返回 HTTP 200。
+- 未提交 `.env`、憑據或未追蹤的 `0.jpeg`。
+
+### 下一步行動清單
+
+- 在客戶後台選取已連接站點後重新執行競品研究；若第三方 Provider 拒絕請求，介面會顯示安全且可操作的原因。
