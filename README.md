@@ -5796,3 +5796,13 @@ Node.js、TypeScript、Vue/Vite、Fastify、Vitest、Docker Compose、GitHub Act
 
 - 等待 GitHub Actions Production Deploy 完成。
 - 部署後檢查 `https://api.rankwoven.com/health`、`rankwoven.com` 與 `www.rankwoven.com` 登入及 CORS。
+
+## 會話總結（2026-09-14）— 生產部署驗證完成
+
+### 驗證結果
+
+- GitHub Actions run `34807443322` 的 Verify 與 Deploy job 均成功。
+- `https://api.rankwoven.com/health` 返回 HTTP 200。
+- `https://rankwoven.com` 與 `https://www.rankwoven.com` 返回 HTTP 200。
+- `www.rankwoven.com` 到 API 的 CORS 預檢返回 HTTP 204；apex 與 `www` 來源的 demo 登入均返回 HTTP 200。
+- 驗證過程未輸出或提交任何 token、密碼或 `.env` 內容。
