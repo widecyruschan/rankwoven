@@ -6578,3 +6578,26 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 ### 下一步行動清單
 
 - 部署後在已連接插件站點重新執行網站檢測，核對每條問題的完整 URL 列表和一鍵修復隊列。
+
+## 會話總結（2026-09-15）— SEO 審計功能推送與 VPS 部署
+
+### 會話主要目的
+
+將 SEO 審計受影響頁面地址、一鍵修復及資料庫 migration 推送至 GitHub 並部署到 Hostinger VPS。
+
+### 完成的主要任務
+
+- 提交 `98295df` 並推送至 GitHub `main`。
+- GitHub Actions `Production Deploy` 完成 Verify 與 Hostinger VPS Deploy。
+- VPS 已套用 `0022_site_audit_affected_urls.sql`，並重建 API、Web、Worker 容器。
+
+### 驗證結果
+
+- [Production Deploy](https://github.com/widecyruschan/rankwoven/actions/runs/34921128360) 成功完成。
+- `https://rankwoven.com/` 返回 HTTP 200。
+- `https://api.rankwoven.com/health` 返回 HTTP 200。
+- 本機 Docker 容器與 API health 均正常。
+
+### 下一步行動清單
+
+- 在已連接插件站點執行網站檢測，核對完整受影響 URL、修復建議及一鍵修復隊列結果。
