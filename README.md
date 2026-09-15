@@ -6674,3 +6674,85 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 ### 下一步行動清單
 
 - 本次修改尚未推送或部署；部署後需用手動站點輸入實際 Property ID，確認 Google 服務帳戶已獲 GA4 Viewer 權限。
+
+## 會話總結（2026-09-15）— Ahrefs 全站 SEO 檢測與受影響 URL
+
+### 會話主要目的
+
+將 SEO 網站檢測由受限首頁／25 頁備援爬取，改為使用所選 Ahrefs Site Audit 專案的全站健康度與問題資料，並可查看每條問題實際受影響的頁面地址。
+
+### 完成的主要任務
+
+- Ahrefs 問題解析支援官方 `crawled`、`importance`、`name` 欄位，並在可用時合併免費 `projects` 健康度與爬取數據。
+- 新增按 `issue_id` 調用 Ahrefs `page-explorer` 的分頁 API，完整保留頁面地址，避免初次載入為每個問題重複消耗 API 單位。
+- SEO 網站檢測頁加入 Ahrefs 專案 ID、爬取日期、對比日期及啟用開關；啟用後立即檢測使用 Ahrefs 全站資料。
+- 新增受影響 URL 展開／載入更多操作、全站報告卡片、問題分類與中英文 i18n 文案。
+
+### 關鍵決策和解決方案
+
+- Ahrefs `issues` 是問題摘要，實際頁面地址由 `page-explorer?issue_id=...&select=url` 按需取得；這同時滿足全站檢測與 API 用量控制。
+- 不將 Ahrefs 金鑰或原始回應返回前端；前端只接收健康分數、問題欄位與使用者主動請求的 URL。
+- 沒有 Ahrefs 專案配置時保留既有唯讀備援爬蟲，並在介面清楚區分兩種資料來源。
+
+### 使用的技術棧
+
+Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3、Vitest。
+
+### 新增或修改文件
+
+- `apps/api/src/ahrefsSiteAudit.ts`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/ahrefsSiteAudit.test.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- 全量測試通過：API 88（8 skipped）、Web 19、Worker 11、AI Provider 24、CMS Adapter 1、Security 15。
+- `npm run build` 通過；`npm run security:audit` 顯示 0 vulnerabilities。
+- 尚未推送或部署本輪變更；工作區原有未追蹤 `0.jpeg` 未加入提交。
+
+### 下一步行動清單
+
+- 在 `/app/site-audit` 為目標站點填入 Ahrefs Project ID，執行一次全站檢測並展開問題核對 URL。
+- 你確認後再將本輪變更提交並推送到 `main`，觸發 VPS 部署。
+
+## 會話總結（2026-09-15）— Google Analytics 月份錯位排查
+
+### 會話主要目的
+
+修復 Google Analytics 選取九月時顯示八月／七月示範數據的問題，並核對生產 GA4 Property 與網站 host 篩選。
+
+### 完成的主要任務
+
+- 確認前端與 API 以 `YYYY-MM-DD` 原樣傳遞日曆日期，沒有 UTC 日回退。
+- 確認生產 `Cyrus` Property 的 GA4 原始日期維度返回正確的 `20260901` 至 `20260914`；九月的 `cyruschan.com` host 篩選沒有資料。
+- 移除未配置或 GA 請求失敗時固定寫死的 2026 年 7 月示範數據，改為空數據與清零統計，避免月份錯誤。
+- 更新中英文提示，明確要求為所選網站配置正確的 GA4 Property ID；不自動改寫站點與 Property 對應。
+
+### 關鍵決策和解決方案
+
+- Property ID 必須屬於目前選取網站；同一 GA4 Property 若追蹤多個網域，仍按所選站點的 `hostName` 過濾，避免跨站流量混入。
+- `configured=false` 時不再回傳虛構月份，使用者可直接看出尚未連接即時數據。
+
+### 新增或修改文件
+
+- `apps/api/src/analytics.ts`
+- `apps/api/tests/health.test.ts`
+- `apps/web/src/i18n.ts`
+- `README.md`
+
+### 驗證結果
+
+- 已在生產 API 重現八月與九月查詢，確認日期請求與 GA4 原始回應日期一致。
+- 回歸測試、lint、build、security audit 均已通過；全量測試為 API 89（8 skipped）、Web 19、Worker 11、AI Provider 24、CMS Adapter 1、Security 15。
+- 尚未提交、推送或部署本次修正。
+
+### 下一步行動清單
+
+- 為 `ckcprompt.cloud` 站點輸入其對應的 GA4 Property ID，再查詢九月數據。
+- 確認 `Cyrus` 站點是否應繼續使用目前 Property；如要改動生產站點配置，需另行授權。

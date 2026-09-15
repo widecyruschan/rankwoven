@@ -37,6 +37,10 @@ import {
   getAdminSerpapiUsage,
   getSyncedArticles,
   createSeoAudit,
+  getSeoAudits,
+  getAhrefsSiteAuditConfig,
+  updateAhrefsSiteAuditConfig,
+  getAhrefsSiteAuditIssuePages,
   getOptimizationSuggestions,
   batchApproveOptimizationSuggestions,
   batchApplyOptimizationSuggestions
@@ -51,7 +55,11 @@ import type {
   SiteAuditCrawlSource,
   SiteAuditMetric,
   SerpapiUsageStats,
-  SyncedArticle
+  SyncedArticle,
+  AhrefsSiteAuditConfig,
+  AhrefsSiteAuditIssuePages,
+  SeoAudit,
+  SeoAuditIssue
 } from '../api/siteConnections';
 
 const { t } = useI18n();
@@ -76,12 +84,21 @@ const quotaStats = ref<SerpapiUsageStats | null>(null);
 const syncedContent = ref<SyncedArticle[]>([]);
 const manualTargetUrl = ref('');
 const manualContentCmsId = ref<string>();
+const ahrefsConfig = ref<AhrefsSiteAuditConfig | null>(null);
+const latestAhrefsAudit = ref<SeoAudit | null>(null);
+const latestAhrefsIssues = ref<SeoAuditIssue[]>([]);
+const ahrefsIssuePages = ref<Record<string, AhrefsSiteAuditIssuePages>>({});
+const loadingAhrefsIssueId = ref<string>();
 
 // ── form model ──
 const formSchedule = ref<SiteAuditSchedule>('disabled');
 const formPageLimit = ref<number>(100);
 const formCrawlSource = ref<SiteAuditCrawlSource>('website');
 const formEmailNotification = ref<boolean>(false);
+const formAhrefsEnabled = ref(false);
+const formAhrefsProjectId = ref('');
+const formAhrefsCrawlDate = ref('');
+const formAhrefsComparisonDate = ref('');
 
 // ── computed ──
 const hasSite = computed(() => !!selectedSiteId.value);
@@ -117,6 +134,15 @@ const severityColorMap: Record<string, string> = {
   medium: '#faad14',
   low: '#52c41a'
 };
+
+const ahrefsIssueColumns = computed(() => [
+  { title: tc('category'), dataIndex: 'category', key: 'category', width: 150 },
+  { title: tc('severity'), dataIndex: 'severity', key: 'severity', width: 100 },
+  { title: tc('issueTitle'), dataIndex: 'message', key: 'message', ellipsis: true },
+  { title: tc('affected'), dataIndex: 'affectedPages', key: 'affectedPages', width: 110 },
+  { title: tc('change'), dataIndex: 'change', key: 'change', width: 100 },
+  { title: tc('issueRecommendation'), dataIndex: 'suggestedValue', key: 'suggestedValue', ellipsis: true, width: 280 }
+]);
 
 const issueColumns = computed(() => [
   {
@@ -193,6 +219,7 @@ const historyColumns = computed(() => [
 // ── methods ──
 async function loadConfig() {
   if (!selectedSiteId.value) return;
+  ahrefsIssuePages.value = {};
   loadingConfig.value = true;
   try {
     const res = await getSiteAuditConfig(selectedSiteId.value);
@@ -203,6 +230,21 @@ async function loadConfig() {
     formEmailNotification.value = res.config.emailNotification;
   } catch {
     config.value = null;
+  }
+
+  try {
+    const result = await getAhrefsSiteAuditConfig(selectedSiteId.value);
+    ahrefsConfig.value = result.config;
+    formAhrefsEnabled.value = result.config.enabled;
+    formAhrefsProjectId.value = result.config.projectId;
+    formAhrefsCrawlDate.value = result.config.crawlDate ?? '';
+    formAhrefsComparisonDate.value = result.config.comparisonDate ?? '';
+  } catch {
+    ahrefsConfig.value = null;
+    formAhrefsEnabled.value = false;
+    formAhrefsProjectId.value = '';
+    formAhrefsCrawlDate.value = '';
+    formAhrefsComparisonDate.value = '';
   } finally {
     loadingConfig.value = false;
   }
@@ -228,6 +270,18 @@ async function loadResults() {
     results.value = [];
     latestResult.value = null;
     latestMetrics.value = [];
+  }
+
+  try {
+    const result = await getSeoAudits(selectedSiteId.value);
+    const audit = result.audits[0];
+    latestAhrefsAudit.value = audit?.metadata?.ahrefs ? audit : null;
+    latestAhrefsIssues.value = latestAhrefsAudit.value
+      ? result.issues.filter((issue) => issue.source === 'ahrefs')
+      : [];
+  } catch {
+    latestAhrefsAudit.value = null;
+    latestAhrefsIssues.value = [];
   } finally {
     loadingResults.value = false;
   }
@@ -250,6 +304,12 @@ function openConfigModal() {
     formCrawlSource.value = config.value.crawlSource;
     formEmailNotification.value = config.value.emailNotification;
   }
+  if (ahrefsConfig.value) {
+    formAhrefsEnabled.value = ahrefsConfig.value.enabled;
+    formAhrefsProjectId.value = ahrefsConfig.value.projectId;
+    formAhrefsCrawlDate.value = ahrefsConfig.value.crawlDate ?? '';
+    formAhrefsComparisonDate.value = ahrefsConfig.value.comparisonDate ?? '';
+  }
   configModalOpen.value = true;
 }
 
@@ -257,6 +317,10 @@ async function saveConfig() {
   if (!selectedSiteId.value) return;
   savingConfig.value = true;
   try {
+    if (formAhrefsEnabled.value && !formAhrefsProjectId.value.trim()) {
+      message.error(tc('ahrefsProjectRequired'));
+      return;
+    }
     const res = await updateSiteAuditConfig(selectedSiteId.value, {
       schedule: formSchedule.value,
       pageLimit: formPageLimit.value,
@@ -264,6 +328,15 @@ async function saveConfig() {
       emailNotification: formEmailNotification.value
     });
     config.value = res.config;
+    if (formAhrefsProjectId.value.trim()) {
+      const ahrefsResult = await updateAhrefsSiteAuditConfig(selectedSiteId.value, {
+        enabled: formAhrefsEnabled.value,
+        projectId: formAhrefsProjectId.value.trim(),
+        ...(formAhrefsCrawlDate.value.trim() ? { crawlDate: formAhrefsCrawlDate.value.trim() } : {}),
+        ...(formAhrefsComparisonDate.value.trim() ? { comparisonDate: formAhrefsComparisonDate.value.trim() } : {})
+      });
+      ahrefsConfig.value = ahrefsResult.config;
+    }
     configModalOpen.value = false;
     message.success(tc('configSaved'));
   } catch {
@@ -277,19 +350,38 @@ function handleRunAudit() {
   if (!selectedSiteId.value) return;
   Modal.confirm({
     title: tc('confirmationTitle'),
-    content: tc('confirmationContent'),
+    content: ahrefsConfig.value?.enabled ? tc('ahrefsConfirmationContent') : tc('confirmationContent'),
     okText: tc('confirm'),
     cancelText: tc('cancel'),
     onOk: async () => {
       runningAudit.value = true;
-      // Keep old latestResult visible while re-audit runs;
-      // set reauditPending to show a "re-detecting" badge on the existing card
       try {
-        const bundle = await runSiteAuditMonitoring(selectedSiteId.value, Math.min(formPageLimit.value, 25));
-        latestMetrics.value = bundle.metrics;
-        const res = await getSiteAuditResults(selectedSiteId.value);
-        latestResult.value = res.latest;
-        results.value = res.results;
+        if (ahrefsConfig.value?.enabled) {
+          const result = await createSeoAudit(selectedSiteId.value);
+          if (!result.audit.metadata?.ahrefs) {
+            latestAhrefsAudit.value = null;
+            latestAhrefsIssues.value = [];
+            message.error(tc('ahrefsUnavailable'));
+            return;
+          }
+          latestResult.value = null;
+          results.value = [];
+          latestMetrics.value = [];
+          latestAhrefsAudit.value = result.audit.metadata?.ahrefs ? result.audit : null;
+          latestAhrefsIssues.value = latestAhrefsAudit.value
+            ? result.issues.filter((issue) => issue.source === 'ahrefs')
+            : [];
+          ahrefsIssuePages.value = {};
+        } else {
+          latestAhrefsAudit.value = null;
+          latestAhrefsIssues.value = [];
+          ahrefsIssuePages.value = {};
+          const bundle = await runSiteAuditMonitoring(selectedSiteId.value, Math.min(formPageLimit.value, 25));
+          latestMetrics.value = bundle.metrics;
+          const res = await getSiteAuditResults(selectedSiteId.value);
+          latestResult.value = res.latest;
+          results.value = res.results;
+        }
         message.success(tc('status_completed'));
       } catch (e: unknown) {
         const errMsg = e instanceof Error ? e.message : '';
@@ -329,6 +421,9 @@ async function runManualAudit(input: { targetUrl: string } | { contentCmsId: str
   runningManualAudit.value = true;
   try {
     const result = await runManualSiteAudit(selectedSiteId.value, input);
+    latestAhrefsAudit.value = null;
+    latestAhrefsIssues.value = [];
+    ahrefsIssuePages.value = {};
     latestMetrics.value = result.bundle?.metrics ?? [];
     await refreshManualAuditResult();
     message.success(tc('manualCompleted'));
@@ -355,6 +450,76 @@ function formatDate(s?: string): string {
 
 function tc(key: string): string {
   return t(`siteAudit.${key}`);
+}
+
+function getAhrefsIssueId(issue: SeoAuditIssue) {
+  const issueId = issue.metadata?.providerIssueId;
+  return typeof issueId === 'string' ? issueId : '';
+}
+
+function getAhrefsCrawledUrls(audit: SeoAudit | null) {
+  const ahrefs = audit?.metadata?.ahrefs;
+  if (!ahrefs || typeof ahrefs !== 'object') return undefined;
+  const crawledUrls = (ahrefs as Record<string, unknown>).crawledUrls;
+  return typeof crawledUrls === 'number' ? crawledUrls : undefined;
+}
+
+function formatAhrefsCategory(category?: string) {
+  return category ? tc(`ahrefsCategory_${category}`) : '-';
+}
+
+async function loadAhrefsIssueUrls(issue: SeoAuditIssue) {
+  const issueId = getAhrefsIssueId(issue);
+  if (!selectedSiteId.value || !issueId || loadingAhrefsIssueId.value) return;
+
+  const current = ahrefsIssuePages.value[issue.id];
+  loadingAhrefsIssueId.value = issue.id;
+  try {
+    const result = await getAhrefsSiteAuditIssuePages(selectedSiteId.value, issueId, {
+      offset: current ? current.offset + current.urls.length : 0,
+      limit: 100
+    });
+    ahrefsIssuePages.value = {
+      ...ahrefsIssuePages.value,
+      [issue.id]: {
+        ...result,
+        urls: Array.from(new Set([...(current?.urls ?? []), ...result.urls]))
+      }
+    };
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : tc('ahrefsAffectedUrlsFailed'));
+  } finally {
+    loadingAhrefsIssueId.value = undefined;
+  }
+}
+
+function expandedAhrefsIssueRow({ record }: { record: SeoAuditIssue }) {
+  const pages = ahrefsIssuePages.value[record.id];
+  const issueId = getAhrefsIssueId(record);
+  const canLoadMore = pages ? pages.hasMore : Boolean(issueId);
+  return h('div', { class: 'issue-expanded-row' }, [
+    record.suggestedValue
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueRecommendation')),
+          h('p', { class: 'issue-detail-text' }, record.suggestedValue)
+        ])
+      : null,
+    h('div', { class: 'issue-detail-section' }, [
+      h('div', { class: 'issue-detail-label' }, tc('issueAffectedUrls')),
+      pages?.urls.length
+        ? h('ul', { class: 'issue-url-list' }, pages.urls.map((url) =>
+            h('li', { key: url }, h('a', { href: url, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, url))
+          ))
+        : h('p', { class: 'issue-detail-text' }, tc('ahrefsAffectedUrlsHint')),
+      canLoadMore
+        ? h(Button, {
+            size: 'small',
+            loading: loadingAhrefsIssueId.value === record.id,
+            onClick: () => void loadAhrefsIssueUrls(record)
+          }, { default: () => pages ? tc('ahrefsLoadMoreUrls') : tc('ahrefsLoadUrls') })
+        : null
+    ])
+  ]);
 }
 
 // ── expanded row render for issues ──
@@ -409,7 +574,10 @@ const safeOneClickSuggestionTypes = new Set([
 ]);
 
 function getAffectedUrlSet() {
-  const urls = latestResult.value?.issues.flatMap((issue) => issue.affectedUrls?.length ? issue.affectedUrls : issue.url ? [issue.url] : []) ?? [];
+  const urls = [
+    ...(latestResult.value?.issues.flatMap((issue) => issue.affectedUrls?.length ? issue.affectedUrls : issue.url ? [issue.url] : []) ?? []),
+    ...Object.values(ahrefsIssuePages.value).flatMap((result) => result.urls)
+  ];
   return new Set(urls.map(normalizeAuditUrl));
 }
 
@@ -473,6 +641,10 @@ watch(selectedSiteId, () => {
     results.value = [];
     latestResult.value = null;
     latestMetrics.value = [];
+    ahrefsConfig.value = null;
+    latestAhrefsAudit.value = null;
+    latestAhrefsIssues.value = [];
+    ahrefsIssuePages.value = {};
     syncedContent.value = [];
     manualTargetUrl.value = '';
     manualContentCmsId.value = undefined;
@@ -587,8 +759,78 @@ onMounted(async () => {
           </div>
         </Card>
 
+        <Alert
+          v-if="ahrefsConfig?.enabled"
+          class="ahrefs-audit-notice"
+          type="info"
+          show-icon
+          :message="tc('ahrefsFullSiteTitle')"
+          :description="tc('ahrefsFullSiteDescription')"
+        />
+
+        <Card
+          v-if="latestAhrefsAudit"
+          :title="tc('ahrefsLatestAudit')"
+          class="result-card"
+          size="small"
+        >
+          <template #extra>
+            <Tag color="blue">Ahrefs</Tag>
+          </template>
+
+          <Descriptions bordered size="small" :column="2">
+            <DescriptionsItem :label="tc('overallScore')">
+              <Progress
+                type="circle"
+                :percent="latestAhrefsAudit.score"
+                :width="60"
+                :stroke-color="latestAhrefsAudit.score >= 80 ? '#52c41a' : latestAhrefsAudit.score >= 60 ? '#faad14' : '#ff4d4f'"
+              />
+            </DescriptionsItem>
+            <DescriptionsItem :label="tc('pagesCrawled')">
+              {{ getAhrefsCrawledUrls(latestAhrefsAudit) ?? '-' }}
+            </DescriptionsItem>
+            <DescriptionsItem :label="tc('ahrefsProjectId')">
+              {{ ahrefsConfig?.projectId ?? '-' }}
+            </DescriptionsItem>
+            <DescriptionsItem :label="tc('lastAudit')">
+              {{ formatDate(latestAhrefsAudit.createdAt) }}
+            </DescriptionsItem>
+          </Descriptions>
+
+          <Table
+            v-if="latestAhrefsIssues.length > 0"
+            :columns="ahrefsIssueColumns"
+            :data-source="latestAhrefsIssues"
+            :pagination="{ pageSize: 10 }"
+            :expanded-row-render="expandedAhrefsIssueRow"
+            :expand-row-by-click="true"
+            size="small"
+            row-key="id"
+            class="issues-table"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'category'">
+                {{ formatAhrefsCategory(record.category) }}
+              </template>
+              <template v-if="column.key === 'severity'">
+                <Tag :color="severityColorMap[record.severity]">
+                  {{ tc(`severity_${record.severity}`) }}
+                </Tag>
+              </template>
+              <template v-if="column.key === 'affectedPages'">
+                {{ record.affectedPages ?? 0 }}
+              </template>
+              <template v-if="column.key === 'change'">
+                {{ record.change ?? '-' }}
+              </template>
+            </template>
+          </Table>
+          <Empty v-else :description="tc('allPassed')" />
+        </Card>
+
         <!-- metrics row -->
-        <Row v-if="latestResult" :gutter="16" class="metrics-row">
+        <Row v-if="latestResult && !latestAhrefsAudit" :gutter="16" class="metrics-row">
           <Col :xs="12" :sm="6">
             <Card size="small">
               <Statistic
@@ -627,7 +869,7 @@ onMounted(async () => {
 
         <!-- latest result detail -->
         <Card
-          v-if="latestResult"
+          v-if="latestResult && !latestAhrefsAudit"
           :title="tc('latestAudit')"
           class="result-card"
           size="small"
@@ -719,7 +961,7 @@ onMounted(async () => {
           </div>
         </Card>
 
-        <Card v-if="latestMetrics.length > 0" :title="tc('metricsBySource')" class="result-card" size="small">
+        <Card v-if="latestMetrics.length > 0 && !latestAhrefsAudit" :title="tc('metricsBySource')" class="result-card" size="small">
           <Table :data-source="latestMetrics" :pagination="false" size="small" row-key="id">
             <a-table-column key="metricName" :title="tc('metric')" data-index="metricName" />
             <a-table-column key="sourceType" :title="tc('source')" data-index="sourceType">
@@ -736,7 +978,7 @@ onMounted(async () => {
 
         <!-- no results -->
         <Empty
-          v-if="!latestResult && !loadingResults"
+          v-if="!latestResult && !latestAhrefsAudit && !loadingResults"
           :description="tc('noResults')"
         />
 
@@ -823,6 +1065,27 @@ onMounted(async () => {
           <Switch v-model:checked="formEmailNotification" />
           <span class="hint">{{ tc('emailNotificationHint') }}</span>
         </div>
+
+        <div class="config-item ahrefs-config-item">
+          <label>{{ tc('ahrefsFullSiteTitle') }}</label>
+          <Switch v-model:checked="formAhrefsEnabled" />
+          <span class="hint">{{ tc('ahrefsConfigHint') }}</span>
+        </div>
+
+        <div class="config-item">
+          <label>{{ tc('ahrefsProjectId') }}</label>
+          <Input v-model:value="formAhrefsProjectId" :placeholder="tc('ahrefsProjectIdPlaceholder')" />
+        </div>
+
+        <div class="config-item">
+          <label>{{ tc('ahrefsCrawlDate') }}</label>
+          <Input v-model:value="formAhrefsCrawlDate" :placeholder="tc('ahrefsDatePlaceholder')" />
+        </div>
+
+        <div class="config-item">
+          <label>{{ tc('ahrefsComparisonDate') }}</label>
+          <Input v-model:value="formAhrefsComparisonDate" :placeholder="tc('ahrefsDatePlaceholder')" />
+        </div>
       </div>
     </Modal>
   </div>
@@ -874,6 +1137,10 @@ onMounted(async () => {
 }
 
 .result-card {
+  margin-bottom: 20px;
+}
+
+.ahrefs-audit-notice {
   margin-bottom: 20px;
 }
 

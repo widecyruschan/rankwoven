@@ -228,6 +228,14 @@ watch(selectedSiteId, (siteId) => {
       :message="t('analytics.demoMode')"
       :description="t('analytics.demoModeDescription')"
     />
+    <a-alert
+      v-if="overview?.configured && overview.daily.length === 0"
+      class="section-alert"
+      type="info"
+      show-icon
+      :message="t('analytics.noDataForRange')"
+      :description="t('analytics.noDataForRangeDescription')"
+    />
     <a-alert v-if="loadError" class="section-alert" type="error" show-icon :message="loadError" />
 
     <a-card v-if="canEditAnalyticsProperty" class="section-card analytics-property-card" :title="t('analytics.propertyTitle')">

@@ -101,20 +101,9 @@ function formatDate(value: string) {
 
 function createDemoOverview(propertyId?: string, options: AnalyticsOverviewOptions = {}): AnalyticsOverview {
   const defaultDateRange = getDefaultDateRange();
-  const daily = [
-    ['2026-07-20', 410, 520, 880],
-    ['2026-07-21', 435, 548, 912],
-    ['2026-07-22', 462, 594, 980],
-    ['2026-07-23', 488, 621, 1044],
-    ['2026-07-24', 510, 666, 1120],
-    ['2026-07-25', 536, 690, 1188],
-    ['2026-07-26', 552, 714, 1236]
-  ].map(([date, activeUsers, sessions, pageViews]) => ({
-    date: String(date),
-    activeUsers: Number(activeUsers),
-    sessions: Number(sessions),
-    pageViews: Number(pageViews)
-  }));
+  // Never return a fixed sample period for a user-selected date range. A static
+  // July sample made August/September selections look like the wrong month.
+  const daily: AnalyticsOverview['daily'] = [];
 
   return {
     configured: false,
@@ -125,26 +114,14 @@ function createDemoOverview(propertyId?: string, options: AnalyticsOverviewOptio
     startDate: options.startDate ?? defaultDateRange.startDate,
     endDate: options.endDate ?? defaultDateRange.endDate,
     totals: {
-      activeUsers: 3393,
-      sessions: 4353,
-      pageViews: 7360,
-      conversions: 86
+      activeUsers: 0,
+      sessions: 0,
+      pageViews: 0,
+      conversions: 0
     },
     daily,
-    channels: [
-      { channel: 'Organic Search', sessions: 1850 },
-      { channel: 'Direct', sessions: 960 },
-      { channel: 'Referral', sessions: 620 },
-      { channel: 'Organic Social', sessions: 480 },
-      { channel: 'Email', sessions: 443 }
-    ],
-    pages: [
-      { path: '/', pageViews: 1640, activeUsers: 920 },
-      { path: '/pricing', pageViews: 780, activeUsers: 420 },
-      { path: '/blog/wordpress-image-seo', pageViews: 650, activeUsers: 388 },
-      { path: '/blog/internal-linking', pageViews: 548, activeUsers: 330 },
-      { path: '/app/suggestions', pageViews: 412, activeUsers: 156 }
-    ]
+    channels: [],
+    pages: []
   };
 }
 

@@ -3,7 +3,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Pool, type QueryResultRow } from 'pg';
 import { z } from 'zod';
 import { getBearerToken, requireAuth, type AuthService } from './auth';
-import { fetchAhrefsSiteAuditReport, type AhrefsSiteAuditIssue, type AhrefsSiteAuditReport } from './ahrefsSiteAudit';
+import {
+  fetchAhrefsSiteAuditIssuePages,
+  fetchAhrefsSiteAuditReport,
+  type AhrefsSiteAuditIssue,
+  type AhrefsSiteAuditReport
+} from './ahrefsSiteAudit';
 import { apiConfig } from './config';
 import type {
   SiteConnectionRepository,
@@ -271,6 +276,13 @@ const ahrefsSiteAuditConfigSchema = z.object({
   crawlDate: z.string().datetime().optional(),
   comparisonDate: z.string().datetime().optional()
 });
+
+const ahrefsSiteAuditIssuePagesQuerySchema = z.object({
+  offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  limit: z.coerce.number().int().min(1).max(1_000).default(100)
+});
+
+const ahrefsSiteAuditIssueIdSchema = z.string().trim().min(1).max(160).regex(/^[A-Za-z0-9._:-]+$/);
 
 const defaultRulesVersion = '2026-08-04.image-context-1';
 const auditBatchSize = 100;
@@ -3516,6 +3528,61 @@ export function registerSeoOptimizationRoutes(
         message: 'Ahrefs Site Audit 設定已儲存',
         data: { config }
       };
+    }
+  );
+
+  app.get<{
+    Params: { siteId: string; issueId: string };
+    Querystring: { offset?: string; limit?: string };
+  }>(
+    '/api/v1/site-connections/:siteId/ahrefs-site-audit/issues/:issueId/pages',
+    async (request, reply) => {
+      const site = await ensureSiteTokenOrWorkspaceAccess(
+        siteRepository,
+        authService,
+        request,
+        reply,
+        request.params.siteId
+      );
+      if (!site) return reply;
+
+      const parsedIssueId = ahrefsSiteAuditIssueIdSchema.safeParse(request.params.issueId);
+      const parsedQuery = ahrefsSiteAuditIssuePagesQuerySchema.safeParse(request.query);
+      if (!parsedIssueId.success) return validationError(reply, parsedIssueId.error);
+      if (!parsedQuery.success) return validationError(reply, parsedQuery.error);
+
+      const siteConfig = await seoRepository.getAhrefsSiteAuditConfig(site.id);
+      const providerRequest = getConfiguredAhrefsSiteAuditRequest(siteConfig);
+      if (!providerRequest) {
+        return reply.status(409).send({
+          success: false,
+          message: '尚未為此網站設定 Ahrefs Site Audit',
+          error: { code: 'AHREFS_SITE_AUDIT_NOT_CONFIGURED' }
+        });
+      }
+
+      try {
+        const pages = await fetchAhrefsSiteAuditIssuePages({
+          ...providerRequest,
+          issueId: parsedIssueId.data,
+          offset: parsedQuery.data.offset,
+          limit: parsedQuery.data.limit
+        });
+        return {
+          success: true,
+          message: '已取得 Ahrefs 受影響頁面',
+          data: pages
+        };
+      } catch (error) {
+        const code = error instanceof Error && /^AHREFS_SITE_AUDIT_/.test(error.message)
+          ? error.message
+          : 'AHREFS_SITE_AUDIT_UNAVAILABLE';
+        return reply.status(502).send({
+          success: false,
+          message: '暫時無法取得 Ahrefs 受影響頁面',
+          error: { code }
+        });
+      }
     }
   );
 

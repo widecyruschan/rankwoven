@@ -136,6 +136,25 @@ describe('analytics and keyword routes', () => {
     expect(formatAnalyticsCalendarDate(new Date(2026, 8, 30, 23, 30, 0))).toBe('2026-09-30');
   });
 
+  it('does not show a fixed sample month when live analytics is unavailable', async () => {
+    const { createGoogleAnalyticsService } = await import('../src/analytics');
+    const overview = await createGoogleAnalyticsService().getOverview({
+      startDate: '2026-09-01',
+      endDate: '2026-09-30'
+    });
+
+    expect(overview).toMatchObject({
+      configured: false,
+      source: 'demo',
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      totals: { activeUsers: 0, sessions: 0, pageViews: 0, conversions: 0 },
+      daily: [],
+      channels: [],
+      pages: []
+    });
+  });
+
   it('returns analytics overview for authenticated users', async () => {
     const server = createServer();
     const token = await loginDemoUser(server);

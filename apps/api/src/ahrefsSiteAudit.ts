@@ -39,6 +39,14 @@ export interface AhrefsSiteAuditReport {
   collectedAt: string;
 }
 
+export interface AhrefsSiteAuditIssuePageResult {
+  issueId: string;
+  urls: string[];
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 export interface AhrefsSiteAuditRequest {
   apiUrl: string;
   apiKey: string;
@@ -110,6 +118,30 @@ function getIssueCategory(title: string): AhrefsSiteAuditCategory {
   return 'other';
 }
 
+function normalizeIssueCategory(value: string, title: string): AhrefsSiteAuditCategory {
+  const normalized = value.toLowerCase().replace(/[\s-]+/g, '_');
+  const categoryMap: Record<string, AhrefsSiteAuditCategory> = {
+    'internal_pages': 'other',
+    indexability: 'indexability',
+    'ai_discoverability': 'ai_discoverability',
+    links: 'links',
+    redirects: 'redirects',
+    content: 'content',
+    'social_tags': 'social_tags',
+    duplicates: 'duplicates',
+    localization: 'localization',
+    'usability_and_performance': 'performance',
+    performance: 'performance',
+    images: 'images',
+    javascript: 'javascript',
+    css: 'css',
+    sitemaps: 'sitemaps',
+    'external_pages': 'external_pages',
+    other: 'other'
+  };
+  return categoryMap[normalized] ?? getIssueCategory(title);
+}
+
 function getRecommendation(title: string): string {
   const value = title.toLowerCase();
   if (/canonical points to redirect/.test(value)) return '將 canonical 更新為最終回應 200 的自我指向 URL，並在重新抓取前驗證該 URL 不再重定向。';
@@ -162,51 +194,141 @@ function readNestedString(body: UnknownRecord, keys: string[]) {
   return data ? readFirstString(data, keys) : '';
 }
 
-export async function fetchAhrefsSiteAuditReport(input: AhrefsSiteAuditRequest): Promise<AhrefsSiteAuditReport> {
+function createAhrefsEndpoint(input: AhrefsSiteAuditRequest, resource: 'issues' | 'projects' | 'page-explorer') {
   const endpoint = new URL(input.apiUrl);
+  const nextPathname = endpoint.pathname.replace(/\/issues\/?$/, `/${resource}`);
+  if (nextPathname === endpoint.pathname && resource !== 'issues') {
+    throw new Error('AHREFS_SITE_AUDIT_URL_INVALID');
+  }
+  endpoint.pathname = nextPathname;
   endpoint.searchParams.set('project_id', input.projectId);
   if (input.crawlDate) endpoint.searchParams.set('date', input.crawlDate);
-  if (input.comparisonDate) endpoint.searchParams.set('date_compared', input.comparisonDate);
+  if (input.comparisonDate && resource !== 'projects') endpoint.searchParams.set('date_compared', input.comparisonDate);
+  return endpoint;
+}
+
+async function fetchAhrefsJson(input: AhrefsSiteAuditRequest, endpoint: URL, signal: AbortSignal) {
+  const response = await (input.fetchImpl ?? fetch)(endpoint, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${input.apiKey}` },
+    signal
+  });
+  if (!response.ok) throw new Error(`AHREFS_SITE_AUDIT_HTTP_${response.status}`);
+  return response.json() as Promise<unknown>;
+}
+
+function extractProjectRecord(body: unknown, projectId: string) {
+  const root = asRecord(body);
+  if (!root) return undefined;
+  const data = asRecord(root.data);
+  const candidates: unknown[] = [root.projects, root.items, root.results, root.data, data?.projects, data?.items, data?.results];
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    for (const value of candidate) {
+      const record = asRecord(value);
+      if (!record) continue;
+      const id = readFirstString(record, ['project_id', 'projectId', 'id']);
+      if (!id || id === projectId) return record;
+    }
+  }
+  return undefined;
+}
+
+function extractPageUrls(body: unknown) {
+  const root = asRecord(body);
+  if (!root) return [];
+  const data = asRecord(root.data);
+  const candidates: unknown[] = [root.pages, root.items, root.results, root.data, data?.pages, data?.items, data?.results];
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    return Array.from(new Set(candidate.flatMap((value) => {
+      const record = asRecord(value);
+      const url = record ? readFirstString(record, ['url', 'page_url', 'pageUrl']) : '';
+      return url ? [url] : [];
+    })));
+  }
+  return [];
+}
+
+export async function fetchAhrefsSiteAuditReport(input: AhrefsSiteAuditRequest): Promise<AhrefsSiteAuditReport> {
+  const endpoint = createAhrefsEndpoint(input, 'issues');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 20_000);
   try {
-    const response = await (input.fetchImpl ?? fetch)(endpoint, {
-      headers: { Accept: 'application/json', Authorization: `Bearer ${input.apiKey}` },
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`AHREFS_SITE_AUDIT_HTTP_${response.status}`);
-    const body = await response.json() as unknown;
+    const body = await fetchAhrefsJson(input, endpoint, controller.signal);
     const root = asRecord(body) ?? {};
     const issues = extractIssueRecords(body).flatMap((record, index) => {
         const title = readFirstString(record, ['issue', 'issue_name', 'name', 'title', 'label']);
         if (!title) return [];
         const rawId = readFirstString(record, ['id', 'issue_id', 'key', 'code']);
-        const affectedPages = Math.max(0, Math.round(readFirstNumber(record, ['affected_pages', 'affectedPages', 'url_count', 'urls', 'count', 'current']) ?? 0));
+        const affectedPages = Math.max(0, Math.round(readFirstNumber(record, ['crawled', 'affected_pages', 'affectedPages', 'url_count', 'urls', 'count', 'current']) ?? 0));
         const change = readFirstNumber(record, ['change', 'change_count', 'changeCount', 'delta']);
         return [{
           id: rawId || createHash('sha256').update(`${title}:${index}`).digest('hex').slice(0, 24),
           title,
           severity: normalizeSeverity(record.severity ?? record.importance ?? record.type),
-          category: getIssueCategory(title),
+          category: normalizeIssueCategory(readFirstString(record, ['category']), title),
           affectedPages,
           change: change === undefined ? undefined : Math.round(change),
           recommendation: getRecommendation(title)
         } satisfies AhrefsSiteAuditIssue];
       });
+    let projectRecord: UnknownRecord | undefined;
+    let projectBody: unknown;
     const rawScore = readNestedNumber(root, ['health_score', 'healthScore']);
-    const healthScore = rawScore === undefined
-      ? undefined
-      : Math.max(0, Math.min(100, Math.round(rawScore <= 1 ? rawScore * 100 : rawScore)));
+    if (rawScore === undefined) {
+      try {
+        projectBody = await fetchAhrefsJson(input, createAhrefsEndpoint(input, 'projects'), controller.signal);
+        projectRecord = extractProjectRecord(projectBody, input.projectId);
+      } catch {
+        // The issue report remains useful if the optional, free project summary is temporarily unavailable.
+      }
+    }
+    const scoreValue = rawScore ?? (projectRecord ? readFirstNumber(projectRecord, ['health_score', 'healthScore']) : undefined);
+    const crawledUrls = readNestedNumber(root, ['crawled_urls', 'crawledUrls', 'urls_crawled', 'total_urls'])
+      ?? (projectRecord ? readFirstNumber(projectRecord, ['crawled', 'crawled_urls', 'crawledUrls', 'urls_crawled', 'total_urls']) : undefined);
     return {
       projectId: input.projectId,
       crawlDate: readNestedString(root, ['date', 'crawl_date', 'crawlDate']) || input.crawlDate,
       comparisonDate: readNestedString(root, ['date_compared', 'comparison_date', 'comparisonDate']) || input.comparisonDate,
-      healthScore,
-      crawledUrls: readNestedNumber(root, ['crawled_urls', 'crawledUrls', 'urls_crawled', 'total_urls']),
+      healthScore: scoreValue === undefined ? undefined : Math.max(0, Math.min(100, Math.round(scoreValue <= 1 ? scoreValue * 100 : scoreValue))),
+      crawledUrls,
       issues,
-      rawResponseHash: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
+      rawResponseHash: createHash('sha256').update(JSON.stringify({ issues: body, project: projectBody })).digest('hex'),
       collectedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('AHREFS_SITE_AUDIT_TIMEOUT', { cause: error });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function fetchAhrefsSiteAuditIssuePages(
+  input: AhrefsSiteAuditRequest & { issueId: string; offset?: number; limit?: number }
+): Promise<AhrefsSiteAuditIssuePageResult> {
+  const offset = Math.max(0, Math.floor(input.offset ?? 0));
+  const limit = Math.min(1_000, Math.max(1, Math.floor(input.limit ?? 100)));
+  const endpoint = createAhrefsEndpoint(input, 'page-explorer');
+  endpoint.searchParams.set('issue_id', input.issueId);
+  endpoint.searchParams.set('select', 'url');
+  endpoint.searchParams.set('offset', String(offset));
+  endpoint.searchParams.set('limit', String(limit));
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 20_000);
+  try {
+    const body = await fetchAhrefsJson(input, endpoint, controller.signal);
+    const urls = extractPageUrls(body);
+    return {
+      issueId: input.issueId,
+      urls,
+      offset,
+      limit,
+      hasMore: urls.length === limit
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {

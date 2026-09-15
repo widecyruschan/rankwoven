@@ -40,6 +40,18 @@
 | Lighthouse 審計 | `/app/lighthouse`、`/app/site-audit` | 查看性能、無障礙、最佳實踐與 SEO 分數 |
 | 設定 | `/app/settings` | API、AI Provider、媒體存儲與團隊設定 |
 
+### SEO 網站檢測的 Ahrefs 全站模式
+
+`/app/site-audit` 仍以所選網站為作用域。當站點配置啟用 Ahrefs Site Audit 並填入專案 ID 後，「立即執行檢測」會調用 Ahrefs 的全站問題與健康度資料，而不再使用 25 頁的備援爬蟲。問題列表顯示每條規則的嚴重度、受影響頁數、變化和修復建議；展開單條問題時才按 `issue_id` 分頁載入實際受影響 URL。
+
+相關 API：
+
+- `GET /api/v1/site-connections/:siteId/ahrefs-site-audit/config`
+- `PUT /api/v1/site-connections/:siteId/ahrefs-site-audit/config`
+- `GET /api/v1/site-connections/:siteId/ahrefs-site-audit/issues/:issueId/pages?offset=0&limit=100`
+
+日期字段使用 Ahrefs 要求的 UTC ISO 8601 格式，例如 `2026-09-12T02:21:42Z`。Ahrefs API 金鑰只在 API server-side 環境變數中配置，不會返回前端。
+
 文章審計、文章同步、建議處理、單篇修改和內容審核仍保留兼容路由；如產品要重新公開入口，應在不改變 API 合約前提下補回獨立導航。
 
 ## 3. 多語言策略

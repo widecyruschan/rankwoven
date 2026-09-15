@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fetchAhrefsSiteAuditReport } from '../src/ahrefsSiteAudit';
+import { fetchAhrefsSiteAuditIssuePages, fetchAhrefsSiteAuditReport } from '../src/ahrefsSiteAudit';
 import { createServer } from '../src/server';
 import { createInMemorySeoOptimizationRepository } from '../src/seoOptimization';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
@@ -73,6 +73,49 @@ describe('Ahrefs Site Audit provider', () => {
       projectId: '10160561',
       fetchImpl: async () => new Response('{}', { status: 429 })
     })).rejects.toThrow('AHREFS_SITE_AUDIT_HTTP_429');
+  });
+
+  it('reads the official crawled field and loads issue URLs through page explorer', async () => {
+    let issuePageRequest: URL | undefined;
+    const report = await fetchAhrefsSiteAuditReport({
+      apiUrl: 'https://api.ahrefs.com/v3/site-audit/issues',
+      apiKey: 'test-ahrefs-key',
+      projectId: '10160558',
+      fetchImpl: async (url) => {
+        const requestUrl = new URL(String(url));
+        if (requestUrl.pathname.endsWith('/issues')) {
+          return new Response(JSON.stringify({
+            issues: [{ issue_id: 'meta-too-short', name: 'Meta description too short', importance: 'Warning', crawled: 430, change: 429 }]
+          }), { status: 200 });
+        }
+        if (requestUrl.pathname.endsWith('/projects')) {
+          return new Response(JSON.stringify({ projects: [{ project_id: '10160558', health_score: 0.8, crawled: 585 }] }), { status: 200 });
+        }
+        issuePageRequest = requestUrl;
+        return new Response(JSON.stringify({ pages: [{ url: 'https://example.com/a' }, { url: 'https://example.com/b' }] }), { status: 200 });
+      }
+    });
+
+    expect(report).toMatchObject({ healthScore: 80, crawledUrls: 585, issues: [{ affectedPages: 430 }] });
+
+    const pages = await fetchAhrefsSiteAuditIssuePages({
+      apiUrl: 'https://api.ahrefs.com/v3/site-audit/issues',
+      apiKey: 'test-ahrefs-key',
+      projectId: '10160558',
+      issueId: 'meta-too-short',
+      offset: 100,
+      limit: 2,
+      fetchImpl: async (url) => {
+        issuePageRequest = new URL(String(url));
+        return new Response(JSON.stringify({ pages: [{ url: 'https://example.com/a' }, { url: 'https://example.com/b' }] }), { status: 200 });
+      }
+    });
+
+    expect(issuePageRequest?.pathname).toBe('/v3/site-audit/page-explorer');
+    expect(issuePageRequest?.searchParams.get('issue_id')).toBe('meta-too-short');
+    expect(issuePageRequest?.searchParams.get('select')).toBe('url');
+    expect(issuePageRequest?.searchParams.get('offset')).toBe('100');
+    expect(pages).toEqual({ issueId: 'meta-too-short', urls: ['https://example.com/a', 'https://example.com/b'], offset: 100, limit: 2, hasMore: true });
   });
 
   it('stores Ahrefs project configuration per connected site', async () => {

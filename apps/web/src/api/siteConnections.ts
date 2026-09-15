@@ -113,6 +113,7 @@ export interface SeoAudit {
   status: SeoAuditStatus;
   score: number;
   rulesVersion: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -138,6 +139,11 @@ export interface SeoAuditIssue {
   currentValue?: string;
   suggestedValue?: string;
   fieldName: string;
+  source?: 'rankwoven' | 'ahrefs';
+  category?: string;
+  affectedPages?: number;
+  change?: number;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -526,6 +532,60 @@ export async function createSeoAudit(siteId: string) {
   }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/audits`, {
     method: 'POST'
   });
+}
+
+export async function getSeoAudits(siteId: string) {
+  return requestApi<{
+    audits: SeoAudit[];
+    issues: SeoAuditIssue[];
+  }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}/audits`);
+}
+
+export interface AhrefsSiteAuditConfig {
+  siteId: string;
+  enabled: boolean;
+  projectId: string;
+  crawlDate?: string;
+  comparisonDate?: string;
+  updatedAt: string;
+}
+
+export interface AhrefsSiteAuditIssuePages {
+  issueId: string;
+  urls: string[];
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export async function getAhrefsSiteAuditConfig(siteId: string) {
+  return requestApi<{ config: AhrefsSiteAuditConfig }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/ahrefs-site-audit/config`
+  );
+}
+
+export async function updateAhrefsSiteAuditConfig(
+  siteId: string,
+  config: Pick<AhrefsSiteAuditConfig, 'enabled' | 'projectId' | 'crawlDate' | 'comparisonDate'>
+) {
+  return requestApi<{ config: AhrefsSiteAuditConfig }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/ahrefs-site-audit/config`,
+    { method: 'PUT', body: JSON.stringify(config) }
+  );
+}
+
+export async function getAhrefsSiteAuditIssuePages(
+  siteId: string,
+  issueId: string,
+  options: { offset?: number; limit?: number } = {}
+) {
+  const query = new URLSearchParams();
+  if (options.offset !== undefined) query.set('offset', String(options.offset));
+  if (options.limit !== undefined) query.set('limit', String(options.limit));
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestApi<AhrefsSiteAuditIssuePages>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/ahrefs-site-audit/issues/${encodeURIComponent(issueId)}/pages${suffix}`
+  );
 }
 
 export async function approveOptimizationSuggestion(siteId: string, suggestionId: string) {
