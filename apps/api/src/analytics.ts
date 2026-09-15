@@ -10,6 +10,12 @@ export interface AnalyticsOverview {
   propertyId?: string;
   siteId?: string;
   siteHost?: string;
+  hostFilterHosts?: string[];
+  availableHosts?: Array<{
+    host: string;
+    sessions: number;
+  }>;
+  hostFilterWarning?: string;
   startDate: string;
   endDate: string;
   totals: {
@@ -111,6 +117,7 @@ function createDemoOverview(propertyId?: string, options: AnalyticsOverviewOptio
     propertyId,
     siteId: options.siteId,
     siteHost: options.siteHost,
+    hostFilterHosts: options.siteHost ? resolveHostNameCandidates(options.siteHost) : undefined,
     startDate: options.startDate ?? defaultDateRange.startDate,
     endDate: options.endDate ?? defaultDateRange.endDate,
     totals: {
@@ -125,18 +132,51 @@ function createDemoOverview(propertyId?: string, options: AnalyticsOverviewOptio
   };
 }
 
-function createHostNameFilter(siteHost?: string) {
-  if (!siteHost) {
+/** Normalize apex / www so site-host tracking diagnostics stay consistent. */
+export function resolveHostNameCandidates(siteHost?: string): string[] {
+  const normalized = String(siteHost || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '');
+
+  if (!normalized) {
+    return [];
+  }
+
+  const withoutWww = normalized.startsWith('www.') ? normalized.slice(4) : normalized;
+  const withWww = `www.${withoutWww}`;
+  return [...new Set([normalized, withoutWww, withWww].filter(Boolean))];
+}
+
+export function createHostNameFilter(siteHost?: string) {
+  const hosts = resolveHostNameCandidates(siteHost);
+  if (hosts.length === 0) {
     return undefined;
   }
 
-  return {
-    filter: {
-      fieldName: 'hostName',
-      stringFilter: {
-        matchType: 'EXACT',
-        value: siteHost
+  if (hosts.length === 1) {
+    return {
+      filter: {
+        fieldName: 'hostName',
+        stringFilter: {
+          matchType: 'EXACT' as const,
+          value: hosts[0]
+        }
       }
+    };
+  }
+
+  return {
+    orGroup: {
+      expressions: hosts.map((host) => ({
+        filter: {
+          fieldName: 'hostName',
+          stringFilter: {
+            matchType: 'EXACT' as const,
+            value: host
+          }
+        }
+      }))
     }
   };
 }
@@ -170,7 +210,7 @@ export function createGoogleAnalyticsService(): AnalyticsService {
       const defaultDateRange = getDefaultDateRange();
       const startDate = options.startDate ?? defaultDateRange.startDate;
       const endDate = options.endDate ?? defaultDateRange.endDate;
-      const dimensionFilter = createHostNameFilter(options.siteHost);
+      const hostFilterHosts = resolveHostNameCandidates(options.siteHost);
       const propertyId = options.propertyId?.trim();
 
       if (!propertyId) {
@@ -184,29 +224,39 @@ export function createGoogleAnalyticsService(): AnalyticsService {
         }
 
         const accessToken = await requestGoogleAccessToken(credentials, googleAnalyticsScope);
-        const [dailyReport, channelReport, pageReport] = await Promise.all([
+
+        // Always read Property-level data so the same Property ID returns the same
+        // charts for plugin and manual sites. Host isolation previously made plugin
+        // sites look empty when only other hosts in the Property still had events.
+        const [dailyReport, channelReport, pageReport, hostReport] = await Promise.all([
           runGoogleAnalyticsReport(propertyId, accessToken, {
             dateRanges: [{ startDate, endDate }],
             dimensions: [{ name: 'date' }],
             metrics: [{ name: 'activeUsers' }, { name: 'sessions' }, { name: 'screenPageViews' }],
-            ...(dimensionFilter ? { dimensionFilter } : {}),
             orderBys: [{ dimension: { dimensionName: 'date' } }]
           }),
           runGoogleAnalyticsReport(propertyId, accessToken, {
             dateRanges: [{ startDate, endDate }],
             dimensions: [{ name: 'sessionDefaultChannelGroup' }],
             metrics: [{ name: 'sessions' }],
-            ...(dimensionFilter ? { dimensionFilter } : {}),
             orderBys: [{ metric: { metricName: 'sessions' }, desc: true }]
           }),
           runGoogleAnalyticsReport(propertyId, accessToken, {
             dateRanges: [{ startDate, endDate }],
             dimensions: [{ name: 'pagePath' }],
             metrics: [{ name: 'screenPageViews' }, { name: 'activeUsers' }],
-            ...(dimensionFilter ? { dimensionFilter } : {}),
             orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
             limit: 8
-          })
+          }),
+          hostFilterHosts.length > 0
+            ? runGoogleAnalyticsReport(propertyId, accessToken, {
+                dateRanges: [{ startDate, endDate }],
+                dimensions: [{ name: 'hostName' }],
+                metrics: [{ name: 'sessions' }],
+                orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+                limit: 20
+              })
+            : Promise.resolve({ rows: [] } as GoogleAnalyticsReport)
         ]);
 
         const daily = (dailyReport.rows ?? []).map((row) => ({
@@ -234,12 +284,43 @@ export function createGoogleAnalyticsService(): AnalyticsService {
           { activeUsers: 0, sessions: 0, pageViews: 0, conversions: 0 }
         );
 
+        let availableHosts: AnalyticsOverview['availableHosts'];
+        let hostFilterWarning: string | undefined;
+
+        if (hostFilterHosts.length > 0) {
+          availableHosts = (hostReport.rows ?? [])
+            .map((row) => ({
+              host: readDimension(row.dimensionValues, 0),
+              sessions: readMetric(row.metricValues, 0)
+            }))
+            .filter((row) => row.host);
+
+          const hostCandidateSet = new Set(hostFilterHosts);
+          const siteHostSessions = availableHosts
+            .filter((row) => hostCandidateSet.has(row.host.toLowerCase()))
+            .reduce((sum, row) => sum + row.sessions, 0);
+
+          if (totals.sessions > 0 && siteHostSessions === 0) {
+            const hostList = availableHosts
+              .slice(0, 5)
+              .map((row) => `${row.host} (${row.sessions})`)
+              .join(', ');
+            hostFilterWarning =
+              `下方數字是整份 GA4 Property 的流量。此站點 host（${hostFilterHosts.join(' / ')}）` +
+              `在選定期間沒有事件；Property 內有流量的 hosts：${hostList || '無'}。` +
+              `請在網站前台確認 Measurement ID 已正確送出 page_view。`;
+          }
+        }
+
         return {
           configured: true,
-          source: 'google-analytics',
+          source: 'google-analytics' as const,
           propertyId,
           siteId: options.siteId,
           siteHost: options.siteHost,
+          hostFilterHosts: hostFilterHosts.length > 0 ? hostFilterHosts : undefined,
+          availableHosts,
+          hostFilterWarning,
           startDate,
           endDate,
           totals,
@@ -290,7 +371,7 @@ export function registerAnalyticsRoutes(
         });
       }
 
-      siteHost = new URL(site.siteUrl).hostname;
+      siteHost = new URL(site.siteUrl).hostname.toLowerCase();
       propertyId = site.googleAnalyticsPropertyId;
     }
 

@@ -6621,9 +6621,173 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 
 - 本次只完成只讀診斷及 README 記錄，未修改業務程式碼、生產配置、GitHub 或部署版本。
 
+## 會話總結（2026-09-15）— Site Kit GA4 destination 最終確認
+
+### 會話主要目的
+
+確認 `Cyrus` 插件站點與手動站點都配置 Property ID 後，為何插件站點仍無法取得 Cyruschan.com 的即時 GA4 數據。
+
+### 最終證據
+
+- 截圖確認 `Cyrus` 使用 Property `358302596`、Measurement ID `G-1KGTZ4SWVS`、Google tag `GT-NGBJLHR`，並顯示程式碼已插入。
+- 直接查詢 GA4 Property `358302596` 的 2026 年 9 月 `date + hostName` 和 `date + pageLocation` 報告，所有事件均來自 `ckcprompt.cloud`；`cyruschan.com` 為 0 行。
+- RankWoven 生產 API 已正確讀取插件站點保存的 Property ID，並加入 `hostName=cyruschan.com` 精確篩選；OAuth、Docker 和日期請求均正常。
+- 插件只同步 Property ID，不負責注入 Google tag；因此目前缺口在 WordPress Site Kit 的 GA4 destination／Consent 事件收集，而不是 SaaS 取數代碼。
+
+### 待辦
+
+- 在 `cyruschan.com` WordPress 後台 Site Kit → Settings → Connected Services → Analytics，確認 destination 為 `G-1KGTZ4SWVS`／Property `358302596`。
+- 在 GA4 Realtime／DebugView 允許同意後訪問 `cyruschan.com`，確認 `page_view` 事件的 hostname 為 `cyruschan.com`；事件出現後 RankWoven 會自動讀到九月數據。
+
+### 驗證結果
+
+- 本次只完成只讀 GA4 原始報告、公開頁面埋點及插件／手動站點對比，未修改業務程式碼、站點綁定、生產配置或部署版本。
+
+## 會話總結（2026-09-15）— Site Kit 設定截圖核對
+
+### 會話主要目的
+
+核對使用者提供的 Site Kit 截圖，確認 `Cyrus` 的 GA4 Property、Measurement ID 與 Google tag 設定是否正確。
+
+### 核對結果
+
+- 截圖顯示 Property `358302596`、Measurement ID `G-1KGTZ4SWVS`、Google tag `GT-NGBJLHR`，並顯示程式碼已插入。
+- 以上設定與生產站點保存的 Property ID 一致；網站公開 HTML 亦載入相同 Google tag。
+- GA4 Data API 仍顯示 2026 年 8 月 14 日後沒有 `cyruschan.com` host 事件，只有 `ckcprompt.cloud` 事件；日期查詢及 API host 過濾沒有錯位。
+
+### 決策與待辦
+
+- 不修改 RankWoven 的 Property 綁定或 `hostName` 隔離。
+- 需在 GA4 Realtime／DebugView 以無痕模式訪問 `cyruschan.com`，確認 `page_view` 是否到達 Property `358302596`；若沒有，檢查 Site Kit Analytics destination、Consent 與主題／快取對 Google tag 的阻擋。
+
+### 驗證結果
+
+- 本次只完成截圖、公開頁面、Site Kit tag 及 GA4 原始事件的只讀核對，未修改業務程式碼、生產配置或部署版本。
+
+## 會話總結（2026-09-15）— 插件站點 GA4 事件鏈路診斷
+
+### 會話主要目的
+
+排查手動輸入 Property ID 的站點可取得 GA4 數據，但通過 WordPress 插件連接的 `Cyrus` 站點取得不到數據。
+
+### 診斷結果
+
+- 手動站點與插件站點均調用同一個 `/api/v1/analytics/overview`，沒有獨立的插件查詢分支；生產資料庫也已保存兩個站點各自的 Property ID。
+- 生產 `Cyrus` 的 Property `358302596` 在 2026 年 8 月有 `cyruschan.com` host 事件，但 2026 年 9 月只返回 `ckcprompt.cloud` host 事件。
+- `cyruschan.com` 公開頁面載入 Google Site Kit Google tag `GT-NGBJLHR`，但目前沒有證據顯示該 tag 的 GA4 destination 是 Property `358302596`；RankWoven API、OAuth 和 hostName 過濾均正常。
+
+### 關鍵決策和待辦
+
+- 保留 `hostName` 精確過濾，避免插件站點顯示另一個網站的流量；不以未驗證的跨域回退掩蓋埋點問題。
+- 在 WordPress `cyruschan.com` 後台 Site Kit → Analytics 確認 Google tag `GT-NGBJLHR` 的 GA4 destination 與 Property `358302596` 一致。
+- 使用 GA4 Realtime／DebugView 以 `cyruschan.com` 訪問測試，確認 `page_view` 事件進入該 Property；事件恢復後再查詢 RankWoven 九月份數據。
+
+### 驗證結果
+
+- 本次只完成只讀 API、GA4 原始 host、公開頁面埋點及本地／生產站點資料對比，未修改業務程式碼、站點綁定、生產配置或部署版本。
+
+## 會話總結（2026-09-15）— 插件連接記錄與 Analytics 接口核對
+
+### 會話主要目的
+
+按使用者要求檢查 WordPress 插件保存 GA4 Property ID 的代碼，以及 SaaS 相關接口是否對插件模式使用了不同查詢邏輯。
+
+### 核對結果
+
+- 插件在保存設定時先保存本地 `rankwoven_ga4_property_id`，再使用 `PUT /api/v1/site-connections/:siteId/analytics-settings` 發送同一 Property ID；接口成功後不會重寫 Property 或 site URL。
+- 插件首次連接使用 `home_url('/')` 建立 `siteUrl`，已存在連接則使用既有 Site Token 更新同一 Site ID；代碼不存在插件／手動 Analytics 分支。
+- SaaS Analytics 路由先按 workspace 讀取站點的 `googleAnalyticsPropertyId`，再由 `siteUrl` 的 hostname 加入 GA4 `hostName` 精確過濾；插件與手動站點走相同查詢服務。
+- 本地 WordPress 測試插件保存的 Site ID 為舊記錄，Token 對本地及生產 API 均返回 `AUTH_TOKEN_INVALID`；這是本地插件連接記錄過期，不是 GA4 Property ID 同步接口的邏輯差異。
+
+### 決策與待辦
+
+- 不移除 hostname 過濾，也不把 `cyruschan.com` 改綁到其他 Property；這會把另一網站流量錯誤歸入 Cyrus。
+- 若要繼續本地插件測試，需在插件後台重新 Connect This Site，生成與當前環境匹配的 Site ID／Token；生產插件則需確認保存的是生產 Cyrus Site ID。
+- GA4 數據問題仍需以 GA4 Realtime／DebugView 確認 `cyruschan.com` 的 `page_view` 事件是否進入 Property `358302596`。
+
+### 驗證結果
+
+- 插件文件在 Docker WordPress 容器內 `php -l` 通過。
+- 本次只完成源碼、接口及只讀連接核對，未修改插件、SaaS 業務代碼或生產配置。
+
+## 會話總結（2026-09-15）— GA4 前台追蹤後備修復
+
+### 會話主要目的
+
+根據插件與 GA4 事件鏈路診斷，修復 Site Kit 後台顯示已插入 Google tag、但公開頁面未輸出 GA4 追蹤腳本的情況。
+
+### 完成的主要任務
+
+- WordPress 插件新增可選 `GA4 Measurement ID` 與 `GA4 tracking fallback` 設定。
+- 啟用後備且 Site Kit 的 `google_gtagjs-js` 未入隊時，插件在前台輸出標準 `gtag.js`、`dataLayer` 及 `gtag('config', Measurement ID)`。
+- Site Kit 已入隊時，後備不輸出第二組 Google tag，避免重複 page view。
+- 保持現有數字 GA4 Property ID 同步至 SaaS 的接口與 `hostName` 精確篩選不變。
+- 插件版本更新為 `0.8.1`，同步更新插件說明與本地測試清單。
+
+### 關鍵決策和解決方案
+
+- Property ID 與 Measurement ID 屬於不同用途：前者給 SaaS GA4 Data API 讀取，後者只用於前台事件收集。
+- 後備預設關閉，需由管理員明確填入有效 `G-...` Measurement ID 並啟用；這避免未確認的雙重計數。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- Docker WordPress 容器 `php -l` 通過。
+- 本地前台驗證：未入隊 Site Kit 時輸出後備 Google tag。
+- 模擬 `google_gtagjs-js` 已入隊時，後備標籤未輸出；臨時 Measurement ID 與開關均已恢復／刪除。
+- 尚未提交、推送或部署此修復；未修改 `.env`、密碼、Token 或未追蹤的 `0.jpeg`。
+
+### 下一步行動清單
+
+- 部署插件 `0.8.1` 至 `cyruschan.com`，在 RankWoven SEO → 一般設定填入 `G-1KGTZ4SWVS` 並啟用 GA4 tracking fallback。
+- 使用無痕模式重新訪問站點，確認前台 `<head>` 只出現一組 GA4 tag，再於 GA4 Realtime／DebugView 驗證 `cyruschan.com` 事件。
+
 ### 下一步行動清單
 
 - 部署後在已連接插件站點重新執行網站檢測，核對每條問題的完整 URL 列表和一鍵修復隊列。
+
+## 會話總結（2026-09-15）— GA4 Site Kit handle 回歸修復
+
+### 會話主要目的
+
+根據 GA4 前台追蹤診斷，修復後備追蹤對 Google Site Kit script handle 判斷不正確而可能重複輸出的問題。
+
+### 完成的主要任務
+
+- 核對 Google Site Kit 原始碼，確認正式 handle 為 `google_gtagjs`。
+- 更新插件後備判斷，同時兼容舊 handle `google_gtagjs-js`。
+- 更新 WordPress 插件測試清單與使用說明，避免以錯誤 handle 驗證。
+
+### 關鍵決策和解決方案
+
+- 後備追蹤仍只在管理員明確啟用且 Site Kit 未入隊時輸出；不改動 Property ID、hostName 過濾或 SaaS Analytics API。
+- 保留舊 handle 兼容，降低不同 Site Kit 版本或既有整合的回歸風險。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/TESTING.md`
+- `plugins/wordpress/README.md`
+- `README.md`
+
+### 驗證結果
+
+- Docker WordPress 容器 PHP 語法檢查通過，源碼與測試站插件副本一致。
+- 有效 Measurement ID 且未入隊 Site Kit 時，前台輸出一組後備 Google tag。
+- `google_gtagjs` 已入隊時，後備標籤輸出數量為 0。
+- 無效 Measurement ID 時不輸出追蹤標籤；測試用選項已清理。
+- 生產 `https://cyruschan.com/` 目前仍未包含 GA4 標籤，因為插件修復尚未提交或部署。
+
+### 下一步行動清單
+
+- 取得授權後提交並部署插件 `0.8.1` 到 `cyruschan.com`。
+- 在生產插件設定填入正確 Measurement ID 並啟用後備，再以無痕模式和 GA4 Realtime／DebugView 驗證事件。
 
 ## 會話總結（2026-09-15）— SEO 審計功能推送與 VPS 部署
 
@@ -6824,3 +6988,95 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 安全與工作區
 
 - 未提交 `.env`、密碼、Token、API Key 或未追蹤的 `0.jpeg`。
+
+## 會話總結（2026-09-16）— 修復插件站點 GA 流量截止 8/14
+
+### 會話主要目的
+
+分析並修復：WordPress 插件連接的站點在 `/app` Google Analytics 只顯示到 8 月 14 日，而相同 GA4 Property ID 在手動添加模式下數據正常。
+
+### 完成的主要任務
+
+- 確認根因：同一 Property 內多 host；`cyruschan.com` 約自 2026-08-14 後無事件，流量轉到其他 host（如 `ckcprompt.cloud`）。插件站點按 `siteUrl` 的 `hostName` 過濾因而斷流；手動站點若綁定仍有流量的 host 則看起來「正常」。
+- API：`resolveHostNameCandidates` / `createHostNameFilter` 支援 apex ↔ www OR 過濾；當篩選 host 無資料時回傳 `availableHosts` 與 `hostFilterWarning`。
+- Web：Analytics 頁在無資料且有 host 診斷時顯示警告提示。
+- WordPress 插件 0.8.2：Site Kit 已入隊時，啟用 fallback 仍會輸出 `gtag("config", Measurement ID)`，不再因 Site Kit 存在而完全跳過，避免錯誤 destination 導致本站無事件。
+- 新增 `apps/api/tests/analyticsHostFilter.test.ts`（6 項通過）；插件 PHP 語法檢查通過。
+
+### 關鍵決策和解決方案
+
+- 不取消 host 隔離，避免跨站流量混入。
+- 用診斷提示解釋「同 Property、不同 siteUrl」的差異。
+- 追蹤修復靠正確 Measurement ID destination，不是改讀其他 host 的數據。
+
+### 使用的技術棧
+
+- Fastify / TypeScript（GA4 Data API host filter）
+- Vue 3 + Ant Design Vue + i18n
+- WordPress PHP 插件（gtag config ensure）
+- Vitest
+
+### 新增或修改文件
+
+- `apps/api/src/analytics.ts`
+- `apps/api/tests/analyticsHostFilter.test.ts`
+- `apps/web/src/api/appInsights.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/views/AnalyticsView.vue`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- `vitest run apps/api/tests/analyticsHostFilter.test.ts`：6 passed。
+- WordPress 插件 PHP lint：無語法錯誤。
+- 尚未推送／部署；生產站點需更新插件並啟用 Measurement ID fallback 後，Realtime 才會恢復 `cyruschan.com` 事件。
+
+### 下一步行動清單
+
+- 在 cyruschan.com 更新 RankWoven SEO 至 0.8.2，填入正確 GA4 Measurement ID 並啟用 tracking fallback，用 GA Realtime 確認 `hostName=cyruschan.com`。
+- 將本輪 API／Web／插件變更提交並部署（需使用者授權）。
+- 部署後在 `/app` 對插件站點查詢近期日期，確認不再只停在 8/14，或至少出現 host 診斷提示。
+
+## 會話總結（2026-09-16）— 插件與手動站同 Property 顯示不一致
+
+### 會話主要目的
+
+修復同一 GA4 Property ID（`358302596`）在手動站有數據、插件站顯示「此日期範圍沒有 GA4 數據」的問題。
+
+### 完成的主要任務
+
+- 確認差異來自 overview 依 `siteUrl` 做 `hostName` 過濾：插件站 `cyruschan.com` 近期無事件回空；手動站綁到同 Property 內仍有流量的 host 故有數字。
+- 改為一律讀取 **Property 級**流量，使同 Property ID 在插件／手動模式顯示一致。
+- 另查 `hostName` 分布：若 Property 有流量但本站 host 無事件，仍顯示黃色追蹤警告（不遮蓋圖表數據）。
+- 更新中英文提示文案；相關 lint／單元測試通過。
+
+### 關鍵決策和解決方案
+
+- 產品預期是「同一 Property ID = 同一組圖表」，優先於跨站 host 隔離。
+- host 診斷保留為警告，不再把無本站 host 事件誤判成整份 Property 無數據。
+
+### 使用的技術棧
+
+- Fastify / GA4 Data API、Vue 3、Vitest
+
+### 新增或修改文件
+
+- `apps/api/src/analytics.ts`
+- `apps/web/src/views/AnalyticsView.vue`
+- `apps/web/src/i18n.ts`
+- `README.md`
+（同輪既有：`apps/api/tests/analyticsHostFilter.test.ts`、插件 0.8.2、`appInsights.ts` 等）
+
+### 驗證結果
+
+- `vitest`：`analyticsHostFilter` + `health` 共 19 passed。
+- `eslint` 變更檔通過。
+- 尚未提交／部署；生產需推送後插件站才會與手動站顯示相同 Property 數據。
+
+### 下一步行動清單
+
+- 授權後提交並推送 `main` 部署。
+- 部署後用插件站點選 `358302596`、日期 2026-09-10～16，確認數字與手動站一致；若本站 host 仍無事件，應看到黃色警告而非空白圖表。

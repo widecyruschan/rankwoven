@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RankWoven SEO
  * Description: Connects a WordPress site to RankWoven and syncs posts, pages, portfolio items, products, and image media for SEO optimization. Includes GEO controls, LLMs.txt, RSS Sitemap output, and WebP/AVIF image optimization.
- * Version: 0.8.0
+ * Version: 0.8.2
  * Author: RankWoven
  * Text Domain: rankwoven-seo
  * Requires at least: 6.0
@@ -15,11 +15,13 @@ if (!defined('ABSPATH')) {
 
 final class RankWoven_SEO_Plugin
 {
-    private const VERSION = '0.8.0';
+    private const VERSION = '0.8.2';
     private const OPTION_API_BASE_URL = 'rankwoven_api_base_url';
     private const OPTION_SITE_ID = 'rankwoven_site_id';
     private const OPTION_SITE_TOKEN = 'rankwoven_site_token';
     private const OPTION_GA4_PROPERTY_ID = 'rankwoven_ga4_property_id';
+    private const OPTION_GA4_MEASUREMENT_ID = 'rankwoven_ga4_measurement_id';
+    private const OPTION_GA4_TRACKING_FALLBACK_ENABLED = 'rankwoven_ga4_tracking_fallback_enabled';
     private const OPTION_TWITTER_USERNAME = 'rankwoven_twitter_username';
     private const OPTION_FACEBOOK_APP_ID = 'rankwoven_facebook_app_id';
     private const OPTION_WP_ADMIN_USERNAME = 'rankwoven_wp_admin_username';
@@ -87,6 +89,7 @@ final class RankWoven_SEO_Plugin
         add_action('wp_head', [$this, 'render_frontend_seo_meta_tags'], 1);
         add_action('wp_head', [$this, 'render_geo_meta_tags'], 2);
         add_action('wp_head', [$this, 'render_geo_structured_data'], 3);
+        add_action('wp_head', [$this, 'render_ga4_tracking_fallback'], 99);
         add_action('parse_request', [$this, 'maybe_render_custom_sitemap_request'], -100, 1);
         add_action('template_redirect', [$this, 'maybe_render_sitemap_xml'], 0);
         add_action('template_redirect', [$this, 'maybe_render_rss_sitemap_xml'], 0);
@@ -625,6 +628,63 @@ final class RankWoven_SEO_Plugin
         $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:site_name', 'content' => $site_name]);
         $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:description', 'content' => $description]);
         $this->render_head_meta_tag(['prefix' => 'og: http://ogp.me/ns#', 'property' => 'og:url', 'content' => $url]);
+    }
+
+    public function render_ga4_tracking_fallback(): void
+    {
+        if (is_admin() || is_feed() || wp_is_json_request()) {
+            return;
+        }
+
+        $measurement_id = $this->sanitize_ga4_measurement_id(
+            (string) get_option(self::OPTION_GA4_MEASUREMENT_ID, '')
+        );
+        $fallback_enabled = (bool) get_option(self::OPTION_GA4_TRACKING_FALLBACK_ENABLED, false);
+
+        if (!$fallback_enabled || $measurement_id === '') {
+            return;
+        }
+
+        // Site Kit may enqueue google_gtagjs while sending events to the wrong
+        // destination. When fallback is enabled, always ensure our Measurement ID
+        // is configured. If Site Kit already loaded gtag.js, only add config.
+        if ($this->is_site_kit_google_tag_enqueued()) {
+            echo "\n<!-- RankWoven GA4 destination ensure -->\n";
+            printf(
+                '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("config",%s);</script>' . "\n",
+                wp_json_encode($measurement_id)
+            );
+            return;
+        }
+
+        $script_url = 'https://www.googletagmanager.com/gtag/js?id=' . rawurlencode($measurement_id);
+
+        echo "\n<!-- RankWoven GA4 tracking fallback -->\n";
+        printf('<script async src="%s"></script>' . "\n", esc_url($script_url));
+        printf(
+            '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config",%s);</script>' . "\n",
+            wp_json_encode($measurement_id)
+        );
+    }
+
+    private function sanitize_ga4_measurement_id(string $value): string
+    {
+        $measurement_id = strtoupper(trim(sanitize_text_field($value)));
+
+        return preg_match('/^G-[A-Z0-9]{4,20}$/', $measurement_id) === 1
+            ? $measurement_id
+            : '';
+    }
+
+    private function is_site_kit_google_tag_enqueued(): bool
+    {
+        foreach (['google_gtagjs', 'google_gtagjs-js'] as $script_handle) {
+            if (wp_script_is($script_handle, 'enqueued') || wp_script_is($script_handle, 'done')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function render_geo_meta_tags(): void
@@ -1975,6 +2035,8 @@ final class RankWoven_SEO_Plugin
         $api_base_url = get_option(self::OPTION_API_BASE_URL, 'http://localhost:3011');
         $site_id = get_option(self::OPTION_SITE_ID, '');
         $ga4_property_id = get_option(self::OPTION_GA4_PROPERTY_ID, '');
+        $ga4_measurement_id = get_option(self::OPTION_GA4_MEASUREMENT_ID, '');
+        $ga4_tracking_fallback_enabled = (bool) get_option(self::OPTION_GA4_TRACKING_FALLBACK_ENABLED, false);
         $twitter_username = get_option(self::OPTION_TWITTER_USERNAME, '');
         $facebook_app_id = get_option(self::OPTION_FACEBOOK_APP_ID, '');
         $wp_admin_username = get_option(self::OPTION_WP_ADMIN_USERNAME, '');
@@ -2120,6 +2182,41 @@ final class RankWoven_SEO_Plugin
                             />
                             <p class="description">
                                 <?php echo esc_html__('Enter this WordPress site GA4 Property ID. RankWoven uses it to read SEO analytics for this site after the platform service account has access to the property.', 'rankwoven-seo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="rankwoven_ga4_measurement_id"><?php echo esc_html__('GA4 Measurement ID', 'rankwoven-seo'); ?></label>
+                        </th>
+                        <td>
+                            <input
+                                id="rankwoven_ga4_measurement_id"
+                                name="rankwoven_ga4_measurement_id"
+                                type="text"
+                                class="regular-text"
+                                value="<?php echo esc_attr($ga4_measurement_id); ?>"
+                                placeholder="G-XXXXXXXXXX"
+                            />
+                            <p class="description">
+                                <?php echo esc_html__('Optional. Enter the public GA4 Measurement ID only when this site needs the RankWoven tracking fallback.', 'rankwoven-seo'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php echo esc_html__('GA4 tracking fallback', 'rankwoven-seo'); ?></th>
+                        <td>
+                            <label>
+                                <input
+                                    name="rankwoven_ga4_tracking_fallback_enabled"
+                                    type="checkbox"
+                                    value="1"
+                                    <?php checked($ga4_tracking_fallback_enabled); ?>
+                                />
+                                <?php echo esc_html__('Load the configured Measurement ID only when Site Kit has not enqueued its Google tag.', 'rankwoven-seo'); ?>
+                            </label>
+                            <p class="description">
+                                <?php echo esc_html__('Use this after confirming Site Kit is missing the correct GA4 destination, or is not outputting a working tag. When Site Kit is already loaded, RankWoven only adds gtag("config", Measurement ID) and does not load a second gtag.js.', 'rankwoven-seo'); ?>
                             </p>
                         </td>
                     </tr>
@@ -2755,6 +2852,10 @@ final class RankWoven_SEO_Plugin
         $site_id = sanitize_text_field(get_option(self::OPTION_SITE_ID, ''));
         $site_token = sanitize_text_field(get_option(self::OPTION_SITE_TOKEN, ''));
         $ga4_property_id = sanitize_text_field(get_option(self::OPTION_GA4_PROPERTY_ID, ''));
+        $ga4_measurement_id = $this->sanitize_ga4_measurement_id(
+            (string) get_option(self::OPTION_GA4_MEASUREMENT_ID, '')
+        );
+        $ga4_tracking_fallback_enabled = (bool) get_option(self::OPTION_GA4_TRACKING_FALLBACK_ENABLED, false);
         $twitter_username = sanitize_text_field(get_option(self::OPTION_TWITTER_USERNAME, ''));
         $facebook_app_id = sanitize_text_field(get_option(self::OPTION_FACEBOOK_APP_ID, ''));
         $wp_credentials = $this->get_wordpress_admin_credentials();
@@ -2775,6 +2876,8 @@ final class RankWoven_SEO_Plugin
                 <?php $this->render_diagnostic_row(__('Site ID', 'rankwoven-seo'), $site_id !== '' ? $site_id : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Token status', 'rankwoven-seo'), $site_token !== '' ? __('Configured locally', 'rankwoven-seo') : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('GA4 Property ID', 'rankwoven-seo'), $ga4_property_id !== '' ? $ga4_property_id : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('GA4 Measurement ID', 'rankwoven-seo'), $ga4_measurement_id !== '' ? $ga4_measurement_id : __('Not configured', 'rankwoven-seo')); ?>
+                <?php $this->render_diagnostic_row(__('GA4 tracking fallback', 'rankwoven-seo'), $ga4_tracking_fallback_enabled ? __('Enabled', 'rankwoven-seo') : __('Disabled', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Twitter/X Username', 'rankwoven-seo'), $twitter_username !== '' ? '@' . $twitter_username : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Facebook App ID', 'rankwoven-seo'), $facebook_app_id !== '' ? $facebook_app_id : __('Not configured', 'rankwoven-seo')); ?>
                 <?php $this->render_diagnostic_row(__('Token last local use', 'rankwoven-seo'), $this->get_last_token_used_label()); ?>
@@ -3742,6 +3845,14 @@ final class RankWoven_SEO_Plugin
         );
         $ga4_property_id = sanitize_text_field(wp_unslash($_POST['rankwoven_ga4_property_id'] ?? ''));
         update_option(self::OPTION_GA4_PROPERTY_ID, $ga4_property_id);
+        $ga4_measurement_id = $this->sanitize_ga4_measurement_id(
+            (string) wp_unslash($_POST['rankwoven_ga4_measurement_id'] ?? '')
+        );
+        update_option(self::OPTION_GA4_MEASUREMENT_ID, $ga4_measurement_id);
+        update_option(
+            self::OPTION_GA4_TRACKING_FALLBACK_ENABLED,
+            !empty($_POST['rankwoven_ga4_tracking_fallback_enabled'])
+        );
         $twitter_username = ltrim(sanitize_text_field(wp_unslash($_POST['rankwoven_twitter_username'] ?? '')), '@');
         $facebook_app_id = sanitize_text_field(wp_unslash($_POST['rankwoven_facebook_app_id'] ?? ''));
         update_option(self::OPTION_TWITTER_USERNAME, $twitter_username);

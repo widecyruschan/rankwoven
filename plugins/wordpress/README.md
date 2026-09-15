@@ -31,6 +31,7 @@ Settings -> RankWoven SEO
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
 - 輸入此 WordPress 站點的 GA4 Property ID，讓 SaaS 分析頁按站點讀取 SEO 流量資料。
+- 如 Google Site Kit 已顯示設定完成但前台沒有輸出 Google tag，或 Site Kit 送到錯誤的 GA4 destination，可輸入 GA4 Measurement ID（`G-...`）並明確啟用 `GA4 tracking fallback`。Site Kit 未入隊時輸出完整 `gtag.js`；已入隊時只補一行 `gtag("config", Measurement ID)`，不重複載入第二組 `gtag.js`。
 - 保存 Twitter/X Username 和 Facebook App ID，用於前台 Twitter Card 與 Facebook Open Graph 標籤。
 - 保存 WordPress 管理員用戶名和 Application Password，供 SaaS 後續以該管理員身份寫回已批准修改。
 - 設定圖片屬性自動生成規則，使用檔案名為新上傳圖片生成標題、Alt Text、媒體說明文字和內容說明。
@@ -219,7 +220,7 @@ Content-Type: application/json
 
 若 WordPress 端刪除了文章、頁面、商品或 Portfolio，請在 `Link Assistant` 點擊 `重新掃描內部連結`。插件會建立 full sync 任務，不帶 `updatedAfter`，SaaS 端會在最後批次完成後移除本輪未再次出現的同步內容，並過濾指向已刪內容的未套用內部連結建議；已經套用到 WordPress 正文中的連結不會被自動刪除，需由管理員按內容策略人工調整。
 
-GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。RankWoven 平台仍需要配置 Google 服務帳號憑據，且該服務帳號必須被加入客戶 GA4 Property 的可讀權限，否則客戶後台分析頁會返回示範數據。
+GA4 Property ID 由客戶在 WordPress 插件後台錄入並同步到 SaaS。RankWoven 平台仍需要配置 Google 服務帳號憑據，且該服務帳號必須被加入客戶 GA4 Property 的可讀權限，否則客戶後台分析頁會返回未連接提示。Measurement ID 是公開的前台追蹤 ID，和數字 Property ID 不同；僅在 Site Kit 未輸出標籤時才啟用 RankWoven 後備追蹤。
 
 ## 站點側 REST API
 

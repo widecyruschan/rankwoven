@@ -104,6 +104,28 @@ const pageColumns = computed<ColumnsType<AnalyticsOverview['pages'][number]>>(()
   { title: t('analytics.activeUsers'), dataIndex: 'activeUsers', key: 'activeUsers' }
 ]);
 
+const hostFilterDescription = computed(() => {
+  if (!overview.value?.hostFilterWarning) {
+    return '';
+  }
+
+  const filteredHosts = overview.value.hostFilterHosts?.join(', ') || overview.value.siteHost || '--';
+  const availableHosts = overview.value.availableHosts
+    ?.map((item) => `${item.host} (${item.sessions})`)
+    .join(', ');
+
+  const parts = [
+    overview.value.hostFilterWarning,
+    t('analytics.hostFilterHint', { hosts: filteredHosts })
+  ];
+
+  if (availableHosts) {
+    parts.push(t('analytics.availableHostsHint', { hosts: availableHosts }));
+  }
+
+  return parts.join(' ');
+});
+
 async function loadAnalytics() {
   isLoading.value = true;
   loadError.value = '';
@@ -229,7 +251,15 @@ watch(selectedSiteId, (siteId) => {
       :description="t('analytics.demoModeDescription')"
     />
     <a-alert
-      v-if="overview?.configured && overview.daily.length === 0"
+      v-if="overview?.configured && overview.hostFilterWarning"
+      class="section-alert"
+      type="warning"
+      show-icon
+      :message="t('analytics.hostFilterTitle')"
+      :description="hostFilterDescription"
+    />
+    <a-alert
+      v-else-if="overview?.configured && overview.daily.length === 0"
       class="section-alert"
       type="info"
       show-icon

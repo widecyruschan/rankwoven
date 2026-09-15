@@ -4,6 +4,12 @@ export interface AnalyticsOverview {
   propertyId?: string;
   siteId?: string;
   siteHost?: string;
+  hostFilterHosts?: string[];
+  availableHosts?: Array<{
+    host: string;
+    sessions: number;
+  }>;
+  hostFilterWarning?: string;
   startDate: string;
   endDate: string;
   totals: {

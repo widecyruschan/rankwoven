@@ -93,6 +93,9 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 - [ ] `Settings -> RankWoven SEO` 舊入口仍可打開並導向一般設定頁。
 - [ ] API Base URL 填 `http://host.docker.internal:3011` 並保存成功。
 - [ ] 保存 GA4 Property ID、WordPress 管理員用戶名和 Application Password 後重新打開頁面，值正確回顯（Application Password 不得明文回顯）。
+- [ ] 沒有 Site Kit Google tag 時，輸入有效 GA4 Measurement ID（`G-...`）並啟用 `GA4 tracking fallback`，前台 `<head>` 僅輸出一組 `googletagmanager.com/gtag/js`、`dataLayer` 及 Measurement ID。
+- [ ] Site Kit 已入隊 `google_gtagjs` 時，啟用後備追蹤不得輸出第二組 `gtag/js`，但應輸出 `gtag("config", Measurement ID)`（註解 `RankWoven GA4 destination ensure`）。
+- [ ] Measurement ID 填入非 `G-...` 格式後保存，重新打開設定頁應為空值，前台不得輸出追蹤腳本。
 
 ### 2. 站點連接
 
