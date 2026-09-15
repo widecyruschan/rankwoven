@@ -120,6 +120,7 @@ function parseContentAnalysisOutput(value: string) {
 function normalizeWorkerErrorCode(error: unknown) {
   const message = error instanceof Error ? error.message : '';
   if (/^WORDPRESS_REST_[45]\d\d$/.test(message)) return message;
+  if (/^KEYWORD_PROVIDER_HTTP_[45]\d\d$/.test(message)) return message;
   if ([
     'UNSAFE_TARGET_URL',
     'WORDPRESS_REQUEST_TIMEOUT',
@@ -138,15 +139,12 @@ function normalizeWorkerErrorCode(error: unknown) {
     'PROVIDER_UNAVAILABLE',
     'KEYWORD_PROVIDER_TIMEOUT',
     'KEYWORD_PROVIDER_RESPONSE_INVALID',
-    'KEYWORD_PROVIDER_HTTP_429',
-    'KEYWORD_PROVIDER_HTTP_500',
-    'KEYWORD_PROVIDER_HTTP_502',
-    'KEYWORD_PROVIDER_HTTP_503',
     'KEYWORD_RESEARCH_INPUT_INVALID',
     'CONTENT_SNAPSHOT_UNAVAILABLE',
     'CONTENT_OUTPUT_REFUSED',
     'CONTENT_OUTPUT_TRUNCATED',
-    'CONTENT_SCHEMA_INVALID'
+    'CONTENT_SCHEMA_INVALID',
+    'WORKER_TASK_FAILED'
   ].includes(message)) {
     return message;
   }

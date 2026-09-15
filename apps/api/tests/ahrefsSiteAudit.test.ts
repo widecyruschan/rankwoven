@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { fetchAhrefsSiteAuditIssuePages, fetchAhrefsSiteAuditReport } from '../src/ahrefsSiteAudit';
+import {
+  fetchAhrefsSiteAuditIssuePages,
+  fetchAhrefsSiteAuditReport,
+  resolveAhrefsSiteAuditProjectId
+} from '../src/ahrefsSiteAudit';
 import { createServer } from '../src/server';
 import { createInMemorySeoOptimizationRepository } from '../src/seoOptimization';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
@@ -151,7 +155,63 @@ describe('Ahrefs Site Audit provider', () => {
       headers: { authorization }
     });
     expect(saved.statusCode).toBe(200);
-    expect(loaded.json()).toMatchObject({ success: true, data: { config: payload } });
+    expect(loaded.json()).toMatchObject({
+      success: true,
+      data: {
+        config: payload,
+        platformManaged: expect.any(Boolean),
+        platformAvailable: expect.any(Boolean)
+      }
+    });
     await server.close();
+  });
+
+  it('resolves Ahrefs project id by site URL without requiring a customer-provided project', async () => {
+    const resolved = await resolveAhrefsSiteAuditProjectId({
+      apiUrl: 'https://api.ahrefs.com/v3/site-audit/issues',
+      managementApiUrl: 'https://api.ahrefs.com/v3/management/projects',
+      apiKey: 'test-ahrefs-key',
+      siteUrl: 'https://www.ckcprompt.cloud/',
+      autoCreate: true,
+      fetchImpl: async (input, init) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : String(input);
+        if (url.includes('/site-audit/projects') && url.includes('project_url=')) {
+          return new Response(JSON.stringify({
+            healthscores: [
+              {
+                project_id: '10160561',
+                project_name: 'Ckcprompt',
+                target_url: 'https://www.ckcprompt.cloud/',
+                health_score: 24,
+                total: 847
+              }
+            ]
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
+        if (url.includes('/management/projects') && init?.method === 'POST') {
+          throw new Error('should not create when lookup succeeds');
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }
+    });
+
+    expect(resolved).toEqual({
+      projectId: '10160561',
+      created: false,
+      resolvedBy: 'lookup'
+    });
+  });
+
+  it('does not bind an unrelated project when the lookup response has no matching target URL', async () => {
+    await expect(resolveAhrefsSiteAuditProjectId({
+      apiUrl: 'https://api.ahrefs.com/v3/site-audit/issues',
+      managementApiUrl: 'https://api.ahrefs.com/v3/management/projects',
+      apiKey: 'test-ahrefs-key',
+      siteUrl: 'https://target.example/',
+      autoCreate: false,
+      fetchImpl: async () => new Response(JSON.stringify({
+        healthscores: [{ project_id: 'unrelated-project', target_url: 'https://other.example/' }]
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    })).rejects.toThrow('AHREFS_SITE_AUDIT_PROJECT_NOT_FOUND');
   });
 });

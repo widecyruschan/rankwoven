@@ -61,6 +61,11 @@ export const apiConfigSchema = z.object({
   AHREFS_SITE_AUDIT_PROJECT_ID: optionalStringSchema.transform((value) => value?.slice(0, 80)),
   AHREFS_SITE_AUDIT_CRAWL_DATE: optionalDateTimeSchema,
   AHREFS_SITE_AUDIT_COMPARISON_DATE: optionalDateTimeSchema,
+  AHREFS_SITE_AUDIT_AUTO_CREATE: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
+  AHREFS_MANAGEMENT_API_URL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.url().default('https://api.ahrefs.com/v3/management/projects')
+  ),
   SEMRUSH_API_URL: optionalUrlSchema,
   SEMRUSH_API_KEY: z.string().optional(),
   SERPAPI_KEY: z.string().optional(),

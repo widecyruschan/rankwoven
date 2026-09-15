@@ -335,6 +335,67 @@ describe('site connection routes', () => {
     await server.close();
   });
 
+  it('saves up to three competitor URLs per site for keyword research', async () => {
+    const { server, body } = await createWordPressConnection();
+    const authToken = await loginDemoUser(server);
+    const siteId = body.data.site.id;
+
+    const updated = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/site-connections/${siteId}/competitor-urls`,
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        competitorUrls: [
+          'https://www.newscan.com.tw/',
+          'https://competitor-two.example.test/path',
+          'https://competitor-three.example.test',
+          'https://should-be-rejected.example.test'
+        ]
+      }
+    });
+    expect(updated.statusCode).toBe(400);
+
+    const saved = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/site-connections/${siteId}/competitor-urls`,
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        competitorUrls: [
+          'https://www.newscan.com.tw/',
+          'https://competitor-two.example.test/path',
+          'https://competitor-three.example.test'
+        ]
+      }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({
+      success: true,
+      data: {
+        site: {
+          id: siteId,
+          competitorUrls: [
+            'https://newscan.com.tw/',
+            'https://competitor-two.example.test/',
+            'https://competitor-three.example.test/'
+          ]
+        }
+      }
+    });
+
+    const detail = await server.inject({
+      method: 'GET',
+      url: `/api/v1/site-connections/${siteId}`,
+      headers: { authorization: `Bearer ${authToken}` }
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data.site.competitorUrls).toEqual([
+      'https://newscan.com.tw/',
+      'https://competitor-two.example.test/',
+      'https://competitor-three.example.test/'
+    ]);
+    await server.close();
+  });
+
   it('updates WordPress admin application password credentials for an existing site', async () => {
     const { server, body } = await createWordPressConnection();
     const authToken = await loginDemoUser(server);

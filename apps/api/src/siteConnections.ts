@@ -64,6 +64,11 @@ const updateSiteAnalyticsSchema = z.object({
   googleAnalyticsPropertyId: optionalAnalyticsPropertyIdSchema
 });
 
+const competitorUrlSchema = z.string().trim().min(1).max(500);
+const updateSiteCompetitorUrlsSchema = z.object({
+  competitorUrls: z.array(competitorUrlSchema).max(3)
+});
+
 const submitSearchConsoleSitemapSchema = z.object({
   sitemapPath: z.string().trim().min(1).max(240).default('sitemap.xml')
 });
@@ -211,6 +216,7 @@ export interface SiteConnection {
   cmsVersion?: string;
   pluginVersion?: string;
   googleAnalyticsPropertyId?: string;
+  competitorUrls: string[];
   status: SiteConnectionStatus;
   createdAt: string;
   lastTokenUsedAt?: string;
@@ -284,6 +290,10 @@ export interface SiteConnectionRepository {
     siteId: string,
     settings: SiteAnalyticsSettingsInput
   ): Promise<SiteConnection | undefined>;
+  updateCompetitorUrls(
+    siteId: string,
+    competitorUrls: string[]
+  ): Promise<SiteConnection | undefined>;
   updateSiteInfo(
     siteId: string,
     input: CreateConnectionInput
@@ -327,6 +337,35 @@ interface InMemorySiteConnection extends SiteConnection {
 
 type WordPressCredentialsInput = z.infer<typeof updateWordPressCredentialsSchema>;
 type SiteAnalyticsSettingsInput = z.infer<typeof updateSiteAnalyticsSchema>;
+
+function normalizeCompetitorUrlList(values: string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const candidate = trimmed.includes('://') ? trimmed : `https://${trimmed}`;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+      const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+      if (!hostname || seen.has(hostname)) continue;
+      seen.add(hostname);
+      normalized.push(`https://${hostname}/`);
+    } catch {
+      continue;
+    }
+    if (normalized.length >= 3) break;
+  }
+  return normalized;
+}
+
+function readCompetitorUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return normalizeCompetitorUrlList(
+    value.filter((item): item is string => typeof item === 'string')
+  );
+}
 
 type PublicUrlValidator = (url: string) => Promise<ValidatedPublicUrl>;
 
@@ -414,6 +453,9 @@ ALTER TABLE site_connections
 ALTER TABLE site_connections
   ADD CONSTRAINT site_connections_platform_check
   CHECK (platform IN ('wordpress', 'joomla', 'opencart', 'manual'));
+
+ALTER TABLE site_connections
+  ADD COLUMN IF NOT EXISTS competitor_urls jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_site_connections_last_token_used
   ON site_connections(last_token_used_at DESC);
@@ -693,6 +735,7 @@ function toPublicConnection(connection: InMemorySiteConnection): SiteConnection 
     cmsVersion: connection.cmsVersion,
     pluginVersion: connection.pluginVersion,
     googleAnalyticsPropertyId: connection.googleAnalyticsPropertyId,
+    competitorUrls: connection.competitorUrls ?? [],
     status: connection.status,
     createdAt: connection.createdAt,
     lastTokenUsedAt: connection.lastTokenUsedAt,
@@ -760,6 +803,7 @@ function mapSiteRow(row: QueryResultRow): SiteConnection {
     cmsVersion: row.cms_version ?? undefined,
     pluginVersion: row.plugin_version ?? undefined,
     googleAnalyticsPropertyId: row.google_analytics_property_id ?? undefined,
+    competitorUrls: readCompetitorUrls(row.competitor_urls),
     status: row.status,
     createdAt: toIsoString(row.created_at) ?? '',
     lastTokenUsedAt: toIsoString(row.last_token_used_at),
@@ -1596,6 +1640,7 @@ function createSiteConnection(
     cmsVersion: input.cmsVersion,
     pluginVersion: input.pluginVersion,
     googleAnalyticsPropertyId: input.googleAnalyticsPropertyId,
+    competitorUrls: [],
     apiToken,
     tokenPreview: getTokenPreview(apiToken),
     status: 'connected',
@@ -1696,6 +1741,12 @@ export function createInMemorySiteConnectionRepository(): SiteConnectionReposito
       }
 
       site.googleAnalyticsPropertyId = settings.googleAnalyticsPropertyId?.trim() || undefined;
+      return toPublicConnection(site);
+    },
+    async updateCompetitorUrls(siteId, competitorUrls) {
+      const site = sites.get(siteId);
+      if (!site) return undefined;
+      site.competitorUrls = normalizeCompetitorUrlList(competitorUrls);
       return toPublicConnection(site);
     },
     async updateSiteInfo(siteId, input) {
@@ -2375,6 +2426,21 @@ class PostgresSiteConnectionRepository implements SiteConnectionRepository {
       [siteId, settings.googleAnalyticsPropertyId?.trim() || null]
     );
 
+    return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
+  }
+
+  async updateCompetitorUrls(siteId: string, competitorUrls: string[]) {
+    await this.ensureSchema();
+    const normalized = normalizeCompetitorUrlList(competitorUrls);
+    const result = await this.pool.query(
+      `
+        UPDATE site_connections
+        SET competitor_urls = $2::jsonb
+        WHERE id = $1
+        RETURNING *
+      `,
+      [siteId, JSON.stringify(normalized)]
+    );
     return result.rows[0] ? mapSiteRow(result.rows[0]) : undefined;
   }
 
@@ -4067,6 +4133,62 @@ export function registerSiteConnectionRoutes(
       data: {
         site
       }
+    };
+  });
+
+  app.put<{
+    Params: {
+      siteId: string;
+    };
+  }>('/api/v1/site-connections/:siteId/competitor-urls', async (request, reply) => {
+    const parsed = updateSiteCompetitorUrlsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return validationError(reply, parsed.error);
+    }
+
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+    if (user.role === 'viewer') {
+      return reply.status(403).send({
+        success: false,
+        message: '沒有足夠權限更新競品網址',
+        error: { code: 'FORBIDDEN' }
+      });
+    }
+
+    const existingSite = await repository.findForWorkspace(request.params.siteId, user.workspaceId);
+    if (!existingSite) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: { code: 'SITE_NOT_FOUND' }
+      });
+    }
+
+    const rawUrls = parsed.data.competitorUrls.map((value) => value.trim()).filter(Boolean);
+    for (const value of rawUrls) {
+      if (normalizeCompetitorUrlList([value]).length === 0) {
+        return reply.status(400).send({
+          success: false,
+          message: '競品網址格式不正確，請輸入公開網站網址',
+          error: { code: 'VALIDATION_ERROR' }
+        });
+      }
+    }
+
+    const site = await repository.updateCompetitorUrls(request.params.siteId, rawUrls);
+    if (!site) {
+      return reply.status(404).send({
+        success: false,
+        message: '找不到站點連接',
+        error: { code: 'SITE_NOT_FOUND' }
+      });
+    }
+
+    return {
+      success: true,
+      message: '競品網址已保存',
+      data: { site }
     };
   });
 

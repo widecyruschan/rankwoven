@@ -85,6 +85,8 @@ const syncedContent = ref<SyncedArticle[]>([]);
 const manualTargetUrl = ref('');
 const manualContentCmsId = ref<string>();
 const ahrefsConfig = ref<AhrefsSiteAuditConfig | null>(null);
+const ahrefsPlatformManaged = ref(false);
+const ahrefsPlatformAvailable = ref(false);
 const latestAhrefsAudit = ref<SeoAudit | null>(null);
 const latestAhrefsIssues = ref<SeoAuditIssue[]>([]);
 const ahrefsIssuePages = ref<Record<string, AhrefsSiteAuditIssuePages>>({});
@@ -134,6 +136,23 @@ const severityColorMap: Record<string, string> = {
   medium: '#faad14',
   low: '#52c41a'
 };
+
+const canUseAhrefsFullSite = computed(() =>
+  ahrefsPlatformAvailable.value
+  || Boolean(ahrefsConfig.value?.enabled && ahrefsConfig.value?.projectId?.trim())
+  || Boolean(ahrefsConfig.value?.projectId?.trim())
+);
+
+const ahrefsIssueDistribution = computed(() => {
+  const counts = { error: 0, warning: 0, notice: 0, total: latestAhrefsIssues.value.length };
+  for (const issue of latestAhrefsIssues.value) {
+    const providerSeverity = issue.metadata?.providerSeverity;
+    if (providerSeverity === 'error') counts.error += 1;
+    else if (providerSeverity === 'warning') counts.warning += 1;
+    else counts.notice += 1;
+  }
+  return counts;
+});
 
 const ahrefsIssueColumns = computed(() => [
   { title: tc('category'), dataIndex: 'category', key: 'category', width: 150 },
@@ -235,12 +254,16 @@ async function loadConfig() {
   try {
     const result = await getAhrefsSiteAuditConfig(selectedSiteId.value);
     ahrefsConfig.value = result.config;
-    formAhrefsEnabled.value = result.config.enabled;
+    ahrefsPlatformManaged.value = Boolean(result.platformManaged);
+    ahrefsPlatformAvailable.value = Boolean(result.platformAvailable);
+    formAhrefsEnabled.value = result.platformManaged ? true : result.config.enabled;
     formAhrefsProjectId.value = result.config.projectId;
     formAhrefsCrawlDate.value = result.config.crawlDate ?? '';
     formAhrefsComparisonDate.value = result.config.comparisonDate ?? '';
   } catch {
     ahrefsConfig.value = null;
+    ahrefsPlatformManaged.value = false;
+    ahrefsPlatformAvailable.value = false;
     formAhrefsEnabled.value = false;
     formAhrefsProjectId.value = '';
     formAhrefsCrawlDate.value = '';
@@ -317,7 +340,7 @@ async function saveConfig() {
   if (!selectedSiteId.value) return;
   savingConfig.value = true;
   try {
-    if (formAhrefsEnabled.value && !formAhrefsProjectId.value.trim()) {
+    if (!ahrefsPlatformManaged.value && formAhrefsEnabled.value && !formAhrefsProjectId.value.trim()) {
       message.error(tc('ahrefsProjectRequired'));
       return;
     }
@@ -328,7 +351,7 @@ async function saveConfig() {
       emailNotification: formEmailNotification.value
     });
     config.value = res.config;
-    if (formAhrefsProjectId.value.trim()) {
+    if (!ahrefsPlatformManaged.value && formAhrefsProjectId.value.trim()) {
       const ahrefsResult = await updateAhrefsSiteAuditConfig(selectedSiteId.value, {
         enabled: formAhrefsEnabled.value,
         projectId: formAhrefsProjectId.value.trim(),
@@ -348,40 +371,55 @@ async function saveConfig() {
 
 function handleRunAudit() {
   if (!selectedSiteId.value) return;
+  const useAhrefsFullSite = canUseAhrefsFullSite.value;
   Modal.confirm({
     title: tc('confirmationTitle'),
-    content: ahrefsConfig.value?.enabled ? tc('ahrefsConfirmationContent') : tc('confirmationContent'),
+    content: useAhrefsFullSite ? tc('ahrefsConfirmationContent') : tc('confirmationContent'),
     okText: tc('confirm'),
     cancelText: tc('cancel'),
     onOk: async () => {
       runningAudit.value = true;
       try {
-        if (ahrefsConfig.value?.enabled) {
+        if (useAhrefsFullSite) {
+          if (!ahrefsPlatformManaged.value && ahrefsConfig.value?.projectId?.trim() && !ahrefsConfig.value.enabled) {
+            const ahrefsResult = await updateAhrefsSiteAuditConfig(selectedSiteId.value, {
+              enabled: true,
+              projectId: ahrefsConfig.value.projectId.trim(),
+              crawlDate: ahrefsConfig.value.crawlDate,
+              comparisonDate: ahrefsConfig.value.comparisonDate
+            });
+            ahrefsConfig.value = ahrefsResult.config;
+            formAhrefsEnabled.value = true;
+          }
           const result = await createSeoAudit(selectedSiteId.value);
-          if (!result.audit.metadata?.ahrefs) {
-            latestAhrefsAudit.value = null;
-            latestAhrefsIssues.value = [];
-            message.error(tc('ahrefsUnavailable'));
+          if (result.audit.metadata?.ahrefs) {
+            latestResult.value = null;
+            results.value = [];
+            latestMetrics.value = [];
+            latestAhrefsAudit.value = result.audit;
+            latestAhrefsIssues.value = result.issues.filter((issue) => issue.source === 'ahrefs');
+            ahrefsIssuePages.value = {};
+            const refreshed = await getAhrefsSiteAuditConfig(selectedSiteId.value);
+            ahrefsConfig.value = refreshed.config;
+            ahrefsPlatformManaged.value = Boolean(refreshed.platformManaged);
+            ahrefsPlatformAvailable.value = Boolean(refreshed.platformAvailable);
+            message.success(tc('status_completed'));
             return;
           }
-          latestResult.value = null;
-          results.value = [];
-          latestMetrics.value = [];
-          latestAhrefsAudit.value = result.audit.metadata?.ahrefs ? result.audit : null;
-          latestAhrefsIssues.value = latestAhrefsAudit.value
-            ? result.issues.filter((issue) => issue.source === 'ahrefs')
-            : [];
-          ahrefsIssuePages.value = {};
-        } else {
-          latestAhrefsAudit.value = null;
-          latestAhrefsIssues.value = [];
-          ahrefsIssuePages.value = {};
-          const bundle = await runSiteAuditMonitoring(selectedSiteId.value, Math.min(formPageLimit.value, 25));
-          latestMetrics.value = bundle.metrics;
-          const res = await getSiteAuditResults(selectedSiteId.value);
-          latestResult.value = res.latest;
-          results.value = res.results;
+          message.warning(tc('ahrefsUnavailable'));
         }
+
+        latestAhrefsAudit.value = null;
+        latestAhrefsIssues.value = [];
+        ahrefsIssuePages.value = {};
+        const bundle = await runSiteAuditMonitoring(
+          selectedSiteId.value,
+          Math.min(Math.max(formPageLimit.value || 100, 10), 200)
+        );
+        latestMetrics.value = bundle.metrics;
+        const res = await getSiteAuditResults(selectedSiteId.value);
+        latestResult.value = res.latest;
+        results.value = res.results;
         message.success(tc('status_completed'));
       } catch (e: unknown) {
         const errMsg = e instanceof Error ? e.message : '';
@@ -523,8 +561,31 @@ function expandedAhrefsIssueRow({ record }: { record: SeoAuditIssue }) {
 }
 
 // ── expanded row render for issues ──
+function isResourceEvidenceUrl(url: string) {
+  try {
+    const parsed = new globalThis.URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return parsed.protocol === 'http:'
+      || host === 'localhost'
+      || host === '127.0.0.1'
+      || host === '0.0.0.0'
+      || host === '::1'
+      || host.endsWith('.localhost')
+      || /\.(jpg|jpeg|png|gif|webp|svg|avif|css|js)(\?|$)/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function splitIssueEvidenceUrls(record: SiteAuditIssue) {
+  const urls = getAffectedUrls(record);
+  const resourceUrls = urls.filter((url) => isResourceEvidenceUrl(url));
+  const pageUrls = urls.filter((url) => !resourceUrls.includes(url));
+  return { pageUrls, resourceUrls };
+}
+
 function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
-  const affectedUrls = getAffectedUrls(record);
+  const { pageUrls, resourceUrls } = splitIssueEvidenceUrls(record);
   return h('div', { class: 'issue-expanded-row' }, [
     record.description
       ? h('div', { class: 'issue-detail-section' }, [
@@ -538,11 +599,23 @@ function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
           h('p', { class: 'issue-detail-text' }, record.recommendation)
         ])
       : null,
-    affectedUrls.length > 0
+    pageUrls.length > 0
       ? h('div', { class: 'issue-detail-section' }, [
           h('div', { class: 'issue-detail-label' }, tc('issueAffectedUrls')),
-          h('ul', { class: 'issue-url-list' }, affectedUrls.map((url) =>
+          h('ul', { class: 'issue-url-list' }, pageUrls.map((url) =>
             h('li', { key: url }, h('a', { href: url, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, url))
+          ))
+        ])
+      : null,
+    resourceUrls.length > 0
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueResourceUrls')),
+          h('ul', { class: 'issue-url-list' }, resourceUrls.map((url) =>
+            h('li', { key: url }, [
+              h('a', { href: url, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, url),
+              ' ',
+              h('span', { class: 'resource-badge' }, tc('resourceNotCrawlable'))
+            ])
           ))
         ])
       : null,
@@ -760,12 +833,20 @@ onMounted(async () => {
         </Card>
 
         <Alert
-          v-if="ahrefsConfig?.enabled"
+          v-if="ahrefsPlatformAvailable || canUseAhrefsFullSite"
           class="ahrefs-audit-notice"
           type="info"
           show-icon
-          :message="tc('ahrefsFullSiteTitle')"
-          :description="tc('ahrefsFullSiteDescription')"
+          :message="ahrefsPlatformManaged ? tc('ahrefsPlatformManagedTitle') : tc('ahrefsFullSiteTitle')"
+          :description="ahrefsPlatformManaged ? tc('ahrefsPlatformManagedDescription') : tc('ahrefsFullSiteDescription')"
+        />
+        <Alert
+          v-else-if="hasSite"
+          class="ahrefs-audit-notice"
+          type="warning"
+          show-icon
+          :message="tc('limitedCrawlTitle')"
+          :description="tc('limitedCrawlDescription')"
         />
 
         <Card
@@ -778,7 +859,35 @@ onMounted(async () => {
             <Tag color="blue">Ahrefs</Tag>
           </template>
 
-          <Descriptions bordered size="small" :column="2">
+          <Row :gutter="16" class="metrics-row">
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic
+                  :title="tc('overallScore')"
+                  :value="latestAhrefsAudit.score"
+                  suffix="/ 100"
+                  :value-style="{ color: latestAhrefsAudit.score >= 80 ? '#52c41a' : latestAhrefsAudit.score >= 60 ? '#faad14' : '#ff4d4f' }"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic :title="tc('pagesCrawled')" :value="getAhrefsCrawledUrls(latestAhrefsAudit) ?? 0" />
+              </Card>
+            </Col>
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic :title="tc('ahrefsErrors')" :value="ahrefsIssueDistribution.error" :value-style="{ color: '#ff4d4f' }" />
+              </Card>
+            </Col>
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic :title="tc('ahrefsWarnings')" :value="ahrefsIssueDistribution.warning" :value-style="{ color: '#faad14' }" />
+              </Card>
+            </Col>
+          </Row>
+
+          <Descriptions bordered size="small" :column="2" class="ahrefs-summary-desc">
             <DescriptionsItem :label="tc('overallScore')">
               <Progress
                 type="circle"
@@ -795,6 +904,12 @@ onMounted(async () => {
             </DescriptionsItem>
             <DescriptionsItem :label="tc('lastAudit')">
               {{ formatDate(latestAhrefsAudit.createdAt) }}
+            </DescriptionsItem>
+            <DescriptionsItem :label="tc('ahrefsNotices')">
+              {{ ahrefsIssueDistribution.notice }}
+            </DescriptionsItem>
+            <DescriptionsItem :label="tc('issues')">
+              {{ ahrefsIssueDistribution.total }}
             </DescriptionsItem>
           </Descriptions>
 
@@ -1044,8 +1159,8 @@ onMounted(async () => {
           <label>{{ tc('pageLimit') }}</label>
           <InputNumber
             v-model:value="formPageLimit"
-            :min="1"
-            :max="500"
+            :min="10"
+            :max="200"
             style="width: 100%"
           />
           <span class="hint">{{ tc('pageLimitHint') }}</span>
@@ -1066,26 +1181,33 @@ onMounted(async () => {
           <span class="hint">{{ tc('emailNotificationHint') }}</span>
         </div>
 
-        <div class="config-item ahrefs-config-item">
+        <div v-if="ahrefsPlatformManaged" class="config-item ahrefs-config-item">
           <label>{{ tc('ahrefsFullSiteTitle') }}</label>
-          <Switch v-model:checked="formAhrefsEnabled" />
-          <span class="hint">{{ tc('ahrefsConfigHint') }}</span>
+          <Alert type="success" show-icon :message="tc('ahrefsPlatformManagedTitle')" :description="tc('ahrefsPlatformManagedDescription')" />
+          <span v-if="ahrefsConfig?.projectId" class="hint">{{ tc('ahrefsBoundProjectId') }}: {{ ahrefsConfig.projectId }}</span>
         </div>
+        <template v-else>
+          <div class="config-item ahrefs-config-item">
+            <label>{{ tc('ahrefsFullSiteTitle') }}</label>
+            <Switch v-model:checked="formAhrefsEnabled" />
+            <span class="hint">{{ tc('ahrefsConfigHint') }}</span>
+          </div>
 
-        <div class="config-item">
-          <label>{{ tc('ahrefsProjectId') }}</label>
-          <Input v-model:value="formAhrefsProjectId" :placeholder="tc('ahrefsProjectIdPlaceholder')" />
-        </div>
+          <div class="config-item">
+            <label>{{ tc('ahrefsProjectId') }}</label>
+            <Input v-model:value="formAhrefsProjectId" :placeholder="tc('ahrefsProjectIdPlaceholder')" />
+          </div>
 
-        <div class="config-item">
-          <label>{{ tc('ahrefsCrawlDate') }}</label>
-          <Input v-model:value="formAhrefsCrawlDate" :placeholder="tc('ahrefsDatePlaceholder')" />
-        </div>
+          <div class="config-item">
+            <label>{{ tc('ahrefsCrawlDate') }}</label>
+            <Input v-model:value="formAhrefsCrawlDate" :placeholder="tc('ahrefsDatePlaceholder')" />
+          </div>
 
-        <div class="config-item">
-          <label>{{ tc('ahrefsComparisonDate') }}</label>
-          <Input v-model:value="formAhrefsComparisonDate" :placeholder="tc('ahrefsDatePlaceholder')" />
-        </div>
+          <div class="config-item">
+            <label>{{ tc('ahrefsComparisonDate') }}</label>
+            <Input v-model:value="formAhrefsComparisonDate" :placeholder="tc('ahrefsDatePlaceholder')" />
+          </div>
+        </template>
       </div>
     </Modal>
   </div>
@@ -1189,6 +1311,17 @@ onMounted(async () => {
   color: #1677ff;
   font-size: 13px;
   word-break: break-all;
+}
+
+.resource-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #fff1f0;
+  color: #cf1322;
+  font-size: 12px;
+  line-height: 20px;
 }
 
 .issue-url-list {

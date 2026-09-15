@@ -133,6 +133,53 @@ async function requestJson({ fetchImpl, url, apiKey, init, timeoutMs }: JsonRequ
   }
 }
 
+export function mapDataForSeoLanguageCode(language: string) {
+  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
+  const mapped: Record<string, string> = {
+    'zh-hant': 'zh_tw',
+    'zh-tw': 'zh_tw',
+    'zh-hk': 'zh_tw',
+    'zh-hans': 'zh_cn',
+    'zh-cn': 'zh_cn',
+    'en-us': 'en',
+    'en-gb': 'en',
+    'en-hk': 'en',
+    'en-au': 'en',
+    'ja-jp': 'ja',
+    'ko-kr': 'ko'
+  };
+  if (mapped[normalized]) return mapped[normalized];
+  if (/^[a-z]{2}$/.test(normalized)) return normalized;
+  const base = normalized.split('-')[0] ?? '';
+  return /^[a-z]{2}$/.test(base) ? base : 'en';
+}
+
+function assertDataForSeoTasksSucceeded(body: unknown) {
+  if (!body || typeof body !== 'object') {
+    throw new Error('KEYWORD_PROVIDER_RESPONSE_INVALID');
+  }
+  const topLevelStatus = readNumber((body as { status_code?: unknown }).status_code);
+  if (topLevelStatus !== undefined && topLevelStatus !== 20000) {
+    if (topLevelStatus >= 40100 && topLevelStatus < 40200) throw new Error('KEYWORD_PROVIDER_HTTP_401');
+    if (topLevelStatus === 40201 || topLevelStatus === 40202 || topLevelStatus === 40203) {
+      throw new Error('KEYWORD_PROVIDER_HTTP_429');
+    }
+    throw new Error('KEYWORD_PROVIDER_RESPONSE_INVALID');
+  }
+  const tasks = (body as { tasks?: unknown }).tasks;
+  if (!Array.isArray(tasks) || tasks.length === 0) return;
+  for (const task of tasks) {
+    if (!task || typeof task !== 'object') continue;
+    const taskStatus = readNumber((task as { status_code?: unknown }).status_code);
+    if (taskStatus === undefined || taskStatus === 20000) continue;
+    if (taskStatus >= 40100 && taskStatus < 40200) throw new Error('KEYWORD_PROVIDER_HTTP_401');
+    if (taskStatus === 40201 || taskStatus === 40202 || taskStatus === 40203) {
+      throw new Error('KEYWORD_PROVIDER_HTTP_429');
+    }
+    throw new Error('KEYWORD_PROVIDER_RESPONSE_INVALID');
+  }
+}
+
 function extractTaskItems(body: unknown): Record<string, unknown>[] {
   if (!body || typeof body !== 'object') return [];
   const tasks = (body as { tasks?: unknown }).tasks;
@@ -153,30 +200,74 @@ function extractTaskItems(body: unknown): Record<string, unknown>[] {
 }
 
 function mapKeywordMetric(item: Record<string, unknown>): KeywordMetricResult | undefined {
-  const keyword = normalizeKeyword(item.keyword ?? item.key ?? item.Ph ?? item.query);
+  const keywordData = item.keyword_data && typeof item.keyword_data === 'object'
+    ? item.keyword_data as Record<string, unknown>
+    : undefined;
+  const keywordInfo = keywordData?.keyword_info && typeof keywordData.keyword_info === 'object'
+    ? keywordData.keyword_info as Record<string, unknown>
+    : undefined;
+  const keyword = normalizeKeyword(
+    item.keyword ?? item.key ?? item.Ph ?? item.query ?? keywordData?.keyword
+  );
   if (!keyword) return undefined;
   return {
     keyword,
-    volume: readNumber(item.search_volume ?? item.monthly_search_volume ?? item.volume ?? item.Nq),
-    cpcUsd: readNumber(item.cpc ?? item.Cpc ?? item.cpc_usd),
-    competition: normalizeCompetition(item.competition ?? item.competition_index ?? item.Com),
+    volume: readNumber(
+      item.search_volume
+      ?? item.monthly_search_volume
+      ?? item.volume
+      ?? item.Nq
+      ?? keywordInfo?.search_volume
+    ),
+    cpcUsd: readNumber(item.cpc ?? item.Cpc ?? item.cpc_usd ?? keywordInfo?.cpc),
+    competition: normalizeCompetition(
+      item.competition ?? item.competition_index ?? item.Com ?? keywordInfo?.competition
+    ),
     difficulty: readNumber(item.keyword_difficulty ?? item.difficulty ?? item.Kd ?? item.kd),
     trend: readNumber(item.trend ?? item.search_volume_trend),
-    providerUpdatedAt: typeof item.last_updated_time === 'string' ? item.last_updated_time : undefined
+    providerUpdatedAt: typeof item.last_updated_time === 'string'
+      ? item.last_updated_time
+      : typeof keywordInfo?.last_updated_time === 'string'
+        ? keywordInfo.last_updated_time
+        : undefined
   };
 }
 
 function mapRankedKeyword(item: Record<string, unknown>): RankedKeywordResult | undefined {
-  const keyword = normalizeKeyword(item.keyword ?? item.key ?? item.query);
+  const keywordData = item.keyword_data && typeof item.keyword_data === 'object'
+    ? item.keyword_data as Record<string, unknown>
+    : undefined;
+  const rankedSerp = item.ranked_serp_element && typeof item.ranked_serp_element === 'object'
+    ? item.ranked_serp_element as Record<string, unknown>
+    : undefined;
+  const serpItem = rankedSerp?.serp_item && typeof rankedSerp.serp_item === 'object'
+    ? rankedSerp.serp_item as Record<string, unknown>
+    : undefined;
+  const keyword = normalizeKeyword(
+    item.keyword ?? item.key ?? item.query ?? keywordData?.keyword
+  );
   if (!keyword) return undefined;
-  const serpFeatures = Array.isArray(item.serp_features)
-    ? item.serp_features.filter((value): value is string => typeof value === 'string')
-    : [];
+  const serpFeaturesSource = Array.isArray(item.serp_features)
+    ? item.serp_features
+    : Array.isArray(serpItem?.serp_features)
+      ? serpItem.serp_features
+      : [];
+  const serpFeatures = serpFeaturesSource.filter((value): value is string => typeof value === 'string');
   return {
     keyword,
-    rank: readNumber(item.rank_absolute ?? item.rank ?? item.position),
-    url: typeof item.url === 'string' ? item.url : undefined,
-    etv: readNumber(item.etv ?? item.traffic),
+    rank: readNumber(
+      item.rank_absolute
+      ?? item.rank
+      ?? item.position
+      ?? serpItem?.rank_absolute
+      ?? serpItem?.rank_group
+    ),
+    url: typeof item.url === 'string'
+      ? item.url
+      : typeof serpItem?.url === 'string'
+        ? serpItem.url
+        : undefined,
+    etv: readNumber(item.etv ?? item.traffic ?? serpItem?.etv),
     serpFeatures
   };
 }
@@ -191,10 +282,9 @@ export function createDataForSeoKeywordResearchProvider(options: KeywordResearch
 
   const requestContext = (input: KeywordMetricsInput) => ({
     location_code: knownLocationCodes[input.market.trim().toUpperCase()] ?? defaultLocationCode,
-    language_code: input.language || defaultLanguageCode,
+    language_code: mapDataForSeoLanguageCode(input.language || defaultLanguageCode),
     device: input.device,
-    se_type: input.engine,
-    market: input.market
+    se_type: input.engine
   });
 
   return {
@@ -215,6 +305,7 @@ export function createDataForSeoKeywordResearchProvider(options: KeywordResearch
         timeoutMs,
         init: { method: 'POST', body: JSON.stringify(requestBody) }
       });
+      assertDataForSeoTasksSucceeded(body);
       const metrics = extractTaskItems(body)
         .map(mapKeywordMetric)
         .filter((metric): metric is KeywordMetricResult => Boolean(metric));
@@ -235,7 +326,7 @@ export function createDataForSeoKeywordResearchProvider(options: KeywordResearch
     },
     async getCompetitorRankedKeywords(input) {
       const requestBody = [{
-        target: input.domain,
+        target: input.domain.replace(/^www\./i, ''),
         ...requestContext(input),
         limit: Math.min(100, Math.max(1, input.limit)),
         include_serp_info: true
@@ -247,6 +338,7 @@ export function createDataForSeoKeywordResearchProvider(options: KeywordResearch
         timeoutMs,
         init: { method: 'POST', body: JSON.stringify(requestBody) }
       });
+      assertDataForSeoTasksSucceeded(body);
       const items = extractTaskItems(body)
         .map(mapRankedKeyword)
         .filter((item): item is RankedKeywordResult => Boolean(item))

@@ -7080,3 +7080,132 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 授權後提交並推送 `main` 部署。
 - 部署後用插件站點選 `358302596`、日期 2026-09-10～16，確認數字與手動站一致；若本站 host 仍無事件，應看到黃色警告而非空白圖表。
+
+## 會話總結（2026-09-16）— 豐富 SEO 網站檢測問題明細
+
+### 會話主要目的
+
+讓 SEO 網站檢測不只顯示圖一那種少量 Meta／canonical 問題，而能像圖二／圖三提供分類錯誤、修改建議與資源級證據（例如 localhost 圖片、mixed content）。
+
+### 完成的主要任務
+
+- 釐清圖一來自本機 deterministic crawl（最多 25 頁）；圖二／三為 Ahrefs 全站／page-explorer 風格。
+- 強化 `extractHtmlPage`：解析 img／srcset、stylesheet、script。
+- 新增檢測：`圖片指向本機開發位址`、`HTTPS/HTTP mixed content`，並附資源 URL 與修復建議。
+- UI：未啟用 Ahrefs 時顯示黃色「本機受限掃描」提示；展開問題列時分開頁面 URL 與資源 URL，並標「未抓取」。
+- 單元測試覆蓋 localhost／mixed content；lint 通過。
+
+### 關鍵決策和解決方案
+
+- 不假裝本機爬蟲等於完整 Ahrefs；保留 Ahrefs 路徑，並把高價值資源錯誤補進本機掃描。
+- 完整 Ahrefs 分類統計仍需在「配置檢測」啟用專案後執行。
+
+### 使用的技術棧
+
+- Fastify / TypeScript、Vue 3、Ant Design Vue、Vitest
+
+### 新增或修改文件
+
+- `apps/api/src/siteAuditMonitoring.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `README.md`
+
+### 驗證結果
+
+- `vitest run apps/api/tests/siteAuditMonitoring.test.ts`：16 passed。
+- `eslint` 變更檔通過。
+- 尚未提交／部署。
+
+### 下一步行動清單
+
+- 重新執行「立即執行檢測」驗證新問題類型與展開建議。
+- 若要圖二級全站分類，在配置中啟用對應 Ahrefs Project ID。
+- 授權後再提交並推送部署。
+
+## 會話總結（2026-09-16）— 平台託管 Ahrefs 全站檢測（客戶免填 Project ID）
+
+### 會話主要目的
+
+讓 SEO 網站檢測可透過 RankWoven 平台 Ahrefs API 做全站檢查，客戶不必自行開設或填寫 Ahrefs Project ID。
+
+### 完成的主要任務
+
+- 新增依站點網址自動解析 Ahrefs Site Audit 專案（`project_url` 查詢），找不到時可依設定自動建立 Management Project。
+- `createSeoAudit` 會解析並持久化 `projectId` 到站點設定；平台啟用時客戶端隱藏 Project ID 表單。
+- 前端「立即執行檢測」在平台 Ahrefs 可用時直接走全站 Ahrefs 報告。
+- 同步強化本機 sitemap index 展開（並修正誤把含 `sitemap` 字樣的 HTML URL 當 sitemap 的 bug）。
+- 測試：Ahrefs + site audit monitoring 共 22 passed。
+
+### 關鍵決策和解決方案
+
+- 客戶不接觸 Ahrefs 帳號；平台用 `AHREFS_API_KEY` + `AHREFS_SITE_AUDIT_ENABLED=true` 託管。
+- `AHREFS_SITE_AUDIT_AUTO_CREATE=true`（預設）允許自動建專案；既有專案則只做 lookup。
+
+### 使用的技術棧
+
+- Ahrefs API v3 Site Audit / Management、Fastify、Vue 3、Vitest
+
+### 新增或修改文件
+
+- `apps/api/src/ahrefsSiteAudit.ts`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/src/config.ts`
+- `apps/api/tests/ahrefsSiteAudit.test.ts`
+- `apps/api/src/siteAuditMonitoring.ts`、`apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/views/SiteAuditView.vue`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`
+- `.env.example`、`docker-compose.yml`、`README.md`
+
+### 驗證結果
+
+- `vitest`：22 passed；eslint 變更檔通過。
+- 生產需設定 `AHREFS_SITE_AUDIT_ENABLED=true`（並已有 `AHREFS_API_KEY`）後部署才會對客戶啟用平台託管。
+
+### 下一步行動清單
+
+- 在生產／本機啟用 `AHREFS_SITE_AUDIT_ENABLED=true`，對 `cyruschan.com`／`ckcprompt.cloud` 執行「立即執行檢測」驗證自動綁定專案與全站問題列表。
+- 授權後提交並推送部署。
+
+## 會話總結（2026-09-16）— 修復競品關鍵詞研究與三個競品網址
+
+### 會話主要目的
+
+修復競品關鍵詞研究失敗（前端顯示「競品研究任務未能完成」），並支援每個網站保存最多三個競品網址。
+
+### 完成的主要任務
+
+- DataForSEO Labs 巢狀 `ranked_keywords` 回應正確解析；`zh-Hant` 映射為 `zh_tw`，並依站點推斷市場（如 `.tw` → TW）。
+- 競品域名正規化允許路徑、去除 `www`；種子詞由 `www.newscan.com.tw` 推為 `newscan` 而非 `www`。
+- Worker 保留 `KEYWORD_PROVIDER_HTTP_4xx/5xx` 錯誤碼；前端顯示具體 Provider 錯誤而非一律 `RUN_FAILED`。
+- 新增 `site_connections.competitor_urls`（最多 3 個）與 `PUT /api/v1/site-connections/:siteId/competitor-urls`；競品研究頁可保存並選擇分析對象。
+
+### 關鍵決策和解決方案
+
+- 失敗主因包含：Worker 把 401 等收成 `WORKER_TASK_FAILED`、前端白名單過窄、以及 DataForSEO 真實回應結構未被映射。
+- 競品網址持久化掛在站點連接，分析前自動保存目前三個欄位。
+
+### 使用的技術棧
+
+- DataForSEO Labs API、Fastify、Vue 3、Vitest、PostgreSQL migration
+
+### 新增或修改文件
+
+- `packages/ai-providers/src/keywordResearch.ts`、`packages/ai-providers/tests/keywordResearch.test.ts`
+- `apps/worker/src/index.ts`
+- `apps/api/src/phase2FeatureRoutes.ts`、`apps/api/src/siteConnections.ts`
+- `db/migrations/0023_site_competitor_urls.sql`
+- `apps/api/tests/phase2Routes.test.ts`、`apps/api/tests/siteConnections.test.ts`
+- `apps/web/src/views/KeywordResearchView.vue`、`apps/web/src/api/siteConnections.ts`、`apps/web/src/i18n.ts`
+- `README.md`
+
+### 驗證結果
+
+- Provider 合約測試 5 項通過；phase2／siteConnections 相關 API 測試通過。
+- API、Worker、Web 建置與變更檔 eslint 通過。
+- 未對生產發起真實 DataForSEO 呼叫；部署後需確認 `KEYWORD_VOLUME_*` 憑據。
+
+### 下一步行動清單
+
+- 授權後提交並推送 `main` 部署；部署後在客戶後台對 `https://www.newscan.com.tw/` 再跑一次競品分析。
+- 若仍失敗，介面應顯示具體 Provider 錯誤（如憑據 401／額度），依訊息檢查生產 `KEYWORD_VOLUME_API_KEY`。

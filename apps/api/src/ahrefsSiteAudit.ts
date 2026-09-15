@@ -339,3 +339,207 @@ export async function fetchAhrefsSiteAuditIssuePages(
     clearTimeout(timeout);
   }
 }
+
+export function getAhrefsProjectUrlCandidates(siteUrl: string): string[] {
+  try {
+    const parsed = new URL(siteUrl.includes('://') ? siteUrl : `https://${siteUrl}`);
+    const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    const withoutWww = host.startsWith('www.') ? host.slice(4) : host;
+    const withWww = `www.${withoutWww}`;
+    return [...new Set([
+      withoutWww,
+      withWww,
+      host,
+      parsed.origin,
+      `https://${withoutWww}`,
+      `https://${withWww}`,
+      `http://${withoutWww}`,
+      `http://${withWww}`
+    ].filter(Boolean))];
+  } catch {
+    return [siteUrl.trim()].filter(Boolean);
+  }
+}
+
+function buildSiteAuditProjectsUrl(apiUrl: string) {
+  const endpoint = new URL(apiUrl);
+  endpoint.pathname = endpoint.pathname.replace(/\/issues\/?$/, '/projects');
+  if (!endpoint.pathname.includes('/site-audit/')) {
+    endpoint.pathname = '/v3/site-audit/projects';
+  }
+  endpoint.search = '';
+  return endpoint;
+}
+
+function extractHealthscoreProjects(body: unknown) {
+  const root = asRecord(body);
+  if (!root) return [] as UnknownRecord[];
+  const data = asRecord(root.data);
+  const candidates: unknown[] = [
+    root.healthscores,
+    root.projects,
+    root.items,
+    root.results,
+    data?.healthscores,
+    data?.projects,
+    data?.items,
+    data?.results
+  ];
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    return candidate.flatMap((value) => {
+      const record = asRecord(value);
+      return record ? [record] : [];
+    });
+  }
+  return [] as UnknownRecord[];
+}
+
+function normalizeComparableHost(value: string) {
+  try {
+    const parsed = new URL(value.includes('://') ? value : `https://${value}`);
+    return parsed.hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+  } catch {
+    return value.toLowerCase().replace(/^www\./, '').replace(/\/+$/, '');
+  }
+}
+
+export async function findAhrefsSiteAuditProjectByUrl(input: {
+  apiUrl: string;
+  apiKey: string;
+  siteUrl: string;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}): Promise<{ projectId: string; targetUrl?: string; healthScore?: number; crawledUrls?: number } | undefined> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 20_000);
+  try {
+    for (const candidate of getAhrefsProjectUrlCandidates(input.siteUrl)) {
+      const endpoint = buildSiteAuditProjectsUrl(input.apiUrl);
+      endpoint.searchParams.set('project_url', candidate);
+      const body = await fetchAhrefsJson(
+        { apiUrl: input.apiUrl, apiKey: input.apiKey, projectId: '0', fetchImpl: input.fetchImpl },
+        endpoint,
+        controller.signal
+      );
+      const projects = extractHealthscoreProjects(body);
+      const expectedHost = normalizeComparableHost(candidate);
+      const matched = projects.find((project) => {
+        const projectId = readFirstString(project, ['project_id', 'projectId', 'id']);
+        if (!projectId) return false;
+        const targetUrl = readFirstString(project, ['target_url', 'targetUrl', 'url', 'project_url', 'projectUrl']);
+        return targetUrl !== '' && normalizeComparableHost(targetUrl) === expectedHost;
+      });
+      if (!matched) continue;
+      const projectId = readFirstString(matched, ['project_id', 'projectId', 'id']);
+      if (!projectId) continue;
+      return {
+        projectId,
+        targetUrl: readFirstString(matched, ['target_url', 'targetUrl', 'url']) || undefined,
+        healthScore: readFirstNumber(matched, ['health_score', 'healthScore']),
+        crawledUrls: readFirstNumber(matched, ['total', 'crawled', 'crawled_urls', 'crawledUrls'])
+      };
+    }
+    return undefined;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('AHREFS_SITE_AUDIT_TIMEOUT', { cause: error });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function createAhrefsManagementProject(input: {
+  managementApiUrl: string;
+  apiKey: string;
+  siteUrl: string;
+  projectName?: string;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}): Promise<{ projectId: string }> {
+  const candidates = getAhrefsProjectUrlCandidates(input.siteUrl);
+  const targetHost = candidates.find((value) => !value.includes('://')) ?? candidates[0];
+  if (!targetHost) throw new Error('AHREFS_SITE_AUDIT_PROJECT_URL_INVALID');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 20_000);
+  try {
+    const response = await (input.fetchImpl ?? fetch)(input.managementApiUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${input.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        access: 'private',
+        project_name: input.projectName || `RankWoven ${targetHost}`,
+        mode: 'domain',
+        url: targetHost,
+        protocol: 'both'
+      }),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`AHREFS_SITE_AUDIT_HTTP_${response.status}`);
+    const body = await response.json() as unknown;
+    const root = asRecord(body) ?? {};
+    const projects = Array.isArray(root.projects) ? root.projects : [root];
+    for (const value of projects) {
+      const record = asRecord(value);
+      const projectId = record ? readFirstString(record, ['project_id', 'projectId', 'id']) : '';
+      if (projectId) return { projectId };
+    }
+    throw new Error('AHREFS_SITE_AUDIT_PROJECT_CREATE_FAILED');
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('AHREFS_SITE_AUDIT_TIMEOUT', { cause: error });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function resolveAhrefsSiteAuditProjectId(input: {
+  apiUrl: string;
+  managementApiUrl: string;
+  apiKey: string;
+  siteUrl: string;
+  existingProjectId?: string;
+  autoCreate?: boolean;
+  projectName?: string;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}): Promise<{ projectId: string; created: boolean; resolvedBy: 'configured' | 'lookup' | 'created' }> {
+  const configured = String(input.existingProjectId || '').trim();
+  if (configured) {
+    return { projectId: configured, created: false, resolvedBy: 'configured' };
+  }
+
+  const found = await findAhrefsSiteAuditProjectByUrl({
+    apiUrl: input.apiUrl,
+    apiKey: input.apiKey,
+    siteUrl: input.siteUrl,
+    timeoutMs: input.timeoutMs,
+    fetchImpl: input.fetchImpl
+  });
+  if (found?.projectId) {
+    return { projectId: found.projectId, created: false, resolvedBy: 'lookup' };
+  }
+
+  if (!input.autoCreate) {
+    throw new Error('AHREFS_SITE_AUDIT_PROJECT_NOT_FOUND');
+  }
+
+  const created = await createAhrefsManagementProject({
+    managementApiUrl: input.managementApiUrl,
+    apiKey: input.apiKey,
+    siteUrl: input.siteUrl,
+    projectName: input.projectName,
+    timeoutMs: input.timeoutMs,
+    fetchImpl: input.fetchImpl
+  });
+  return { projectId: created.projectId, created: true, resolvedBy: 'created' };
+}

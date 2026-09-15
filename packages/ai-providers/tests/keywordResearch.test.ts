@@ -28,19 +28,58 @@ describe('Keyword Research Provider adapters', () => {
       fetchImpl: async (input, init) => {
         requests.push(new Request(input, init));
         if (String(input).includes('ranked_keywords')) {
-          return jsonResponse({ tasks: [{ result: [{ keyword: 'eco mat', rank_absolute: 8, url: 'https://competitor.test/eco-mat', etv: 12.5, serp_features: ['featured_snippet'] }] }] });
+          return jsonResponse({
+            status_code: 20000,
+            tasks: [{
+              status_code: 20000,
+              result: [{
+                items: [{
+                  keyword_data: { keyword: 'eco mat' },
+                  ranked_serp_element: {
+                    serp_item: {
+                      rank_absolute: 8,
+                      url: 'https://competitor.test/eco-mat',
+                      etv: 12.5,
+                      serp_features: ['featured_snippet']
+                    }
+                  }
+                }]
+              }]
+            }]
+          });
         }
-        return jsonResponse({ tasks: [{ result: [{ keyword: 'yoga mat', search_volume: 1000, cpc: 1.2, competition: 0.4, keyword_difficulty: 32 }] }] });
+        return jsonResponse({
+          status_code: 20000,
+          tasks: [{ status_code: 20000, result: [{ keyword: 'yoga mat', search_volume: 1000, cpc: 1.2, competition: 0.4, keyword_difficulty: 32 }] }]
+        });
       }
     });
     const input = { seeds: ['yoga mat'], market: 'US', language: 'en', device: 'desktop' as const, engine: 'google' as const };
     const metrics = await provider.discoverKeywordMetrics(input);
     expect(metrics).toMatchObject({ provider: 'dataforseo', sourceType: 'provider_estimated', providerSnapshotId: expect.stringContaining('dataforseo-') });
     expect(metrics.metrics[0]).toMatchObject({ keyword: 'yoga mat', volume: 1000, cpcUsd: 1.2, competition: 0.4, difficulty: 32 });
-    const ranked = await provider.getCompetitorRankedKeywords({ ...input, domain: 'competitor.test', limit: 500 });
+    const ranked = await provider.getCompetitorRankedKeywords({ ...input, domain: 'www.competitor.test', limit: 500 });
     expect(ranked.keywords[0]).toMatchObject({ keyword: 'eco mat', rank: 8, etv: 12.5 });
     expect(requests[0].headers.get('authorization')).toMatch(/^Basic /);
     expect(await requests[0].clone().text()).toContain('"location_code"');
+    expect(await requests[1].clone().text()).toContain('"target":"competitor.test"');
+  });
+
+  it('maps zh-Hant language codes for DataForSEO and surfaces auth task errors', async () => {
+    const requests: Request[] = [];
+    const provider = createDataForSeoKeywordResearchProvider({
+      baseUrl: 'https://dataforseo.test',
+      apiKey: 'fixture-key',
+      fetchImpl: async (input, init) => {
+        requests.push(new Request(input, init));
+        return jsonResponse({ status_code: 20000, tasks: [{ status_code: 40102, result: null }] });
+      }
+    });
+    await expect(
+      provider.discoverKeywordMetrics({ seeds: ['newscan'], market: 'TW', language: 'zh-Hant', device: 'desktop', engine: 'google' })
+    ).rejects.toThrow('KEYWORD_PROVIDER_HTTP_401');
+    expect(await requests[0].clone().text()).toContain('"language_code":"zh_tw"');
+    expect(await requests[0].clone().text()).toContain('"location_code":2158');
   });
 
   it('normalizes Ahrefs JSON and caps competitor output at 100 rows', async () => {

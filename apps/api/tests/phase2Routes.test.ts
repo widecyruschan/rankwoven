@@ -269,7 +269,7 @@ describe('phase 2 contract routes', () => {
       id: '00000000-0000-4000-8000-000000000201',
       workspaceId,
       featureKey: 'keyword_research',
-      limitValue: 5,
+      limitValue: 10,
       period: 'monthly',
       source: 'test',
       effectiveAt: new Date(Date.now() - 1_000).toISOString()
@@ -307,6 +307,17 @@ describe('phase 2 contract routes', () => {
     expect(competitorOnly.statusCode).toBe(202);
     const inferredRun = await repository.findKeywordResearchRun(competitorOnly.json().data.runId, workspaceId);
     expect(inferredRun?.seedKeywords).toEqual(['competitor']);
+
+    const taiwanCompetitor = await server.inject({
+      method: 'POST',
+      url: `/api/v1/keyword-research/projects/${project.id}/runs`,
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'research-run-taiwan-competitor' },
+      payload: { seedKeywords: [], competitorDomains: ['https://www.newscan.com.tw/'], locale: 'zh-Hant' }
+    });
+    expect(taiwanCompetitor.statusCode).toBe(202);
+    const taiwanRun = await repository.findKeywordResearchRun(taiwanCompetitor.json().data.runId, workspaceId);
+    expect(taiwanRun?.seedKeywords).toEqual(['newscan']);
+    expect(taiwanRun?.competitorDomains).toEqual(['newscan.com.tw']);
   });
 
   it('queues a content optimization snapshot and keeps CMS apply disabled', async () => {

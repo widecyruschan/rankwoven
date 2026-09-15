@@ -177,6 +177,10 @@ export interface AuditGraphPageInput {
   robotsIndexable?: boolean;
   hasSchema?: boolean;
   internalLinks?: string[];
+  /** Absolute image URLs found in img src / srcset. */
+  imageUrls?: string[];
+  /** Absolute stylesheet and script asset URLs. */
+  assetUrls?: string[];
 }
 
 export interface DeterministicFinding {
@@ -188,6 +192,17 @@ export interface DeterministicFinding {
   affectedUrls?: string[];
   affectedCount: number;
   recommendation?: string;
+  /** Resource-level evidence such as localhost image URLs or mixed-content assets. */
+  resourceUrls?: string[];
+}
+
+function isLocalDevelopmentHost(hostname: string) {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  return host === 'localhost'
+    || host === '127.0.0.1'
+    || host === '0.0.0.0'
+    || host === '::1'
+    || host.endsWith('.localhost');
 }
 
 /**
@@ -229,6 +244,87 @@ export function analyzeAuditPageGraph(
     ? []
     : pages.filter((page) => normalizeAuditUrl(page.url) !== normalizedSite && (inbound.get(normalizeAuditUrl(page.url)) ?? 0) === 0);
   if (orphaned.length) findings.push({ category: 'links', severity: 'medium', title: '發現孤島頁面', description: `${orphaned.length} 個頁面沒有任何站內入鏈。`, url: orphaned[0]?.url, affectedUrls: orphaned.map((page) => page.url), affectedCount: orphaned.length, recommendation: '從相關內容、分類頁或導航加入有意義的站內連結。' });
+
+  const localhostImagePages = pages.filter((page) =>
+    (page.imageUrls ?? []).some((imageUrl) => {
+      try {
+        return isLocalDevelopmentHost(new URL(imageUrl).hostname);
+      } catch {
+        return false;
+      }
+    })
+  );
+  if (localhostImagePages.length) {
+    const resourceUrls = [...new Set(
+      localhostImagePages.flatMap((page) =>
+        (page.imageUrls ?? []).filter((imageUrl) => {
+          try {
+            return isLocalDevelopmentHost(new URL(imageUrl).hostname);
+          } catch {
+            return false;
+          }
+        })
+      )
+    )].slice(0, 20);
+    findings.push({
+      category: 'images',
+      severity: 'critical',
+      title: '圖片指向本機開發位址',
+      description:
+        `${localhostImagePages.length} 個頁面引用了 localhost / 127.0.0.1 圖片，搜尋引擎與訪客無法抓取。` +
+        (resourceUrls[0] ? ` 例如：${resourceUrls[0]}` : ''),
+      url: localhostImagePages[0]?.url,
+      affectedUrls: [...localhostImagePages.map((page) => page.url), ...resourceUrls],
+      affectedCount: localhostImagePages.length,
+      recommendation: '將圖片 URL 改為公開可訪問的正式網域路徑，並清除內容中殘留的本機開發位址。',
+      resourceUrls
+    });
+  }
+
+  const httpsPages = pages.filter((page) => {
+    try {
+      return new URL(page.url).protocol === 'https:';
+    } catch {
+      return false;
+    }
+  });
+  const mixedContentPages = httpsPages.filter((page) => {
+    const resources = [...(page.imageUrls ?? []), ...(page.assetUrls ?? []), ...(page.internalLinks ?? [])];
+    return resources.some((resourceUrl) => {
+      try {
+        return new URL(resourceUrl).protocol === 'http:';
+      } catch {
+        return false;
+      }
+    });
+  });
+  if (mixedContentPages.length) {
+    const resourceUrls = [...new Set(
+      mixedContentPages.flatMap((page) =>
+        [...(page.imageUrls ?? []), ...(page.assetUrls ?? []), ...(page.internalLinks ?? [])].filter((resourceUrl) => {
+          try {
+            return new URL(resourceUrl).protocol === 'http:';
+          } catch {
+            return false;
+          }
+        })
+      )
+    )].slice(0, 20);
+    findings.push({
+      category: 'security',
+      severity: 'high',
+      title: 'HTTPS/HTTP mixed content',
+      description:
+        `${mixedContentPages.length} 個 HTTPS 頁面仍引用 HTTP 資源，可能被瀏覽器阻擋並影響信任訊號。` +
+        (resourceUrls[0] ? ` 例如：${resourceUrls[0]}` : ''),
+      url: mixedContentPages[0]?.url,
+      affectedUrls: [...mixedContentPages.map((page) => page.url), ...resourceUrls],
+      affectedCount: mixedContentPages.length,
+      recommendation: '將圖片、CSS、JS 與站內連結一律改為 HTTPS，並檢查 CDN / CMS 媒體庫網址設定。',
+      resourceUrls
+    });
+  }
+
   return findings;
 }
 
@@ -244,10 +340,11 @@ interface CrawlResult {
   partialReasons: string[];
 }
 
-const maxConnectedAuditPages = 25;
+const maxConnectedAuditPages = 200;
 const maxAuditRedirects = 3;
 const auditFetchTimeoutMs = 8_000;
-const auditTotalTimeoutMs = 60_000;
+const auditTotalTimeoutMs = 180_000;
+const maxSitemapExpansionDepth = 2;
 
 function normalizeHtmlText(value: string) {
   return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
@@ -270,6 +367,26 @@ function findAttribute(tag: string, attribute: string) {
   return expression.exec(tag)?.[2]?.trim();
 }
 
+function resolveAuditAssetUrl(href: string, baseUrl: string): string | undefined {
+  try {
+    const resolved = new URL(href, baseUrl);
+    return ['http:', 'https:'].includes(resolved.protocol) ? resolved.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractSrcsetUrls(srcset: string, baseUrl: string) {
+  return srcset
+    .split(',')
+    .map((part) => part.trim().split(/\s+/)[0])
+    .filter((value): value is string => Boolean(value))
+    .flatMap((href) => {
+      const resolved = resolveAuditAssetUrl(href, baseUrl);
+      return resolved ? [resolved] : [];
+    });
+}
+
 function extractHtmlPage(url: string, httpStatus: number, contentType: string | undefined, body: string): CrawledAuditPage {
   const title = normalizeHtmlText(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(body)?.[1] ?? '');
   const descriptionTag = [...body.matchAll(/<meta\b[^>]*>/gi)].find((match) => findAttribute(match[0], 'name')?.toLowerCase() === 'description');
@@ -278,13 +395,39 @@ function extractHtmlPage(url: string, httpStatus: number, contentType: string | 
   const links = [...body.matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>/gi)]
     .map((match) => match[2])
     .flatMap((href) => {
-      try {
-        const resolved = new URL(href, url);
-        return ['http:', 'https:'].includes(resolved.protocol) ? [resolved.toString()] : [];
-      } catch {
-        return [];
-      }
+      const resolved = resolveAuditAssetUrl(href, url);
+      return resolved ? [resolved] : [];
     });
+  const imageUrls = [...new Set(
+    [...body.matchAll(/<img\b[^>]*>/gi)].flatMap((match) => {
+      const tag = match[0];
+      const candidates = [
+        findAttribute(tag, 'src'),
+        findAttribute(tag, 'data-src'),
+        findAttribute(tag, 'data-lazy-src')
+      ].filter((value): value is string => Boolean(value));
+      const srcset = findAttribute(tag, 'srcset') || findAttribute(tag, 'data-srcset');
+      return [
+        ...candidates.flatMap((href) => {
+          const resolved = resolveAuditAssetUrl(href, url);
+          return resolved ? [resolved] : [];
+        }),
+        ...(srcset ? extractSrcsetUrls(srcset, url) : [])
+      ];
+    })
+  )];
+  const stylesheetUrls = [...body.matchAll(/<link\b[^>]*>/gi)]
+    .filter((match) => /\brel\s*=\s*(["'])[^"']*\bstylesheet\b[^"']*\1/i.test(match[0]))
+    .flatMap((match) => {
+      const href = findAttribute(match[0], 'href');
+      const resolved = href ? resolveAuditAssetUrl(href, url) : undefined;
+      return resolved ? [resolved] : [];
+    });
+  const scriptUrls = [...body.matchAll(/<script\b[^>]*>/gi)].flatMap((match) => {
+    const src = findAttribute(match[0], 'src');
+    const resolved = src ? resolveAuditAssetUrl(src, url) : undefined;
+    return resolved ? [resolved] : [];
+  });
   const canonicalTag = [...body.matchAll(/<link\b[^>]*>/gi)].find((match) => /\brel\s*=\s*(["'])[^"']*\bcanonical\b[^"']*\1/i.test(match[0]));
   const canonicalHref = canonicalTag ? findAttribute(canonicalTag[0], 'href') : undefined;
   let canonicalUrl: string | undefined;
@@ -304,6 +447,8 @@ function extractHtmlPage(url: string, httpStatus: number, contentType: string | 
     robotsIndexable: robotsContent ? !robotsContent.includes('noindex') : true,
     hasSchema: /<script\b[^>]*type\s*=\s*(["'])application\/ld\+json\1/i.test(body),
     internalLinks: links,
+    imageUrls,
+    assetUrls: [...new Set([...stylesheetUrls, ...scriptUrls])],
     crawlStatus: httpStatus >= 400 ? 'failed' : 'ok'
   };
 }
@@ -348,6 +493,24 @@ function parseSitemapUrls(body: string) {
   return [...body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((match) => match[1]);
 }
 
+function isXmlSitemapPayload(contentType: string | undefined, body: string) {
+  const type = contentType?.toLowerCase() ?? '';
+  if (type.includes('xml') || type.includes('text/plain')) {
+    return /<sitemapindex[\s>]|<urlset[\s>]/i.test(body);
+  }
+  return /<sitemapindex[\s>]|<urlset[\s>]/i.test(body);
+}
+
+function looksLikeSitemapUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    return path.endsWith('.xml') || /(^|\/)sitemap(_index)?(\.xml)?$/i.test(path) || /\/wp-sitemap/i.test(path);
+  } catch {
+    return /\.xml($|\?)/i.test(url) || /sitemap(_index)?\.xml/i.test(url);
+  }
+}
+
 /**
  * 連接站點的受控唯讀 crawler。正文只在當前請求中解析，絕不持久化。
  */
@@ -363,8 +526,24 @@ export async function crawlConnectedSite(
   const pages: CrawledAuditPage[] = [];
   const queued = [rootTarget.url.toString()];
   const visited = new Set<string>();
+  const sitemapQueue: Array<{ url: string; depth: number }> = [];
   const startedAt = Date.now();
   let disallowPaths: string[] = [];
+
+  const enqueueSitemap = (url: string, depth = 0) => {
+    if (depth > maxSitemapExpansionDepth) return;
+    sitemapQueue.push({ url, depth });
+  };
+
+  const expandSitemapBody = (body: string, depth: number) => {
+    for (const loc of parseSitemapUrls(body)) {
+      if (looksLikeSitemapUrl(loc) && depth < maxSitemapExpansionDepth) {
+        enqueueSitemap(loc, depth + 1);
+      } else {
+        queued.push(loc);
+      }
+    }
+  };
 
   try {
     const robotsTarget = await validatePublicUrl(new URL('/robots.txt', rootTarget.url).toString());
@@ -373,18 +552,39 @@ export async function crawlConnectedSite(
       const parsed = parseRobots(robots.body);
       disallowPaths = parsed.disallowPaths;
       for (const sitemapUrl of parsed.sitemapUrls) {
-        try {
-          const sitemapTarget = await validatePublicUrl(sitemapUrl);
-          if (sitemapTarget.url.origin !== rootOrigin) continue;
-          const sitemap = await fetchAuditText(sitemapTarget, fetchImpl, rootOrigin);
-          if (sitemap.status >= 200 && sitemap.status < 300) queued.push(...parseSitemapUrls(sitemap.body));
-        } catch {
-          partialReasons.push('SITEMAP_FETCH_FAILED');
-        }
+        enqueueSitemap(sitemapUrl, 0);
       }
     }
   } catch {
     partialReasons.push('ROBOTS_FETCH_FAILED');
+  }
+
+  // Common CMS sitemap entry points when robots.txt omits them.
+  for (const path of ['/sitemap.xml', '/sitemap_index.xml', '/wp-sitemap.xml']) {
+    enqueueSitemap(new URL(path, rootTarget.url).toString(), 0);
+  }
+
+  while (sitemapQueue.length) {
+    if (Date.now() - startedAt >= auditTotalTimeoutMs) {
+      partialReasons.push('AUDIT_TOTAL_TIMEOUT');
+      break;
+    }
+    const nextSitemap = sitemapQueue.shift();
+    if (!nextSitemap) continue;
+    let normalizedSitemap: string;
+    try { normalizedSitemap = normalizeAuditUrl(nextSitemap.url); } catch { continue; }
+    if (visited.has(`sitemap:${normalizedSitemap}`)) continue;
+    visited.add(`sitemap:${normalizedSitemap}`);
+    try {
+      const sitemapTarget = await validatePublicUrl(nextSitemap.url);
+      if (sitemapTarget.url.origin !== rootOrigin) continue;
+      const sitemap = await fetchAuditText(sitemapTarget, fetchImpl, rootOrigin);
+      if (sitemap.status >= 200 && sitemap.status < 300 && isXmlSitemapPayload(sitemap.contentType, sitemap.body)) {
+        expandSitemapBody(sitemap.body, nextSitemap.depth);
+      }
+    } catch {
+      partialReasons.push('SITEMAP_FETCH_FAILED');
+    }
   }
 
   while (queued.length && pages.length < pageLimit) {
@@ -412,8 +612,12 @@ export async function crawlConnectedSite(
     }
     try {
       const response = await fetchAuditText(target, fetchImpl, rootOrigin);
+      if (isXmlSitemapPayload(response.contentType, response.body) || looksLikeSitemapUrl(response.finalUrl)) {
+        expandSitemapBody(response.body, 0);
+        continue;
+      }
       if (!response.contentType?.toLowerCase().includes('text/html') && !response.contentType?.toLowerCase().includes('application/xhtml+xml')) {
-        pages.push({ url: response.finalUrl, finalUrl: response.finalUrl, httpStatus: response.status, contentType: response.contentType, crawlStatus: 'failed', errorCode: 'AUDIT_UNSUPPORTED_CONTENT_TYPE', internalLinks: [] });
+        // Resource / non-HTML URLs must not consume the HTML page budget.
         partialReasons.push('AUDIT_UNSUPPORTED_CONTENT_TYPE');
         continue;
       }
@@ -1207,7 +1411,8 @@ async function executeConnectedSiteAudit(
       category: finding.category as SiteAuditIssueData['category'], severity: finding.severity,
       title: finding.title, description: finding.description, url: finding.url,
       affectedUrls: finding.affectedUrls,
-      affectedCount: finding.affectedCount, recommendation: finding.recommendation
+      affectedCount: finding.affectedCount, recommendation: finding.recommendation,
+      sampleUrls: finding.resourceUrls
     })));
     await monitoringRepository.saveFindings(graphFindings.map((finding) => ({
       workspaceId, siteId, auditId: audit.id,
@@ -1215,8 +1420,13 @@ async function executeConnectedSiteAudit(
       fingerprint: createIssueFingerprint({ category: finding.category, url: finding.url, title: finding.title }),
       category: finding.category, severity: finding.severity, title: finding.title,
       description: finding.description,
-      evidence: { affectedCount: finding.affectedCount, url: finding.url, affectedUrls: finding.affectedUrls ?? [] },
-      recommendation: finding.recommendation, ruleVersion: 'ph2-10.1', status: status === 'partial' ? 'partial' as const : 'open' as const
+      evidence: {
+        affectedCount: finding.affectedCount,
+        url: finding.url,
+        affectedUrls: finding.affectedUrls ?? [],
+        resourceUrls: finding.resourceUrls ?? []
+      },
+      recommendation: finding.recommendation, ruleVersion: 'ph2-10.2', status: status === 'partial' ? 'partial' as const : 'open' as const
     })));
     await saveAuditMetrics(monitoringRepository, workspaceId, siteId, audit.id, overallScore, targetUrl ?? siteUrl);
     return monitoringRepository.getBundle(workspaceId, audit.id);

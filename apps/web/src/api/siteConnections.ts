@@ -33,6 +33,7 @@ export interface SiteConnection {
   cmsVersion?: string;
   pluginVersion?: string;
   googleAnalyticsPropertyId?: string;
+  competitorUrls?: string[];
   status: SiteConnectionStatus;
   createdAt: string;
   lastTokenUsedAt?: string;
@@ -296,6 +297,13 @@ export async function updateSiteAnalyticsSettings(
   );
 }
 
+export async function updateSiteCompetitorUrls(siteId: string, competitorUrls: string[]) {
+  return requestApi<{ site: SiteConnection }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/competitor-urls`,
+    { method: 'PUT', body: JSON.stringify({ competitorUrls }) }
+  );
+}
+
 export interface SyncTaskListFilters {
   siteId?: string;
   scope?: SyncTaskScope;
@@ -550,6 +558,13 @@ export interface AhrefsSiteAuditConfig {
   updatedAt: string;
 }
 
+export interface AhrefsSiteAuditConfigResponse {
+  config: AhrefsSiteAuditConfig;
+  platformManaged: boolean;
+  platformAvailable: boolean;
+  autoCreate: boolean;
+}
+
 export interface AhrefsSiteAuditIssuePages {
   issueId: string;
   urls: string[];
@@ -559,7 +574,7 @@ export interface AhrefsSiteAuditIssuePages {
 }
 
 export async function getAhrefsSiteAuditConfig(siteId: string) {
-  return requestApi<{ config: AhrefsSiteAuditConfig }>(
+  return requestApi<AhrefsSiteAuditConfigResponse>(
     `/api/v1/site-connections/${encodeURIComponent(siteId)}/ahrefs-site-audit/config`
   );
 }

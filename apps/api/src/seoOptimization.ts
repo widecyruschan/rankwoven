@@ -6,6 +6,7 @@ import { getBearerToken, requireAuth, type AuthService } from './auth';
 import {
   fetchAhrefsSiteAuditIssuePages,
   fetchAhrefsSiteAuditReport,
+  resolveAhrefsSiteAuditProjectId,
   type AhrefsSiteAuditIssue,
   type AhrefsSiteAuditReport
 } from './ahrefsSiteAudit';
@@ -272,7 +273,7 @@ const internalLinkGenerationSchema = z.object({
 
 const ahrefsSiteAuditConfigSchema = z.object({
   enabled: z.boolean(),
-  projectId: z.string().trim().min(1).max(80),
+  projectId: z.string().trim().max(80).optional().default(''),
   crawlDate: z.string().datetime().optional(),
   comparisonDate: z.string().datetime().optional()
 });
@@ -667,14 +668,15 @@ async function buildSeoIssues(
 
 type NewSeoAuditIssue = Omit<SeoAuditIssue, 'id' | 'auditId' | 'siteId' | 'createdAt'>;
 
-function getConfiguredAhrefsSiteAuditRequest(siteConfig?: AhrefsSiteAuditProjectConfig) {
+function isPlatformAhrefsSiteAuditAvailable() {
+  return Boolean(apiConfig.AHREFS_API_KEY && apiConfig.AHREFS_SITE_AUDIT_API_URL && apiConfig.AHREFS_SITE_AUDIT_ENABLED);
+}
+
+function getConfiguredAhrefsSiteAuditRequest(siteConfig?: AhrefsSiteAuditProjectConfig, projectIdOverride?: string) {
+  const projectId = String(projectIdOverride || siteConfig?.projectId || apiConfig.AHREFS_SITE_AUDIT_PROJECT_ID || '').trim();
   const isSiteConfigEnabled = siteConfig?.enabled === true;
-  const isEnvironmentConfigEnabled = apiConfig.AHREFS_SITE_AUDIT_ENABLED;
-  const projectId = siteConfig?.projectId ?? apiConfig.AHREFS_SITE_AUDIT_PROJECT_ID;
-  const crawlDate = siteConfig?.crawlDate ?? apiConfig.AHREFS_SITE_AUDIT_CRAWL_DATE;
-  const comparisonDate = siteConfig?.comparisonDate ?? apiConfig.AHREFS_SITE_AUDIT_COMPARISON_DATE;
   if (
-    (!isSiteConfigEnabled && !isEnvironmentConfigEnabled) ||
+    (!isPlatformAhrefsSiteAuditAvailable() && !isSiteConfigEnabled) ||
     !apiConfig.AHREFS_API_KEY ||
     !apiConfig.AHREFS_SITE_AUDIT_API_URL ||
     !projectId
@@ -685,9 +687,89 @@ function getConfiguredAhrefsSiteAuditRequest(siteConfig?: AhrefsSiteAuditProject
     apiUrl: apiConfig.AHREFS_SITE_AUDIT_API_URL,
     apiKey: apiConfig.AHREFS_API_KEY,
     projectId,
-    crawlDate,
-    comparisonDate
+    crawlDate: siteConfig?.crawlDate ?? apiConfig.AHREFS_SITE_AUDIT_CRAWL_DATE,
+    comparisonDate: siteConfig?.comparisonDate ?? apiConfig.AHREFS_SITE_AUDIT_COMPARISON_DATE
   };
+}
+
+async function resolveAndPersistAhrefsProject(
+  seoRepository: SeoOptimizationRepository,
+  siteId: string,
+  siteUrl: string,
+  siteConfig?: AhrefsSiteAuditProjectConfig
+) {
+  if (!apiConfig.AHREFS_API_KEY || !apiConfig.AHREFS_SITE_AUDIT_API_URL) {
+    throw new Error('AHREFS_SITE_AUDIT_NOT_CONFIGURED');
+  }
+  if (!isPlatformAhrefsSiteAuditAvailable() && !siteConfig?.enabled && !siteConfig?.projectId) {
+    throw new Error('AHREFS_SITE_AUDIT_NOT_CONFIGURED');
+  }
+
+  const resolved = await resolveAhrefsSiteAuditProjectId({
+    apiUrl: apiConfig.AHREFS_SITE_AUDIT_API_URL,
+    managementApiUrl: apiConfig.AHREFS_MANAGEMENT_API_URL,
+    apiKey: apiConfig.AHREFS_API_KEY,
+    siteUrl,
+    existingProjectId: siteConfig?.projectId || apiConfig.AHREFS_SITE_AUDIT_PROJECT_ID,
+    autoCreate: apiConfig.AHREFS_SITE_AUDIT_AUTO_CREATE,
+    projectName: `RankWoven ${(() => {
+      try { return new URL(siteUrl).hostname; } catch { return siteId; }
+    })()}`
+  });
+
+  if (resolved.projectId !== siteConfig?.projectId || siteConfig?.enabled !== true) {
+    await seoRepository.upsertAhrefsSiteAuditConfig(siteId, {
+      enabled: true,
+      projectId: resolved.projectId,
+      crawlDate: siteConfig?.crawlDate,
+      comparisonDate: siteConfig?.comparisonDate
+    });
+  }
+
+  return resolved;
+}
+
+async function buildAhrefsSiteAuditIssues(
+  options: BuildSeoIssueOptions,
+  siteConfig: AhrefsSiteAuditProjectConfig | undefined,
+  context: { siteUrl: string; seoRepository: SeoOptimizationRepository }
+) {
+  if (!isPlatformAhrefsSiteAuditAvailable() && !siteConfig?.enabled && !siteConfig?.projectId) {
+    return { report: undefined, issues: [] as NewSeoAuditIssue[], errorCode: undefined, resolvedBy: undefined as string | undefined };
+  }
+
+  try {
+    const resolved = await resolveAndPersistAhrefsProject(
+      context.seoRepository,
+      options.siteId,
+      context.siteUrl,
+      siteConfig
+    );
+    const request = getConfiguredAhrefsSiteAuditRequest(
+      { ...(siteConfig ?? { siteId: options.siteId, enabled: true, projectId: resolved.projectId, updatedAt: '' }), projectId: resolved.projectId, enabled: true },
+      resolved.projectId
+    );
+    if (!request) {
+      return {
+        report: undefined,
+        issues: [] as NewSeoAuditIssue[],
+        errorCode: 'AHREFS_SITE_AUDIT_NOT_CONFIGURED',
+        resolvedBy: resolved.resolvedBy
+      };
+    }
+    const report = await fetchAhrefsSiteAuditReport(request);
+    const aiRecommendations = await generateAhrefsAiRecommendations(report, options);
+    const issues = report.issues.map((issue) => {
+      const aiRecommendation = aiRecommendations.get(issue.id);
+      return createAhrefsAuditIssue(issue, aiRecommendation ?? issue.recommendation, aiRecommendation ? 'ai' : 'deterministic');
+    });
+    return { report, issues, errorCode: undefined, resolvedBy: resolved.resolvedBy };
+  } catch (error) {
+    const errorCode = error instanceof Error && /^AHREFS_SITE_AUDIT_/.test(error.message)
+      ? error.message
+      : 'AHREFS_SITE_AUDIT_UNAVAILABLE';
+    return { report: undefined, issues: [] as NewSeoAuditIssue[], errorCode, resolvedBy: undefined as string | undefined };
+  }
 }
 
 function mapAhrefsSeverity(severity: AhrefsSiteAuditIssue['severity']): IssueSeverity {
@@ -773,25 +855,6 @@ async function generateAhrefsAiRecommendations(
     return parseAiRecommendationMap(response.text);
   } catch {
     return new Map<string, string>();
-  }
-}
-
-async function buildAhrefsSiteAuditIssues(options: BuildSeoIssueOptions, siteConfig?: AhrefsSiteAuditProjectConfig) {
-  const request = getConfiguredAhrefsSiteAuditRequest(siteConfig);
-  if (!request) return { report: undefined, issues: [] as NewSeoAuditIssue[], errorCode: undefined };
-  try {
-    const report = await fetchAhrefsSiteAuditReport(request);
-    const aiRecommendations = await generateAhrefsAiRecommendations(report, options);
-    const issues = report.issues.map((issue) => {
-      const aiRecommendation = aiRecommendations.get(issue.id);
-      return createAhrefsAuditIssue(issue, aiRecommendation ?? issue.recommendation, aiRecommendation ? 'ai' : 'deterministic');
-    });
-    return { report, issues, errorCode: undefined };
-  } catch (error) {
-    const errorCode = error instanceof Error && /^AHREFS_SITE_AUDIT_/.test(error.message)
-      ? error.message
-      : 'AHREFS_SITE_AUDIT_UNAVAILABLE';
-    return { report: undefined, issues: [] as NewSeoAuditIssue[], errorCode };
   }
 }
 
@@ -3415,7 +3478,10 @@ export function registerSeoOptimizationRoutes(
       } satisfies BuildSeoIssueOptions;
       const localIssues = await buildSeoIssues(articles, media, auditOptions);
       const ahrefsSiteAuditConfig = await seoRepository.getAhrefsSiteAuditConfig(site.id);
-      const ahrefs = await buildAhrefsSiteAuditIssues(auditOptions, ahrefsSiteAuditConfig);
+      const ahrefs = await buildAhrefsSiteAuditIssues(auditOptions, ahrefsSiteAuditConfig, {
+        siteUrl: site.siteUrl,
+        seoRepository
+      });
       const issues = [...localIssues, ...ahrefs.issues];
       const score = ahrefs.report?.healthScore ?? calculateRankWovenAuditScore(issues);
       const result = await seoRepository.saveAudit(
@@ -3434,7 +3500,8 @@ export function registerSeoOptimizationRoutes(
                   crawledUrls: ahrefs.report.crawledUrls,
                   issueCount: ahrefs.report.issues.length,
                   rawResponseHash: ahrefs.report.rawResponseHash,
-                  collectedAt: ahrefs.report.collectedAt
+                  collectedAt: ahrefs.report.collectedAt,
+                  resolvedBy: ahrefs.resolvedBy
                 }
               : undefined,
             ahrefsErrorCode: ahrefs.errorCode
@@ -3496,9 +3563,12 @@ export function registerSeoOptimizationRoutes(
         success: true,
         message: '操作成功',
         data: {
+          platformManaged: isPlatformAhrefsSiteAuditAvailable(),
+          platformAvailable: isPlatformAhrefsSiteAuditAvailable(),
+          autoCreate: apiConfig.AHREFS_SITE_AUDIT_AUTO_CREATE,
           config: config ?? {
             siteId: site.id,
-            enabled: false,
+            enabled: isPlatformAhrefsSiteAuditAvailable(),
             projectId: '',
             updatedAt: ''
           }
@@ -3552,7 +3622,15 @@ export function registerSeoOptimizationRoutes(
       if (!parsedQuery.success) return validationError(reply, parsedQuery.error);
 
       const siteConfig = await seoRepository.getAhrefsSiteAuditConfig(site.id);
-      const providerRequest = getConfiguredAhrefsSiteAuditRequest(siteConfig);
+      let providerRequest = getConfiguredAhrefsSiteAuditRequest(siteConfig);
+      if (!providerRequest && (isPlatformAhrefsSiteAuditAvailable() || siteConfig?.enabled)) {
+        try {
+          const resolved = await resolveAndPersistAhrefsProject(seoRepository, site.id, site.siteUrl, siteConfig);
+          providerRequest = getConfiguredAhrefsSiteAuditRequest(siteConfig, resolved.projectId);
+        } catch {
+          providerRequest = undefined;
+        }
+      }
       if (!providerRequest) {
         return reply.status(409).send({
           success: false,

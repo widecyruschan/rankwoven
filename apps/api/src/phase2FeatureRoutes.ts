@@ -156,8 +156,8 @@ function normalizeDomain(value: string) {
   try {
     const parsed = new URL(candidate);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
-    if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) return undefined;
-    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    if (parsed.username || parsed.password) return undefined;
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
     if (!hostname || [...hostname].some((character) => character.charCodeAt(0) > 127) || hostname.length > 253 || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname.includes(':')) return undefined;
     if (/^(10|127|169\.254|192\.168)\./.test(hostname) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)) return undefined;
     return hostname;
@@ -167,8 +167,35 @@ function normalizeDomain(value: string) {
 }
 
 function deriveSeedKeywordFromDomain(domain: string) {
-  const label = domain.split('.')[0] ?? '';
-  return label.replace(/[-_]+/g, ' ').trim().slice(0, 300);
+  const labels = domain.toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
+  const multiPartSecondLevel = new Set(['com', 'co', 'net', 'org', 'gov', 'edu', 'ac']);
+  let brand = labels[0] ?? '';
+  if (labels.length >= 3 && multiPartSecondLevel.has(labels[labels.length - 2] ?? '')) {
+    brand = labels[labels.length - 3] ?? brand;
+  } else if (labels.length >= 2) {
+    brand = labels[labels.length - 2] ?? brand;
+  }
+  return brand.replace(/[-_]+/g, ' ').trim().slice(0, 300);
+}
+
+export function inferResearchMarketFromSiteUrl(siteUrl: string) {
+  try {
+    const host = new URL(siteUrl).hostname.toLowerCase();
+    if (host.endsWith('.tw') || host.includes('.com.tw')) return 'TW';
+    if (host.endsWith('.hk') || host.includes('.com.hk')) return 'HK';
+    if (host.endsWith('.cn') || host.includes('.com.cn')) return 'CN';
+    if (host.endsWith('.uk') || host.endsWith('.gb')) return 'GB';
+    if (host.endsWith('.us')) return 'US';
+  } catch {
+    // fall through
+  }
+  return 'US';
+}
+
+export function inferResearchLanguageFromMarket(market: string) {
+  if (market === 'TW' || market === 'HK') return 'zh-Hant';
+  if (market === 'CN') return 'zh-Hans';
+  return 'en';
 }
 
 async function resolveContentSource(
@@ -228,13 +255,17 @@ export function registerPhase2FeatureRoutes(
     const idempotency = await readIdempotency(repository, request, createRequestContext(request, user));
     if (sendIdempotencyError(reply, idempotency)) return reply;
     if (idempotency.existing) return reply.status(idempotency.existing.statusCode).send(idempotency.existing.responseBody);
-    if (!(await siteConnectionRepository.findForWorkspace(parsed.data.siteId, user.workspaceId))) {
+    const site = await siteConnectionRepository.findForWorkspace(parsed.data.siteId, user.workspaceId);
+    if (!site) {
       return sendWorkspaceNotFound(reply);
     }
 
     try {
+      const inferredMarket = inferResearchMarketFromSiteUrl(site.siteUrl);
       const project = await repository.createKeywordResearchProject({
         ...parsed.data,
+        market: inferredMarket,
+        language: inferResearchLanguageFromMarket(inferredMarket),
         workspaceId: user.workspaceId,
         id: createDeterministicUuid(`${user.workspaceId}:${getRouteKey(request)}:${idempotency.key}`)
       });
@@ -310,7 +341,11 @@ export function registerPhase2FeatureRoutes(
     if (ownDomain) {
       const site = await siteConnectionRepository.findForWorkspace(project.siteId, user.workspaceId);
       const connectedDomain = (() => {
-        try { return new URL(site?.siteUrl ?? '').hostname.toLowerCase().replace(/\.$/, ''); } catch { return ''; }
+        try {
+          return new URL(site?.siteUrl ?? '').hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+        } catch {
+          return '';
+        }
       })();
       if (!connectedDomain || connectedDomain !== ownDomain) {
         return sendValidationError(reply, [{ path: ['ownDomain'], message: '自有域名必須與研究專案的已連接站點一致' }]);

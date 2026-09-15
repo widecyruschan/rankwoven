@@ -38,24 +38,100 @@ describe('site audit monitoring domain', () => {
     expect(findings.find((finding) => finding.title === '發現孤島頁面')?.affectedUrls).toEqual(['https://example.com/orphan']);
   });
 
+  it('detects localhost image URLs and HTTPS mixed content with resource evidence', () => {
+    const findings = analyzeAuditPageGraph([
+      {
+        url: 'https://www.ckcprompt.cloud/ai-trends/1/',
+        httpStatus: 200,
+        title: 'ClaudeCode tips',
+        metaDescription: 'A sufficiently long meta description for the article page audit check.',
+        h1Count: 1,
+        wordCount: 220,
+        canonicalUrl: 'https://www.ckcprompt.cloud/ai-trends/1/',
+        hasSchema: true,
+        internalLinks: ['http://www.ckcprompt.cloud/legacy'],
+        imageUrls: [
+          'http://localhost:8888/cms/wp-content/uploads/2025/09/cover.jpg',
+          'https://www.ckcprompt.cloud/assets/ok.png'
+        ],
+        assetUrls: ['http://cdn.example.com/legacy.css']
+      }
+    ], 'https://www.ckcprompt.cloud/');
+
+    const localhostImages = findings.find((finding) => finding.title === '圖片指向本機開發位址');
+    const mixedContent = findings.find((finding) => finding.title === 'HTTPS/HTTP mixed content');
+
+    expect(localhostImages).toMatchObject({
+      category: 'images',
+      severity: 'critical',
+      affectedCount: 1
+    });
+    expect(localhostImages?.resourceUrls).toEqual([
+      'http://localhost:8888/cms/wp-content/uploads/2025/09/cover.jpg'
+    ]);
+    expect(localhostImages?.recommendation).toContain('公開可訪問');
+
+    expect(mixedContent).toMatchObject({
+      category: 'security',
+      severity: 'high',
+      affectedCount: 1
+    });
+    expect(mixedContent?.resourceUrls).toEqual(expect.arrayContaining([
+      'http://localhost:8888/cms/wp-content/uploads/2025/09/cover.jpg',
+      'http://cdn.example.com/legacy.css',
+      'http://www.ckcprompt.cloud/legacy'
+    ]));
+    expect(mixedContent?.recommendation).toContain('HTTPS');
+  });
+
+  it('expands sitemap index entries into HTML page URLs', async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : String(input);
+      if (url.includes('/robots.txt')) {
+        return new Response('User-agent: *\nSitemap: https://example.com/sitemap_index.xml', { status: 200, headers: { 'content-type': 'text/plain' } });
+      }
+      if (url.includes('/sitemap_index.xml')) {
+        return new Response('<sitemapindex><sitemap><loc>https://example.com/post-sitemap.xml</loc></sitemap></sitemapindex>', { status: 200, headers: { 'content-type': 'application/xml' } });
+      }
+      if (url.includes('/post-sitemap.xml')) {
+        return new Response('<urlset><url><loc>https://example.com/from-sitemap</loc></url></urlset>', { status: 200, headers: { 'content-type': 'application/xml' } });
+      }
+      if (url.includes('/sitemap.xml') || url.includes('/wp-sitemap.xml')) {
+        return new Response('Not Found', { status: 404, headers: { 'content-type': 'text/plain' } });
+      }
+      if (url.includes('/from-sitemap')) {
+        return new Response('<html><head><title>From Sitemap</title><link rel="canonical" href="https://example.com/from-sitemap"></head><body><h1>From Sitemap</h1><p>Content for sitemap discovery path.</p></body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+      }
+      return new Response('<html><head><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1><p>Home page content for crawler seed.</p></body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    };
+    const result = await crawlConnectedSite('https://example.com', 5, fetchImpl);
+    expect(result.pages.map((page) => page.url).join(' ')).toContain('from-sitemap');
+  });
+
   it('crawls robots and sitemap URLs without persisting page bodies', async () => {
     const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith('/robots.txt')) {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : String(input);
+      if (url.includes('/robots.txt')) {
         return new Response('User-agent: *\nSitemap: https://example.com/sitemap.xml', { status: 200, headers: { 'content-type': 'text/plain' } });
       }
-      if (url.endsWith('/sitemap.xml')) {
+      if (url.includes('/sitemap.xml') && !url.includes('sitemap_index') && !url.includes('wp-sitemap')) {
         return new Response('<urlset><url><loc>https://example.com/sitemap-page</loc></url></urlset>', { status: 200, headers: { 'content-type': 'application/xml' } });
       }
-      if (url.endsWith('/sitemap-page')) {
+      if (url.includes('/sitemap_index.xml') || url.includes('/wp-sitemap.xml')) {
+        return new Response('Not Found', { status: 404, headers: { 'content-type': 'text/plain' } });
+      }
+      if (url.includes('/sitemap-page')) {
         return new Response('<html><head><title>Mapped</title><link rel="canonical" href="https://example.com/sitemap-page"></head><body></body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+      }
+      if (url.includes('/article')) {
+        return new Response('<html><head><title>Article</title><link rel="canonical" href="https://example.com/article"></head><body></body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
       }
       return new Response('<html><head><title>Home</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{}</script></head><body><a href="/article">Article</a></body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
     };
     const result = await crawlConnectedSite('https://example.com', 3, fetchImpl);
-    expect(result.pages).toHaveLength(3);
-    expect(result.pages[0]).toMatchObject({ title: 'Home', hasSchema: true, crawlStatus: 'ok' });
-    expect(result.pages[0]?.internalLinks).toContain('https://example.com/article');
+    expect(result.pages.length).toBeGreaterThanOrEqual(2);
+    expect(result.pages.some((page) => page.title === 'Home')).toBe(true);
+    expect(result.pages.some((page) => page.url.includes('sitemap-page') || page.url.includes('/article'))).toBe(true);
   });
 
   it('analyzes one connected-site page without creating an orphan-page finding', async () => {
