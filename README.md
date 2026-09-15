@@ -6576,6 +6576,51 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 - 本機資料庫 migration `0022` 已成功應用。
 - 未提交 `.env`、密碼、Token、API Key 或未追蹤的 `0.jpeg`。
 
+## 會話總結（2026-09-15）— Cyrus 站點 GA4 無數據診斷
+
+### 會話主要目的
+
+排查 `Cyrus` 站點在本地可讀取相同 GA4 Property、部署到 VPS 後卻沒有數據的原因。
+
+### 診斷結果
+
+- 本地與生產使用相同 GA4 Property ID 指紋，Google OAuth 服務帳號交換及 Analytics Data API 均正常。
+- 生產 `Cyrus` 站點 URL 為 `https://cyruschan.com`，API 會加入 `hostName=cyruschan.com` 精確篩選。
+- 該 Property 2026 年 9 月目前有數據的 host 是 `ckcprompt.cloud`；因此生產 `Cyrus` 返回 0 行是正確的篩選結果，不是月份偏移。
+- 本地 `ckcprompt.cloud` 站點按其 host 篩選可返回 9 月數據；未配置 Property 的站點已不再返回固定 7 月示範數據。
+
+### 關鍵決策和待確認事項
+
+- 保留站點 host 隔離，避免不同網站共用 Property 時互相污染流量數據。
+- 需要確認 `Cyrus` 應分析 `cyruschan.com` 的獨立 Property，還是刻意分析同一 Property 下的 `ckcprompt.cloud` 數據；未確認前不修改生產站點 URL、Property ID 或放寬過濾。
+
+### 驗證結果
+
+- 生產 API、主站及所有 Docker 容器均正常。
+- 本次只完成診斷及 README 記錄，未修改業務程式碼、未修改生產配置、未推送或部署新版本。
+
+## 會話總結（2026-09-15）— Cyruschan.com GA4 事件缺失確認
+
+### 會話主要目的
+
+確認兩個站點均已配置不同 GA4 Property ID 後，為何部署到 VPS 的 `Cyrus` 站點仍無法取得 2026 年 9 月數據。
+
+### 最終證據
+
+- 生產資料庫保存：`ckcprompt.cloud` 使用 `547361337`，`Cyrus` 使用 `358302596`；兩者均已配置。
+- 直接調用 GA4 Data API：Property `358302596` 在 2026 年 8 月同時有 `cyruschan.com` 與 `ckcprompt.cloud` host 事件；2026 年 9 月只返回 `ckcprompt.cloud` host 事件。
+- 生產 API 的 OAuth、Property 讀取、日期範圍及 Docker 容器均正常；`Cyrus` 的 0 行是 GA4 原始數據缺少 `cyruschan.com` 事件，不是上傳或月份轉換錯誤。
+- 公開 `cyruschan.com` 頁面目前載入 Google Site Kit Google tag `GT-NGBJLHR`，後續需在 GA4／Site Kit 檢查該 tag 的 GA4 destination 與 9 月事件收集狀態。
+
+### 決策與待辦
+
+- 不自動交換兩個站點的 Property ID，也不移除 hostName 隔離，避免顯示錯誤網站流量。
+- 待在 GA4 Realtime 或 DebugView 以 `cyruschan.com` 訪問測試，確認事件是否進入 Property `358302596`；若沒有，修復網站 Google tag destination／Consent 設定後再重新查詢。
+
+### 驗證結果
+
+- 本次只完成只讀診斷及 README 記錄，未修改業務程式碼、生產配置、GitHub 或部署版本。
+
 ### 下一步行動清單
 
 - 部署後在已連接插件站點重新執行網站檢測，核對每條問題的完整 URL 列表和一鍵修復隊列。
