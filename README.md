@@ -7209,3 +7209,40 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 授權後提交並推送 `main` 部署；部署後在客戶後台對 `https://www.newscan.com.tw/` 再跑一次競品分析。
 - 若仍失敗，介面應顯示具體 Provider 錯誤（如憑據 401／額度），依訊息檢查生產 `KEYWORD_VOLUME_API_KEY`。
+
+## 會話總結（2026-09-16）— 推送並部署 SEO 檢測與競品研究修復
+
+### 會話主要目的
+
+將已驗證的 SEO 全站檢測、Ahrefs Site Audit 綁定及競品關鍵詞研究修復推送至 GitHub `main`，並部署到 Hostinger VPS。
+
+### 完成的主要任務
+
+- 推送提交 `9bda57d84ff1006012b8662374f65101ece54764` 至 `origin/main`。
+- GitHub Actions `Production Deploy` 完成 Verify 與 Hostinger VPS 部署。
+- 生產環境已套用資料庫 migration，並重建 API、Web、Worker、PostgreSQL 與 Redis 容器。
+
+### 關鍵決策和解決方案
+
+- 只推送已通過本機 lint、test、build、安全審計的既有提交；未追蹤的 `0.jpeg` 未加入 Git。
+- 透過 GitHub Actions 使用乾淨 Git ref 部署，避免把本機環境變數或未提交檔案帶入生產。
+
+### 使用的技術棧
+
+- GitHub Actions、SSH、Docker Compose、Hostinger VPS、Fastify、Vue 3、PostgreSQL、Redis
+
+### 新增或修改文件
+
+- 本次部署未新增程式碼；只追加本會話部署記錄至 `README.md`。
+
+### 驗證結果
+
+- GitHub Actions run `35004205023`：Verify 與 Deploy 均成功。
+- `https://api.rankwoven.com/health` 回傳 `success: true`。
+- VPS `.deploy-version` 已確認為提交 `9bda57d84ff1006012b8662374f65101ece54764`。
+- `rankwoven-api`、`rankwoven-web`、`rankwoven-worker`、`rankwoven-postgres`、`rankwoven-redis` 均為 running。
+
+### 下一步行動清單
+
+- 可在生產客戶後台驗證「SEO 網站檢測」全站問題列表與「競品關鍵詞研究」實際任務。
+- 若需要更新 WordPress 插件 GA4 修復，需另行部署 `plugins/wordpress/rankwoven-seo/` 至對應 WordPress 網站。
