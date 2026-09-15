@@ -31,7 +31,7 @@
 |---|---|---|
 | 站點概覽 | `/app` | 健康分、審計進度、待審核建議、近期活動 |
 | 站點管理 | `/app/sites` | 新增、查看、刷新、重新生成或吊銷站點連接 |
-| 流量分析 | `/app/analytics` | 日期範圍、流量趨勢、查詢與熱門頁面 |
+| 流量分析 | `/app/analytics`、`/app/sites/:siteId/analytics` | 日期範圍、流量趨勢、查詢與熱門頁面；手動網站可輸入 GA4 Property ID 連接唯讀數據 |
 | 關鍵詞建議 | `/app/keywords` | 生成、篩選、查看與匯出建議 |
 | 媒體處理 | `/app/media` | 批量掃描、編輯、批准和套用圖片 SEO 建議 |
 | 內部連結 | `/app/links` | 審核來源、目標、錨文本、理由與信心度 |
@@ -99,6 +99,7 @@
 - [x] Web build 會生成 10 個公開入口與 86 篇文章的路由專屬 SEO fallback HTML；Nginx 優先返回對應 `index.html`。
 - [x] 語言切換會同步公開頁面的 SEO head；文章頁保留文章 title、摘要、封面和 BlogPosting metadata。
 - [x] 10 個公開入口各有唯一中英文主要關鍵詞；首頁繁中主詞為 `SEO 教學`，Blog 文章以文章標題作獨立長尾詞，私有頁不保留 keywords meta。
+- [x] 手動加入的網站可在流量分析頁保存 GA4 Property ID；保存後按站點上下文讀取 GA4，內容寫回能力仍保持關閉。
 - [x] Nginx 透過 URI `map` 對 `/login`、`/register`、`/forgot-password`、`/reset-password` 和所有 `/app`、`/admin` 路由輸出 `X-Robots-Tag: noindex, nofollow, noarchive`；即使 SPA fallback 到 `index.html`，header 仍會保留。
 - [ ] 公開頁面目前尚未達成初始 HTML SSR/SSG；需在正式 SEO 上線前完成前台渲染架構遷移。
 - [ ] 正式上線前替換法律文件骨架，並接入 FAQPage / BlogPosting / Organization schema。

@@ -263,6 +263,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /api/v1/site-connections/:siteId/apply-queue`：查看站點已批准建議、寫回/回滾任務和套用快照。
 - `POST /api/v1/site-connections/:siteId/apply-snapshots/:snapshotId/rollback`：為已套用快照建立回滾任務。
 - `GET /api/v1/analytics/overview?siteId=&startDate=&endDate=`：讀取 GA4 或示範分析數據，支援站點 host 篩選與日期範圍。
+- `PUT /api/v1/site-connections/:siteId/analytics-settings`：由工作區用戶保存站點 GA4 Property ID；手動網站只連接唯讀流量分析，不開啟 CMS 寫回。
 - `POST /api/v1/keyword-suggestions`：產生關鍵詞建議，優先使用第三方搜尋量/難度 API，其次 AI Provider，最後才回退本地 fallback。
 
 站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、重試次數、退避時間、死信狀態、文章同步資料、文章 Meta Description、媒體同步資料、同步批次記錄、SEO 審計、審計問題、優化建議和寫回快照已落到 PostgreSQL。文章與媒體列表已支援 `page` / `pageSize` 分頁查詢，避免資料量增長後一次讀取過多。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度；`/app/apply` 已接入真實已批准建議寫回隊列、批次預覽、任務狀態和回滾入口。手動刷新、已批准建議寫回與快照回滾任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行，失敗時按退避時間重新排隊，超過最大重試次數後進入 `dead_letter`。
@@ -6601,3 +6602,75 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 ### 下一步行動清單
 
 - 在已連接插件站點執行網站檢測，核對完整受影響 URL、修復建議及一鍵修復隊列結果。
+
+## 會話總結（2026-09-15）— Google Analytics 月份顯示修復
+
+### 會話主要目的
+
+修復 Google Analytics 表單在香港等正時區於月初把九月份日期顯示為八月份的問題。
+
+### 完成的主要任務
+
+- 前端 Analytics 日期輸入改用本地日曆字段組裝 `YYYY-MM-DD`，不再以 UTC ISO 字串截取日期。
+- API 默認 Analytics 日期範圍改用本地日期和 `setDate`，避免月初 UTC 回退一天。
+- 新增 API 日期格式化回歸測試，以及 Web 日期輸入邏輯測試。
+
+### 關鍵決策和解決方案
+
+- Google Analytics 的日期範圍本身是日曆日期，不應經過 UTC 時刻轉換；保留 API 接收的 `YYYY-MM-DD` 原值。
+
+### 新增或修改文件
+
+- `apps/web/src/views/AnalyticsView.vue`
+- `apps/api/src/analytics.ts`
+- `apps/api/tests/health.test.ts`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- lint 通過。
+- 全量測試：API 86 通過、8 跳過；Web 18 通過；Worker 11 通過；AI Provider 24 通過；CMS Adapter 1 通過；Security 15 通過。
+- API／Web build 通過，`npm audit --audit-level=high` 顯示 0 vulnerabilities。
+
+### 下一步行動清單
+
+- 本次只完成本地修復和驗證，尚未推送或部署。
+
+## 會話總結（2026-09-15）— 手動網站 GA4 Property ID 連接
+
+### 會話主要目的
+
+讓手動加入的網站可以由用戶在流量分析頁輸入 GA4 Property ID，連接該站點的唯讀 Google Analytics 數據。
+
+### 完成的主要任務
+
+- 新增 Web API client `updateSiteAnalyticsSettings`，調用既有站點分析設定 API。
+- Analytics 頁面新增 GA4 Property ID 表單、保存成功／失敗狀態和當前站點同步；手動站點顯示只讀連接提示。
+- 新增手動站點 API 回歸測試，驗證保存後 Analytics overview 使用相同 Property ID。
+- 同步更新 `docs/frontend-page-spec.md` 和本 README 的路由／API 說明。
+
+### 關鍵決策和解決方案
+
+- Property ID 不是密鑰，可由已登入的 workspace owner／editor 保存；Google 服務帳戶憑據仍只在 API server-side 使用。
+- 手動站點保留 `canWriteBack=false`，此功能只增加 GA4 讀取，不改變手動站點的 CMS 寫回邊界。
+
+### 新增或修改文件
+
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/views/AnalyticsView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證結果
+
+- 全量 lint 通過。
+- API 目標測試 51 項通過；Web smoke 測試 18 項通過。
+- API／Web build 通過；全量測試 86 API（8 skipped）、18 Web、11 Worker、24 AI Provider、1 CMS Adapter、15 Security 通過。
+- `npm run security:audit` 通過，0 個高風險漏洞。
+
+### 下一步行動清單
+
+- 本次修改尚未推送或部署；部署後需用手動站點輸入實際 Property ID，確認 Google 服務帳戶已獲 GA4 Viewer 權限。

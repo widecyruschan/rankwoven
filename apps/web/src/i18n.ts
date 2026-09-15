@@ -516,6 +516,14 @@ const messages = {
       demoMode: 'Demo analytics data',
       demoModeDescription:
         'Enter this site GA4 Property ID in the WordPress plugin and grant the RankWoven service account read access to the property.',
+      propertyTitle: 'GA4 property connection',
+      propertyDescription: 'Set the GA4 Property ID for the selected site. RankWoven uses the server-side Google service account to read analytics.',
+      manualPropertyDescription: 'This manually added site has no CMS writeback. Enter its GA4 Property ID here to connect read-only traffic analytics.',
+      propertyId: 'GA4 Property ID',
+      propertyPlaceholder: '123456789',
+      saveProperty: 'Save Property ID',
+      propertySaved: 'GA4 Property ID saved.',
+      propertySaveFailed: 'Unable to save the GA4 Property ID.',
       loadFailed: 'Unable to load analytics'
     },
     searchConsole: {
@@ -1672,6 +1680,14 @@ const messages = {
       endDate: '結束日期',
       demoMode: '示範分析數據',
       demoModeDescription: '請先在 WordPress 插件輸入此站點的 GA4 Property ID，並授權 RankWoven 服務帳號讀取該 Property。',
+      propertyTitle: '連接 GA4 資源',
+      propertyDescription: '為目前選取的站點設定 GA4 Property ID。RankWoven 會使用伺服器端 Google 服務帳戶讀取分析數據。',
+      manualPropertyDescription: '此為手動加入的網站，不提供 CMS 寫回。你可以在此輸入 GA4 Property ID，連接唯讀流量分析。',
+      propertyId: 'GA4 Property ID',
+      propertyPlaceholder: '123456789',
+      saveProperty: '儲存 Property ID',
+      propertySaved: 'GA4 Property ID 已儲存。',
+      propertySaveFailed: '無法儲存 GA4 Property ID。',
       loadFailed: '無法載入分析數據'
     },
     searchConsole: {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from '../src/server';
+import { formatAnalyticsCalendarDate } from '../src/analytics';
 import { createKeywordSuggestionService } from '../src/keywordSuggestions';
 import { apiConfig } from '../src/config';
 import { createInMemorySiteConnectionRepository } from '../src/siteConnections';
@@ -130,6 +131,11 @@ async function loginDemoUser(server: ReturnType<typeof createServer>) {
 }
 
 describe('analytics and keyword routes', () => {
+  it('formats analytics dates using the local calendar date without UTC day rollback', () => {
+    expect(formatAnalyticsCalendarDate(new Date(2026, 8, 1, 0, 30, 0))).toBe('2026-09-01');
+    expect(formatAnalyticsCalendarDate(new Date(2026, 8, 30, 23, 30, 0))).toBe('2026-09-30');
+  });
+
   it('returns analytics overview for authenticated users', async () => {
     const server = createServer();
     const token = await loginDemoUser(server);

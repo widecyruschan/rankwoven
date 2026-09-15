@@ -71,9 +71,21 @@ describe('web smoke test', () => {
     );
     expect(analyticsViewSource).toContain("sites.value.some((site) => site.id === routedSiteId.value)");
     expect(analyticsViewSource).toContain('v-if="!routedSiteId"');
-    expect(analyticsViewSource.indexOf('await loadSites();')).toBeLessThan(
-      analyticsViewSource.indexOf('await loadAnalytics();')
+    const pageLoaderSource = analyticsViewSource.slice(analyticsViewSource.indexOf('async function loadAnalyticsPage()'));
+    expect(pageLoaderSource.indexOf('await loadSites();')).toBeLessThan(
+      pageLoaderSource.indexOf('await loadAnalytics();')
     );
+    expect(analyticsViewSource).toContain('formatCalendarDate(date)');
+    expect(analyticsViewSource).not.toContain('date.toISOString().slice(0, 10)');
+  });
+
+  it('allows manually added sites to connect a read-only GA4 Property ID', async () => {
+    const analyticsViewSource = await readFile(resolve('src/views/AnalyticsView.vue'), 'utf8');
+    const siteApiSource = await readFile(resolve('src/api/siteConnections.ts'), 'utf8');
+    expect(analyticsViewSource).toContain('manualPropertyDescription');
+    expect(analyticsViewSource).toContain('saveAnalyticsPropertyId');
+    expect(analyticsViewSource).toContain("updateSiteAnalyticsSettings(selectedSiteId.value");
+    expect(siteApiSource).toContain('/analytics-settings');
   });
 
   it('keeps manual URL and synced-content audits read-only', async () => {

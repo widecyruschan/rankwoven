@@ -294,6 +294,47 @@ describe('site connection routes', () => {
     });
   });
 
+  it('allows workspace users to connect a manually added site to GA4 by Property ID', async () => {
+    const siteConnectionRepository = createInMemorySiteConnectionRepository();
+    const server = createServer({ siteConnectionRepository });
+    const login = await server.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'demo@rankwoven.com', password: 'rankwoven' }
+    });
+    const authorization = `Bearer ${login.json<{ data: { token: string } }>().data.token}`;
+    const created = await server.inject({
+      method: 'POST',
+      url: '/api/v1/site-connections/manual',
+      headers: { authorization },
+      payload: { siteUrl: 'https://manual-ga4.example.test', name: 'Manual GA4 site' }
+    });
+    const siteId = created.json<{ data: { site: { id: string } } }>().data.site.id;
+
+    const updated = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/site-connections/${siteId}/analytics-settings`,
+      headers: { authorization },
+      payload: { googleAnalyticsPropertyId: '987654321' }
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({
+      success: true,
+      data: { site: { id: siteId, googleAnalyticsPropertyId: '987654321', connectionMode: 'manual' } }
+    });
+
+    const overview = await server.inject({
+      method: 'GET',
+      url: `/api/v1/analytics/overview?siteId=${siteId}&startDate=2026-09-01&endDate=2026-09-30`,
+      headers: { authorization }
+    });
+    expect(overview.statusCode).toBe(200);
+    expect(overview.json()).toMatchObject({ success: true, data: { propertyId: '987654321', siteId } });
+    await server.close();
+  });
+
   it('updates WordPress admin application password credentials for an existing site', async () => {
     const { server, body } = await createWordPressConnection();
     const authToken = await loginDemoUser(server);

@@ -280,6 +280,16 @@ export async function getSiteConnection(siteId: string) {
   }>(`/api/v1/site-connections/${encodeURIComponent(siteId)}`);
 }
 
+export async function updateSiteAnalyticsSettings(
+  siteId: string,
+  settings: { googleAnalyticsPropertyId?: string }
+) {
+  return requestApi<{ site: SiteConnection }>(
+    `/api/v1/site-connections/${encodeURIComponent(siteId)}/analytics-settings`,
+    { method: 'PUT', body: JSON.stringify(settings) }
+  );
+}
+
 export interface SyncTaskListFilters {
   siteId?: string;
   scope?: SyncTaskScope;
