@@ -678,6 +678,7 @@ export interface SiteAuditIssue {
   title: string;
   description: string;
   url?: string;
+  affectedUrls: string[];
   affectedCount: number;
   recommendation?: string;
   createdAt: string;

@@ -88,6 +88,15 @@ describe('web smoke test', () => {
     expect(auditApiSource).toContain('writebackEnabled: false');
   });
 
+  it('shows affected page URLs and gates one-click fixes by writeback capability', async () => {
+    const auditViewSource = await readFile(resolve('src/views/SiteAuditView.vue'), 'utf8');
+    expect(auditViewSource).toContain('affectedUrls');
+    expect(auditViewSource).toContain('handleOneClickFix');
+    expect(auditViewSource).toContain('selectedSite?.canWriteBack');
+    expect(auditViewSource).toContain("safeOneClickSuggestionTypes.has(suggestion.suggestionType)");
+    expect(auditViewSource).toContain("batchApplyOptimizationSuggestions(selectedSiteId.value");
+  });
+
   it('keeps a single current-site context across customer navigation', async () => {
     const appSource = await readFile(resolve('src/App.vue'), 'utf8');
     const routerSource = await readFile(resolve('src/router/index.ts'), 'utf8');

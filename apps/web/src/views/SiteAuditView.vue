@@ -35,7 +35,11 @@ import {
   getSiteAuditResults,
   getSiteAuditMonitoringRun,
   getAdminSerpapiUsage,
-  getSyncedArticles
+  getSyncedArticles,
+  createSeoAudit,
+  getOptimizationSuggestions,
+  batchApproveOptimizationSuggestions,
+  batchApplyOptimizationSuggestions
 } from '../api/siteConnections';
 import type {
   SiteConnection,
@@ -62,6 +66,7 @@ const runningAudit = ref(false);
 const runningManualAudit = ref(false);
 const savingConfig = ref(false);
 const configModalOpen = ref(false);
+const oneClickFixing = ref(false);
 
 const config = ref<SiteAuditConfig | null>(null);
 const results = ref<SiteAuditResult[]>([]);
@@ -80,6 +85,7 @@ const formEmailNotification = ref<boolean>(false);
 
 // ── computed ──
 const hasSite = computed(() => !!selectedSiteId.value);
+const selectedSite = computed(() => sites.value.find((site) => site.id === selectedSiteId.value));
 const manualContentOptions = computed(() =>
   syncedContent.value
     .filter((article) => (article.type === 'post' || article.type === 'product') && article.status === 'publish' && article.url)
@@ -132,11 +138,17 @@ const issueColumns = computed(() => [
     ellipsis: true
   },
   {
-    title: tc('url'),
-    dataIndex: 'url',
-    key: 'url',
+    title: tc('affectedUrls'),
+    key: 'affectedUrls',
     ellipsis: true,
     width: 200
+  },
+  {
+    title: tc('issueRecommendation'),
+    dataIndex: 'recommendation',
+    key: 'recommendation',
+    ellipsis: true,
+    width: 260
   },
   {
     title: tc('affected'),
@@ -347,6 +359,7 @@ function tc(key: string): string {
 
 // ── expanded row render for issues ──
 function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
+  const affectedUrls = getAffectedUrls(record);
   return h('div', { class: 'issue-expanded-row' }, [
     record.description
       ? h('div', { class: 'issue-detail-section' }, [
@@ -360,10 +373,12 @@ function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
           h('p', { class: 'issue-detail-text' }, record.recommendation)
         ])
       : null,
-    record.url
+    affectedUrls.length > 0
       ? h('div', { class: 'issue-detail-section' }, [
-          h('div', { class: 'issue-detail-label' }, tc('issueAffectedUrl')),
-          h('a', { href: record.url, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, record.url)
+          h('div', { class: 'issue-detail-label' }, tc('issueAffectedUrls')),
+          h('ul', { class: 'issue-url-list' }, affectedUrls.map((url) =>
+            h('li', { key: url }, h('a', { href: url, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, url))
+          ))
         ])
       : null,
     record.affectedCount > 1
@@ -373,6 +388,72 @@ function expandedIssueRow({ record }: { record: SiteAuditIssue }) {
         ])
       : null
   ]);
+}
+
+function getAffectedUrls(record: { affectedUrls?: string[]; url?: string }) {
+  return record.affectedUrls?.length ? record.affectedUrls : record.url ? [record.url] : [];
+}
+
+function normalizeAuditUrl(value: string) {
+  try {
+    const url = new globalThis.URL(value);
+    return `${url.origin.toLowerCase()}${url.pathname.replace(/\/+$/, '') || '/'}${url.search}`;
+  } catch {
+    return value.trim().replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+const safeOneClickSuggestionTypes = new Set([
+  'title',
+  'meta_description'
+]);
+
+function getAffectedUrlSet() {
+  const urls = latestResult.value?.issues.flatMap((issue) => issue.affectedUrls?.length ? issue.affectedUrls : issue.url ? [issue.url] : []) ?? [];
+  return new Set(urls.map(normalizeAuditUrl));
+}
+
+async function handleOneClickFix() {
+  if (!selectedSite.value?.canWriteBack || !selectedSiteId.value) return;
+  Modal.confirm({
+    title: tc('oneClickFixTitle'),
+    content: tc('oneClickFixConfirmation'),
+    okText: tc('oneClickFixConfirm'),
+    cancelText: tc('cancel'),
+    onOk: async () => {
+      oneClickFixing.value = true;
+      try {
+        await createSeoAudit(selectedSiteId.value);
+        const result = await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 });
+        const affectedUrls = getAffectedUrlSet();
+        const contentUrlByCmsId = new Map(
+          syncedContent.value
+            .filter((content) => content.url)
+            .map((content) => [content.cmsId, normalizeAuditUrl(content.url)])
+        );
+        const eligible = result.suggestions.filter((suggestion) =>
+          safeOneClickSuggestionTypes.has(suggestion.suggestionType) &&
+          suggestion.status === 'pending' &&
+          affectedUrls.has(contentUrlByCmsId.get(suggestion.targetCmsId) ?? '')
+        );
+        if (eligible.length === 0) {
+          message.info(tc('oneClickFixNoEligible'));
+          return;
+        }
+        const pendingIds = eligible.map((suggestion) => suggestion.id);
+        const approval = await batchApproveOptimizationSuggestions(selectedSiteId.value, pendingIds);
+        const approvedIds = approval.results.filter((item) => item.success).map((item) => item.suggestionId);
+        const applyResult = approvedIds.length > 0
+          ? await batchApplyOptimizationSuggestions(selectedSiteId.value, approvedIds)
+          : { succeeded: 0, failed: 0, total: 0 };
+        message.success(tc('oneClickFixSuccess').replace('{succeeded}', String(applyResult.succeeded)).replace('{failed}', String(approval.failed + applyResult.failed)));
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : tc('oneClickFixFailed'));
+      } finally {
+        oneClickFixing.value = false;
+      }
+    }
+  });
 }
 
 // ── watch ──
@@ -449,6 +530,14 @@ onMounted(async () => {
             @click="handleRunAudit"
           >
             {{ runningAudit ? tc('running') : tc('runNow') }}
+          </Button>
+          <Button
+            v-if="selectedSite?.canWriteBack"
+            type="default"
+            :loading="oneClickFixing"
+            @click="handleOneClickFix"
+          >
+            {{ tc('oneClickFix') }}
           </Button>
           <span v-if="quotaStats" class="quota-badge" :style="{ color: quotaStats.remaining <= 10 ? '#ff4d4f' : quotaStats.remaining <= 50 ? '#faad14' : undefined }">
             {{ tc('quotaRemaining').replace('{remaining}', String(quotaStats.remaining)).replace('{limit}', String(quotaStats.monthlyLimit)) }}
@@ -606,6 +695,21 @@ onMounted(async () => {
                 <Tag :color="severityColorMap[record.severity]">
                   {{ tc(`severity_${record.severity}`) }}
                 </Tag>
+              </template>
+              <template v-if="column.key === 'affectedUrls'">
+                <div v-if="getAffectedUrls(record).length" class="issue-url-preview">
+                  <a
+                    v-for="url in getAffectedUrls(record)"
+                    :key="url"
+                    :href="url"
+                    target="_blank"
+                    rel="noopener"
+                    class="issue-detail-link"
+                  >
+                    {{ url }}
+                  </a>
+                </div>
+                <span v-else>-</span>
               </template>
             </template>
           </Table>
@@ -818,6 +922,20 @@ onMounted(async () => {
   color: #1677ff;
   font-size: 13px;
   word-break: break-all;
+}
+
+.issue-url-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.issue-url-preview {
+  display: grid;
+  gap: 2px;
+  max-height: 110px;
+  overflow: auto;
 }
 
 .error-msg {

@@ -185,6 +185,7 @@ export interface DeterministicFinding {
   title: string;
   description: string;
   url?: string;
+  affectedUrls?: string[];
   affectedCount: number;
   recommendation?: string;
 }
@@ -207,27 +208,27 @@ export function analyzeAuditPageGraph(
     }
   }
   const deadLinks = pages.filter((page) => page.httpStatus !== undefined && page.httpStatus >= 400);
-  if (deadLinks.length) findings.push({ category: 'links', severity: 'high', title: '發現失效頁面或死鏈', description: `${deadLinks.length} 個頁面返回 HTTP ${deadLinks[0]?.httpStatus ?? 400}。`, url: deadLinks[0]?.url, affectedCount: deadLinks.length, recommendation: '修復目標連結或設定正確的 301/410 回應。' });
+  if (deadLinks.length) findings.push({ category: 'links', severity: 'high', title: '發現失效頁面或死鏈', description: `${deadLinks.length} 個頁面返回 HTTP ${deadLinks[0]?.httpStatus ?? 400}。`, url: deadLinks[0]?.url, affectedUrls: deadLinks.map((page) => page.url), affectedCount: deadLinks.length, recommendation: '修復目標連結或設定正確的 301/410 回應。' });
   const missingTitles = pages.filter((page) => !page.title);
-  if (missingTitles.length) findings.push({ category: 'meta_tags', severity: 'critical', title: '頁面缺少 Title', description: `${missingTitles.length} 個頁面沒有可讀取的 Title 標籤。`, url: missingTitles[0]?.url, affectedCount: missingTitles.length, recommendation: '為頁面設定唯一且準確描述內容的 Title，建議控制在 25 至 65 字元。' });
+  if (missingTitles.length) findings.push({ category: 'meta_tags', severity: 'critical', title: '頁面缺少 Title', description: `${missingTitles.length} 個頁面沒有可讀取的 Title 標籤。`, url: missingTitles[0]?.url, affectedUrls: missingTitles.map((page) => page.url), affectedCount: missingTitles.length, recommendation: '為頁面設定唯一且準確描述內容的 Title，建議控制在 25 至 65 字元。' });
   const missingDescriptions = pages.filter((page) => !page.metaDescription || page.metaDescription.length < 70);
-  if (missingDescriptions.length) findings.push({ category: 'meta_tags', severity: 'high', title: 'Meta Description 過短或缺失', description: `${missingDescriptions.length} 個頁面的 Meta Description 少於 70 字元或未設定。`, url: missingDescriptions[0]?.url, affectedCount: missingDescriptions.length, recommendation: '手動撰寫 70 至 160 字元的獨特 Meta Description，概述頁面價值與搜尋意圖。' });
+  if (missingDescriptions.length) findings.push({ category: 'meta_tags', severity: 'high', title: 'Meta Description 過短或缺失', description: `${missingDescriptions.length} 個頁面的 Meta Description 少於 70 字元或未設定。`, url: missingDescriptions[0]?.url, affectedUrls: missingDescriptions.map((page) => page.url), affectedCount: missingDescriptions.length, recommendation: '手動撰寫 70 至 160 字元的獨特 Meta Description，概述頁面價值與搜尋意圖。' });
   const invalidH1 = pages.filter((page) => page.h1Count !== undefined && page.h1Count !== 1);
-  if (invalidH1.length) findings.push({ category: 'headings', severity: 'medium', title: 'H1 標題數量不正確', description: `${invalidH1.length} 個頁面沒有剛好一個 H1。`, url: invalidH1[0]?.url, affectedCount: invalidH1.length, recommendation: '保留一個清楚描述頁面主題的 H1，其餘段落標題請使用 H2 至 H4。' });
+  if (invalidH1.length) findings.push({ category: 'headings', severity: 'medium', title: 'H1 標題數量不正確', description: `${invalidH1.length} 個頁面沒有剛好一個 H1。`, url: invalidH1[0]?.url, affectedUrls: invalidH1.map((page) => page.url), affectedCount: invalidH1.length, recommendation: '保留一個清楚描述頁面主題的 H1，其餘段落標題請使用 H2 至 H4。' });
   const thinContent = pages.filter((page) => page.wordCount !== undefined && page.wordCount < 150);
-  if (thinContent.length) findings.push({ category: 'content_quality', severity: 'medium', title: '頁面文字內容偏少', description: `${thinContent.length} 個頁面的可讀文字少於 150 個字詞單位。`, url: thinContent[0]?.url, affectedCount: thinContent.length, recommendation: '依使用者意圖補充原創說明、規格、實例、FAQ 或相關閱讀連結，而非重複堆疊關鍵詞。' });
+  if (thinContent.length) findings.push({ category: 'content_quality', severity: 'medium', title: '頁面文字內容偏少', description: `${thinContent.length} 個頁面的可讀文字少於 150 個字詞單位。`, url: thinContent[0]?.url, affectedUrls: thinContent.map((page) => page.url), affectedCount: thinContent.length, recommendation: '依使用者意圖補充原創說明、規格、實例、FAQ 或相關閱讀連結，而非重複堆疊關鍵詞。' });
   const missingCanonical = pages.filter((page) => !page.canonicalUrl);
-  if (missingCanonical.length) findings.push({ category: 'indexability', severity: 'medium', title: '頁面缺少 canonical', description: `${missingCanonical.length} 個頁面沒有自引用或有效 canonical。`, url: missingCanonical[0]?.url, affectedCount: missingCanonical.length, recommendation: '為每個可索引頁面輸出唯一的自引用 canonical。' });
+  if (missingCanonical.length) findings.push({ category: 'indexability', severity: 'medium', title: '頁面缺少 canonical', description: `${missingCanonical.length} 個頁面沒有自引用或有效 canonical。`, url: missingCanonical[0]?.url, affectedUrls: missingCanonical.map((page) => page.url), affectedCount: missingCanonical.length, recommendation: '為每個可索引頁面輸出唯一的自引用 canonical。' });
   const mismatchedCanonical = pages.filter((page) => page.canonicalUrl && normalizeAuditUrl(page.canonicalUrl) !== normalizeAuditUrl(page.url));
-  if (mismatchedCanonical.length) findings.push({ category: 'indexability', severity: 'medium', title: 'canonical 與頁面 URL 不一致', description: `${mismatchedCanonical.length} 個頁面的 canonical 指向其他地址。`, url: mismatchedCanonical[0]?.url, affectedCount: mismatchedCanonical.length, recommendation: '確認跨 URL canonical 是有意設定，並避免指向不可索引頁面。' });
+  if (mismatchedCanonical.length) findings.push({ category: 'indexability', severity: 'medium', title: 'canonical 與頁面 URL 不一致', description: `${mismatchedCanonical.length} 個頁面的 canonical 指向其他地址。`, url: mismatchedCanonical[0]?.url, affectedUrls: mismatchedCanonical.map((page) => page.url), affectedCount: mismatchedCanonical.length, recommendation: '確認跨 URL canonical 是有意設定，並避免指向不可索引頁面。' });
   const blocked = pages.filter((page) => page.robotsIndexable === false);
-  if (blocked.length) findings.push({ category: 'indexability', severity: 'high', title: 'robots 指令阻止索引', description: `${blocked.length} 個頁面被 robots 或 meta 指令標記為不可索引。`, url: blocked[0]?.url, affectedCount: blocked.length, recommendation: '檢查 robots.txt 與 meta robots，確認阻止索引符合預期。' });
+  if (blocked.length) findings.push({ category: 'indexability', severity: 'high', title: 'robots 指令阻止索引', description: `${blocked.length} 個頁面被 robots 或 meta 指令標記為不可索引。`, url: blocked[0]?.url, affectedUrls: blocked.map((page) => page.url), affectedCount: blocked.length, recommendation: '檢查 robots.txt 與 meta robots，確認阻止索引符合預期。' });
   const missingSchema = pages.filter((page) => page.hasSchema === false);
-  if (missingSchema.length) findings.push({ category: 'structured_data', severity: 'low', title: '頁面缺少結構化資料', description: `${missingSchema.length} 個頁面沒有檢測到 JSON-LD 或其他 Schema。`, url: missingSchema[0]?.url, affectedCount: missingSchema.length, recommendation: '按頁面類型添加 Article、Product、FAQPage 或 WebSite Schema。' });
+  if (missingSchema.length) findings.push({ category: 'structured_data', severity: 'low', title: '頁面缺少結構化資料', description: `${missingSchema.length} 個頁面沒有檢測到 JSON-LD 或其他 Schema。`, url: missingSchema[0]?.url, affectedUrls: missingSchema.map((page) => page.url), affectedCount: missingSchema.length, recommendation: '按頁面類型添加 Article、Product、FAQPage 或 WebSite Schema。' });
   const orphaned = options.includeOrphanCheck === false
     ? []
     : pages.filter((page) => normalizeAuditUrl(page.url) !== normalizedSite && (inbound.get(normalizeAuditUrl(page.url)) ?? 0) === 0);
-  if (orphaned.length) findings.push({ category: 'links', severity: 'medium', title: '發現孤島頁面', description: `${orphaned.length} 個頁面沒有任何站內入鏈。`, url: orphaned[0]?.url, affectedCount: orphaned.length, recommendation: '從相關內容、分類頁或導航加入有意義的站內連結。' });
+  if (orphaned.length) findings.push({ category: 'links', severity: 'medium', title: '發現孤島頁面', description: `${orphaned.length} 個頁面沒有任何站內入鏈。`, url: orphaned[0]?.url, affectedUrls: orphaned.map((page) => page.url), affectedCount: orphaned.length, recommendation: '從相關內容、分類頁或導航加入有意義的站內連結。' });
   return findings;
 }
 
@@ -1205,6 +1206,7 @@ async function executeConnectedSiteAudit(
     await auditRepository.saveIssues(audit.id, siteId, graphFindings.map((finding) => ({
       category: finding.category as SiteAuditIssueData['category'], severity: finding.severity,
       title: finding.title, description: finding.description, url: finding.url,
+      affectedUrls: finding.affectedUrls,
       affectedCount: finding.affectedCount, recommendation: finding.recommendation
     })));
     await monitoringRepository.saveFindings(graphFindings.map((finding) => ({
@@ -1212,7 +1214,8 @@ async function executeConnectedSiteAudit(
       pageId: finding.url ? pageByUrl.get(normalizeAuditUrl(finding.url)) : undefined,
       fingerprint: createIssueFingerprint({ category: finding.category, url: finding.url, title: finding.title }),
       category: finding.category, severity: finding.severity, title: finding.title,
-      description: finding.description, evidence: { affectedCount: finding.affectedCount, url: finding.url },
+      description: finding.description,
+      evidence: { affectedCount: finding.affectedCount, url: finding.url, affectedUrls: finding.affectedUrls ?? [] },
       recommendation: finding.recommendation, ruleVersion: 'ph2-10.1', status: status === 'partial' ? 'partial' as const : 'open' as const
     })));
     await saveAuditMetrics(monitoringRepository, workspaceId, siteId, audit.id, overallScore, targetUrl ?? siteUrl);

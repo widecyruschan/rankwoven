@@ -34,6 +34,8 @@ describe('site audit monitoring domain', () => {
       { url: 'https://example.com/orphan', httpStatus: 200, canonicalUrl: 'https://example.com/orphan', hasSchema: true, internalLinks: [] }
     ], 'https://example.com/');
     expect(findings.map((finding) => finding.title)).toEqual(expect.arrayContaining(['發現失效頁面或死鏈', '頁面缺少 canonical', '頁面缺少結構化資料', '發現孤島頁面']));
+    expect(findings.find((finding) => finding.title === '發現失效頁面或死鏈')?.affectedUrls).toEqual(['https://example.com/article']);
+    expect(findings.find((finding) => finding.title === '發現孤島頁面')?.affectedUrls).toEqual(['https://example.com/orphan']);
   });
 
   it('crawls robots and sitemap URLs without persisting page bodies', async () => {

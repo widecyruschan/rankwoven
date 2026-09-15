@@ -653,7 +653,10 @@ const messages = {
       issueDescription: 'Description',
       issueRecommendation: 'How to Fix',
       issueAffectedUrl: 'Affected URL',
+      issueAffectedUrls: 'Affected URLs',
       issueAffectedCount: 'Affected Count',
+      affectedUrls: 'Affected URLs',
+      oneClickFix: 'One-click fix', oneClickFixTitle: 'Apply safe SEO fixes', oneClickFixConfirmation: 'This will generate title and meta description suggestions for affected synced pages, approve them, and queue them for the connected plugin. Redirects, robots, Schema, and server settings remain manual.', oneClickFixConfirm: 'Apply and queue', oneClickFixNoEligible: 'No safe title or meta description suggestions match the affected pages.', oneClickFixSuccess: 'Queued {succeeded} fixes; {failed} failed.', oneClickFixFailed: 'Unable to queue one-click fixes.',
       category: 'Category', severity: 'Severity', issueTitle: 'Title', url: 'URL', affected: 'Affected', date: 'Date', status: 'Status', score: 'Score', pages: 'Pages', issues: 'Issues',
       metricsBySource: 'Performance data by source', metric: 'Metric', source: 'Source', value: 'Value', unavailable: 'Unavailable',
       sourceLighthouseLab: 'Lighthouse lab', sourceCruxField: 'CrUX field (28 days)'
@@ -1806,7 +1809,10 @@ const messages = {
       issueDescription: '問題描述',
       issueRecommendation: '修復建議',
       issueAffectedUrl: '受影響 URL',
+      issueAffectedUrls: '受影響頁面地址',
       issueAffectedCount: '影響數量',
+      affectedUrls: '受影響頁面地址',
+      oneClickFix: '一鍵修復', oneClickFixTitle: '套用可安全修復的 SEO 問題', oneClickFixConfirmation: '系統會按受影響頁面生成標題及 Meta 描述建議，批准後提交到已連接插件的寫回隊列。重定向、robots、Schema 及伺服器設定仍需手動處理。', oneClickFixConfirm: '套用並提交', oneClickFixNoEligible: '受影響頁面沒有可安全寫回的標題或 Meta 描述建議。', oneClickFixSuccess: '已提交 {succeeded} 項修復，{failed} 項失敗。', oneClickFixFailed: '無法提交一鍵修復。',
       category: '分類', severity: '嚴重程度', issueTitle: '標題', url: '網址', affected: '影響數量', date: '日期', status: '狀態', score: '分數', pages: '頁面', issues: '問題',
       metricsBySource: '按來源分列的效能數據', metric: '指標', source: '來源', value: '數值', unavailable: '暫不可用',
       sourceLighthouseLab: 'Lighthouse 實驗室數據', sourceCruxField: 'CrUX 現場數據（28 日）'

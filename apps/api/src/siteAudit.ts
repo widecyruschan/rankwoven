@@ -59,6 +59,7 @@ export interface SiteAuditIssue {
   title: string;
   description: string;
   url?: string;
+  affectedUrls: string[];
   affectedCount: number;
   recommendation?: string;
   createdAt: string;
@@ -288,6 +289,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: '缺少 Title 標籤',
       description: `發現 ${missingTitlePages.length} 個頁面缺少 Title 標籤，這會嚴重影響搜尋引擎排名。`,
       affectedCount: missingTitlePages.length,
+      affectedUrls: missingTitlePages,
       recommendation: '為每個頁面設定獨特且描述性的 Title 標籤，長度建議在 25-65 字元之間。',
       sampleUrls: missingTitlePages.slice(0, 3)
     });
@@ -300,6 +302,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: 'Title 標籤過短',
       description: `發現 ${shortTitlePages.length} 個頁面的 Title 過短（少於 25 字元），可能無法充分描述頁面內容。`,
       affectedCount: shortTitlePages.length,
+      affectedUrls: shortTitlePages,
       recommendation: '將 Title 標籤擴展至 25-65 字元，包含主要關鍵字並準確描述頁面內容。',
       sampleUrls: shortTitlePages.slice(0, 3)
     });
@@ -312,6 +315,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: 'Title 標籤過長',
       description: `發現 ${longTitlePages.length} 個頁面的 Title 超過 65 字元，可能在搜尋結果中被截斷。`,
       affectedCount: longTitlePages.length,
+      affectedUrls: longTitlePages,
       recommendation: '將 Title 標籤縮短至 65 字元以內，確保在搜尋結果中完整顯示。',
       sampleUrls: longTitlePages.slice(0, 3)
     });
@@ -324,6 +328,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: 'Meta Description 過短或缺失',
       description: `發現 ${missingDescriptionPages.length} 個頁面的 Meta Description 長度不足，可能影響點擊率。`,
       affectedCount: missingDescriptionPages.length,
+      affectedUrls: missingDescriptionPages,
       recommendation: '為每個頁面撰寫 70-160 字元的 Meta Description，包含關鍵字和行動號召。',
       sampleUrls: missingDescriptionPages.slice(0, 3)
     });
@@ -337,6 +342,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: '網站無法被 Google 索引',
       description: `網站 ${extractDomain(siteUrl)} 在 Google 索引中找不到任何頁面。請檢查 robots.txt 或 noindex 設定。`,
       affectedCount: 1,
+      affectedUrls: [siteUrl],
       recommendation: '檢查網站是否有 robots.txt 阻擋、noindex meta 標籤，或網站是否過新尚未被索引。'
     });
   } else if (pages.length < 10 && pages.length > 0) {
@@ -346,6 +352,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: '網站索引頁面數量偏低',
       description: `網站僅有 ${pages.length} 個頁面被 Google 索引，遠低於一般健康網站的標準。`,
       affectedCount: 1,
+      affectedUrls: pages.map((page) => page.url),
       recommendation: '檢查是否有重複內容、canonical 標籤設定不當，或網站結構不利於爬蟲。'
     });
   }
@@ -370,6 +377,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: 'URL 結構不夠友善',
       description: `發現 ${urlIssues.length} 個頁面的 URL 包含大寫字母、底線或過長的查詢參數，不利於 SEO。`,
       affectedCount: urlIssues.length,
+      affectedUrls: urlIssues,
       recommendation: '使用小寫字母和連字號 (-) 的 URL 結構，保持簡短且有意義。',
       sampleUrls: urlIssues.slice(0, 3)
     });
@@ -393,6 +401,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: '重複的 Title 標籤',
       description: `發現 ${duplicateTitles.length} 組重複的 Title 標籤，共影響 ${totalAffected} 個頁面。這會讓搜尋引擎難以判斷哪個頁面是最相關的。`,
       affectedCount: totalAffected,
+      affectedUrls: duplicateTitles.flatMap(([, urls]) => urls),
       recommendation: '確保每個頁面都有獨特的 Title 標籤，反映該頁面的獨特內容。',
       sampleUrls: duplicateTitles[0]?.[1]?.slice(0, 3)
     });
@@ -407,6 +416,7 @@ function detectSeoIssues(pages: AuditPageData[], siteUrl: string): SiteAuditIssu
       title: '網站未完整使用 HTTPS',
       description: `發現 ${nonHttpsPages.length} 個頁面仍使用 HTTP 而非 HTTPS。Google 將 HTTPS 作為排名信號。`,
       affectedCount: nonHttpsPages.length,
+      affectedUrls: nonHttpsPages.map((page) => page.url),
       recommendation: '將所有頁面強制重新導向至 HTTPS，並更新內部連結。',
       sampleUrls: nonHttpsPages.slice(0, 3).map((p) => p.url)
     });
@@ -421,6 +431,7 @@ export interface SiteAuditIssueData {
   title: string;
   description: string;
   url?: string;
+  affectedUrls?: string[];
   affectedCount: number;
   recommendation?: string;
   sampleUrls?: string[];
@@ -542,6 +553,7 @@ function createInMemorySiteAuditRepository(): SiteAuditRepository {
         title: data.title,
         description: data.description,
         url: data.sampleUrls?.[0],
+        affectedUrls: data.affectedUrls ?? data.sampleUrls ?? [],
         affectedCount: data.affectedCount,
         recommendation: data.recommendation,
         createdAt: new Date().toISOString()
@@ -635,8 +647,12 @@ CREATE TABLE IF NOT EXISTS site_audit_issues (
   url text,
   affected_count integer NOT NULL DEFAULT 1,
   recommendation text,
+  affected_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE site_audit_issues
+  ADD COLUMN IF NOT EXISTS affected_urls jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_site_audit_issues_audit
   ON site_audit_issues(audit_id, category, severity);
@@ -678,6 +694,9 @@ function mapResultRow(row: QueryResultRow): SiteAuditResult {
 }
 
 function mapIssueRow(row: QueryResultRow): SiteAuditIssue {
+  const affectedUrls = Array.isArray(row.affected_urls)
+    ? row.affected_urls.filter((value: unknown): value is string => typeof value === 'string')
+    : [];
   return {
     id: row.id,
     auditId: row.audit_id,
@@ -687,6 +706,7 @@ function mapIssueRow(row: QueryResultRow): SiteAuditIssue {
     title: row.title,
     description: row.description,
     url: row.url ?? undefined,
+    affectedUrls,
     affectedCount: Number(row.affected_count),
     recommendation: row.recommendation ?? undefined,
     createdAt: toIsoString(row.created_at) ?? ''
@@ -837,8 +857,8 @@ export class PostgresSiteAuditRepository implements SiteAuditRepository {
     for (const data of issueDataList) {
       const result = await this.pool.query(
         `
-          INSERT INTO site_audit_issues (id, audit_id, site_id, category, severity, title, description, url, affected_count, recommendation)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          INSERT INTO site_audit_issues (id, audit_id, site_id, category, severity, title, description, url, affected_count, recommendation, affected_urls)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
           RETURNING *
         `,
         [
@@ -851,7 +871,8 @@ export class PostgresSiteAuditRepository implements SiteAuditRepository {
           data.description,
           data.sampleUrls?.[0] ?? null,
           data.affectedCount,
-          data.recommendation ?? null
+          data.recommendation ?? null,
+          JSON.stringify(data.affectedUrls ?? data.sampleUrls ?? [])
         ]
       );
       savedIssues.push(mapIssueRow(result.rows[0]));

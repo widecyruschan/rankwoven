@@ -6537,3 +6537,44 @@ Fastify、TypeScript、PostgreSQL migration、Vue 3、WordPress PHP、Vitest、D
 ### 下一步行動清單
 
 - 在客戶後台選取已連接站點後重新執行競品研究；若第三方 Provider 拒絕請求，介面會顯示安全且可操作的原因。
+
+## 會話總結（2026-09-15）— SEO 審計頁面地址與一鍵修復
+
+### 會話主要目的
+
+讓 SEO 網站檢測結果逐條列出所有受影響頁面地址和修復建議，並為已授權插件／API 連接提供安全的一鍵修復入口。
+
+### 完成的主要任務
+
+- 審計規則現在保存完整 `affectedUrls`，不再只返回第一個示例網址。
+- 新增 `0022_site_audit_affected_urls.sql`，兼容既有 `site_audit_issues` 數據並保存 JSONB URL 列表。
+- Site Audit 結果表新增受影響網址數量與修復建議欄位；展開問題時可逐一打開全部頁面地址。
+- 對 `canWriteBack=true` 的插件／API 站點顯示一鍵修復；流程只批准並提交受影響文章的標題和 Meta 描述等安全建議，重定向、robots、Schema 及伺服器設定保留人工處理。
+- 手動站點不顯示一鍵修復，伺服器原有 `CMS_WRITEBACK_NOT_AVAILABLE` 權限閘門保持不變。
+
+### 關鍵決策和解決方案
+
+- 以現有 SEO 建議、批准和寫回隊列 API 組合一鍵流程，避免新增平行寫回協議。
+- 所有 URL 仍來自已驗證的站點審計結果；寫回前要求站點已有 CMS 憑據，並通過既有快照與任務隊列以便追蹤和回滾。
+
+### 新增或修改文件
+
+- `apps/api/src/siteAudit.ts`
+- `apps/api/src/siteAuditMonitoring.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/tests/smoke.test.ts`
+- `db/migrations/0022_site_audit_affected_urls.sql`
+- `README.md`
+
+### 驗證結果
+
+- 全量 lint、全部工作區測試、API／Web 建置與 `npm audit --audit-level=high` 通過。
+- 本機資料庫 migration `0022` 已成功應用。
+- 未提交 `.env`、密碼、Token、API Key 或未追蹤的 `0.jpeg`。
+
+### 下一步行動清單
+
+- 部署後在已連接插件站點重新執行網站檢測，核對每條問題的完整 URL 列表和一鍵修復隊列。
