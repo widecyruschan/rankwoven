@@ -6756,3 +6756,26 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 為 `ckcprompt.cloud` 站點輸入其對應的 GA4 Property ID，再查詢九月數據。
 - 確認 `Cyrus` 站點是否應繼續使用目前 Property；如要改動生產站點配置，需另行授權。
+
+## 會話總結（2026-09-15）— 推送並部署 GA4 月份修正
+
+### 會話主要目的
+
+將 GA4 月份錯位修正及已驗證的 Ahrefs 全站檢測功能推送至 GitHub `main`，並部署到 Hostinger VPS。
+
+### 完成的主要任務
+
+- 提交 `26676e5` 並推送至 `main`。
+- GitHub Actions `Production Deploy` 完成 Verify、VPS 重建及認證冒煙測試。
+- 生產環境已移除固定七月示範數據，未配置即時 GA4 時不再顯示錯誤月份。
+
+### 驗證結果
+
+- [Production Deploy](https://github.com/widecyruschan/rankwoven/actions/runs/34943128571) 成功完成。
+- `https://api.rankwoven.com/health` 返回 API 服務正常。
+- `https://rankwoven.com/` 返回 HTTP 200。
+- 生產 `ckcprompt.cloud` 站點查詢 `2026-09-01` 至 `2026-09-30` 返回九月日期數據；`Cyrus` Property 因 host 篩選不匹配而返回 0 行，未被錯誤標示為其他月份。
+
+### 安全與工作區
+
+- 未提交 `.env`、密碼、Token、API Key 或未追蹤的 `0.jpeg`。
