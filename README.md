@@ -7657,3 +7657,28 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 推送 PH2-11 提交至 `main`，監看 Production Deploy，並驗證公開 health endpoint 與生產 Checkout 建立流程。
+
+## 會話總結（2026-09-16）— PH2-11 Stripe Test Mode 生產驗證結果
+
+### 會話主要目的
+
+完成 PH2-11 Stripe Test Mode 部署後驗證。
+
+### 完成的主要任務
+
+- 將 PH2-11 套餐、續費控制、Webhook 對帳與用量報告初始功能推送至 `main`。
+- Production Deploy 完成 Verify 與 VPS Deploy 兩個 job。
+- 確認 `0026_phase2_billing_entitlement_reporting.sql` 已在生產資料庫記錄為已套用。
+- 以測試帳號完成受保護 Billing API 驗證，建立一個未付款的 Stripe Test Checkout session。
+
+### 驗證結果
+
+- GitHub Actions lint、test、build 與 security audit 全部通過。
+- VPS API、Web、Worker、PostgreSQL 與 Redis 均正常運行，PostgreSQL、Redis 及 Web health check 通過。
+- `https://api.rankwoven.com/health` 與 `https://rankwoven.com/` 均回應 HTTP 200。
+- Test Checkout 只建立待付款 session，未付款前沒有變更本地 subscription 或 Entitlement。
+
+### 下一步行動清單
+
+- 使用 Stripe Test Card 完成一次付款後，透過 webhook 驗證訂閱對帳、套餐開通與取消／恢復續費流程。
+- 完成 Site Audit CSV、PDF、Agency 白標、每日 reconciliation 與付款失敗通知後，申請 PH2-11 完整完成核檢。
