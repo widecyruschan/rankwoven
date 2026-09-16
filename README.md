@@ -7631,3 +7631,29 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 先建立 Stripe test-mode 的 Starter／Growth／Agency recurring monthly Price，完成 webhook endpoint 後再配置 test credentials 並執行 Checkout／Webhook canary。
+
+## 會話總結（2026-09-16）— Stripe Test Mode 核對與 PH2-11 部署
+
+### 會話主要目的
+
+核對本機與 VPS 的 Stripe Test Mode 設定，並將已驗證的 PH2-11 套餐管理功能推送至生產部署流程。
+
+### 完成的主要任務
+
+- 以不輸出憑據內容的雜湊指紋比對本機 `.env` 與 VPS `/docker/rankwoven/.env` 的 Stripe 設定。
+- 確認 Stripe secret key 為 Test Mode、webhook signing secret 與三個月付 Price ID 格式有效。
+- 確認遠端 `main` 沒有待合併提交，`0.jpeg` 為未追蹤檔案並排除於提交之外。
+
+### 關鍵決策和解決方案
+
+- 所有 Stripe 值只存在本機與 VPS 環境檔；Git 僅保留變數名稱和說明，不提交任何憑據。
+- 由 GitHub Actions 的 `Production Deploy` 工作流執行生產驗證與部署，避免以未提交來源直接覆蓋 VPS。
+
+### 驗證結果
+
+- 本機與 VPS 的五個 Stripe Test Mode 變數指紋一致。
+- `git diff --check` 通過；待推送的 PH2-11 提交不包含 `.env` 或可識別的 Stripe 憑據。
+
+### 下一步行動清單
+
+- 推送 PH2-11 提交至 `main`，監看 Production Deploy，並驗證公開 health endpoint 與生產 Checkout 建立流程。
