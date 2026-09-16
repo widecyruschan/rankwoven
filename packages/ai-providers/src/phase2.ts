@@ -394,7 +394,7 @@ export interface KeywordResearchRun {
   projectId: string;
   taskId?: string;
   inputHash: string;
-  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  provider: 'dataforseo' | 'ahrefs' | 'semrush' | 'serpapi';
   providerSnapshotId?: string;
   status: Phase2TaskStatus;
   costEstimate: number;
@@ -477,7 +477,7 @@ export interface KeywordGapSnapshot {
 }
 
 export interface KeywordResearchProviderCapabilities {
-  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  provider: 'dataforseo' | 'ahrefs' | 'semrush' | 'serpapi';
   supportsKeywordMetrics: boolean;
   supportsCompetitorRankedKeywords: boolean;
   supportsBacklinkOpportunities: boolean;
@@ -502,7 +502,7 @@ export interface KeywordMetricResult {
 }
 
 export interface KeywordMetricsResult {
-  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  provider: 'dataforseo' | 'ahrefs' | 'semrush' | 'serpapi';
   providerSnapshotId: string;
   methodologyVersion: string;
   location: string;
@@ -530,7 +530,7 @@ export interface RankedKeywordResult {
 }
 
 export interface CompetitorRankedKeywordsResult {
-  provider: 'dataforseo' | 'ahrefs' | 'semrush';
+  provider: 'dataforseo' | 'ahrefs' | 'semrush' | 'serpapi';
   providerSnapshotId: string;
   methodologyVersion: string;
   location: string;

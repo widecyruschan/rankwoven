@@ -3,8 +3,10 @@ import { createWordPressAdapter } from '@aieo/cms-adapters';
 import {
   createAiGatewayAdapter,
   createDataForSeoKeywordResearchProvider,
+  createFallbackKeywordResearchProvider,
   createRedisTaskGovernance,
   createSemrushKeywordResearchProvider,
+  createSerpApiKeywordResearchProvider,
   hashContentSnapshot,
   isDataForSeoKeywordResearchConfiguration,
   parseContentRewriteOutput,
@@ -139,6 +141,7 @@ function normalizeWorkerErrorCode(error: unknown) {
     'PROVIDER_UNAVAILABLE',
     'KEYWORD_PROVIDER_TIMEOUT',
     'KEYWORD_PROVIDER_RESPONSE_INVALID',
+    'KEYWORD_PROVIDER_ACCOUNT_UNVERIFIED',
     'KEYWORD_RESEARCH_INPUT_INVALID',
     'CONTENT_SNAPSHOT_UNAVAILABLE',
     'CONTENT_OUTPUT_REFUSED',
@@ -487,17 +490,26 @@ function createKeywordResearchProviderFromEnvironment(fetchImpl: typeof fetch): 
   const provider = process.env.KEYWORD_VOLUME_PROVIDER;
   const apiUrl = process.env.KEYWORD_VOLUME_API_URL;
   const apiKey = process.env.KEYWORD_VOLUME_API_KEY;
+  const serpApiKey = process.env.SERPAPI_KEY?.trim();
+  const serpApi = serpApiKey
+    ? createSerpApiKeywordResearchProvider({ apiKey: serpApiKey, fetchImpl })
+    : undefined;
+
+  let primary: KeywordResearchProvider | undefined;
   if (isDataForSeoKeywordResearchConfiguration(provider, apiUrl, apiKey) && apiUrl && apiKey) {
-    return createDataForSeoKeywordResearchProvider({ baseUrl: apiUrl, apiKey, fetchImpl });
-  }
-  if (provider === 'semrush' && process.env.SEMRUSH_API_URL && process.env.SEMRUSH_API_KEY) {
-    return createSemrushKeywordResearchProvider({
+    primary = createDataForSeoKeywordResearchProvider({ baseUrl: apiUrl, apiKey, fetchImpl });
+  } else if (provider === 'semrush' && process.env.SEMRUSH_API_URL && process.env.SEMRUSH_API_KEY) {
+    primary = createSemrushKeywordResearchProvider({
       baseUrl: process.env.SEMRUSH_API_URL,
       apiKey: process.env.SEMRUSH_API_KEY,
       fetchImpl
     });
   }
-  return undefined;
+
+  if (primary && serpApi && primary.id !== serpApi.id) {
+    return createFallbackKeywordResearchProvider(primary, serpApi);
+  }
+  return primary ?? serpApi;
 }
 
 function parseKeywordIdeas(value: string) {

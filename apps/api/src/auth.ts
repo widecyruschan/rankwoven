@@ -439,6 +439,16 @@ export class PostgresAuthRepository implements AuthRepository {
         `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`,
         [workspaceId, userId]
       );
+      await client.query(
+        `INSERT INTO entitlement_assignments (
+           id, workspace_id, feature_key, limit_value, period, source, effective_at
+         )
+         VALUES
+           ($1, $3, 'keyword_research', 200, 'monthly', 'platform_default', now()),
+           ($2, $3, 'content_optimization', 200, 'monthly', 'platform_default', now())
+         ON CONFLICT DO NOTHING`,
+        [randomUUID(), randomUUID(), workspaceId]
+      );
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');

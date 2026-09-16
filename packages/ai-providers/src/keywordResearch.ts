@@ -107,12 +107,23 @@ async function requestJson({ fetchImpl, url, apiKey, init, timeoutMs }: JsonRequ
       signal: init?.signal ?? controller.signal,
       headers: {
         Accept: 'application/json',
-        Authorization: `Basic ${Buffer.from(apiKey).toString('base64')}`,
+        Authorization: `Basic ${Buffer.from(normalizeDataForSeoApiKey(apiKey)).toString('base64')}`,
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         ...init?.headers
       }
     });
     if (!response.ok) {
+      let providerMessage = '';
+      try {
+        const body = await response.clone().json() as { status_code?: unknown; status_message?: unknown };
+        providerMessage = typeof body.status_message === 'string' ? body.status_message : '';
+        const statusCode = readNumber(body.status_code);
+        if (statusCode === 40104 || /verify your account/i.test(providerMessage)) {
+          throw new Error('KEYWORD_PROVIDER_ACCOUNT_UNVERIFIED');
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('KEYWORD_PROVIDER_')) throw error;
+      }
       throw new Error(`KEYWORD_PROVIDER_HTTP_${response.status}`);
     }
     const responseCopy = response.clone();
@@ -131,6 +142,26 @@ async function requestJson({ fetchImpl, url, apiKey, init, timeoutMs }: JsonRequ
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Some deployments stored DataForSEO credentials as email:base64(email:password).
+ * Normalize back to email:password before Basic auth.
+ */
+export function normalizeDataForSeoApiKey(apiKey: string) {
+  const separator = apiKey.indexOf(':');
+  if (separator <= 0) return apiKey;
+  const email = apiKey.slice(0, separator);
+  const password = apiKey.slice(separator + 1);
+  try {
+    const decoded = Buffer.from(password, 'base64').toString('utf8');
+    if (decoded.startsWith(`${email}:`) && decoded.includes(':')) {
+      return decoded;
+    }
+  } catch {
+    // keep original key
+  }
+  return apiKey;
 }
 
 export function mapDataForSeoLanguageCode(language: string) {
@@ -160,6 +191,7 @@ function assertDataForSeoTasksSucceeded(body: unknown) {
   }
   const topLevelStatus = readNumber((body as { status_code?: unknown }).status_code);
   if (topLevelStatus !== undefined && topLevelStatus !== 20000) {
+    if (topLevelStatus === 40104) throw new Error('KEYWORD_PROVIDER_ACCOUNT_UNVERIFIED');
     if (topLevelStatus >= 40100 && topLevelStatus < 40200) throw new Error('KEYWORD_PROVIDER_HTTP_401');
     if (topLevelStatus === 40201 || topLevelStatus === 40202 || topLevelStatus === 40203) {
       throw new Error('KEYWORD_PROVIDER_HTTP_429');
@@ -172,6 +204,7 @@ function assertDataForSeoTasksSucceeded(body: unknown) {
     if (!task || typeof task !== 'object') continue;
     const taskStatus = readNumber((task as { status_code?: unknown }).status_code);
     if (taskStatus === undefined || taskStatus === 20000) continue;
+    if (taskStatus === 40104) throw new Error('KEYWORD_PROVIDER_ACCOUNT_UNVERIFIED');
     if (taskStatus >= 40100 && taskStatus < 40200) throw new Error('KEYWORD_PROVIDER_HTTP_401');
     if (taskStatus === 40201 || taskStatus === 40202 || taskStatus === 40203) {
       throw new Error('KEYWORD_PROVIDER_HTTP_429');
@@ -536,6 +569,311 @@ export function createSemrushKeywordResearchProvider(options: KeywordResearchPro
         estimatedCost: 0,
         rawResponseHash: hashPayload(result.body)
       } satisfies CompetitorRankedKeywordsResult;
+    }
+  };
+}
+
+export interface SerpApiKeywordResearchProviderOptions {
+  apiKey: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  /** Soft cap on SerpAPI requests per provider method (free tier friendly). */
+  maxRequestsPerOperation?: number;
+  methodologyVersion?: string;
+}
+
+const serpApiMarketLocale: Record<string, { gl: string; hl: string }> = {
+  US: { gl: 'us', hl: 'en' },
+  GB: { gl: 'uk', hl: 'en' },
+  HK: { gl: 'hk', hl: 'zh-tw' },
+  TW: { gl: 'tw', hl: 'zh-tw' },
+  CN: { gl: 'cn', hl: 'zh-cn' },
+  ES: { gl: 'es', hl: 'es' },
+  MX: { gl: 'mx', hl: 'es' }
+};
+
+function resolveSerpApiLocale(market: string, language: string) {
+  const mapped = serpApiMarketLocale[market.trim().toUpperCase()];
+  if (mapped) return mapped;
+  const lang = mapDataForSeoLanguageCode(language);
+  return { gl: market.trim().toLowerCase().slice(0, 2) || 'us', hl: lang === 'zh_tw' ? 'zh-tw' : lang === 'zh_cn' ? 'zh-cn' : lang || 'en' };
+}
+
+function isKeywordProviderFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  return message.startsWith('KEYWORD_PROVIDER_') || message === 'PROVIDER_UNAVAILABLE';
+}
+
+function deriveBrandFromDomain(domain: string) {
+  const labels = domain.toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
+  const multiPartSecondLevel = new Set(['com', 'co', 'net', 'org', 'gov', 'edu', 'ac']);
+  let brand = labels[0] ?? domain;
+  if (labels.length >= 3 && multiPartSecondLevel.has(labels[labels.length - 2] ?? '')) {
+    brand = labels[labels.length - 3] ?? brand;
+  } else if (labels.length >= 2) {
+    brand = labels[labels.length - 2] ?? brand;
+  }
+  return brand.replace(/[-_]+/g, ' ').trim();
+}
+
+function hostMatchesDomain(urlValue: string | undefined, domain: string) {
+  if (!urlValue) return false;
+  try {
+    const host = new URL(urlValue).hostname.toLowerCase().replace(/^www\./, '');
+    const target = domain.toLowerCase().replace(/^www\./, '');
+    return host === target || host.endsWith(`.${target}`);
+  } catch {
+    return false;
+  }
+}
+
+export function createSerpApiKeywordResearchProvider(
+  options: SerpApiKeywordResearchProviderOptions
+): KeywordResearchProvider {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? 'https://serpapi.com/search');
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const maxRequests = Math.max(1, options.maxRequestsPerOperation ?? 8);
+  const methodologyVersion = options.methodologyVersion ?? 'serpapi-keyword-research-v1';
+
+  async function requestSerpApi(params: Record<string, string>) {
+    const query = new URLSearchParams({ ...params, api_key: options.apiKey, output: 'json' });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(`${baseUrl}?${query.toString()}`, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { Accept: 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error(`KEYWORD_PROVIDER_HTTP_${response.status}`);
+      }
+      const body = await response.json() as Record<string, unknown>;
+      if (typeof body.error === 'string' && body.error.trim()) {
+        const message = body.error.toLowerCase();
+        if (message.includes('invalid') || message.includes('api key')) {
+          throw new Error('KEYWORD_PROVIDER_HTTP_401');
+        }
+        if (message.includes('run out') || message.includes('quota') || message.includes('limit')) {
+          throw new Error('KEYWORD_PROVIDER_HTTP_429');
+        }
+        throw new Error('KEYWORD_PROVIDER_RESPONSE_INVALID');
+      }
+      return body;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('KEYWORD_PROVIDER_TIMEOUT', { cause: error });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return {
+    id: 'serpapi',
+    async getCapabilities() {
+      return createCapabilities('serpapi', true);
+    },
+    async discoverKeywordMetrics(input) {
+      const locale = resolveSerpApiLocale(input.market, input.language);
+      const seeds = [...new Set(input.seeds.map((seed) => seed.trim()).filter(Boolean))].slice(0, Math.min(5, maxRequests));
+      const metrics: KeywordMetricResult[] = [];
+      const rawResponses: unknown[] = [];
+      let requests = 0;
+      for (const seed of seeds) {
+        if (requests >= maxRequests) break;
+        const body = await requestSerpApi({
+          engine: 'google_autocomplete',
+          q: seed,
+          gl: locale.gl,
+          hl: locale.hl
+        });
+        requests += 1;
+        rawResponses.push(body);
+        const suggestions = Array.isArray(body.suggestions) ? body.suggestions : [];
+        for (const row of suggestions) {
+          const keyword = normalizeKeyword(
+            typeof row === 'string'
+              ? row
+              : row && typeof row === 'object'
+                ? (row as { value?: unknown }).value
+                : undefined
+          );
+          if (!keyword) continue;
+          metrics.push({ keyword });
+        }
+        if (metrics.length === 0) {
+          metrics.push({ keyword: seed });
+        }
+      }
+      const unique = [...new Map(metrics.map((item) => [item.keyword.toLowerCase(), item])).values()].slice(0, 100);
+      const collectedAt = new Date().toISOString();
+      return {
+        provider: 'serpapi',
+        providerSnapshotId: makeSnapshotId('serpapi', { seeds, locale }, rawResponses),
+        methodologyVersion,
+        location: String(input.market),
+        language: input.language,
+        device: input.device,
+        collectedAt,
+        sourceType: 'provider_estimated',
+        metrics: unique,
+        estimatedCost: requests,
+        rawResponseHash: hashPayload(rawResponses)
+      } satisfies KeywordMetricsResult;
+    },
+    async getCompetitorRankedKeywords(input) {
+      const locale = resolveSerpApiLocale(input.market, input.language);
+      const domain = input.domain.replace(/^www\./i, '');
+      const brand = deriveBrandFromDomain(domain) || domain;
+      const rawResponses: unknown[] = [];
+      let requests = 0;
+      const ranked = new Map<string, RankedKeywordResult>();
+
+      const siteBody = await requestSerpApi({
+        engine: 'google',
+        q: `site:${domain}`,
+        gl: locale.gl,
+        hl: locale.hl,
+        num: '10',
+        device: input.device
+      });
+      requests += 1;
+      rawResponses.push(siteBody);
+      const organic = Array.isArray(siteBody.organic_results) ? siteBody.organic_results : [];
+      for (const row of organic) {
+        if (!row || typeof row !== 'object') continue;
+        const item = row as { title?: unknown; link?: unknown; position?: unknown };
+        const title = normalizeKeyword(item.title);
+        if (!title) continue;
+        const keyword = title
+          .replace(/\s*[|\-–—].*$/, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 120);
+        if (!keyword) continue;
+        ranked.set(keyword.toLowerCase(), {
+          keyword,
+          rank: readNumber(item.position) ?? 1,
+          url: typeof item.link === 'string' ? item.link : undefined
+        });
+      }
+
+      if (requests < maxRequests) {
+        const brandBody = await requestSerpApi({
+          engine: 'google',
+          q: brand,
+          gl: locale.gl,
+          hl: locale.hl,
+          num: '10',
+          device: input.device
+        });
+        requests += 1;
+        rawResponses.push(brandBody);
+        const related = Array.isArray(brandBody.related_searches) ? brandBody.related_searches : [];
+        const peopleAlsoAsk = Array.isArray(brandBody.related_questions) ? brandBody.related_questions : [];
+        const candidateQueries = [
+          ...related.map((row) => normalizeKeyword(
+            row && typeof row === 'object' ? (row as { query?: unknown }).query : row
+          )),
+          ...peopleAlsoAsk.map((row) => normalizeKeyword(
+            row && typeof row === 'object' ? (row as { question?: unknown }).question : row
+          )),
+          ...input.seeds.map((seed) => normalizeKeyword(seed))
+        ].filter(Boolean);
+
+        for (const query of [...new Set(candidateQueries)].slice(0, Math.max(0, maxRequests - requests))) {
+          const body = await requestSerpApi({
+            engine: 'google',
+            q: query,
+            gl: locale.gl,
+            hl: locale.hl,
+            num: '10',
+            device: input.device
+          });
+          requests += 1;
+          rawResponses.push(body);
+          const results = Array.isArray(body.organic_results) ? body.organic_results : [];
+          for (const row of results) {
+            if (!row || typeof row !== 'object') continue;
+            const item = row as { link?: unknown; position?: unknown };
+            if (!hostMatchesDomain(typeof item.link === 'string' ? item.link : undefined, domain)) continue;
+            ranked.set(query.toLowerCase(), {
+              keyword: query,
+              rank: readNumber(item.position),
+              url: typeof item.link === 'string' ? item.link : undefined
+            });
+            break;
+          }
+          if (!ranked.has(query.toLowerCase())) {
+            ranked.set(query.toLowerCase(), { keyword: query });
+          }
+        }
+      }
+
+      const keywords = [...ranked.values()]
+        .filter((item) => item.rank === undefined || (item.rank >= 1 && item.rank <= 100))
+        .slice(0, Math.min(100, Math.max(1, input.limit)));
+      const collectedAt = new Date().toISOString();
+      return {
+        provider: 'serpapi',
+        providerSnapshotId: makeSnapshotId('serpapi', { domain, locale, limit: input.limit }, rawResponses),
+        methodologyVersion,
+        location: String(input.market),
+        language: input.language,
+        device: input.device,
+        collectedAt,
+        sourceType: 'provider_estimated',
+        domain: input.domain,
+        keywords,
+        estimatedCost: requests,
+        rawResponseHash: hashPayload(rawResponses)
+      } satisfies CompetitorRankedKeywordsResult;
+    }
+  };
+}
+
+/**
+ * Prefer the primary provider; on Keyword provider failures, transparently retry with fallback.
+ */
+export function createFallbackKeywordResearchProvider(
+  primary: KeywordResearchProvider,
+  fallback: KeywordResearchProvider
+): KeywordResearchProvider {
+  return {
+    id: primary.id,
+    async getCapabilities() {
+      const [primaryCapabilities, fallbackCapabilities] = await Promise.all([
+        primary.getCapabilities(),
+        fallback.getCapabilities()
+      ]);
+      return {
+        provider: primaryCapabilities.provider,
+        supportsKeywordMetrics: primaryCapabilities.supportsKeywordMetrics || fallbackCapabilities.supportsKeywordMetrics,
+        supportsCompetitorRankedKeywords:
+          primaryCapabilities.supportsCompetitorRankedKeywords || fallbackCapabilities.supportsCompetitorRankedKeywords,
+        supportsBacklinkOpportunities:
+          primaryCapabilities.supportsBacklinkOpportunities || fallbackCapabilities.supportsBacklinkOpportunities
+      };
+    },
+    async discoverKeywordMetrics(input) {
+      try {
+        return await primary.discoverKeywordMetrics(input);
+      } catch (error) {
+        if (!isKeywordProviderFailure(error)) throw error;
+        return fallback.discoverKeywordMetrics(input);
+      }
+    },
+    async getCompetitorRankedKeywords(input) {
+      try {
+        return await primary.getCompetitorRankedKeywords(input);
+      } catch (error) {
+        if (!isKeywordProviderFailure(error)) throw error;
+        return fallback.getCompetitorRankedKeywords(input);
+      }
     }
   };
 }

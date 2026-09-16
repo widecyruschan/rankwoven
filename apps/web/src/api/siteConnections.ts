@@ -581,7 +581,7 @@ export async function getAhrefsSiteAuditConfig(siteId: string) {
 
 export async function updateAhrefsSiteAuditConfig(
   siteId: string,
-  config: Pick<AhrefsSiteAuditConfig, 'enabled' | 'projectId' | 'crawlDate' | 'comparisonDate'>
+  config: Pick<AhrefsSiteAuditConfig, 'enabled' | 'crawlDate' | 'comparisonDate'>
 ) {
   return requestApi<{ config: AhrefsSiteAuditConfig }>(
     `/api/v1/site-connections/${encodeURIComponent(siteId)}/ahrefs-site-audit/config`,

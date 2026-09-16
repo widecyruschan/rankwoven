@@ -139,7 +139,6 @@ describe('Ahrefs Site Audit provider', () => {
     const authorization = `Bearer ${login.json<{ data: { token: string } }>().data.token}`;
     const payload = {
       enabled: true,
-      projectId: '10160561',
       crawlDate: '2026-09-13T07:03:02Z',
       comparisonDate: '2026-09-08T14:16:49Z'
     };
@@ -158,11 +157,38 @@ describe('Ahrefs Site Audit provider', () => {
     expect(loaded.json()).toMatchObject({
       success: true,
       data: {
-        config: payload,
+        config: { ...payload, projectId: '' },
         platformManaged: expect.any(Boolean),
         platformAvailable: expect.any(Boolean)
       }
     });
+    await server.close();
+  });
+
+  it('does not accept a customer-provided Ahrefs project id', async () => {
+    const siteRepository = createInMemorySiteConnectionRepository();
+    const seoRepository = createInMemorySeoOptimizationRepository();
+    const { site } = await siteRepository.create({
+      platform: 'wordpress',
+      name: 'Managed project site',
+      siteUrl: 'https://managed.example.com'
+    });
+    const server = createServer({ siteConnectionRepository: siteRepository, seoOptimizationRepository: seoRepository });
+    const login = await server.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'demo@rankwoven.com', password: 'rankwoven' }
+    });
+    const authorization = `Bearer ${login.json<{ data: { token: string } }>().data.token}`;
+    const response = await server.inject({
+      method: 'PUT',
+      url: `/api/v1/site-connections/${site.id}/ahrefs-site-audit/config`,
+      headers: { authorization },
+      payload: { enabled: true, projectId: 'customer-project-id' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ data: { config: { enabled: true, projectId: '' } } });
     await server.close();
   });
 

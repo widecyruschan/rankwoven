@@ -273,7 +273,6 @@ const internalLinkGenerationSchema = z.object({
 
 const ahrefsSiteAuditConfigSchema = z.object({
   enabled: z.boolean(),
-  projectId: z.string().trim().max(80).optional().default(''),
   crawlDate: z.string().datetime().optional(),
   comparisonDate: z.string().datetime().optional()
 });
@@ -3592,7 +3591,13 @@ export function registerSeoOptimizationRoutes(
       const parsed = ahrefsSiteAuditConfigSchema.safeParse(request.body);
       if (!parsed.success) return validationError(reply, parsed.error);
 
-      const config = await seoRepository.upsertAhrefsSiteAuditConfig(site.id, parsed.data);
+      // Project IDs are platform-owned. Keep an existing internal binding (or the
+      // server-wide fallback) and never accept one from the customer UI/API.
+      const currentConfig = await seoRepository.getAhrefsSiteAuditConfig(site.id);
+      const config = await seoRepository.upsertAhrefsSiteAuditConfig(site.id, {
+        ...parsed.data,
+        projectId: currentConfig?.projectId || apiConfig.AHREFS_SITE_AUDIT_PROJECT_ID || ''
+      });
       return {
         success: true,
         message: 'Ahrefs Site Audit 設定已儲存',

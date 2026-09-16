@@ -39,7 +39,6 @@ import {
   createSeoAudit,
   getSeoAudits,
   getAhrefsSiteAuditConfig,
-  updateAhrefsSiteAuditConfig,
   getAhrefsSiteAuditIssuePages,
   getOptimizationSuggestions,
   batchApproveOptimizationSuggestions,
@@ -85,7 +84,6 @@ const syncedContent = ref<SyncedArticle[]>([]);
 const manualTargetUrl = ref('');
 const manualContentCmsId = ref<string>();
 const ahrefsConfig = ref<AhrefsSiteAuditConfig | null>(null);
-const ahrefsPlatformManaged = ref(false);
 const ahrefsPlatformAvailable = ref(false);
 const latestAhrefsAudit = ref<SeoAudit | null>(null);
 const latestAhrefsIssues = ref<SeoAuditIssue[]>([]);
@@ -97,10 +95,6 @@ const formSchedule = ref<SiteAuditSchedule>('disabled');
 const formPageLimit = ref<number>(100);
 const formCrawlSource = ref<SiteAuditCrawlSource>('website');
 const formEmailNotification = ref<boolean>(false);
-const formAhrefsEnabled = ref(false);
-const formAhrefsProjectId = ref('');
-const formAhrefsCrawlDate = ref('');
-const formAhrefsComparisonDate = ref('');
 
 // ── computed ──
 const hasSite = computed(() => !!selectedSiteId.value);
@@ -254,20 +248,10 @@ async function loadConfig() {
   try {
     const result = await getAhrefsSiteAuditConfig(selectedSiteId.value);
     ahrefsConfig.value = result.config;
-    ahrefsPlatformManaged.value = Boolean(result.platformManaged);
     ahrefsPlatformAvailable.value = Boolean(result.platformAvailable);
-    formAhrefsEnabled.value = result.platformManaged ? true : result.config.enabled;
-    formAhrefsProjectId.value = result.config.projectId;
-    formAhrefsCrawlDate.value = result.config.crawlDate ?? '';
-    formAhrefsComparisonDate.value = result.config.comparisonDate ?? '';
   } catch {
     ahrefsConfig.value = null;
-    ahrefsPlatformManaged.value = false;
     ahrefsPlatformAvailable.value = false;
-    formAhrefsEnabled.value = false;
-    formAhrefsProjectId.value = '';
-    formAhrefsCrawlDate.value = '';
-    formAhrefsComparisonDate.value = '';
   } finally {
     loadingConfig.value = false;
   }
@@ -327,12 +311,6 @@ function openConfigModal() {
     formCrawlSource.value = config.value.crawlSource;
     formEmailNotification.value = config.value.emailNotification;
   }
-  if (ahrefsConfig.value) {
-    formAhrefsEnabled.value = ahrefsConfig.value.enabled;
-    formAhrefsProjectId.value = ahrefsConfig.value.projectId;
-    formAhrefsCrawlDate.value = ahrefsConfig.value.crawlDate ?? '';
-    formAhrefsComparisonDate.value = ahrefsConfig.value.comparisonDate ?? '';
-  }
   configModalOpen.value = true;
 }
 
@@ -340,10 +318,6 @@ async function saveConfig() {
   if (!selectedSiteId.value) return;
   savingConfig.value = true;
   try {
-    if (!ahrefsPlatformManaged.value && formAhrefsEnabled.value && !formAhrefsProjectId.value.trim()) {
-      message.error(tc('ahrefsProjectRequired'));
-      return;
-    }
     const res = await updateSiteAuditConfig(selectedSiteId.value, {
       schedule: formSchedule.value,
       pageLimit: formPageLimit.value,
@@ -351,15 +325,6 @@ async function saveConfig() {
       emailNotification: formEmailNotification.value
     });
     config.value = res.config;
-    if (!ahrefsPlatformManaged.value && formAhrefsProjectId.value.trim()) {
-      const ahrefsResult = await updateAhrefsSiteAuditConfig(selectedSiteId.value, {
-        enabled: formAhrefsEnabled.value,
-        projectId: formAhrefsProjectId.value.trim(),
-        ...(formAhrefsCrawlDate.value.trim() ? { crawlDate: formAhrefsCrawlDate.value.trim() } : {}),
-        ...(formAhrefsComparisonDate.value.trim() ? { comparisonDate: formAhrefsComparisonDate.value.trim() } : {})
-      });
-      ahrefsConfig.value = ahrefsResult.config;
-    }
     configModalOpen.value = false;
     message.success(tc('configSaved'));
   } catch {
@@ -381,16 +346,6 @@ function handleRunAudit() {
       runningAudit.value = true;
       try {
         if (useAhrefsFullSite) {
-          if (!ahrefsPlatformManaged.value && ahrefsConfig.value?.projectId?.trim() && !ahrefsConfig.value.enabled) {
-            const ahrefsResult = await updateAhrefsSiteAuditConfig(selectedSiteId.value, {
-              enabled: true,
-              projectId: ahrefsConfig.value.projectId.trim(),
-              crawlDate: ahrefsConfig.value.crawlDate,
-              comparisonDate: ahrefsConfig.value.comparisonDate
-            });
-            ahrefsConfig.value = ahrefsResult.config;
-            formAhrefsEnabled.value = true;
-          }
           const result = await createSeoAudit(selectedSiteId.value);
           if (result.audit.metadata?.ahrefs) {
             latestResult.value = null;
@@ -401,7 +356,6 @@ function handleRunAudit() {
             ahrefsIssuePages.value = {};
             const refreshed = await getAhrefsSiteAuditConfig(selectedSiteId.value);
             ahrefsConfig.value = refreshed.config;
-            ahrefsPlatformManaged.value = Boolean(refreshed.platformManaged);
             ahrefsPlatformAvailable.value = Boolean(refreshed.platformAvailable);
             message.success(tc('status_completed'));
             return;
@@ -833,12 +787,12 @@ onMounted(async () => {
         </Card>
 
         <Alert
-          v-if="ahrefsPlatformAvailable || canUseAhrefsFullSite"
+          v-if="canUseAhrefsFullSite"
           class="ahrefs-audit-notice"
-          type="info"
+          type="success"
           show-icon
-          :message="ahrefsPlatformManaged ? tc('ahrefsPlatformManagedTitle') : tc('ahrefsFullSiteTitle')"
-          :description="ahrefsPlatformManaged ? tc('ahrefsPlatformManagedDescription') : tc('ahrefsFullSiteDescription')"
+          :message="tc('ahrefsPlatformManagedTitle')"
+          :description="tc('ahrefsPlatformManagedDescription')"
         />
         <Alert
           v-else-if="hasSite"
@@ -898,9 +852,6 @@ onMounted(async () => {
             </DescriptionsItem>
             <DescriptionsItem :label="tc('pagesCrawled')">
               {{ getAhrefsCrawledUrls(latestAhrefsAudit) ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="tc('ahrefsProjectId')">
-              {{ ahrefsConfig?.projectId ?? '-' }}
             </DescriptionsItem>
             <DescriptionsItem :label="tc('lastAudit')">
               {{ formatDate(latestAhrefsAudit.createdAt) }}
@@ -1181,33 +1132,15 @@ onMounted(async () => {
           <span class="hint">{{ tc('emailNotificationHint') }}</span>
         </div>
 
-        <div v-if="ahrefsPlatformManaged" class="config-item ahrefs-config-item">
+        <div class="config-item ahrefs-config-item">
           <label>{{ tc('ahrefsFullSiteTitle') }}</label>
-          <Alert type="success" show-icon :message="tc('ahrefsPlatformManagedTitle')" :description="tc('ahrefsPlatformManagedDescription')" />
-          <span v-if="ahrefsConfig?.projectId" class="hint">{{ tc('ahrefsBoundProjectId') }}: {{ ahrefsConfig.projectId }}</span>
+          <Alert
+            :type="canUseAhrefsFullSite ? 'success' : 'warning'"
+            show-icon
+            :message="canUseAhrefsFullSite ? tc('ahrefsPlatformManagedTitle') : tc('limitedCrawlTitle')"
+            :description="canUseAhrefsFullSite ? tc('ahrefsPlatformManagedDescription') : tc('limitedCrawlDescription')"
+          />
         </div>
-        <template v-else>
-          <div class="config-item ahrefs-config-item">
-            <label>{{ tc('ahrefsFullSiteTitle') }}</label>
-            <Switch v-model:checked="formAhrefsEnabled" />
-            <span class="hint">{{ tc('ahrefsConfigHint') }}</span>
-          </div>
-
-          <div class="config-item">
-            <label>{{ tc('ahrefsProjectId') }}</label>
-            <Input v-model:value="formAhrefsProjectId" :placeholder="tc('ahrefsProjectIdPlaceholder')" />
-          </div>
-
-          <div class="config-item">
-            <label>{{ tc('ahrefsCrawlDate') }}</label>
-            <Input v-model:value="formAhrefsCrawlDate" :placeholder="tc('ahrefsDatePlaceholder')" />
-          </div>
-
-          <div class="config-item">
-            <label>{{ tc('ahrefsComparisonDate') }}</label>
-            <Input v-model:value="formAhrefsComparisonDate" :placeholder="tc('ahrefsDatePlaceholder')" />
-          </div>
-        </template>
       </div>
     </Modal>
   </div>

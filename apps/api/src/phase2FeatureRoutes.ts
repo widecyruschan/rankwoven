@@ -261,7 +261,9 @@ export function registerPhase2FeatureRoutes(
     }
 
     try {
-      const inferredMarket = inferResearchMarketFromSiteUrl(site.siteUrl);
+      const inferredMarket = parsed.data.name.includes('.')
+        ? inferResearchMarketFromSiteUrl(parsed.data.name.includes('://') ? parsed.data.name : `https://${parsed.data.name}`)
+        : inferResearchMarketFromSiteUrl(site.siteUrl);
       const project = await repository.createKeywordResearchProject({
         ...parsed.data,
         market: inferredMarket,
@@ -361,12 +363,20 @@ export function registerPhase2FeatureRoutes(
       return sendValidationError(reply, [{ path: ['seedKeywords'], message: '必須提供核心關鍵詞或至少一個有效競品域名' }]);
     }
 
+    const competitorMarket = competitorDomains[0]
+      ? inferResearchMarketFromSiteUrl(`https://${competitorDomains[0]}/`)
+      : project.market;
+    const researchMarket = competitorDomains.length > 0 ? competitorMarket : project.market;
+    const researchLanguage = competitorDomains.length > 0
+      ? inferResearchLanguageFromMarket(researchMarket)
+      : project.language;
+
     const input = {
       seedKeywords,
       ownDomain,
       competitorDomains,
-      market: project.market,
-      language: project.language,
+      market: researchMarket,
+      language: researchLanguage,
       device: project.device === 'mobile' ? 'mobile' as const : 'desktop' as const,
       engine: 'google' as const,
       locale: parsed.data.locale,

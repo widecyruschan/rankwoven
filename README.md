@@ -7246,3 +7246,160 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 可在生產客戶後台驗證「SEO 網站檢測」全站問題列表與「競品關鍵詞研究」實際任務。
 - 若需要更新 WordPress 插件 GA4 修復，需另行部署 `plugins/wordpress/rankwoven-seo/` 至對應 WordPress 網站。
+
+## 會話總結（2026-09-16）— 競品分析失敗根因：額度與 DataForSEO 帳號
+
+### 會話主要目的
+
+排查已保存三個競品網址後仍無法分析、只顯示「競品研究任務未能完成」的問題。
+
+### 完成的主要任務
+
+- 確認生產 `entitlement_assignments` 為空，導致 run 建立時回傳 `ENTITLEMENT_REQUIRED`，前端誤映射為 `RUN_FAILED`。
+- 已在生產補上 `keyword_research`／`content_optimization` 月額度，並新增 migration `0024_default_phase2_entitlements.sql`；註冊新工作區時一併寫入預設額度。
+- 發現 `KEYWORD_VOLUME_API_KEY` 被存成 `email:base64(email:password)`，已在生產解碼修正；程式加入 `normalizeDataForSeoApiKey` 防呆。
+- 修正後 DataForSEO 登入成功，但排名關鍵詞 API 回傳帳號未驗證（40104／HTTP 403）；介面改為顯示明確的帳號未驗證提示。
+- 競品研究改依競品網址推斷市場／語言（例如 `.tw` → TW／zh-Hant）。
+
+### 關鍵決策和解決方案
+
+- 真正阻斷出結果的最後一哩是 DataForSEO 帳號尚未在官方後台完成驗證，需使用者於 https://app.dataforseo.com/ 完成驗證後才能呼叫 `ranked_keywords`。
+- 不在未授權時提交／推送；生產已先熱修額度與 API Key 編碼。
+
+### 使用的技術棧
+
+- DataForSEO API、PostgreSQL entitlements、Fastify、Vue 3、Vitest
+
+### 新增或修改文件
+
+- `db/migrations/0024_default_phase2_entitlements.sql`
+- `apps/api/src/auth.ts`、`apps/api/src/phase2FeatureRoutes.ts`
+- `packages/ai-providers/src/keywordResearch.ts`、`packages/ai-providers/tests/keywordResearch.test.ts`
+- `apps/worker/src/index.ts`
+- `apps/web/src/views/KeywordResearchView.vue`、`apps/web/src/i18n.ts`
+- `README.md`
+
+### 驗證結果
+
+- 生產 DataForSEO `user_data` 認證成功（key 修正後）。
+- 生產 `ranked_keywords`／`keywords_for_keywords` 回傳帳號未驗證（40104）。
+- Provider 單元測試 6 項通過；變更檔 eslint 通過。
+
+### 下一步行動清單
+
+- 使用者至 DataForSEO 後台完成帳號驗證後，再於競品研究頁選擇其中一個競品並按「分析競品」。
+- 授權後提交並推送本批錯誤提示／額度／市場推斷程式碼至 `main` 部署。
+
+## 會話總結（2026-09-16）— Ahrefs 專案由平台自動管理
+
+### 會話主要目的
+
+確保 SEO 網站檢測使用平台託管的 Ahrefs API，客戶不需要自行開設、輸入或管理 Ahrefs Site Audit Project ID。
+
+### 完成的主要任務
+
+- 前端移除 Ahrefs Project ID 輸入欄位、日期欄位與相關必填校驗。
+- SEO 檢測設定頁改為顯示平台託管狀態；平台接入不可用時只提示使用本機全站爬取。
+- API 配置更新路由不再接受客戶提交的 `projectId`；保留既有平台綁定或服務器端 fallback，新的專案仍按站點網址自動查找／建立。
+- 更新中英文 i18n 文案及前端頁面規格，明確說明 Project ID 為平台內部資料。
+- 新增 API 回歸測試，確認客戶傳入的 Project ID 不會覆蓋平台綁定。
+
+### 關鍵決策和解決方案
+
+- Project ID 屬於平台服務端狀態，不作為客戶配置項；站點網址是唯一的客戶側識別輸入。
+- 保留資料庫 `project_id` 欄位及兼容路由，讓平台可以快取已解析的專案並避免每次請求重建。
+
+### 使用的技術棧
+
+- Vue 3、TypeScript、Vue I18n、Fastify、Zod、Vitest、Ahrefs API v3
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/ahrefsSiteAudit.test.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `docs/frontend-page-spec.md`
+- `README.md`
+
+### 驗證結果
+
+- Ahrefs API 測試：7 passed。
+- Web 測試：19 passed。
+- Web/API build 通過。
+- 專案 lint 通過。
+
+### 下一步行動清單
+
+- 本次未執行 Git commit 或 push，等待使用者明確授權後再提交／部署。
+- 生產環境驗證時，在已連接站點按「立即執行檢測」，確認平台按站點網址解析 Ahrefs 專案並返回全站問題。
+
+## 會話總結（2026-09-16）— 競品分析 API 替代方案建議
+
+### 會話主要目的
+
+評估 DataForSEO 以外、適合競品關鍵詞／長尾詞分析且最好有免費測試額度的 API。
+
+### 完成的主要任務
+
+- 整理可測試免費額度與正式商業方案的差異，並對照 RankWoven 現有 Provider 架構（DataForSEO／Semrush／Ahrefs／SerpAPI env）。
+
+### 關鍵決策和解決方案
+
+- 短期測試優先：SerpAPI（約 250 次／月免費）或 Kwinside（20 次／日免信用卡）。
+- 正式競品排名詞：Ahrefs／Semrush 品質高但 API 幾乎無真正免費額度；DataForSEO 仍適合量大時的成本，但需完成帳號驗證。
+
+### 使用的技術棧
+
+- 未修改程式碼；僅方案評估。
+
+### 新增或修改文件
+
+- `README.md`
+
+### 驗證結果
+
+- 未修改文件以外的實作；僅提供方案說明。
+
+### 下一步行動清單
+
+- 若選定 SerpAPI 或 Kwinside 作測試 Provider，再實作對應 adapter 並接到競品研究 Worker。
+
+## 會話總結（2026-09-16）— SerpAPI 競品研究 Fallback Provider
+
+### 會話主要目的
+
+在 DataForSEO 失敗時，自動切換到 SerpAPI 作為競品關鍵詞研究 fallback，方便免費額度測試。
+
+### 完成的主要任務
+
+- 新增 `createSerpApiKeywordResearchProvider`：以 Google Autocomplete／SERP 推導關鍵詞與競品排名。
+- 新增 `createFallbackKeywordResearchProvider`：primary 拋出 `KEYWORD_PROVIDER_*` 時改打 fallback。
+- API／Worker 在已配置 `SERPAPI_KEY` 時自動組成 DataForSEO／Semrush → SerpAPI fallback 鏈。
+- migration `0025_keyword_research_serpapi_provider.sql` 允許 run.provider = `serpapi`。
+
+### 關鍵決策和解決方案
+
+- 每個 SerpAPI 操作限制請求數（預設 8），避免快速耗盡 250／月免費額度。
+- Fallback 以方法為單位（metrics 與 ranked keywords 可分別切換），不要求整次 run 全失敗才切換。
+
+### 使用的技術棧
+
+- SerpAPI、Vitest、Fastify Worker、PostgreSQL migration
+
+### 新增或修改文件
+
+- `packages/ai-providers/src/keywordResearch.ts`、`packages/ai-providers/src/phase2.ts`
+- `packages/ai-providers/tests/keywordResearch.test.ts`
+- `apps/api/src/keywordResearchService.ts`、`apps/worker/src/index.ts`
+- `db/migrations/0025_keyword_research_serpapi_provider.sql`
+- `.env.example`、`README.md`
+
+### 驗證結果
+
+- Provider 測試 8 項通過；API phase2Routes 10 項通過；ai-providers／api／worker 建置通過。
+
+### 下一步行動清單
+
+- 確認生產 `SERPAPI_KEY` 有效後，提交並推送部署；DataForSEO 未驗證時應自動改走 SerpAPI 完成競品分析。
