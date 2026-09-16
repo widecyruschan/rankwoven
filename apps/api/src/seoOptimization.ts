@@ -3558,6 +3558,11 @@ export function registerSeoOptimizationRoutes(
       if (!site) return reply;
 
       const config = await seoRepository.getAhrefsSiteAuditConfig(site.id);
+      const latestAudit = (await seoRepository.listAudits(site.id))[0];
+      const latestMetadata = latestAudit?.metadata;
+      const providerErrorCode = typeof latestMetadata?.ahrefsErrorCode === 'string'
+        ? latestMetadata.ahrefsErrorCode
+        : undefined;
       return {
         success: true,
         message: '操作成功',
@@ -3565,6 +3570,7 @@ export function registerSeoOptimizationRoutes(
           platformManaged: isPlatformAhrefsSiteAuditAvailable(),
           platformAvailable: isPlatformAhrefsSiteAuditAvailable(),
           autoCreate: apiConfig.AHREFS_SITE_AUDIT_AUTO_CREATE,
+          providerErrorCode,
           config: config ?? {
             siteId: site.id,
             enabled: isPlatformAhrefsSiteAuditAvailable(),

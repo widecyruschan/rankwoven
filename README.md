@@ -7290,6 +7290,52 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 - 使用者至 DataForSEO 後台完成帳號驗證後，再於競品研究頁選擇其中一個競品並按「分析競品」。
 - 授權後提交並推送本批錯誤提示／額度／市場推斷程式碼至 `main` 部署。
 
+## 會話總結（2026-09-16）— 排查 Ahrefs Site Audit 不可用
+
+### 會話主要目的
+
+排查 SEO 網站檢測在生產環境提示 Ahrefs 不可用，並落實客戶不需要自行建立或填寫 Ahrefs Project ID。
+
+### 完成的主要任務
+
+- 只讀檢查 VPS：API、Web、Worker、PostgreSQL、Redis 容器均正常運行；`AHREFS_SITE_AUDIT_ENABLED=true`、`AHREFS_SITE_AUDIT_AUTO_CREATE=true`，三個 Ahrefs endpoint 地址正確。
+- 從 VPS API 容器直接呼叫 Ahrefs Site Audit，確認返回 `HTTP 401 ["Error","Unauthorized"]`；本機與 VPS 的 Ahrefs key 長度及內容雜湊一致，排除部署配置漂移。
+- SEO 網站檢測頁取得最近審計的 `ahrefsErrorCode`，在前端對 `AHREFS_SITE_AUDIT_HTTP_401` 顯示密鑰／方案權限錯誤，而不是籠統的不可用提示。
+- WordPress 外掛移除 Project ID、crawl 日期輸入及本地保存；只保留啟用開關，改由 SaaS 依站點網址自動查找或建立 Site Audit 專案。
+
+### 關鍵決策和解決方案
+
+- 401 是 Ahrefs 生產憑證被 Ahrefs 拒絕，不能透過程式或 Project ID 修復；需要管理員在 Ahrefs 後台重新建立有效 API key，並確認方案包含 Site Audit API 權限。
+- 保留平台端專案綁定與自動建立流程；客戶端不接觸 Project ID，也不把 Ahrefs key 傳到 WordPress。
+
+### 使用的技術棧
+
+- Ahrefs API v3、Fastify、Vue 3、Vue I18n、WordPress PHP、Docker Compose、Vitest
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/rankwoven-seo/README.md`
+- `README.md`
+
+### 驗證結果
+
+- Ahrefs Site Audit API 測試：7 passed。
+- 完整測試：API 101 passed／8 skipped，Web 19 passed，Worker 11 passed，AI Provider 26 passed，CMS Adapter 1 passed，Security 15 passed。
+- API／Web build、專案 lint 通過。
+- WordPress 外掛 PHP 8.2 語法檢查通過。
+- 生產 API 仍返回健康狀態；Ahrefs 401 已被準確記錄及提示。
+
+### 下一步行動清單
+
+- 管理員在 Ahrefs 後台重新生成具備 API 權限的生產 key，更新 VPS `/docker/rankwoven/.env` 的 `AHREFS_API_KEY` 後重建 API 容器。
+- 重新執行 `cyruschan.com` 與 `ckcprompt.cloud` 的 SEO 網站檢測，確認按站點網址自動解析專案及載入全站問題。
+- 本次尚未執行 Git commit、push 或生產部署；目前工作區中的其他未提交修改與 `0.jpeg` 均未加入。
+
 ## 會話總結（2026-09-16）— Ahrefs 專案由平台自動管理
 
 ### 會話主要目的
@@ -7423,3 +7469,25 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 在客戶後台對已保存競品再執行一次分析；DataForSEO 失敗時應自動走 SerpAPI。
+
+## 會話總結（2026-09-16）— 競品分析需先選擇單一網址
+
+### 會話主要目的
+
+強化競品關鍵詞研究 UI：可保存三個網址，分析前必須明確選擇其中一個。
+
+### 完成的主要任務
+
+- 改用 `a-radio-group`，空白欄位不可選。
+- 未選擇時停用「分析競品」，並提示「請先選擇一個競品」。
+- 選中列高亮，並顯示目前選擇的網址。
+
+### 新增或修改文件
+
+- `apps/web/src/views/KeywordResearchView.vue`
+- `apps/web/src/i18n.ts`
+- `README.md`
+
+### 下一步行動清單
+
+- 授權後提交並推送部署。

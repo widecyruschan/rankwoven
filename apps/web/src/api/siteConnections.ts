@@ -563,6 +563,7 @@ export interface AhrefsSiteAuditConfigResponse {
   platformManaged: boolean;
   platformAvailable: boolean;
   autoCreate: boolean;
+  providerErrorCode?: string;
 }
 
 export interface AhrefsSiteAuditIssuePages {

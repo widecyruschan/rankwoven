@@ -2458,7 +2458,7 @@ final class RankWoven_SEO_Plugin
 
         <details class="rankwoven-settings-card rankwoven-ahrefs-site-audit-settings">
             <summary><?php echo esc_html__('Ahrefs Site Audit 資料來源', 'rankwoven-seo'); ?></summary>
-            <p class="description"><?php echo esc_html__('輸入此 WordPress 站點對應的 Ahrefs Project ID 與 crawl 日期。Ahrefs API key 只保存在 RankWoven SaaS，外掛不會讀取或保存 key。', 'rankwoven-seo'); ?></p>
+            <p class="description"><?php echo esc_html__('Ahrefs Site Audit 由 RankWoven SaaS 平台託管。外掛不需要、也不會保存 Ahrefs Project ID 或 API key，平台會依此站點網址自動解析或建立專案。', 'rankwoven-seo'); ?></p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <?php wp_nonce_field('rankwoven_save_ahrefs_site_audit'); ?>
                 <input type="hidden" name="action" value="rankwoven_save_ahrefs_site_audit" />
@@ -2466,18 +2466,6 @@ final class RankWoven_SEO_Plugin
                     <tr>
                         <th scope="row"><?php echo esc_html__('啟用 Ahrefs Site Audit', 'rankwoven-seo'); ?></th>
                         <td><label><input type="checkbox" name="rankwoven_ahrefs_site_audit[enabled]" value="1" <?php checked(!empty($ahrefs_settings['enabled'])); ?> /> <?php echo esc_html__('將 Ahrefs 網站級問題納入 SEO 健康度與檢測列表', 'rankwoven-seo'); ?></label></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="rankwoven_ahrefs_project_id"><?php echo esc_html__('Ahrefs Project ID', 'rankwoven-seo'); ?></label></th>
-                        <td><input id="rankwoven_ahrefs_project_id" class="regular-text" name="rankwoven_ahrefs_site_audit[projectId]" value="<?php echo esc_attr($ahrefs_settings['projectId']); ?>" inputmode="numeric" required /></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="rankwoven_ahrefs_crawl_date"><?php echo esc_html__('最新 Crawl 日期', 'rankwoven-seo'); ?></label></th>
-                        <td><input id="rankwoven_ahrefs_crawl_date" class="regular-text code" name="rankwoven_ahrefs_site_audit[crawlDate]" value="<?php echo esc_attr($ahrefs_settings['crawlDate']); ?>" placeholder="2026-09-13T07:03:02Z" /></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="rankwoven_ahrefs_comparison_date"><?php echo esc_html__('比較 Crawl 日期', 'rankwoven-seo'); ?></label></th>
-                        <td><input id="rankwoven_ahrefs_comparison_date" class="regular-text code" name="rankwoven_ahrefs_site_audit[comparisonDate]" value="<?php echo esc_attr($ahrefs_settings['comparisonDate']); ?>" placeholder="2026-09-08T14:16:49Z" /></td>
                     </tr>
                 </table>
                 <?php submit_button(__('儲存 Ahrefs Site Audit 設定', 'rankwoven-seo'), 'secondary'); ?>
@@ -2496,7 +2484,7 @@ final class RankWoven_SEO_Plugin
         $issue_groups = $this->group_audit_issues_by_category($issues);
         ?>
         <?php if ($health_summary['ahrefsErrorCode'] !== '') : ?>
-            <div class="notice notice-warning inline"><p><?php echo esc_html(sprintf(__('Ahrefs Site Audit 資料暫時未能載入（%s）。目前只顯示 RankWoven 已觀測規則。', 'rankwoven-seo'), $health_summary['ahrefsErrorCode'])); ?></p></div>
+            <div class="notice notice-warning inline"><p><?php echo esc_html(sprintf(__('Ahrefs Site Audit 資料暫時未能載入（%s）。請管理員確認 RankWoven SaaS 的 Ahrefs API key、API 方案權限及服務狀態；目前只顯示 RankWoven 已觀測規則。', 'rankwoven-seo'), $health_summary['ahrefsErrorCode'])); ?></p></div>
         <?php endif; ?>
         <section class="rankwoven-site-audit-summary">
             <article class="rankwoven-health-score-card" data-tone="<?php echo esc_attr((string) $health_summary['tone']); ?>">
@@ -5478,38 +5466,17 @@ final class RankWoven_SEO_Plugin
         $saved_settings = is_array($saved_settings) ? $saved_settings : [];
 
         return [
-            'enabled' => !empty($saved_settings['enabled']),
-            'projectId' => sanitize_text_field((string) ($saved_settings['projectId'] ?? '')),
-            'crawlDate' => sanitize_text_field((string) ($saved_settings['crawlDate'] ?? '')),
-            'comparisonDate' => sanitize_text_field((string) ($saved_settings['comparisonDate'] ?? ''))
+            'enabled' => !empty($saved_settings['enabled'])
         ];
     }
 
     private function sanitize_ahrefs_site_audit_settings($input): array
     {
         $input = is_array($input) ? $input : [];
-        $project_id = sanitize_text_field((string) ($input['projectId'] ?? ''));
-        $project_id = substr($project_id, 0, 80);
-        $crawl_date = $this->sanitize_ahrefs_site_audit_date((string) ($input['crawlDate'] ?? ''));
-        $comparison_date = $this->sanitize_ahrefs_site_audit_date((string) ($input['comparisonDate'] ?? ''));
 
         return [
-            'enabled' => !empty($input['enabled']),
-            'projectId' => $project_id,
-            'crawlDate' => $crawl_date,
-            'comparisonDate' => $comparison_date
+            'enabled' => !empty($input['enabled'])
         ];
-    }
-
-    private function sanitize_ahrefs_site_audit_date(string $value): string
-    {
-        $value = sanitize_text_field($value);
-        if ($value === '') {
-            return '';
-        }
-
-        $timestamp = strtotime($value);
-        return $timestamp === false ? '' : gmdate('c', $timestamp);
     }
 
     private function sanitize_image_attribute_settings(array $input): array

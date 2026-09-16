@@ -85,6 +85,7 @@ const manualTargetUrl = ref('');
 const manualContentCmsId = ref<string>();
 const ahrefsConfig = ref<AhrefsSiteAuditConfig | null>(null);
 const ahrefsPlatformAvailable = ref(false);
+const ahrefsProviderErrorCode = ref('');
 const latestAhrefsAudit = ref<SeoAudit | null>(null);
 const latestAhrefsIssues = ref<SeoAuditIssue[]>([]);
 const ahrefsIssuePages = ref<Record<string, AhrefsSiteAuditIssuePages>>({});
@@ -136,6 +137,8 @@ const canUseAhrefsFullSite = computed(() =>
   || Boolean(ahrefsConfig.value?.enabled && ahrefsConfig.value?.projectId?.trim())
   || Boolean(ahrefsConfig.value?.projectId?.trim())
 );
+
+const hasAhrefsAuthError = computed(() => ahrefsProviderErrorCode.value === 'AHREFS_SITE_AUDIT_HTTP_401');
 
 const ahrefsIssueDistribution = computed(() => {
   const counts = { error: 0, warning: 0, notice: 0, total: latestAhrefsIssues.value.length };
@@ -249,9 +252,11 @@ async function loadConfig() {
     const result = await getAhrefsSiteAuditConfig(selectedSiteId.value);
     ahrefsConfig.value = result.config;
     ahrefsPlatformAvailable.value = Boolean(result.platformAvailable);
+    ahrefsProviderErrorCode.value = result.providerErrorCode ?? '';
   } catch {
     ahrefsConfig.value = null;
     ahrefsPlatformAvailable.value = false;
+    ahrefsProviderErrorCode.value = '';
   } finally {
     loadingConfig.value = false;
   }
@@ -357,10 +362,14 @@ function handleRunAudit() {
             const refreshed = await getAhrefsSiteAuditConfig(selectedSiteId.value);
             ahrefsConfig.value = refreshed.config;
             ahrefsPlatformAvailable.value = Boolean(refreshed.platformAvailable);
+            ahrefsProviderErrorCode.value = refreshed.providerErrorCode ?? '';
             message.success(tc('status_completed'));
             return;
           }
-          message.warning(tc('ahrefsUnavailable'));
+          ahrefsProviderErrorCode.value = typeof result.audit.metadata?.ahrefsErrorCode === 'string'
+            ? result.audit.metadata.ahrefsErrorCode
+            : '';
+          message.error(ahrefsProviderErrorCode.value === 'AHREFS_SITE_AUDIT_HTTP_401' ? tc('ahrefsAuthFailed') : tc('ahrefsUnavailable'));
         }
 
         latestAhrefsAudit.value = null;
@@ -789,10 +798,10 @@ onMounted(async () => {
         <Alert
           v-if="canUseAhrefsFullSite"
           class="ahrefs-audit-notice"
-          type="success"
+          :type="hasAhrefsAuthError ? 'warning' : 'success'"
           show-icon
-          :message="tc('ahrefsPlatformManagedTitle')"
-          :description="tc('ahrefsPlatformManagedDescription')"
+          :message="hasAhrefsAuthError ? tc('ahrefsUnavailable') : tc('ahrefsPlatformManagedTitle')"
+          :description="hasAhrefsAuthError ? tc('ahrefsAuthFailed') : tc('ahrefsPlatformManagedDescription')"
         />
         <Alert
           v-else-if="hasSite"
@@ -1137,8 +1146,8 @@ onMounted(async () => {
           <Alert
             :type="canUseAhrefsFullSite ? 'success' : 'warning'"
             show-icon
-            :message="canUseAhrefsFullSite ? tc('ahrefsPlatformManagedTitle') : tc('limitedCrawlTitle')"
-            :description="canUseAhrefsFullSite ? tc('ahrefsPlatformManagedDescription') : tc('limitedCrawlDescription')"
+            :message="canUseAhrefsFullSite ? (hasAhrefsAuthError ? tc('ahrefsUnavailable') : tc('ahrefsPlatformManagedTitle')) : tc('limitedCrawlTitle')"
+            :description="canUseAhrefsFullSite ? (hasAhrefsAuthError ? tc('ahrefsAuthFailed') : tc('ahrefsPlatformManagedDescription')) : tc('limitedCrawlDescription')"
           />
         </div>
       </div>

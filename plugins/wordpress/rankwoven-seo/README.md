@@ -18,7 +18,7 @@ GEO 設定亦包含可獨立關閉的 JSON-LD、Entity Schema、Content Schema �
 
 後台路徑：**RankWoven SEO -> SEO 網站檢測 -> Ahrefs Site Audit 資料來源**。
 
-每個已連接的 WordPress 站點可分別保存 Ahrefs `Project ID`、最新 crawl 日期和比較 crawl 日期。勾選啟用並執行檢測後，RankWoven 會以 SaaS 端的 Ahrefs API v3 憑證讀取該 Project 的網站級問題，將 Error、Warning、Notice、受影響頁面、變化量、分類與修復建議併入問題表；Ahrefs 回傳 Health Score 時會作為網站健康度分數來源。
+Ahrefs Site Audit 由 RankWoven SaaS 平台託管。WordPress 外掛只需啟用功能，不需要、也不會保存 Ahrefs `Project ID`、crawl 日期或 API key；SaaS 會依已連接站點網址自動查找或建立並綁定專案。執行檢測後，RankWoven 會以 SaaS 端的 Ahrefs API v3 憑證讀取網站級問題，將 Error、Warning、Notice、受影響頁面、變化量、分類與修復建議併入問題表；Ahrefs 回傳 Health Score 時會作為網站健康度分數來源。
 
 Ahrefs API key 只配置在 RankWoven SaaS 的 `AHREFS_API_KEY` 環境變數，絕不輸入、保存或回傳到 WordPress 外掛。若 Ahrefs 暫時無法讀取，檢測仍會保留 RankWoven 已觀測的內容規則，並在頁面提示 provider 錯誤碼；不會以本地分數冒充 Ahrefs 分數。
 

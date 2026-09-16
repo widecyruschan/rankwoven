@@ -82,8 +82,10 @@ const messages = {
       errors: { PROVIDER_UNAVAILABLE: 'Content analysis is unavailable until an approved model profile is configured.', REQUEST_FAILED: 'Unable to create the content analysis task.' }
     },
     keywordResearch: {
-      title: 'Competitor Keyword Research', body: 'Enter up to three competitor URLs per site to discover ranked keywords, long-tail opportunities, and keyword gaps.',
+      title: 'Competitor Keyword Research', body: 'Save up to three competitor URLs per site, then select one to analyze ranked keywords, long-tail opportunities, and keyword gaps.',
       competitorUrl: 'Competitor URL', competitorSlot: 'Competitor {index}', slotHint: 'Saved competitors: {count}/3',
+      selectHint: 'Select one competitor below before running analysis.',
+      selectThis: 'Analyze this', analyzing: 'Selected',
       analyze: 'Analyze competitor', save: 'Save competitors', status: 'Task status', competitorKeywords: 'Competitor keywords',
       longTailKeywords: 'Long-tail keywords', gaps: 'Keyword gaps', keyword: 'Keyword', intent: 'Intent', opportunity: 'Opportunity',
       errors: {
@@ -102,6 +104,7 @@ const messages = {
         WORKER_TASK_FAILED: 'The competitor research worker failed unexpectedly. Please retry or contact support.',
         ENTITLEMENT_REQUIRED: 'Keyword research is not included in the current workspace plan.',
         QUOTA_EXCEEDED: 'Keyword research quota has been reached for this workspace.',
+        SELECT_REQUIRED: 'Select one competitor URL before starting analysis.',
         RUN_FAILED: 'The competitor research task did not complete.',
         REQUEST_FAILED: 'Unable to start competitor research.'
       }
@@ -700,6 +703,7 @@ const messages = {
       ahrefsPlatformManagedTitle: 'Ahrefs is managed by RankWoven',
       ahrefsPlatformManagedDescription: 'You do not need an Ahrefs Project ID. RankWoven resolves or creates the Site Audit project from this site URL using the platform API key.',
       ahrefsUnavailable: 'Ahrefs full-site audit is not available. Falling back to the local full-site crawler.',
+      ahrefsAuthFailed: 'The Ahrefs API rejected the platform credential (HTTP 401). An administrator must replace the Ahrefs production key or verify its API plan permissions.',
       ahrefsConfirmationContent: 'Refresh the Ahrefs full-site report for this connected site. RankWoven will resolve the project automatically. Affected URLs load only when an issue is expanded. Continue?',
       ahrefsAffectedUrlsHint: 'Load the affected URLs for this issue from Ahrefs.',
       ahrefsLoadUrls: 'Load affected URLs',
@@ -1301,8 +1305,10 @@ const messages = {
       errors: { PROVIDER_UNAVAILABLE: '尚未配置已核驗模型 profile，內容分析暫不可用。', REQUEST_FAILED: '無法建立內容分析任務。' }
     },
     keywordResearch: {
-      title: '競品關鍵詞研究', body: '每個網站可保存最多三個競品網址，自動整理排名關鍵詞、長尾關鍵詞與關鍵詞差距。',
+      title: '競品關鍵詞研究', body: '每個網站可保存最多三個競品網址；分析前請先選擇其中一個，系統會整理排名關鍵詞、長尾關鍵詞與關鍵詞差距。',
       competitorUrl: '競品網址', competitorSlot: '競品 {index}', slotHint: '已保存競品：{count}/3',
+      selectHint: '請先點選下方其中一個競品，再按「分析競品」。',
+      selectThis: '分析此競品', analyzing: '目前選擇',
       analyze: '分析競品', save: '保存競品', status: '任務狀態', competitorKeywords: '競品關鍵詞',
       longTailKeywords: '長尾關鍵詞', gaps: '關鍵詞差距', keyword: '關鍵詞', intent: '搜尋意圖', opportunity: '機會分數',
       errors: {
@@ -1321,6 +1327,7 @@ const messages = {
         WORKER_TASK_FAILED: '競品研究背景任務意外失敗，請重試或聯絡支援。',
         ENTITLEMENT_REQUIRED: '目前套餐未包含關鍵詞研究額度，請升級方案或聯絡管理員開通。',
         QUOTA_EXCEEDED: '此工作區的關鍵詞研究額度已用盡。',
+        SELECT_REQUIRED: '請先選擇一個競品網址，再開始分析。',
         RUN_FAILED: '競品研究任務未能完成。',
         REQUEST_FAILED: '無法建立競品研究任務。'
       }
@@ -1916,6 +1923,7 @@ const messages = {
       ahrefsPlatformManagedTitle: 'Ahrefs 已由 RankWoven 平台託管',
       ahrefsPlatformManagedDescription: '客戶無需自行開設或填寫 Ahrefs Project ID。系統會依站點網址自動對應或建立 Site Audit 專案。',
       ahrefsUnavailable: 'Ahrefs 全站檢測暫不可用，已改為本機全站爬取。',
+      ahrefsAuthFailed: 'Ahrefs API 拒絕平台憑證（HTTP 401）。請管理員重新建立 Ahrefs 生產 key，並確認帳戶方案具備 API 權限。',
       ahrefsConfirmationContent: '將透過 RankWoven 平台 Ahrefs 接入更新全站報告（依站點網址自動解析專案）；僅在展開問題時載入受影響 URL。確認繼續？',
       ahrefsAffectedUrlsHint: '從 Ahrefs 載入此問題的受影響 URL。',
       ahrefsLoadUrls: '載入受影響 URL',

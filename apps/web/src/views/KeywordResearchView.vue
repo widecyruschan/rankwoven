@@ -17,7 +17,8 @@ import { getSiteConnection, updateSiteCompetitorUrls } from '../api/siteConnecti
 const { t } = useI18n();
 const route = useRoute();
 const competitorUrls = ref(['', '', '']);
-const selectedIndex = ref(0);
+/** null means the user has not chosen which competitor to analyze yet */
+const selectedIndex = ref<number | null>(null);
 const isLoading = ref(false);
 const isSaving = ref(false);
 const status = ref('');
@@ -43,7 +44,8 @@ const knownTaskErrorCodes = new Set([
   'ENTITLEMENT_REQUIRED',
   'QUOTA_EXCEEDED',
   'REQUEST_FAILED',
-  'RUN_FAILED'
+  'RUN_FAILED',
+  'SELECT_REQUIRED'
 ]);
 
 function resolveTaskErrorCode(value?: string) {
@@ -54,13 +56,28 @@ function resolveTaskErrorCode(value?: string) {
 }
 
 const siteId = computed(() => typeof route.params.siteId === 'string' ? route.params.siteId : '');
-const selectedCompetitorUrl = computed(() => competitorUrls.value[selectedIndex.value]?.trim() ?? '');
+const selectedCompetitorUrl = computed(() => {
+  if (selectedIndex.value === null) return '';
+  return competitorUrls.value[selectedIndex.value]?.trim() ?? '';
+});
 const filledCompetitorCount = computed(() => competitorUrls.value.filter((value) => value.trim()).length);
+const canAnalyze = computed(() => Boolean(siteId.value && selectedCompetitorUrl.value));
 const longTailKeywords = computed(() => keywords.value.filter((item) => item.displayKeyword.trim().split(/\s+/).length >= 3 || [...item.displayKeyword].length >= 12));
 
 function stopPolling() {
   if (pollTimer !== null) window.clearInterval(pollTimer);
   pollTimer = null;
+}
+
+function selectCompetitor(index: number) {
+  if (!competitorUrls.value[index]?.trim()) return;
+  selectedIndex.value = index;
+}
+
+function onCompetitorUrlChange(index: number) {
+  if (!competitorUrls.value[index]?.trim() && selectedIndex.value === index) {
+    selectedIndex.value = null;
+  }
 }
 
 async function loadSiteCompetitors() {
@@ -69,9 +86,8 @@ async function loadSiteCompetitors() {
     const result = await getSiteConnection(siteId.value);
     const saved = result.site.competitorUrls ?? [];
     competitorUrls.value = [0, 1, 2].map((index) => saved[index] ?? '');
-    if (!selectedCompetitorUrl.value) {
-      const firstFilled = competitorUrls.value.findIndex((value) => value.trim());
-      selectedIndex.value = firstFilled >= 0 ? firstFilled : 0;
+    if (selectedIndex.value !== null && !competitorUrls.value[selectedIndex.value]?.trim()) {
+      selectedIndex.value = null;
     }
   } catch {
     // Keep empty slots when site details cannot be loaded.
@@ -95,6 +111,9 @@ async function saveCompetitors() {
     );
     const saved = result.site.competitorUrls ?? [];
     competitorUrls.value = [0, 1, 2].map((index) => saved[index] ?? '');
+    if (selectedIndex.value !== null && !competitorUrls.value[selectedIndex.value]?.trim()) {
+      selectedIndex.value = null;
+    }
   } catch (error) {
     errorCode.value = error instanceof ApiError ? resolveTaskErrorCode(error.code) : 'REQUEST_FAILED';
   } finally {
@@ -103,7 +122,11 @@ async function saveCompetitors() {
 }
 
 async function analyzeCompetitor() {
-  if (!siteId.value || !selectedCompetitorUrl.value) return;
+  if (!siteId.value) return;
+  if (selectedIndex.value === null || !selectedCompetitorUrl.value) {
+    errorCode.value = 'SELECT_REQUIRED';
+    return;
+  }
   stopPolling();
   isLoading.value = true;
   errorCode.value = '';
@@ -144,6 +167,7 @@ async function analyzeCompetitor() {
 
 watch(siteId, () => {
   stopPolling();
+  selectedIndex.value = null;
   void loadSiteCompetitors();
 });
 
@@ -161,23 +185,33 @@ onUnmounted(stopPolling);
     <section class="content-panel">
       <a-form layout="vertical" @submit.prevent="analyzeCompetitor">
         <p class="panel-note">{{ t('keywordResearch.slotHint', { count: filledCompetitorCount }) }}</p>
-        <a-form-item
-          v-for="(_, index) in competitorUrls"
-          :key="index"
-          :label="t('keywordResearch.competitorSlot', { index: index + 1 })"
-        >
-          <div class="competitor-row">
-            <a-radio :checked="selectedIndex === index" @change="selectedIndex = index" />
-            <a-input
-              v-model:value="competitorUrls[index]"
-              placeholder="https://example.com"
-              @focus="selectedIndex = index"
-            />
-          </div>
-        </a-form-item>
+        <p class="panel-note select-hint">{{ t('keywordResearch.selectHint') }}</p>
+        <a-radio-group v-model:value="selectedIndex" class="competitor-radio-group">
+          <a-form-item
+            v-for="(_, index) in competitorUrls"
+            :key="index"
+            :label="t('keywordResearch.competitorSlot', { index: index + 1 })"
+          >
+            <div class="competitor-row" :class="{ selected: selectedIndex === index }">
+              <a-radio
+                :value="index"
+                :disabled="!competitorUrls[index]?.trim()"
+                @click="selectCompetitor(index)"
+              >
+                {{ t('keywordResearch.selectThis') }}
+              </a-radio>
+              <a-input
+                v-model:value="competitorUrls[index]"
+                placeholder="https://example.com"
+                @update:value="onCompetitorUrlChange(index)"
+              />
+            </div>
+          </a-form-item>
+        </a-radio-group>
         <div class="action-row">
           <a-button :loading="isSaving" :disabled="!siteId" @click="saveCompetitors">{{ t('keywordResearch.save') }}</a-button>
-          <a-button type="primary" html-type="submit" :loading="isLoading" :disabled="!siteId || !selectedCompetitorUrl">{{ t('keywordResearch.analyze') }}</a-button>
+          <a-button type="primary" html-type="submit" :loading="isLoading" :disabled="!canAnalyze">{{ t('keywordResearch.analyze') }}</a-button>
+          <span v-if="selectedCompetitorUrl" class="panel-note">{{ t('keywordResearch.analyzing') }}: {{ selectedCompetitorUrl }}</span>
           <span v-if="status" class="panel-note">{{ t('keywordResearch.status') }}: {{ status }}</span>
         </div>
       </a-form>
@@ -202,10 +236,29 @@ onUnmounted(stopPolling);
 </template>
 
 <style scoped>
+.competitor-radio-group {
+  display: block;
+  width: 100%;
+}
+
+.select-hint {
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
 .competitor-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.competitor-row.selected {
+  border-color: var(--ant-color-primary, #1677ff);
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 8%, transparent);
 }
 
 .competitor-row :deep(.ant-input) {
