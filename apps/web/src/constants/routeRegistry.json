@@ -893,9 +893,17 @@
       "area": "customer",
       "layout": "app",
       "indexable": false,
-      "enabled": false,
-      "planned": true,
-      "titleKey": "nav.settings"
+      "enabled": true,
+      "availabilityPhase": "PH2-11",
+      "featureKey": "billing",
+      "navigationSurface": "customer_sidebar",
+      "navigationGroup": "workspace_operations",
+      "navigationOrder": 90,
+      "parentId": "app-sites",
+      "titleKey": "billing.title",
+      "navLabelKey": "nav.billing",
+      "componentKey": "BillingView",
+      "nav": true
     },
     {
       "id": "app-integrations",

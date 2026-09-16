@@ -345,7 +345,7 @@ describe('phase 2 contract routes', () => {
     expect(apply.json().error.code).toBe('CMS_WRITE_DISABLED');
   });
 
-  it('hard-stops unconfigured content optimization and unsigned webhooks', async () => {
+  it('hard-stops unconfigured content optimization and rejects unsigned Stripe webhooks', async () => {
     const repository = createInMemoryPhase2Repository();
     const siteConnectionRepository = createInMemorySiteConnectionRepository();
     const site = await siteConnectionRepository.create({
@@ -370,6 +370,6 @@ describe('phase 2 contract routes', () => {
       payload: { event: 'checkout.completed' }
     });
     expect(unsignedWebhook.statusCode).toBe(400);
-    expect(unsignedWebhook.json().error.code).toBe('VALIDATION_ERROR');
+    expect(unsignedWebhook.json().error.code).toBe('WEBHOOK_SIGNATURE_INVALID');
   });
 });

@@ -3,8 +3,11 @@ import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { getRoutePath } from '../constants/routeRegistry';
+import { useAuthStore } from '../stores/auth';
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+const pricingActionPath = computed(() => getRoutePath(authStore.isLoggedIn ? 'app-billing' : 'auth-login'));
 
 const plans = computed(() => [
   {
@@ -59,7 +62,7 @@ const plans = computed(() => [
         <ul class="plain-list">
           <li v-for="feature in plan.features" :key="feature">{{ feature }}</li>
         </ul>
-        <RouterLink :class="plan.featured ? 'primary-button' : 'secondary-button'" :to="getRoutePath('auth-login')">
+        <RouterLink :class="plan.featured ? 'primary-button' : 'secondary-button'" :to="pricingActionPath">
           {{ t('pricing.action') }}
         </RouterLink>
       </article>

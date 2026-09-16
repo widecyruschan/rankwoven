@@ -33,6 +33,7 @@ export type RouteComponentKey =
   | 'KeywordResearchView'
   | 'MonitorEventsView'
   | 'AlertsView'
+  | 'BillingView'
   | 'LegacyRouteView';
 
 export interface RouteRegistryEntry {

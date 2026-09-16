@@ -41,6 +41,7 @@ const navigationIcons = {
   'app-dashboard': LayoutDashboard, 'app-sites': Waypoints, 'app-analytics': BarChart3,
   'app-keywords': Search, 'app-media': Image, 'app-links': Link2, 'app-tasks': ListChecks,
   'app-cms-adapters': PlugZap, 'app-lighthouse': Gauge, 'app-settings': Settings,
+  'app-billing': CreditCard,
   'admin-overview': BarChart3, 'admin-customers': Users, 'admin-usage': CreditCard,
   'admin-operations': Activity, 'admin-settings': Settings
 } as const;

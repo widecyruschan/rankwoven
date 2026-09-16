@@ -52,6 +52,7 @@ const messages = {
       cmsAdapters: 'CMS Adapters',
       lighthouse: 'Lighthouse Audit',
       siteAudit: 'Site Audit',
+      billing: 'Billing & Usage',
       settings: 'Settings'
     },
     monitoring: {
@@ -63,6 +64,44 @@ const messages = {
       createTitle: 'Create monitoring', site: 'Site', selectSite: 'Select site', kind: 'Type', kindTechnical: 'Technical', kindCompetitor: 'Competitor', kindAiVisibility: 'AI visibility',
       frequency: 'Frequency', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', threshold: 'Alert threshold', create: 'Create monitor', createFailed: 'Unable to create monitor.'
     },
+    billing: {
+      title: 'Billing & Usage',
+      body: 'Review your workspace plan, current usage, renewal status, and available upgrades.',
+      refresh: 'Refresh',
+      loadFailed: 'Unable to load billing information.',
+      actionFailed: 'Unable to complete the billing action.',
+      exportUsage: 'Export usage CSV',
+      exportFailed: 'Unable to export usage data.',
+      currentPlan: 'Current plan',
+      starterAccess: 'Starter access',
+      usageTitle: 'Current usage',
+      remaining: '{count} remaining',
+      features: {
+        keyword_research: 'Keyword research',
+        content_optimization: 'Content optimization'
+      },
+      notAvailable: 'Not available',
+      customPricing: 'Custom',
+      month: 'month',
+      providerUnavailable: 'Stripe billing is not configured yet. Plan and usage details remain available, while payment changes are disabled.',
+      ownerRequired: 'Only the workspace owner can manage billing and renewals.',
+      renewsOn: 'Renews on',
+      accessEnds: 'Access ends on',
+      cancelScheduled: 'Auto-renewal is off. Your current access remains available until {date}.',
+      managePayment: 'Manage payment',
+      cancelAutoRenewal: 'Cancel auto-renewal',
+      resumeAutoRenewal: 'Resume auto-renewal',
+      cancelTitle: 'Cancel auto-renewal?',
+      cancelDescription: 'Auto-renewal will stop. Your current plan and entitlements stay active until {date}; no refund is created automatically.',
+      cancelDescriptionUnknown: 'Auto-renewal will stop. Your current plan remains active through the current paid period; no refund is created automatically.',
+      upgradePreview: 'Preview upgrade',
+      upgradePreviewTitle: 'Upgrade preview',
+      dueNow: 'Due now',
+      nextCycle: 'Next cycle',
+      confirmationNotice: 'Your plan changes only after Stripe confirms payment and RankWoven reconciles the subscription.',
+      continueToPayment: 'Continue to payment',
+      contactSales: 'Contact sales'
+    },
     common: {
       totalItems: '{total} items',
       untitled: 'Untitled',
@@ -73,6 +112,7 @@ const messages = {
     navigationGroups: {
       default: 'Workspace',
       workspace: 'Monitoring',
+      workspace_operations: 'Workspace Operations',
       current_site: 'Current Site'
     },
     contentOptimizer: {
@@ -1275,6 +1315,7 @@ const messages = {
       cmsAdapters: 'CMS 適配器',
       lighthouse: 'Lighthouse 審計',
       siteAudit: '網站檢測',
+      billing: '套餐與用量',
       settings: '設定'
     },
     monitoring: {
@@ -1286,6 +1327,44 @@ const messages = {
       createTitle: '建立監控', site: '站點', selectSite: '選擇站點', kind: '類型', kindTechnical: '技術檢測', kindCompetitor: '競品', kindAiVisibility: 'AI 可見度',
       frequency: '頻率', daily: '每日', weekly: '每週', monthly: '每月', threshold: '告警閾值', create: '建立監控', createFailed: '無法建立監控。'
     },
+    billing: {
+      title: '套餐與用量',
+      body: '查看工作區套餐、目前用量、續費狀態與可升級方案。',
+      refresh: '重新整理',
+      loadFailed: '無法載入帳單資料。',
+      actionFailed: '無法完成帳單操作。',
+      exportUsage: '匯出用量 CSV',
+      exportFailed: '無法匯出用量資料。',
+      currentPlan: '目前套餐',
+      starterAccess: 'Starter 權益',
+      usageTitle: '目前用量',
+      remaining: '剩餘 {count}',
+      features: {
+        keyword_research: '關鍵詞研究',
+        content_optimization: '內容優化'
+      },
+      notAvailable: '暫不可用',
+      customPricing: '客製',
+      month: '月',
+      providerUnavailable: 'Stripe 帳單服務尚未配置。仍可查看套餐與用量，付款、升級及續費變更會保持關閉。',
+      ownerRequired: '只有工作區 Owner 可以管理帳單與續費。',
+      renewsOn: '續費日期',
+      accessEnds: '權益到期日',
+      cancelScheduled: '已取消自動續費。目前權益會保留至 {date}。',
+      managePayment: '管理付款方式',
+      cancelAutoRenewal: '取消自動續費',
+      resumeAutoRenewal: '恢復自動續費',
+      cancelTitle: '取消自動續費？',
+      cancelDescription: '系統會停止下一期自動續費。目前套餐與權益保留至 {date}，不會自動退款。',
+      cancelDescriptionUnknown: '系統會停止下一期自動續費。目前套餐會保留至已付款週期結束，不會自動退款。',
+      upgradePreview: '預覽升級',
+      upgradePreviewTitle: '升級預覽',
+      dueNow: '目前應付',
+      nextCycle: '下期金額',
+      confirmationNotice: '只有 Stripe 確認付款並由 RankWoven 對帳後，套餐與權益才會更新。',
+      continueToPayment: '前往付款確認',
+      contactSales: '聯絡銷售'
+    },
     common: {
       totalItems: '共 {total} 項',
       untitled: '未命名',
@@ -1296,6 +1375,7 @@ const messages = {
     navigationGroups: {
       default: '工作區',
       workspace: '監控',
+      workspace_operations: '工作區操作',
       current_site: '目前站點'
     },
     contentOptimizer: {

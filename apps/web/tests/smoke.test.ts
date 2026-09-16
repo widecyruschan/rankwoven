@@ -266,7 +266,13 @@ describe('web smoke test', () => {
       navigationSurface: 'customer_sidebar'
     });
     expect(activeRouteEntries.some((route) => route.id === 'public-tools')).toBe(false);
-    expect(activeRouteEntries.some((route) => route.id === 'app-billing')).toBe(false);
+    const billingRoute = activeRouteEntries.find((route) => route.id === 'app-billing');
+    expect(billingRoute).toMatchObject({
+      componentKey: 'BillingView',
+      featureKey: 'billing',
+      navigationSurface: 'customer_sidebar',
+      indexable: false
+    });
   });
 
   it('localizes navigation groups without exposing missing i18n keys', async () => {
@@ -276,10 +282,12 @@ describe('web smoke test', () => {
     try {
       i18n.global.locale.value = 'en';
       expect(i18n.global.t('navigationGroups.workspace')).toBe('Monitoring');
+      expect(i18n.global.t('navigationGroups.workspace_operations')).toBe('Workspace Operations');
       expect(i18n.global.t('navigationGroups.current_site')).toBe('Current Site');
 
       i18n.global.locale.value = 'zh-Hant';
       expect(i18n.global.t('navigationGroups.workspace')).toBe('監控');
+      expect(i18n.global.t('navigationGroups.workspace_operations')).toBe('工作區操作');
       expect(i18n.global.t('navigationGroups.current_site')).toBe('目前站點');
       expect(appSource).toContain('function navigationGroupLabel(group: string)');
       expect(appSource).toContain("t('navigationGroups.default')");

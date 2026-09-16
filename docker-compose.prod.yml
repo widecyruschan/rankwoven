@@ -24,12 +24,19 @@ services:
     command: sh -c "npm run build -w @aieo/cms-adapters && npm run build -w @aieo/ai-providers && npm run build -w @aieo/security && npm run build -w @aieo/api && npm run start:production -w @aieo/api"
     environment:
       NODE_ENV: production
+      APP_BASE_URL: ${APP_BASE_URL:-https://rankwoven.com}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be configured for production}
       LEGACY_PASSWORD_HMAC_SECRET: ${LEGACY_PASSWORD_HMAC_SECRET:-}
       WORDPRESS_CREDENTIAL_ENCRYPTION_KEY: ${WORDPRESS_CREDENTIAL_ENCRYPTION_KEY:?WORDPRESS_CREDENTIAL_ENCRYPTION_KEY must be configured for production}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://rankwoven.com,https://www.rankwoven.com,https://app.rankwoven.com}
       TRUST_PROXY: 'true'
       ALLOW_LOCAL_LIGHTHOUSE_FALLBACK: 'false'
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER_MONTHLY: ${STRIPE_PRICE_STARTER_MONTHLY:-}
+      STRIPE_PRICE_GROWTH_MONTHLY: ${STRIPE_PRICE_GROWTH_MONTHLY:-}
+      STRIPE_PRICE_AGENCY_MONTHLY: ${STRIPE_PRICE_AGENCY_MONTHLY:-}
+      STRIPE_BILLING_PORTAL_CONFIGURATION_ID: ${STRIPE_BILLING_PORTAL_CONFIGURATION_ID:-}
 
   worker:
     profiles: []

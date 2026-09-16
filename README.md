@@ -7511,3 +7511,92 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 在後台填入最多三個競品，點選其中一個後執行「分析競品」驗證。
+
+## 會話總結（2026-09-16）— 進入 PH2-11 套餐、訂閱與報告核檢
+
+### 會話主要目的
+
+進入 PH2-11，將套餐管理、升級目前套餐及取消自動續費納入 Billing、Entitlement 與報告開發規劃。
+
+### 完成的主要任務
+
+- 建立 `PH2-11-billing-entitlement-reporting.md` 核檢草案，定義 Stripe-first 訂閱、服務端套餐目錄、升級預覽、Checkout、Customer Portal、Webhook 對帳與報告切片。
+- 明確定義取消自動續費使用 `cancel_at_period_end`：當期已付款權益保留至 `current_period_end`，到期前可恢復續費，取消本身不觸發退款。
+- 明確定義套餐升級只有在 Stripe 驗簽事件及 subscription retrieve 對帳完成後才更新 Entitlement；Checkout success URL 不作開通依據。
+- 更新第二階段 PRD 的使用者故事、資料表、API 與 Credits／Entitlement 規則，並更新 PH2-11 開發流程狀態。
+
+### 關鍵決策和解決方案
+
+- `usage_ledger` 繼續作即時配額事實來源；Stripe 只提供付款與訂閱狀態，本地 projection 不反向改寫歷史用量。
+- Billing mutation 僅 Owner 可執行；Viewer／Editor／Admin 可查看套餐與用量，API 作最終權限檢查。
+- 初期超額採 hard stop；PayPal、按量超額、自動退款與未核檢白標 PDF 不在第一個 PH2-11 runtime 切片啟用。
+- 現有 Pricing 頁與 PRD 套餐命名不一致，實作前需由 Product／Finance 確認版本化 plan catalog 與 Stripe Price mapping。
+
+### 使用的技術棧
+
+- Stripe Subscription／Checkout／Customer Portal／Webhook、PostgreSQL、Fastify、Vue 3、PH2-05 usage ledger／Entitlement
+
+### 新增或修改文件
+
+- `docs/approvals/phase-2/PH2-11-billing-entitlement-reporting.md`
+- `docs/rankwoven-phase-2-development-workflow.md`
+- `docs/rankwoven-phase-2-prd.md`
+- `README.md`
+
+### 驗證結果
+
+- 文件交叉檢查與 `git diff --check` 通過。
+- 本次只建立核檢與契約文件，未修改 runtime、資料庫或環境變數，因此未執行程式測試與部署。
+
+### 下一步行動清單
+
+- Product Owner 回覆 `APPROVE PH2-11` 後，按 migration → Stripe adapter／webhook → Billing API → `/app/billing` → 報告 export 的順序實作。
+- 批准 PH2-11 不等於授權 Stripe live mode、Git push 或生產部署；以上操作仍需另行明確授權。
+
+## 會話總結（2026-09-16）— PH2-11 套餐管理與續費控制初始實作
+
+### 會話主要目的
+
+根據 `APPROVE PH2-11` 實作工作區套餐管理、升級目前套餐、取消／恢復自動續費、Stripe 訂閱投影與初始報告匯出。
+
+### 完成的主要任務
+
+- 新增 `0026_phase2_billing_entitlement_reporting.sql`，建立套餐目錄、訂閱投影、變更請求、Webhook 去重與 Usage CSV export 資料表；本機 migration 與重跑均通過。
+- 新增 Stripe-first Billing service：Checkout、升級 preview／Portal、Customer Portal、原始 body webhook 簽名驗證、重放／亂序防護、subscription retrieve 對帳與脫敏本地投影。
+- 將 Entitlement 與 subscription transaction 串接：Webhook 對帳後才開通或升級；取消自動續費使用 `cancel_at_period_end`，保留當期權益；`past_due` 保留寬限，直到 Stripe 明確進入 `unpaid`／`canceled` 才停用付費權益。
+- 啟用 `/app/billing`，加入「工作區操作」側欄；Owner 可升級、管理付款、取消或恢復續費，其他角色只讀。
+- 新增 Usage CSV export；Stripe 未配置時仍可查看套餐及用量，但付款相關 mutation 安全拒絕。
+
+### 關鍵決策和解決方案
+
+- `usage_ledger` 保持 request-time quota 的唯一事實來源；Stripe 只提供付款／訂閱狀態，不能直接覆寫歷史用量。
+- Checkout success URL 不會開通套餐，只有有效 Stripe webhook 與 subscription retrieve 對帳可更新本地投影及 Entitlement。
+- 價格與 Price ID 由服務端環境配置，前端不保存或顯示 secret；缺少 Stripe secret、webhook secret 或 Price ID 時 fail closed。
+- 初始報告切片只完成 Usage CSV；Site Audit CSV、PDF 與 Agency 白標仍是 PH2-11 後續工作。
+
+### 使用的技術棧
+
+- Stripe Node SDK、fastify-raw-body、Fastify、PostgreSQL、Vue 3、Ant Design Vue、Vue I18n、Vitest
+
+### 新增或修改文件
+
+- `apps/api/src/billing.ts`、`apps/api/src/config.ts`、`apps/api/src/server.ts`
+- `apps/api/tests/billing.test.ts`、`apps/api/tests/phase2Routes.test.ts`
+- `apps/web/src/api/billing.ts`、`apps/web/src/views/BillingView.vue`
+- `apps/web/src/constants/routeRegistry.ts`、`apps/web/src/constants/routeRegistry.json`、`apps/web/src/router/index.ts`、`apps/web/src/App.vue`、`apps/web/src/i18n.ts`、`apps/web/src/views/PricingView.vue`、`apps/web/tests/smoke.test.ts`
+- `db/migrations/0026_phase2_billing_entitlement_reporting.sql`
+- `.env.example`、`docker-compose.yml`、`docker-compose.prod.yml`、`apps/api/package.json`、`package-lock.json`
+- `docs/approvals/phase-2/PH2-11-billing-entitlement-reporting.md`、`docs/rankwoven-phase-2-development-workflow.md`、`README.md`
+
+### 驗證結果
+
+- Migration `0026` 已在本機 PostgreSQL 套用，重跑安全跳過；套餐目錄與五張 Billing／report 表確認存在。
+- Billing API 測試 8 項通過，涵蓋 Owner gate、Checkout idempotency、cancel／resume 權益、webhook signature／replay／亂序與 CSV export。
+- 全倉 lint、test、build、security audit 通過；security audit 為 0 vulnerabilities。
+- 本地 Docker API 健康檢查通過；登入後 `/api/v1/billing/subscription` 返回 Starter、套餐列表與用量，Stripe 未配置時 `checkoutAvailable=false`。
+
+### 下一步行動清單
+
+- Finance／Product 確認 Stripe test-mode Price ID、月／年套餐、稅項與退款文案後，配置 Stripe test credentials 並以 Stripe CLI／fixture 跑 webhook canary。
+- 完成 Site Audit CSV、PDF、Agency 白標、每日 reconciliation 與付款失敗通知後再申請 PH2-11 完整完成核檢。
+- 本次尚未 Git commit、push 或部署；`0.jpeg` 與其他非本次檔案不會加入提交。

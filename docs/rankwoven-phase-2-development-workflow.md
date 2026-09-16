@@ -355,6 +355,8 @@ PH2-06、PH2-07、PH2-08 可在契約批准後並行，但每個分支仍要獨�
 
 **批准門檻**：Finance、Security、Product、QA。
 
+**PH2-11 狀態（2026-09-16）**：`APPROVED / IMPLEMENTATION IN PROGRESS`。核檢文件見 `docs/approvals/phase-2/PH2-11-billing-entitlement-reporting.md`。已完成 `0026` 套餐／訂閱／Webhook／export schema、Stripe adapter、Owner-only Billing API、Webhook raw-body 驗簽與重放／亂序對帳、`cancel_at_period_end` 當期權益保留、`/app/billing` 與 Usage CSV export。Stripe 目前未配置時所有付款 mutation fail closed；Site Audit CSV、PDF／白標報告、Stripe test-mode canary 及 live mode 仍待後續切片與明確授權。
+
 ### PH2-12：全量 QA、安全與成本驗證
 
 測試層：

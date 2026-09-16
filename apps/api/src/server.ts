@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import rawBody from 'fastify-raw-body';
 import Fastify from 'fastify';
 import {
   createNoopAiProviderRegistry,
@@ -46,6 +47,13 @@ import { createDefaultPhase2Repository } from './phase2Repository';
 import { registerPhase2Routes } from './phase2Routes';
 import { registerPhase2FeatureRoutes } from './phase2FeatureRoutes';
 import { createKeywordResearchProviderFromConfig } from './keywordResearchService';
+import {
+  createDefaultBillingRepository,
+  createStripeBillingProvider,
+  registerBillingRoutes,
+  type BillingProvider,
+  type BillingRepository
+} from './billing';
 import type { KeywordResearchProvider, Phase2Repository } from '@aieo/ai-providers';
 
 interface CreateServerOptions {
@@ -58,6 +66,8 @@ interface CreateServerOptions {
   phase2Repository?: Phase2Repository;
   taskGovernance?: TaskGovernance;
   keywordResearchProvider?: KeywordResearchProvider;
+  billingRepository?: BillingRepository;
+  billingProvider?: BillingProvider;
 }
 
 export function createServer(options: CreateServerOptions = {}) {
@@ -94,6 +104,7 @@ export function createServer(options: CreateServerOptions = {}) {
   const siteConnectionRepository =
     options.siteConnectionRepository ?? createDefaultSiteConnectionRepository(apiConfig.DATABASE_URL);
   const phase2Repository = options.phase2Repository ?? createDefaultPhase2Repository(apiConfig.DATABASE_URL);
+  const billingRepository = options.billingRepository ?? createDefaultBillingRepository(apiConfig.DATABASE_URL, phase2Repository);
   const siteAuditRepository = options.siteAuditRepository ?? createDefaultSiteAuditRepository(apiConfig.DATABASE_URL);
   const siteAuditMonitoringRepository = options.siteAuditMonitoringRepository ?? createDefaultSiteAuditMonitoringRepository(apiConfig.DATABASE_URL);
   const taskGovernance = options.taskGovernance ?? (
@@ -128,6 +139,7 @@ export function createServer(options: CreateServerOptions = {}) {
       }
     })
   });
+  app.register(rawBody, { global: false, encoding: 'utf8', runFirst: true });
 
   app.get('/health', async () => ({
     success: true,
@@ -247,6 +259,7 @@ export function createServer(options: CreateServerOptions = {}) {
 
   registerPhase2Routes(app, phase2Repository, authService, taskGovernance);
   registerPhase2FeatureRoutes(app, phase2Repository, authService, siteConnectionRepository, options.keywordResearchProvider ?? createKeywordResearchProviderFromConfig());
+  registerBillingRoutes(app, billingRepository, phase2Repository, authService, options.billingProvider ?? createStripeBillingProvider());
 
   // 啟動站點稽核排程器（每 30 分鐘檢查一次）
   const stopScheduler = startSiteAuditScheduler(
@@ -258,6 +271,7 @@ export function createServer(options: CreateServerOptions = {}) {
     stopMonitoringScheduler();
   });
   app.addHook('onClose', async () => {
+    await billingRepository.close?.();
     await taskGovernance?.close();
   });
 

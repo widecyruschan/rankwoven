@@ -171,7 +171,7 @@ RankWoven 第二階段要解決三個問題：
 24. 作為 WordPress 用戶，我希望新內容發布或更新後自動觸發同步與重新評估，但所有寫回仍受權限及審批控制。
 25. 作為 Shopify 商戶，我希望只授權必要 scope，同步商品、集合、頁面與 Blog SEO 欄位，不讓工具修改價格、庫存或訂單。
 26. 作為付費用戶，我希望在執行前看見預計消耗、執行後看見實際用量及剩餘額度。
-27. 作為工作區 Owner，我希望管理套餐、付款方式、成員 Entitlement、API Key 與超額策略。
+27. 作為工作區 Owner，我希望查看目前套餐與剩餘額度、升級至較高套餐、管理付款方式，以及取消或恢復自動續費；取消續費後，當期已付款權益應保留至訂閱週期結束。
 28. 作為 API 使用者，我希望每個非同步任務都有 idempotency key、狀態、錯誤碼、重試資訊與 webhook。
 
 ## 8. 產品原則
@@ -831,8 +831,10 @@ AI 不直接持有 CMS 寫權限、付款權限或任意 HTTP 工具。套用操
 | `publishing_targets`         | 已授權發布目標         | site_id、adapter、cms_url、scopes、authorization_status、last_diagnosed_at；只保存加密憑據參照          |
 | `backlink_publication_runs`  | 合作文章發布任務       | opportunity_id、target_id、content_snapshot_id、status、cms_content_id、idempotency_key、error_code     |
 | `backlink_verifications`     | 發布後連結驗證         | publication_run_id、checked_url、http_status、canonical_url、link_found、rel_values、checked_at、status |
-| `subscriptions`              | 本地訂閱投影           | workspace_id、provider、external_id、plan_key、status、period_end                                       |
-| `billing_webhook_events`     | webhook 去重與審計     | provider、external_event_id、payload_hash、status；組合唯一                                             |
+| `billing_plan_catalog`       | 版本化套餐與 Provider Price mapping | plan_key、version、interval、currency、unit_amount、provider_price_ref、limits、status；組合唯一         |
+| `subscriptions`              | 本地訂閱投影           | workspace_id、provider、customer／subscription ref、plan_key／version、status、period_end、cancel_at_period_end |
+| `subscription_change_requests` | 升級、Checkout、取消／恢復續費請求 | workspace_id、type、from／to plan、idempotency_key、provider_ref、preview_amount、status、actor        |
+| `billing_webhook_events`     | webhook 去重與審計     | provider、external_event_id、payload_hash、provider_created_at、status、error_code；組合唯一             |
 | `api_keys`                   | 公共 API 認證          | workspace_id、key_hash、preview、scopes、expires_at、last_used_at、revoked_at                           |
 | `integration_webhook_events` | CMS webhook 去重       | provider、external_event_id、site_id、status；組合唯一                                                  |
 | `report_exports`             | PDF／CSV／白標報告產物 | workspace_id、report_type、filters、status、storage_ref、expires_at                                     |
@@ -917,8 +919,14 @@ Migration 使用新檔案追加，不在 runtime route 中建立新表。大型�
 | `POST` | `/api/v1/monitors`                                 | 建立競品或 AI visibility 監控          |
 | `GET`  | `/api/v1/monitor-events`                           | 分頁列出變化與告警                     |
 | `GET`  | `/api/v1/usage`                                    | 當期用量、預留與剩餘額度               |
+| `GET`  | `/api/v1/billing/plans`                             | 可購買套餐、功能與限制                 |
+| `GET`  | `/api/v1/billing/subscription`                      | 目前套餐、週期、自動續費與用量         |
+| `POST` | `/api/v1/billing/upgrade-previews`                  | 預覽升級價格與按比例計費               |
 | `POST` | `/api/v1/billing/checkout-sessions`                | 建立 Stripe Checkout                   |
 | `POST` | `/api/v1/billing/customer-portal-sessions`         | 建立 Stripe Customer Portal            |
+| `POST` | `/api/v1/billing/subscription/upgrades`             | 確認升級目前套餐                       |
+| `POST` | `/api/v1/billing/subscription/cancel-renewal`       | 到期取消，不立即移除當期權益           |
+| `POST` | `/api/v1/billing/subscription/resume-renewal`       | 到期前恢復自動續費                     |
 | `POST` | `/api/v1/webhooks/stripe`                          | 簽名驗證、去重、更新本地投影           |
 
 ### 13.6 API 共通規則
@@ -979,6 +987,8 @@ Migration 使用新檔案追加，不在 runtime route 中建立新表。大型�
 | API                |      無 | 只讀 Preview |   有限額 |   合約額度 |
 
 - 超額預設 hard stop；啟用付費超額前必須由 Owner 明確開啟 spending cap。
+- 套餐升級只有在 Stripe 驗簽事件及 subscription retrieve 對帳成功後才提升 Entitlement；Checkout success URL 不可作開通依據。
+- 取消自動續費使用 `cancel_at_period_end`，當期 Entitlement 保留至 `current_period_end`；到期前可恢復續費，取消續費本身不觸發退款。
 - 執行昂貴任務時採 `reserve → finalize／release` append-only 事件；重試使用同一 idempotency key，不可再次預留或扣費。
 - `usage_ledger` 是產品用量事實來源；Stripe meter 只可作非同步計費投影，不反過來決定請求是否允許。
 - 正式採用 usage-based billing 前比較 Stripe Billing Meters 與 Stripe 官方建議評估的 Metronome；只選一條路徑，不同時維護兩套按量計費。

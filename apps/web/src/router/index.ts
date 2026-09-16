@@ -48,6 +48,7 @@ const componentLoaders = {
   ,KeywordResearchView: () => import('../views/KeywordResearchView.vue')
   ,MonitorEventsView: () => import('../views/MonitorEventsView.vue')
   ,AlertsView: () => import('../views/AlertsView.vue')
+  ,BillingView: () => import('../views/BillingView.vue')
   ,LegacyRouteView: () => import('../views/LegacyRouteView.vue')
 };
 
