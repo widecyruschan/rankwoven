@@ -7600,3 +7600,34 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 - Finance／Product 確認 Stripe test-mode Price ID、月／年套餐、稅項與退款文案後，配置 Stripe test credentials 並以 Stripe CLI／fixture 跑 webhook canary。
 - 完成 Site Audit CSV、PDF、Agency 白標、每日 reconciliation 與付款失敗通知後再申請 PH2-11 完整完成核檢。
 - 本次尚未 Git commit、push 或部署；`0.jpeg` 與其他非本次檔案不會加入提交。
+
+## 會話總結（2026-09-16）— Stripe 套餐與 Webhook 參數取得說明
+
+### 會話主要目的
+
+說明 PH2-11 所需 Stripe secret key、Webhook signing secret 與各套餐月付 Price ID 的取得位置及配置原則。
+
+### 完成的主要任務
+
+- 依 Stripe 官方 API key、Webhook 及 Products／Prices 文件整理 Dashboard 操作位置。
+- 明確區分 publishable key、server-side secret key、每個 webhook endpoint 的 signing secret 與每個 recurring Price 的 `price_...` 識別碼。
+- 確認目前 RankWoven Checkout 使用 Stripe-hosted 頁面，不需要把 publishable key 放入前端。
+
+### 關鍵決策和解決方案
+
+- 先使用 Stripe sandbox／test mode 建立 Products、月付 recurring Prices 與 webhook；test-mode key 和 Price ID 不可與 live mode 混用。
+- `STRIPE_WEBHOOK_SECRET` 為每一個 webhook endpoint 的 `whsec_...`，不是 API key。
+- 所有值只配置在本機 `.env` 或 VPS `/docker/rankwoven/.env`，不提交 Git、不貼入聊天。
+
+### 新增或修改文件
+
+- `README.md`
+
+### 驗證結果
+
+- 參考 Stripe 官方文件：API keys、Webhooks、Products and Prices。
+- 未修改 runtime、未配置任何 Stripe 憑證、未推送或部署。
+
+### 下一步行動清單
+
+- 先建立 Stripe test-mode 的 Starter／Growth／Agency recurring monthly Price，完成 webhook endpoint 後再配置 test credentials 並執行 Checkout／Webhook canary。
