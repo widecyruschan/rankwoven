@@ -7491,3 +7491,23 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 授權後提交並推送部署。
+
+## 會話總結（2026-09-16）— 競品選擇分析生產部署
+
+### 會話主要目的
+
+推送並部署「三個競品網址須先選一個再分析」等最新變更。
+
+### 完成的主要任務
+
+- 提交 `395a62c` 並推送至 `main`。
+- Production Deploy 成功。
+
+### 驗證結果
+
+- [Production Deploy](https://github.com/widecyruschan/rankwoven/actions/runs/35057948428) 成功。
+- `https://api.rankwoven.com/health` 與 `https://rankwoven.com/` 回傳 HTTP 200。
+
+### 下一步行動清單
+
+- 在後台填入最多三個競品，點選其中一個後執行「分析競品」驗證。
