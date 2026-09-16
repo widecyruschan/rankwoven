@@ -7403,3 +7403,23 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 確認生產 `SERPAPI_KEY` 有效後，提交並推送部署；DataForSEO 未驗證時應自動改走 SerpAPI 完成競品分析。
+
+## 會話總結（2026-09-16）— SerpAPI Fallback 生產部署
+
+### 會話主要目的
+
+將 SerpAPI 競品研究 fallback 與相關修復推上 `main` 並完成生產部署。
+
+### 完成的主要任務
+
+- 提交 `2c6b1d9` 並推送至 GitHub `main`。
+- GitHub Actions `Production Deploy` 成功完成 Verify 與 Deploy。
+
+### 驗證結果
+
+- [Production Deploy](https://github.com/widecyruschan/rankwoven/actions/runs/35048205194) 成功。
+- `https://api.rankwoven.com/health` 與 `https://rankwoven.com/` 回傳 HTTP 200。
+
+### 下一步行動清單
+
+- 在客戶後台對已保存競品再執行一次分析；DataForSEO 失敗時應自動走 SerpAPI。
