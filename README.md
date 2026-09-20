@@ -7888,3 +7888,28 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - Docker 恢復後同步插件，檢查前台原始碼：啟用外部 SEO 外掛時 description 應為 1 條；停用外部 SEO 外掛後 RankWoven 應輸出 1 條。
 - 本次未 commit、push 或部署。
+
+## 會話總結（2026-09-21）— 更新推送與 VPS 部署
+
+### 會話主要目的
+
+將客戶後台標題修復及 WordPress 插件修復推送到 GitHub `main`，並部署到 RankWoven VPS。
+
+### 完成的主要任務
+
+- 提交 `84471f8`：移除後台共享頂欄重複標題，統一頁面間距。
+- 提交 `79574b2`：修復 WordPress 正文圖片誤判及重複 Meta Description，並同步插件文檔。
+- 推送至 GitHub `main`，Production Deploy 工作流成功完成。
+
+### 驗證結果
+
+- GitHub Actions Verify：lint、全倉測試、build、安全審計全部通過。
+- VPS 已運行 `79574b2`；API、Web、Worker、PostgreSQL、Redis 正常。
+- `https://api.rankwoven.com/health`、`https://rankwoven.com/` 和登入後 Site Connections smoke check 全部通過。
+- WordPress 容器 PHP `exec` 仍返回 Docker I/O 錯誤，因此未完成本機 PHP lint 與前台 description HTML 回歸；插件最新源碼已包含在 VPS 發布包中。
+- `0.jpeg` 保持未追蹤，未上傳。
+
+### 下一步行動清單
+
+- Docker exec 恢復後補跑 WordPress PHP lint 與前台 description 數量檢查。
+- 若需要覆蓋獨立 WordPress Hosting 插件，需確認 Hostinger WordPress 站點部署接口和目标域名；本次未执行外部插件覆盖上传。
