@@ -530,6 +530,41 @@ final class RankWoven_SEO_Plugin
         ];
     }
 
+    private function has_external_seo_meta_provider(): bool
+    {
+        $known_seo_plugins = [
+            'wordpress-seo/wp-seo.php',
+            'all-in-one-seo-pack/all_in_one_seo_pack.php',
+            'all-in-one-seo-pack-pro/all_in_one_seo_pack.php',
+            'seo-by-10web/framework/boot.php',
+            'seo-by-10web/seo-by-10web.php',
+            'seo-press/seopress.php',
+            'seopress-pro/seopress-pro.php',
+            'autodescription/autodescription.php',
+            'slim-seo/slim-seo.php',
+            'seo-framework-extension-manager/extension-manager.php',
+            'seo-framework-extension-manager-premium/extension-manager.php',
+            'rank-math/rank-math.php',
+            'rank-math-pro/rank-math-pro.php'
+        ];
+
+        $active_plugins = (array) get_option('active_plugins', []);
+        if (is_multisite()) {
+            $active_plugins = array_merge($active_plugins, array_keys((array) get_site_option('active_sitewide_plugins', [])));
+        }
+
+        return (bool) array_intersect($known_seo_plugins, $active_plugins);
+    }
+
+    private function should_render_native_meta_description(WP_Post $post): bool
+    {
+        return (bool) apply_filters(
+            'rankwoven_seo_render_native_meta_description',
+            !$this->has_external_seo_meta_provider(),
+            $post
+        );
+    }
+
     private function get_post_meta_keywords(WP_Post $post): string
     {
         $keywords = get_post_meta($post->ID, self::META_EDITOR_META_KEYWORDS, true);
@@ -585,6 +620,7 @@ final class RankWoven_SEO_Plugin
         }
 
         $description = $this->get_post_meta_description($post, wp_strip_all_tags((string) $post->post_excerpt));
+        $render_native_meta_description = $this->should_render_native_meta_description($post);
         $keywords = $this->get_post_meta_keywords($post);
         $title = $this->get_post_seo_title($post);
         $site_name = sanitize_text_field((string) get_bloginfo('name'));
@@ -597,7 +633,9 @@ final class RankWoven_SEO_Plugin
         $url = is_string($canonical_url) ? esc_url_raw($canonical_url) : '';
 
         echo "\n";
-        $this->render_head_meta_tag(['name' => 'description', 'content' => $description]);
+        if ($render_native_meta_description) {
+            $this->render_head_meta_tag(['name' => 'description', 'content' => $description]);
+        }
         $this->render_head_meta_tag(['name' => 'keywords', 'content' => $keywords]);
 
         echo '<!-- Google+ -->' . "\n";
@@ -1405,6 +1443,42 @@ final class RankWoven_SEO_Plugin
         return implode('', $parts);
     }
 
+    private function get_editor_seo_content_image_tags(string $content_html, int $post_id): array
+    {
+        preg_match_all('/<img\b[^>]*>/i', $content_html, $image_matches);
+        $image_tags = $image_matches[0] ?? [];
+        if ($image_tags !== []) {
+            return $image_tags;
+        }
+
+        $post = $post_id > 0 ? get_post($post_id) : null;
+        if (!($post instanceof WP_Post) || trim($content_html) === '') {
+            return [];
+        }
+
+        // Shortcodes and page builders can produce image tags only during content rendering.
+        $previous_post = $GLOBALS['post'] ?? null;
+        $rendered_content = '';
+        $GLOBALS['post'] = $post;
+        setup_postdata($post);
+
+        try {
+            $rendered_content = (string) apply_filters('the_content', $content_html);
+        } catch (Throwable $error) {
+            $rendered_content = '';
+        } finally {
+            if ($previous_post instanceof WP_Post) {
+                $GLOBALS['post'] = $previous_post;
+                setup_postdata($previous_post);
+            } else {
+                wp_reset_postdata();
+            }
+        }
+
+        preg_match_all('/<img\b[^>]*>/i', $rendered_content, $image_matches);
+        return $image_matches[0] ?? [];
+    }
+
     private function build_editor_seo_score_check(
         string $key,
         string $label,
@@ -1488,10 +1562,10 @@ final class RankWoven_SEO_Plugin
             }
         }
 
-        preg_match_all('/<img\b[^>]*>/i', $scoring_content_html, $image_matches);
-        $image_count = count($image_matches[0] ?? []);
+        $image_tags = $this->get_editor_seo_content_image_tags($scoring_content_html, $post_id);
+        $image_count = count($image_tags);
         $image_keyphrase_count = 0;
-        foreach ($image_matches[0] ?? [] as $image_tag) {
+        foreach ($image_tags as $image_tag) {
             preg_match('/\balt\s*=\s*["\']([^"\']*)["\']/i', (string) $image_tag, $alt_match);
             $alt_text = $this->normalize_editor_seo_comparable_text((string) ($alt_match[1] ?? ''));
             if ($this->editor_seo_text_contains_keyphrase($alt_text, $normalized_keyphrase)) {

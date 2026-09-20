@@ -7682,3 +7682,209 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 使用 Stripe Test Card 完成一次付款後，透過 webhook 驗證訂閱對帳、套餐開通與取消／恢復續費流程。
 - 完成 Site Audit CSV、PDF、Agency 白標、每日 reconciliation 與付款失敗通知後，申請 PH2-11 完整完成核檢。
+
+## 會話總結（2026-09-17）— Ahrefs API 憑據更新驗證
+
+### 會話主要目的
+
+驗證更新後的 Ahrefs API 憑據是否可供 RankWoven 關鍵詞指標功能使用。
+
+### 完成的主要任務
+
+- 確認本機與 VPS 都已設定 Ahrefs Keyword Explorer endpoint 與啟用旗標。
+- 以雜湊指紋確認本機新 Key 與 VPS 現行 Key 不同，未輸出任何憑據內容。
+- 對兩組 Key 以單一關鍵詞執行 Ahrefs v3 Keyword Explorer 授權測試。
+
+### 驗證結果
+
+- 本機新 Key 回應 HTTP 401。
+- VPS 現行 Key 亦回應 HTTP 401。
+- 目前判定為 Ahrefs 憑據授權失效；未修改程式、未覆寫 VPS 設定、未推送或部署。
+
+### 下一步行動清單
+
+- 在 Ahrefs Dashboard 重新產生具 API 存取權限的 v3 access token，確認帳戶方案包含 Keyword Explorer endpoint 後，僅更新本機與 VPS `.env` 的 `AHREFS_API_KEY`。
+- 憑據更新後重新執行授權測試；HTTP 200 通過後才重啟 API 容器或部署。
+
+## 會話總結（2026-09-17）— Ahrefs API 憑據重新驗證
+
+### 會話主要目的
+
+重新驗證使用者更新後的 Ahrefs API 憑據。
+
+### 完成的主要任務
+
+- 確認本機與 VPS 的 Ahrefs Key 指紋一致，代表新 Key 已同步到兩端。
+- 確認 Keyword Explorer endpoint 與 Ahrefs 關鍵詞指標功能旗標均已啟用。
+- 以單一關鍵詞對 Ahrefs v3 Keyword Explorer endpoint 執行 Bearer 授權測試。
+
+### 驗證結果
+
+- Ahrefs API 仍回應 HTTP 401。
+- 同步與 RankWoven endpoint 設定正常；問題限於 Ahrefs access token 有效性或帳戶 API 權限。
+- 未重啟服務、未修改程式、未推送或部署。
+
+### 下一步行動清單
+
+- 確認 Ahrefs Dashboard 產生的是 API v3 access token，而非帳戶登入憑據或其他整合 token，並確認 API credits／Keyword Explorer 權限已啟用。
+- 取得有效 token 後更新兩端 `.env`，重新驗證取得 HTTP 200 後才重啟 API。
+
+## 會話總結（2026-09-17）— Ahrefs API Key 設定核對
+
+### 會話主要目的
+
+根據 Ahrefs 官方文件核對 API Key 建立、授權與 RankWoven 環境變數設定方式。
+
+### 完成的主要任務
+
+- 確認 Ahrefs API v3 使用 `Authorization: Bearer <API_KEY>`，與 RankWoven 現有 provider 實作一致。
+- 使用 Ahrefs 官方免費測試關鍵詞驗證現有 Key；請求仍回應 HTTP 401。
+- 核對 RankWoven Keyword Explorer、Site Audit 及平台代管專案自動建立所需的環境變數。
+
+### 關鍵決策和解決方案
+
+- `AHREFS_API_KEY` 必須只保存完整原始 API key，不能包含 `Bearer ` 前綴、遮罩字元或額外空白；程式會自行加入 Bearer 前綴。
+- Keyword Explorer 使用獨立的 `AHREFS_*` 變數，不修改既有 `KEYWORD_VOLUME_*` 系列設定。
+- Site Audit 採平台代管模式：啟用後由 `AHREFS_SITE_AUDIT_AUTO_CREATE=true` 尋找或建立對應專案，客戶不需提供 Ahrefs Project ID。
+
+### 驗證結果
+
+- 官方免費測試查詢仍為 HTTP 401，因此 Key 尚未獲 Ahrefs 接受。
+- 未修改程式、未覆寫 VPS 設定、未重啟服務、未推送或部署。
+
+### 下一步行動清單
+
+- 由 Ahrefs workspace Owner 或 Admin 在 Account settings / API keys 建立有效 API v3 key，確認其狀態、到期日及 API key usage limit。
+- 更新本機與 VPS `.env` 後，以官方免費測試查詢取得 HTTP 200，再進行容器重啟與功能驗證。
+
+## 會話總結（2026-09-17）— Ahrefs API 最後重新驗證
+
+### 會話主要目的
+
+在 Ahrefs 端設定調整後重新驗證現有 API Key。
+
+### 驗證結果
+
+- 本機與 VPS Key 指紋一致，但未發生變更。
+- Ahrefs 官方免費 Keyword Explorer 測試查詢仍回應 HTTP 401。
+- 未修改程式、未重啟服務、未推送或部署。
+
+### 下一步行動清單
+
+- 必須在 Ahrefs API Keys 頁重新建立或啟用有效的 API v3 key；現有 token 仍不獲 Ahrefs 接受。
+
+## 會話總結（2026-09-17）— VPS 502 生產服務修復
+
+### 會話主要目的
+
+診斷並修復 RankWoven VPS 的公開入口 502 錯誤。
+
+### 根因與修復
+
+- 根因：API、Worker、Web 曾以基礎開發 Compose 配置重新建立。API 與 Worker 因嘗試對 `/workspace/node_modules` 執行 `npm install` 而遇到權限錯誤；Web 則以開發指令在 Nginx 映像內執行 `npm` 而退出。
+- 修復：在 VPS 明確以 `docker-compose.yml` 加上 `docker-compose.prod.yml` 重建 API、Worker 與 Web，未重建 PostgreSQL、Redis 或刪除資料卷。
+
+### 驗證結果
+
+- API、Worker、Web 已使用 production command 並正常運行；PostgreSQL 與 Redis 維持健康。
+- `https://rankwoven.com/` 及 `https://api.rankwoven.com/health` 均回應 HTTP 200。
+- 測試帳號登入和受保護的 Site Connections API 冒煙測試通過。
+
+### 下一步行動清單
+
+- VPS 手動維護時必須使用完整 production Compose 指令，避免單獨執行基礎 `docker-compose.yml`。
+- Ahrefs API Key 仍需在 Ahrefs 端修正授權後重新驗證。
+
+## 會話總結（2026-09-20）— 客戶後台重複標題與錯位修復
+
+### 會話主要目的
+
+修復客戶後台及管理後台各頁面重複顯示頁面標題、父子頁面標題重複，以及部分頁面內容左邊距不一致的問題。
+
+### 根因與修復
+
+- 根因：`App.vue` 共用頂欄會輸出當前路由 `h1`，各個後台 view 又自行輸出同一頁面標題，造成重複；Site Audit、Billing、Monitoring 和 Alerts 的根容器也未統一使用 `page-section` 間距。
+- 修復：頂欄移除當前頁面 `h1`，只保留階段資訊與父級 breadcrumb；後台頁面保留單一內容區標題。統一 Site Audit、Billing、Monitoring、Alerts 的頁面容器間距，並縮短無頁面標題後的頂欄高度。
+- 新增前端 smoke test，鎖定單一頁面標題與非標準後台頁面的對齊契約。
+
+### 新增或修改文件
+
+- `apps/web/src/App.vue`
+- `apps/web/src/styles.css`
+- `apps/web/src/views/AlertsView.vue`
+- `apps/web/src/views/MonitorEventsView.vue`
+- `apps/web/src/views/BillingView.vue`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run test -w @aieo/web`：20 項通過。
+- `npm run lint`：通過。
+- `npm run build -w @aieo/web`：通過；只有既有大 chunk 警告。
+- `git diff --check`：通過。
+
+### 下一步行動清單
+
+- 需要上線時，按既有 GitHub Actions Production Deploy 流程提交並部署；本次未自行 commit、push 或部署。
+
+## 會話總結（2026-09-17）— WordPress 正文圖片誤判修復
+
+### 會話主要目的
+
+修復 WordPress 編輯頁 SEO 面板將含圖片文章錯誤判定為「正文尚未包含圖片」的問題。
+
+### 根因與修復
+
+- 根因：原有圖片檢查只以原始內容的 `<img>` 標籤計數；`[gallery]` 短碼與頁面建構器等會在 `the_content` 渲染階段才輸出圖片，因此被誤判為無圖片。
+- 修復：保留原始 HTML 的快速檢查；僅在未找到圖片時，於目標文章上下文渲染 `the_content` 後再提取圖片標籤，並恢復原本全域文章狀態。
+- 特色圖片仍不會被當作正文圖片；商品既有圖庫計數流程維持不變。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- `git diff --check` 通過。
+- 本機 Docker Desktop 的中繼資料檔案系統唯讀，WordPress PHP／WP-CLI 無法執行；因此尚未完成 WordPress 執行期回歸與 PHP CLI lint。
+- 已將 Gutenberg、Gallery 短碼與頁面建構器圖片檢查加入插件手動回歸清單。
+
+### 下一步行動清單
+
+- Docker Desktop 恢復可寫入狀態後，同步插件至本機 WordPress 測試站並執行 PHP lint 與編輯頁圖片計數回歸。
+- 使用者確認後再提交、推送及部署插件更新。
+
+## 會話總結（2026-09-20）— WordPress 重複 Meta Description 修復
+
+### 會話主要目的
+
+修復 WordPress 前台頁面同時出現兩條 `<meta name="description">` 的問題。
+
+### 根因與修復
+
+- 根因：測試站同時啟用了 RankWoven、Yoast 和 AIOSEO；RankWoven 雖然讀取外部 SEO 外掛的 description 欄位，仍在 `wp_head` 再輸出自己的標準 description。
+- 修復：新增已知外部 SEO 外掛偵測。偵測到 Yoast、AIOSEO、Rank Math、SEOPress、The SEO Framework 或 Slim SEO 時，RankWoven 停止輸出標準 `meta name="description"`，保留其他社交 meta；沒有外部 SEO 外掛時維持 RankWoven 原有輸出。
+- 新增 `rankwoven_seo_render_native_meta_description` filter，供有明確整合需求的網站覆寫輸出策略。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `README.md`
+
+### 驗證結果
+
+- 已確認測試站插件目錄同時存在 Yoast、AIOSEO 和 RankWoven，符合重複輸出的根因。
+- `git diff --check` 通過。
+- 本機 Docker Desktop 目前無法執行 PHP／WP-CLI，執行期 HTML 回歸需待容器恢復後補跑。
+
+### 下一步行動清單
+
+- Docker 恢復後同步插件，檢查前台原始碼：啟用外部 SEO 外掛時 description 應為 1 條；停用外部 SEO 外掛後 RankWoven 應輸出 1 條。
+- 本次未 commit、push 或部署。

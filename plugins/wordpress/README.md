@@ -94,7 +94,7 @@ http://host.docker.internal:3011
 - WordPress 原生 `Update` / `Publish`：也會保存 RankWoven 面板中的 SEO title、Meta description 和 Keywords，避免刷新後欄位變空。
 - 若 WordPress AJAX 返回 nonce 過期、未登入、插件 action 未載入或 PHP 非 JSON 錯誤，面板會顯示可讀原因，避免只顯示泛化的 `SEO request failed`。
 
-RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。內容分數會根據當前標題、Meta description、Slug、正文長度、H1、內部連結與 Focus keyphrase 覆蓋情況即時計算。
+RankWoven 會把生成結果寫入 WordPress 的自訂欄位，並同步常見 SEO 外掛的 title / meta description 欄位，方便與現有 SEO 流程共存。保存的 Meta description 和 Keywords 會在支援的文章、頁面、Portfolio 和商品前台頁面 `<head>` 輸出，同時會使用 SEO title、描述、特色圖片、圖片 Alt Text、網站名稱和頁面 URL 生成 Google+、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 標籤。當 Yoast、AIOSEO、Rank Math、SEOPress、The SEO Framework 或 Slim SEO 已啟用時，RankWoven 會讓外部 SEO 外掛負責標準 `meta name="description"`，避免前台出現兩條 description；沒有外部 SEO 外掛時才由 RankWoven 輸出。內容分數會根據當前標題、Meta description、Slug、正文長度、H1、內部連結與 Focus keyphrase 覆蓋情況即時計算；正文圖片檢查會先讀取原始 HTML，若未找到圖片，才以 WordPress 渲染短碼或頁面建構器內容後重新判斷。
 
 `搜尋外觀` 頁籤可為不同內容類型設定預設模板。每個 SEO Title、Meta Description 和 Meta Keywords 欄位都提供可點擊標籤，客戶可直接插入 `{{title}}`、`{{excerpt}}`、`{{focus_keyphrase}}`、`{{site_name}}`、`{{slug}}`、`{{post_type}}` 和 `{{post_type_label}}`，不需要手動輸入 placeholder 代碼；早期單括號格式也會兼容。單篇文章若已保存自訂 SEO 欄位，仍會優先使用單篇值。
 

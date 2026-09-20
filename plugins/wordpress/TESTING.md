@@ -179,12 +179,14 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 輸入 `Focus keyphrase` 後，點擊 `Generate & Apply SEO` 能生成並套用 SEO title、Slug 和 Meta description。
 - [ ] 無論 AI 回傳、手動輸入或 WordPress 原有 slug 是否包含中文、URL encode、數字、空格或連字號，保存後 Slug 都只包含英文小寫字母與下劃線，例如 `wordpress_seo_settings`。
 - [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
+- [ ] 文章正文使用 Gutenberg 圖片區塊、`[gallery]` 短碼或頁面建構器輸出圖片時，`Images` 檢查會正確顯示正文圖片數量，不會誤報「正文尚未包含圖片」。
 - [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
 - [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。
 - [ ] 直接點擊 WordPress 原生 `Update` / `Publish` 後重新打開編輯頁，Keywords 仍能正確回顯。
 - [ ] 沒有 RankWoven 站點連接時，`Generate & Apply SEO` 會停用，但手動保存仍可正常使用。
 - [ ] 重新打開編輯頁後，已保存的 SEO title / Meta description / Keywords 能正確回顯。
 - [ ] 打開已保存的前台頁面原始碼，`<head>` 內包含對應的 `meta name="description"` 和 `meta name="keywords"`。
+- [ ] 當 Yoast、AIOSEO、Rank Math、SEOPress、The SEO Framework 或 Slim SEO 已啟用時，前台 `<head>` 只保留外部 SEO 插件輸出的 `meta name="description"`，RankWoven 不再重複輸出；停用外部 SEO 插件後，RankWoven 會恢復輸出自己的 description。
 - [ ] 若內容有特色圖片，前台 `<head>` 內包含 Google+ itemprop、Weibo、Twitter Card、LinkedIn / Facebook Open Graph 圖片標籤。
 - [ ] 在插件設定保存 Twitter/X Username 或 Facebook App ID 後，前台 `<head>` 內包含 `twitter:site`、`twitter:creator` 或 `fb:app_id`，且不出現 `@username` / `APP ID` placeholder。
 
