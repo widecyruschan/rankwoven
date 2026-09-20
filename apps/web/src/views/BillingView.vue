@@ -185,7 +185,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="billing-view">
+  <section class="page-section billing-view">
     <header class="page-header">
       <div>
         <h2>{{ t('billing.title') }}</h2>

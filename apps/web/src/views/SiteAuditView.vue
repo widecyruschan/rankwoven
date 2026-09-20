@@ -712,7 +712,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="site-audit-view">
+  <div class="page-section site-audit-view">
     <!-- header -->
     <div class="page-header">
       <div class="header-left">
@@ -1159,7 +1159,7 @@ onMounted(async () => {
 .site-audit-view {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 0 8px;
+  box-sizing: border-box;
 }
 
 .page-header {

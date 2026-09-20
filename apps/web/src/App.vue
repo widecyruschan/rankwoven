@@ -49,7 +49,6 @@ const navigationIcons = {
 const marketingItems = computed(() => getNavigationGroups('marketing_header').flatMap((group) => group.routes));
 const marketingFooterItems = computed(() => getNavigationGroups('marketing_footer').flatMap((group) => group.routes));
 
-const currentTitle = computed(() => t(String(route.meta.titleKey ?? 'nav.dashboard')));
 const currentLayout = computed(() => String(route.meta.layout ?? 'app'));
 const isMarketingLayout = computed(() => currentLayout.value === 'marketing');
 const isAdminLayout = computed(() => currentLayout.value === 'admin');
@@ -63,7 +62,8 @@ const navigationGroups = computed(() => getNavigationGroups(isAdminLayout.value 
   .filter((group) => group.routes.length > 0));
 const breadcrumbs = computed(() => {
   const routeId = typeof route.meta.routeId === 'string' ? route.meta.routeId : '';
-  return routeId ? getBreadcrumbRoutes(routeId) : [];
+  const routeTrail = routeId ? getBreadcrumbRoutes(routeId) : [];
+  return routeTrail.slice(0, -1);
 });
 const shellSubtitle = computed(() => (isAdminLayout.value ? t('admin.subtitle') : t('app.brandSubtitle')));
 const topbarPhase = computed(() => (isAdminLayout.value ? t('admin.phase') : t('app.phase')));
@@ -220,10 +220,9 @@ function logout() {
         <a-button class="menu-button" type="button" @click="toggleNavigation">
           {{ t('app.menu') }}
         </a-button>
-        <div>
+        <div class="topbar-context">
           <p>{{ topbarPhase }}</p>
-          <h1>{{ currentTitle }}</h1>
-          <a-breadcrumb v-if="breadcrumbs.length > 1" class="app-breadcrumb">
+          <a-breadcrumb v-if="breadcrumbs.length > 0" class="app-breadcrumb">
             <a-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.id">{{ t(crumb.titleKey ?? '') }}</a-breadcrumb-item>
           </a-breadcrumb>
         </div>

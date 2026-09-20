@@ -42,7 +42,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="alerts-view">
+  <section class="page-section alerts-view">
     <header class="page-header">
       <div>
         <h1>{{ t('monitoring.alertsTitle') }}</h1>

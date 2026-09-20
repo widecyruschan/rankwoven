@@ -76,7 +76,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="monitor-events-view">
+  <section class="page-section monitor-events-view">
     <header class="page-header">
       <div>
         <h1>{{ t('monitoring.title') }}</h1>

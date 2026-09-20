@@ -122,6 +122,21 @@ describe('web smoke test', () => {
     expect(siteStoreSource).toContain('site.status === \'connected\'');
   });
 
+  it('renders one in-page title and aligns non-standard customer pages', async () => {
+    const appSource = await readFile(resolve('src/App.vue'), 'utf8');
+    const alertsSource = await readFile(resolve('src/views/AlertsView.vue'), 'utf8');
+    const monitorSource = await readFile(resolve('src/views/MonitorEventsView.vue'), 'utf8');
+    const billingSource = await readFile(resolve('src/views/BillingView.vue'), 'utf8');
+    const auditSource = await readFile(resolve('src/views/SiteAuditView.vue'), 'utf8');
+
+    expect(appSource).toContain('class="topbar-context"');
+    expect(appSource).not.toContain('<h1>{{ currentTitle }}</h1>');
+    expect(alertsSource).toContain('<section class="page-section alerts-view">');
+    expect(monitorSource).toContain('<section class="page-section monitor-events-view">');
+    expect(billingSource).toContain('<section class="page-section billing-view">');
+    expect(auditSource).toContain('<div class="page-section site-audit-view">');
+  });
+
   it('keeps site details customer-facing and delete confirmation controlled', async () => {
     const sitesViewSource = await readFile(resolve('src/views/SitesView.vue'), 'utf8');
 
