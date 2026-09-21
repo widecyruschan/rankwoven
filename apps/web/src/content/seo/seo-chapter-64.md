@@ -24,6 +24,8 @@ robots.txt vs llms.txt：
   llms.txt   = 告訴 AI「這裡有什麼、重點是什麼」
 ```
 
+> **香港視角：** 香港用家用嘅 AI 平台 —— **Google AI Overviews / AI Mode**（Google 喺香港佔 ~92-95%）、**ChatGPT、Gemini、Perplexity、Claude、Microsoft Copilot**（Copilot 仲會影響 Yahoo 香港搜尋）—— 都係 llms.txt 嘅潛在讀者。香港做法同全球一致：**robots.txt 要放行 AI bot**（GPTBot、OAI-SearchBot、ClaudeBot、Claude-SearchBot、PerplexityBot、Google-Extended），再加 llms.txt 做導覽。
+
 ---
 
 ## 為什麼需要 llms.txt？
@@ -163,9 +165,16 @@ llms.txt 就像一本書的目錄 + 摘要：
 ```
 llms.txt 必須放在網站根目錄：
 
-  https://www.yoursite.com/llms.txt
+  https://www.yoursite.hk/llms.txt
 
 與 robots.txt、sitemap.xml 放在同一層級。
+
+香港多語言網站嘅做法：
+  → 主版本放喺根目錄（通常係繁中 /zh-hk/）
+  → 英文版可另設 https://www.yoursite.hk/en-hk/llms.txt
+  → 亦可只放一個根目錄版本，
+     入面同時列出繁中、英文、簡中嘅核心頁面連結
+     （配合 hreflang，避免 AI 搵錯語言版本）
 ```
 
 ### 檔案格式要求
@@ -293,14 +302,39 @@ llms.txt 必須放在網站根目錄：
 技術步驟：
 
 1. 將 llms.txt 檔案上傳到網站根目錄
-   確認可以通過 https://yoursite.com/llms.txt 訪問
+   確認可以通過 https://www.yoursite.hk/llms.txt 訪問
 
 2. （可選）在 robots.txt 中引用
-   Sitemap: https://yoursite.com/sitemap.xml
-   LLMs: https://yoursite.com/llms.txt
+   Sitemap: https://www.yoursite.hk/sitemap.xml
+   LLMs: https://www.yoursite.hk/llms.txt
 
-3. 測試：
+3. 香港必做：確認 robots.txt 放行 AI 爬蟲
+   （做法同全球一致，冇地區差異）
+
+   User-agent: GPTBot
+   Allow: /
+
+   User-agent: OAI-SearchBot
+   Allow: /
+
+   User-agent: ClaudeBot
+   Allow: /
+
+   User-agent: Claude-SearchBot
+   Allow: /
+
+   User-agent: PerplexityBot
+   Allow: /
+
+   User-agent: Google-Extended
+   Allow: /
+
+   ⚠️ 香港常見失誤：Cloudflare Bot Fight Mode / WAF /
+      CDN 地理封鎖誤傷 AI 爬蟲，記得加白名單。
+
+4. 測試：
    使用 curl 或瀏覽器訪問 llms.txt，確認內容正確顯示
+   （香港網站記得測試 CDN 快取有冇擋到 .txt）
 ```
 
 ---
@@ -382,7 +416,15 @@ AI 可以理解 Markdown 格式，利用它來增強結構：
 
   可能很快跟進的：
   🔄 Google（尚未正式支援，但業界預期會）
-  🔄 Bing Copilot
+     → 香港用家最重要嘅 AI 接觸點就係 Google AI Overviews，
+       所以唔好因為「未正式支援」而唔做
+  🔄 Bing Copilot / Microsoft Copilot
+     → 影響 Yahoo 香港搜尋同企業 Windows 環境
+  🔄 Google Gemini
+
+  香港實務建議：
+  → 成本極低（一個 .txt 檔案），即使支援未全面都值得做
+  → 同時交 Bing Webmaster Tools，確保 Bing / Copilot 索引到
 ```
 
 ### llms.txt 與其他標準的關係
@@ -414,6 +456,9 @@ AI 時代的網站標準生態：
 | ☐ 加入背景資訊區塊 | 品牌簡介、核心數據、營業資訊 |
 | ☐ 上傳 llms.txt 到網站根目錄 | 確認可以通過 URL 訪問 |
 | ☐ 在 robots.txt 中引用 llms.txt | （可選） |
+| ☐ robots.txt 放行 AI 爬蟲 | GPTBot、OAI-SearchBot、ClaudeBot、Claude-SearchBot、PerplexityBot、Google-Extended |
+| ☐ 香港多語言處理 | 繁中 / 英文 / 簡中核心頁面連結對齊 hreflang |
+| ☐ 交 Bing Webmaster Tools | Yahoo 香港搜尋 + ChatGPT / Copilot 索引 |
 | ☐ 設定定期更新提醒 | 每季審查一次 |
 
 ---

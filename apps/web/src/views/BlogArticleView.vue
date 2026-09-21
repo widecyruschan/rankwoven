@@ -20,13 +20,13 @@ const adjacentArticles = computed(() => (article.value ? getAdjacentBlogArticles
 
 function updateArticleSeo(currentArticle: BlogArticle) {
   const canonicalUrl = new window.URL(getRoutePath('public-blog-article', { slug: currentArticle.slug }), window.location.origin).toString();
-  const description = getBlogArticleSeoDescription(currentArticle);
+  const description = currentArticle.metaDescription || getBlogArticleSeoDescription(currentArticle);
   updateSeoHead({
-    title: `${currentArticle.title} | RankWoven`,
+    title: `${currentArticle.seoTitle || currentArticle.title} | RankWoven`,
     description,
     canonicalUrl,
     indexable: true,
-    keywords: [currentArticle.title],
+    keywords: [currentArticle.focusKeyphrase, currentArticle.longTailKeyword],
     type: 'article',
     imageUrl: new window.URL(currentArticle.coverImage, window.location.origin).toString(),
     // Article content is authored in Traditional Chinese; keep social metadata aligned
@@ -43,8 +43,8 @@ function updateStructuredData(currentArticle: BlogArticle) {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: currentArticle.title,
-    description: getBlogArticleSeoDescription(currentArticle),
-    keywords: currentArticle.title,
+    description: currentArticle.metaDescription || getBlogArticleSeoDescription(currentArticle),
+    keywords: [currentArticle.focusKeyphrase, currentArticle.longTailKeyword].filter(Boolean).join(', '),
     image: new window.URL(currentArticle.coverImage, window.location.origin).toString(),
     articleSection: t(`publicPages.blog.categories.${currentArticle.categoryId}`),
     inLanguage: 'zh-Hant',
@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
             <h1>{{ article.title }}</h1>
             <p>{{ article.excerpt }}</p>
           </div>
-          <img :src="article.coverImage" :alt="article.title" width="1024" height="1024">
+          <img :src="article.coverImage" :alt="article.title" width="1672" height="941">
         </header>
 
         <div class="blog-article-layout">

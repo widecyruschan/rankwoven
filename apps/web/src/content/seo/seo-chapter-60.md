@@ -4,6 +4,8 @@
 
 > 你不需要從零開始重建 SEO。你只需要在現有基礎上，做三件關鍵的事：**結構化你的內容、強化你的 Entity 身分、讓 AI 更容易找到你。**
 
+**香港版補充：** 香港用家主力用 **Google（~92-95% 份額）**，AI 接觸點以 **Google AI Overviews / AI Mode** 為主，其次係 **ChatGPT、Gemini、Perplexity、Claude、Microsoft Copilot**；而 Yahoo 香港搜尋用 Bing 技術、企業 Windows 環境普遍裝 Edge，**Bing 索引喺香港特別重要**。本地第三方來源就係 **LIHKG、Discuss.com.hk、Uwants、高登、OpenRice、香港新聞媒體**，加上年輕人愛用嘅 **小紅書（RED）**。全球來源（Wikipedia、Reddit、YouTube、LinkedIn）依然係 AI 嘅主要引用池，兩層要一齊做。
+
 ---
 
 ## 第一件事：結構化你的內容（Structure）
@@ -179,20 +181,40 @@ Google 和 AI 不再只是匹配關鍵字。
 ```
 在外部平台上建立你的 Entity 存在：
 
-  必須做：
-  ☐ Google Business Profile（最重要！）
+  必須做（香港本地 SEO 基石）：
+  ☐ Google Business Profile / 商家檔案（最重要！香港完全可用）
+     地址用香港格式：街道 + 大廈 + 室號 + 香港 / 九龍 / 新界 + 地區
+  ☐ Bing Webmaster Tools 提交 Sitemap
+     （Yahoo 香港搜尋 + ChatGPT / Copilot 嘅索引來源）
   ☐ Wikidata 項目（如果符合建立標準）
-  ☐ 主要社交媒體（Facebook、Instagram、LinkedIn）
+  ☐ 主要社交媒體（Facebook、Instagram、LinkedIn、Threads）
+  ☐ 小紅書（RED）— 香港年輕人 discovery 入口
+     （美妝、餐飲、旅遊、生活資訊）
+
+  香港本地社群 / 口碑足跡（AI 會當作「真實意見」來源）：
+  ☐ LIHKG（連登）、Discuss.com.hk、Uwants、高登
+  ☐ Facebook 社團（香港各行業家長 / 消費者群組極活躍）
+  ☐ OpenRice（餐飲必爭）、TripAdvisor（旅遊）
+  ☐ 香港新聞媒體：香港01、明報、經濟日報、星島、東方、
+     頭條日報、am730、信報、HKET、商業電台、TVB
+
+  官方 / 半官方引用（Entity 驗證）：
+  ☐ 公司註冊處（ICRIS）登記資料一致
+  ☐ 香港貿發局（HKTDC）、香港中華總商會、生產力促進局
+  ☐ 香港政府「資料一線通」、香港旅發局
 
   行業相關：
-  ☐ 香港牙醫學會名冊
-  ☐ OpenRice（餐飲）/ 行業目錄
+  ☐ 香港牙醫管理委員會名冊（醫療）
+  ☐ OpenRice（餐飲）、28Hse / 星之谷（地產）、Car1.hk（汽車）
+  ☐ 相關監管機構：EAA（地產代理）、SFC（證監）、IA（保監）
 
   高價值（如果有機會）：
   ☐ Wikipedia 條目（需要符合知名度標準）
-  ☐ 主要媒體報導（HK01、明報等）
+  ☐ 主要媒體報導（香港01、明報、經濟日報等）
   ☐ 行業權威網站的品牌頁面
 ```
+
+> **香港提醒：** 以上平台的 NAP（名稱 / 地址 / 電話）要**完全一致**，電話用 +852 格式。AI 喺唔同平台見到一致資料，先會確認你係同一個 Entity。
 
 #### Step 4：建立 Entity 之間的關係
 
@@ -259,7 +281,8 @@ llms.txt 放在網站根目錄：https://yoursite.com/llms.txt
 ### 3.2 設定 AI 爬蟲的 robots.txt 規則
 
 ```
-除了傳統的 Googlebot，現在有新的 AI 爬蟲需要管理：
+除了傳統的 Googlebot，現在有新的 AI 爬蟲需要管理
+（香港做法同全球一致，沒有地區差異）：
 
   Google-Extended（Google AI 專用）：
     控制你的內容是否用於 Google 的 AI 訓練和 AI Overviews
@@ -267,24 +290,47 @@ llms.txt 放在網站根目錄：https://yoursite.com/llms.txt
   GPTBot（OpenAI）：
     ChatGPT 的爬蟲
 
+  OAI-SearchBot（OpenAI）：
+    ChatGPT 搜尋時即時抓取用的爬蟲
+
+  ClaudeBot / Claude-SearchBot / anthropic-ai（Anthropic）：
+    Claude 的爬蟲
+
+  PerplexityBot（Perplexity）：
+    Perplexity 的爬蟲
+
   CCBot（Common Crawl）：
     公開網頁資料庫，被多個 AI 模型使用
 
-  anthropic-ai（Anthropic）：
-    Claude 的爬蟲
-
-robots.txt 範例：
+robots.txt 範例（香港網站建議：全部放行）：
   User-agent: Google-Extended
   Allow: /
-  # 允許 Google AI 使用你的內容
+  # 允許 Google AI Overviews / AI Mode 使用你的內容
 
   User-agent: GPTBot
   Allow: /
   # 允許 ChatGPT 爬取你的內容
 
-  # 如果你想 AI 使用你的內容，可以：
+  User-agent: OAI-SearchBot
+  Allow: /
+
+  User-agent: ClaudeBot
+  Allow: /
+
+  User-agent: Claude-SearchBot
+  Allow: /
+
+  User-agent: PerplexityBot
+  Allow: /
+
+  # 如果你想阻止 AI 使用你的內容，可以：
   # User-agent: GPTBot
   # Disallow: /
+
+⚠️ 香港常見失誤：Cloudflare 的 Bot Fight Mode / WAF 規則
+   或 CDN 的地理封鎖（geo-blocking）把 AI 爬蟲一併擋掉，
+   令網站「自己封咗自己」。設定後記得用 Search Console
+   網址檢查或 log 分析確認爬蟲真係入到。
 ```
 
 ### 3.3 確保你的內容可以被 AI 爬取
@@ -303,6 +349,13 @@ robots.txt 範例：
 
   ❌ 速度太慢（AI 爬蟲也有時間限制）
   ✅ 優化網站速度，確保頁面在 2 秒內載入
+     （香港網站可用 Cloudflare / AWS ap-east-1 香港節點、
+       本地 colo，TTFB 目標 < 200ms）
+
+  ❌ 地區轉跳（geo-redirect）把爬蟲彈去錯版本
+  ✅ 香港網站常做繁中 / 英文 / 簡中自動轉跳，
+     要確保爬蟲睇到正確語言版，並用 hreflang 標明
+     （zh-HK / en-HK / zh-CN + x-default）
 ```
 
 ---
@@ -318,18 +371,26 @@ robots.txt 範例：
 
 第二週：強化 Entity 身分（Entity）
   ☐ 在 Schema 中標記 Organization 和 Person
-  ☐ 確保 sameAs 連結完整
+  ☐ 確保 sameAs 連結完整（官網、Facebook、Instagram、
+     LinkedIn、YouTube、OpenRice、小紅書、GBP）
   ☐ 建立 Wikidata 項目（如果符合標準）
   ☐ 檢查 Google Knowledge Graph 中是否有你的品牌
+  ☐ 香港必做：Google 商家檔案（GBP）資料與 NAP 一致
+  ☐ 香港必做：盤點 LIHKG / Discuss / Uwants / OpenRice
+     上嘅品牌討論（有冇 mention、評價如何）
 
 第三週：讓 AI 更容易找到你（Accessibility）
   ☐ 建立 llms.txt 檔案
-  ☐ 檢查和更新 robots.txt
+  ☐ 檢查和更新 robots.txt（放行 GPTBot、OAI-SearchBot、
+     ClaudeBot、Claude-SearchBot、PerplexityBot、Google-Extended）
   ☐ 確認 AI 爬蟲可以訪問你的重要內容
-  ☐ 提交更新的 Sitemap
+  ☐ 提交更新的 Sitemap（Google Search Console
+     + Bing Webmaster Tools 兩邊都交）
 
 第四週：測試與迭代
-  ☐ 使用 ChatGPT / Perplexity 提問你的行業相關問題
+  ☐ 用廣東話喺 ChatGPT / Gemini / Perplexity / Copilot /
+     Google AI Overviews 提問你的行業問題
+     （例：「中環 牙醫 邊間好」「旺角 有咩好食」）
   ☐ 檢查你的品牌/內容是否被引用
   ☐ 根據結果調整內容格式和結構
   ☐ 計劃下一輪的內容重構

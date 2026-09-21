@@ -31,6 +31,11 @@
     你被引用的機會就越大
 ```
 
+> **香港視角：** 香港用家用 **Google AI Overviews / AI Mode**（Google 佔 ~92-95%）最多，其次係 **ChatGPT、Gemini、Perplexity、Claude、Microsoft Copilot**。做 Query Fan-out 時要特別留意香港嘅三種擴散特性：
+> 1. **粵語口語擴散**：「幾錢」→「價錢」→「平唔平」→「值唔值」；書面語同口語要兩邊都寫
+> 2. **地區擴散**：「香港」→ 港島（中環、銅鑼灣、灣仔）→ 九龍（尖沙咀、旺角、觀塘）→ 新界（沙田、元朗、將軍澳）→ 18 區
+> 3. **中英夾雜擴散**：「植牙」→「dental implant」→「implant HK price」；香港雙語社會，AI 會同時擴散兩種語言
+
 ---
 
 ## Query Fan-out 的三個層次
@@ -65,7 +70,9 @@
 
 縱向擴散：
   植牙費用（表層）
-    → 香港植牙平均費用（具體數字）
+    → 香港植牙平均費用（具體數字，HK$）
+    → 港島 / 九龍 / 新界收費差異（地區定價）
+    → 私家診所 vs 大學診所 vs 醫療券適用（制度層面）
     → 不同植體品牌的費用差異（深入比較）
     → 為什麼植牙費用差異這麼大？（原因分析）
     → 如何判斷植牙費用是否合理？（評估方法）
@@ -85,8 +92,10 @@
   植牙 → 牙科恐懼症（心理層面）
       → 植牙材料科學（技術層面）
       → 口腔健康與全身健康（健康層面）
-      → 醫療旅遊：去外國植牙（消費者行為層面）
+      → 醫療旅遊：北上深圳植牙 vs 香港植牙（香港用家常見比較）
       → 植牙技術的歷史和未來（知識層面）
+      → 香港醫療券 / 牙科保險覆蓋範圍（本地制度層面）
+      → LIHKG / Discuss 上嘅真實用家經驗（本地口碑層面）
 
 策略：
   探索與你的核心主題相關的「周邊主題」。
@@ -217,18 +226,35 @@ AI 的思考過程：
 支柱 2：外部 Entity 建設（External Entity Building）
 
   在整個網絡上建立 Entity 存在：
-  ☐ Google Business Profile（最重要！）
+  ☐ Google Business Profile（最重要！香港本地 SEO 基石）
+  ☐ Bing Places / Bing Webmaster Tools
+     （Yahoo 香港搜尋 + ChatGPT / Copilot 索引來源）
   ☐ Wikidata / Wikipedia（如符合標準）
   ☐ 行業目錄和專業平台
   ☐ 社交媒體（sameAs 連結）
-  ☐ 媒體報導和行業出版物
+
+  香港本地 Entity 基建：
+  ☐ 公司註冊處（ICRIS）：中英文公司名、註冊編號一致
+  ☐ 香港貿發局（HKTDC）、香港中華總商會、生產力促進局
+  ☐ 香港政府「資料一線通」、香港旅發局
+  ☐ OpenRice（餐飲）、TripAdvisor（旅遊）、
+     28Hse / 星之谷（地產）、Car1.hk（汽車）
+  ☐ 香港新聞媒體：香港01、明報、經濟日報、星島、
+     東方、頭條日報、am730、信報、HKET
+  ☐ 社群口碑：LIHKG（連登）、Discuss.com.hk、Uwants、
+     高登、Facebook 社團、Instagram、小紅書（RED）
+  ☐ 全球來源依然重要：Wikipedia、Reddit、YouTube、LinkedIn
+     —— 國際 AI 引用池冇變，本地平台係「補充」而唔係「取代」
 
 支柱 3：Entity 一致性（Entity Consistency）
 
   確保 Entity 資訊在所有平台上一致：
   ☐ NAP（名稱、地址、電話）完全一致
+     （香港地址格式：街道 + 大廈 + 室號 + 地區；電話用 +852）
   ☐ 品牌名稱不變（不要有時「陳大明牙科」有時「Dr. Chan Dental」）
+     （香港雙語：繁中名同英文名要一一對應，並用 sameAs 串連）
   ☐ 使用 sameAs 連結統一所有 Entity 表現
+  ☐ 價錢一律用 HK$，列明是否含其他費用（符合消委會指引）
 ```
 
 ---
@@ -351,6 +377,13 @@ AI 的思考過程：
 4. 結構化資料錯誤監控
    → Google Search Console → 增強項目
    → 查看 Schema 錯誤和警告
+
+5. 香港多平台 Entity 準確度（新增）
+   → 用廣東話喺 Google AI、ChatGPT、Gemini、Perplexity、
+     Copilot 問「[品牌名] 係咩來的？」「[品牌名] 喺邊？」
+   → AI 係咪講啱你嘅地區、服務、HK$ 價錢？
+   → 再檢查 LIHKG / Discuss / OpenRice / 小紅書上嘅描述
+     係咪同官網一致（唔一致會拖低 AI 對你嘅信心）
 ```
 
 ---

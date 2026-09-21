@@ -5,23 +5,32 @@
 **網站搬遷（Site Migration）** 是 SEO 中風險最高的操作之一。如果處理不當，可能導致流量暴跌 50-90%，且需要數月才能恢復。
 
 ```
-網站搬遷的常見場景：
+網站搬遷的常見場景（香港情境）：
 
   1. 域名變更（Domain Change）
-     oldsite.com → newsite.hk
+     公司品牌升級：oldsite.com.hk → newbrand.hk
+     或由 .com 轉做 .hk / .com.hk（本地信任度 + 地區訊號）
 
   2. 網站改版（Redesign）+ URL 結構改變
-     /old-page.html → /new-page/
+     /old-page.html → /zh-hk/new-page/
 
   3. 平台遷移（Platform Migration）
-     WordPress → Shopify / 自訂 CMS
+     WordPress → Shopify / SHOPLINE / 自訂 CMS
+     （香港網店常見：SHOPLINE、Shopify、WooCommerce 互搬）
 
   4. HTTP → HTTPS 遷移
-     http://site.com → https://site.com
+     http://site.hk → https://site.hk
 
   5. 子域合併或拆分
-     blog.site.com → site.com/blog/
+     blog.site.hk → site.hk/blog/
+     或 en.site.hk → site.hk/en-hk/（多語言結構重整）
+
+  6. 語言版本重整（香港最常見）
+     /zh-hk/、/zh-cn/、/en-hk/ 三版本重新規劃
+     → 牽涉 hreflang，風險與換域名同級
 ```
+
+> **香港提示：** 香港網站多數同時有繁中、英文，做內地客生意仲有簡中版。搬遷時語言目錄一改，hreflang 全部要同步更新，否則 Google 會當你三個版本係三套重複內容，排名一齊跌。
 
 > **核心原則：** 網站搬遷的成功關鍵在於**規劃**。臨時抱佛腳的搬遷是不必要的 SEO 自殺。
 
@@ -36,21 +45,27 @@
 ```
 URL 映射表範例：
 
-| 舊 URL                        | 新 URL                        | 轉址類型 |
-|-------------------------------|------------------------------|---------|
-| /about-us.html                | /about/                      | 301     |
-| /products/shoes/red-sneakers  | /products/red-sneakers/      | 301     |
-| /blog/2025/seo-tips           | /blog/seo-tips-2025/         | 301     |
-| /contact.php                  | /contact/                    | 301     |
-| /old-promotion                | /（首頁）                     | 301     |
-| /deleted-product              | 沒有對應頁面                   | 410     |
+| 舊 URL                          | 新 URL                              | 轉址類型 |
+|---------------------------------|-------------------------------------|---------|
+| /about-us.html                  | /zh-hk/about/                       | 301     |
+| /products/shoes/red-sneakers    | /zh-hk/products/red-sneakers/       | 301     |
+| /blog/2025/seo-tips             | /zh-hk/blog/seo-tips-2025/          | 301     |
+| /contact.php                    | /zh-hk/contact/                     | 301     |
+| /cn/contact.php（簡中版）        | /zh-cn/contact/                     | 301     |
+| /en/about-us（英文版）           | /en-hk/about/                       | 301     |
+| /old-promotion（舊新年優惠）      | /zh-hk/（首頁）                      | 301     |
+| /deleted-product                | 沒有對應頁面                          | 410     |
 
 建立映射表的工具：
   → Screaming Frog（爬取舊網站所有 URL）
   → Google Search Console（導出所有已索引的 URL）
+  → Bing Webmaster Tools（香港約 3-5% 份額，Yahoo 香港搜尋亦用
+     Bing 技術；而且 ChatGPT 搜尋 / Copilot 依賴 Bing 索引，不能漏）
   → Google Analytics（導出所有有流量的 URL）
   → Ahrefs / Semrush（導出所有有反向連結的 URL）
 ```
+
+> **香港提示：** 映射表記得包含**語言版本**與**地區登陸頁**（例如 `/tsim-sha-tsui/`、`/causeway-bay/`、`/sha-tin/`）。香港 SEO 好多流量嚟自「地區 + 服務」字（如「尖沙咀 牙醫」「沙田 補習社」），呢類頁漏轉址，損失會即時反映喺門市查詢。
 
 ### 法則 2：使用 301 永久轉址
 
@@ -134,7 +149,9 @@ URL 映射表範例：
      /products/red-sneakers/ 比 /p/12345/ 好
 
   ✅ 包含關鍵字（但不要關鍵字堆砌）
-     /hong-kong-dental-services/ 比 /services/ 好
+     /zh-hk/hong-kong-dental-services/ 比 /services/ 好
+     （香港例子：/zh-hk/tsim-sha-tsui-dentist/
+       比 /zh-hk/services/branch-3/ 好）
 
   ✅ 使用連字號（-）分隔詞語
      /red-sneakers/（不是 /red_sneakers/ 或 /redsneakers/）
@@ -177,10 +194,16 @@ URL 映射表範例：
   ☐ 所有頁面都能正常載入？
   ☐ 所有 301 轉址都正確運作？（使用 Screaming Frog 爬取舊 URL，確認得到 301 和正確的新 URL）
   ☐ 沒有轉址鏈（舊 URL → 301 → 新 URL，不是舊 → 舊 → 新）
-  ☐ Canonical 標籤正確？（新頁面的 Canonical 指向自己）
-  ☐ hreflang 標籤正確？（如果有多語言版本）
+  ☐ Canonical 標籤正確？（新頁面的 Canonical 指向自己，
+     不是指向舊 URL）
+  ☐ hreflang 標籤正確？（香港網站常見 zh-HK / en-HK / zh-CN，
+     記得 x-default，且每一版本都要互相 return tag）
   ☐ Schema 結構化資料正確？
+     （本地商家用 LocalBusiness：地址、電話用香港格式，
+      價錢用 HK$、OpeningHours 用香港時間）
   ☐ robots.txt 和 Sitemap 指向新 URL？
+  ☐ robots.txt 有冇放行 AI 爬蟲？（GPTBot、OAI-SearchBot、
+     ClaudeBot、PerplexityBot、Google-Extended）
   ☐ 內部連結都更新到新 URL？
 ```
 
@@ -202,10 +225,28 @@ URL 映射表範例：
 ### Step 7：設定 Sitemap 和 robots.txt（新網站）
 
 ```
-新網站的 robots.txt：
+新網站的 robots.txt（香港網店範例）：
+
   User-agent: *
   Allow: /
-  Sitemap: https://newsite.com/sitemap_index.xml
+  Disallow: /zh-hk/search/
+  Disallow: /*?color=*
+  Disallow: /*?sort=*
+
+  # AI 爬蟲：同全球做法，建議放行（AI 搜尋引用來源）
+  User-agent: GPTBot
+  Allow: /
+
+  User-agent: OAI-SearchBot
+  Allow: /
+
+  User-agent: ClaudeBot
+  Allow: /
+
+  User-agent: PerplexityBot
+  Allow: /
+
+  Sitemap: https://www.newsite.hk/sitemap_index.xml
 
 新網站的 Sitemap：
   → 包含所有新 URL
@@ -224,6 +265,12 @@ URL 映射表範例：
   4. 在 Search Console 中提交新網站的 Sitemap
   5. 如果需要域名變更，在 Search Console 使用「地址變更」工具
   6. 驗證：使用 Screaming Frog 爬取舊 URL → 確認得到 301 + 正確的新 URL
+  7. 香港必做：喺 **Bing Webmaster Tools** 一併提交新 Sitemap
+     （Yahoo 香港搜尋用 Bing 技術，約 3-6% 份額；
+       同時影響 ChatGPT 搜尋 / Copilot 嘅引用來源）
+  8. 更新本地引用平台嘅網址：Google 商家檔案（GBP）、OpenRice、
+     Facebook 專頁、Instagram、HKTDC / 商會目錄、
+     LIHKG / Discuss 舊帖入面嘅連結
 ```
 
 ---
@@ -239,6 +286,9 @@ URL 映射表範例：
   ☐ Google Analytics → 自然流量（有沒有暴跌？）
   ☐ 排名追蹤工具 → 主要關鍵字排名（有沒有急降？）
   ☐ 搜尋你的品牌名稱 → 確保新網站出現在第一頁
+  ☐ 香港加測：用 ChatGPT / Gemini / Perplexity 問「XX（品牌）喺邊」
+     → 睇吓 AI 仲引用緊舊網址，若有就代表外部來源未更新
+  ☐ 檢查 Google 商家檔案（GBP）嘅網站連結是否已更新為新域名
 
 預期波動：
   → 搬遷後 1-2 週內，排名和流量會有一些波動，這是正常的
@@ -275,15 +325,21 @@ URL 映射表範例：
 ☐ 檢查排名是否回到搬遷前水平
 ☐ 審查內部連結（確保沒有指向舊 URL 的內部連結）
 ☐ 更新外部反向連結（聯繫對方更新連結到新 URL）
-☐ 檢查 Sitemap 處理狀態
+☐ 檢查 Sitemap 處理狀態（Google + Bing 兩邊都要睇）
 ☐ 確認舊 URL 的索引已經被轉移到新 URL
+☐ 香港重點外鏈來源優先處理：香港01、經濟日報、明報、星島、
+  香港貿發局（HKTDC）、商會目錄、LIHKG / Discuss 相關帖、
+  OpenRice、TripAdvisor、Facebook 專頁 —— 呢批對本地
+  權威度同 AI 引用影響最大
+☐ 更新實體物料：卡片、門市招牌、WhatsApp / 電郵簽名、
+  香港電話（+852）聯絡頁
 ```
 
 ---
 
 ## Search Console 的「地址變更」工具
 
-### 如果同樣域名（例如 .com → .hk）
+### 如果域名變更（例如 .com → .hk / .com.hk）
 
 ```
 使用 Search Console 的地址變更工具：
@@ -346,10 +402,14 @@ HTTP → HTTPS 遷移是常見的搬遷類型，有特別的注意事項：
 | 轉址鏈太長 | 權重層層損失 | 確保所有轉址是直接的一對一映射 |
 | 忘記加入 Canonical | 重複內容問題 | 上線前檢查每個頁面的 Canonical |
 | robots.txt 封鎖了新網站 | 整個網站不被爬取 | 確認 robots.txt 沒有 Disallow: / |
+| robots.txt 誤封 AI 爬蟲 | ChatGPT / Perplexity 唔再引用你 | 放行 GPTBot、ClaudeBot、PerplexityBot、OAI-SearchBot、Google-Extended |
 | Sitemap 包含舊 URL | 混亂的索引訊號 | 提交只包含新 URL 的 Sitemap |
 | 內部連結指向舊 URL | 爬取混亂、使用者 404 | 搬遷後爬取網站，檢查內部連結 |
 | 測試環境沒有封鎖 | Google 索引了測試網站 | 使用 noindex 或 robots.txt 封鎖 |
-| 外鏈沒有更新 | 反向連結價值流失 | 聯繫重要的外鏈來源更新連結 |
+| 外鏈沒有更新 | 反向連結價值流失 | 聯絡香港媒體、商會目錄、OpenRice 等更新連結 |
+| hreflang 未同步更新 | 繁中 / 英文 / 簡中版互相打架 | 搬遷前一併重寫 hreflang，並加 x-default |
+| 忘記更新 GBP / OpenRice 網址 | 本地流量與門市查詢流失 | 上線當日更新本地平台資料 |
+| 只交 Google、唔交 Bing | 流失 Yahoo 香港與 AI 搜尋流量 | Bing Webmaster Tools 同步提交 Sitemap |
 | HTTPS 混合內容 | 瀏覽器警告、信任度下降 | 確保所有資源使用 HTTPS |
 
 ---
@@ -363,9 +423,10 @@ HTTP → HTTPS 遷移是常見的搬遷類型，有特別的注意事項：
 | ☐ 記錄 SEO 基準數據 | 流量、排名、索引數量、反向連結 |
 | ☐ 爬取舊網站所有 URL | Screaming Frog / Search Console / Analytics |
 | ☐ 建立 URL 映射表 | 每個舊 URL 對應新 URL |
-| ☐ 設計新 URL 結構 | 保持簡短、描述性、一致性 |
-| ☐ 準備 301 轉址規則 | Regex 規則或逐一映射 |
+| ☐ 設計新 URL 結構 | 保持簡短、描述性、一致性；預留 /zh-hk/、/en-hk/、/zh-cn/ |
+| ☐ 準備 301 轉址規則 | Regex 規則或逐一映射（記得包埋語言版與地區頁） |
 | ☐ 封鎖測試環境 | robots.txt Disallow 或 noindex |
+| ☐ 盤點本地平台連結 | GBP、OpenRice、Facebook、HKTDC、商會目錄 |
 
 ### 搬遷中（上線日）
 
@@ -373,7 +434,7 @@ HTTP → HTTPS 遷移是常見的搬遷類型，有特別的注意事項：
 |------|------|
 | ☐ 部署新網站 | 確認正式環境正常運作 |
 | ☐ 實施所有 301 轉址 | 一次性全部上線，確認都是 301 |
-| ☐ 提交新 Sitemap | Search Console 中提交 |
+| ☐ 提交新 Sitemap | Search Console + Bing Webmaster Tools 都提交 |
 | ☐ 使用地址變更工具（如適用） | 僅在域名變更時使用 |
 | ☐ 快速驗證 | 爬取舊 URL，確認得到正確的 301 |
 | ☐ 檢查 robots.txt | 確保沒有意外封鎖 |

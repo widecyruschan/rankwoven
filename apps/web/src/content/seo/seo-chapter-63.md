@@ -17,6 +17,8 @@
 每個訊號 = 1 個檢查清單 + 1 個實戰練習
 ```
 
+> **香港版重點：** 香港用家主力用 **Google（~92-95%）**，AI 引用主要發生喺 **AI Overviews / AI Mode**；其次 **ChatGPT、Gemini、Perplexity、Claude、Microsoft Copilot**（Copilot 再影響 Yahoo 香港搜尋）。AI 搵香港本地答案時，除咗全球來源（Wikipedia、Reddit、YouTube、LinkedIn），仲會參考 **LIHKG（連登）、Discuss.com.hk、Uwants、高登、OpenRice、香港新聞媒體**，同埋年輕人愛用嘅 **小紅書（RED）**。本章嘅檢查清單會標示邊幾項要特別補「香港本地」元素。
+
 ---
 
 ## 訊號 1：內容結構化 — 實戰檢查清單
@@ -106,12 +108,23 @@
   二級來源（高價值）：
   ✅ 學術期刊和研究論文
   ✅ 政府統計數據
+     （香港：政府統計處、香港政府「資料一線通」、
+       公司註冊處 ICRIS、各政策局公布）
   ✅ 行業協會的官方報告
+     （香港：香港牙醫學會、香港中華總商會、
+       香港貿發局 HKTDC、生產力促進局）
   ✅ 權威醫學機構的臨床數據
 
   三級來源（輔助價值）：
   ✅ 知名媒體的調研報告
+     （香港：香港01、經濟日報、明報、信報、HKET、消委會報告）
   ✅ 行業領先公司的白皮書
+
+  香港本地一手數據（原創價值最高）：
+  ✅ 你自己嘅香港客戶數據、分店數據、HK$ 價格區間
+  ✅ 本地問卷 / 市場調查（註明香港地區與樣本數）
+  ✅ 18 區（港島 / 九龍 / 新界）嘅地區分佈數據
+     → 呢類數據全球來源通常冇，AI 特別鍾意引用
 
 使用數據時的黃金法則：
 
@@ -150,8 +163,19 @@
 □ 8. 有真實的客戶評價/案例（非匿名）
 □ 9. Organization Schema 標記完整
 □ 10. 網站有隱私政策、使用條款等信任頁面
+     （香港必須符合 **PDPO《個人資料（私隱）條例》**，
+       收集用戶資料、評論、表單時要有私隱政策與聲明）
 
-目標：10 項中至少完成 8 項
+香港本地權威訊號（加加分項）：
+□ 11. 列明香港監管機構註冊 / 牌照編號
+     （例：牙醫管理委員會、EAA 地產代理、SFC 證監、IA 保監）
+□ 12. 被香港新聞媒體報導（香港01、經濟日報、明報等）
+□ 13. 香港平台足跡：GBP、OpenRice、HKTDC、商會目錄
+□ 14. 社群口碑：LIHKG、Discuss、Uwants、Facebook 社團、小紅書
+□ 15. 價目表清楚列明 HK$ 及是否已包其他費用
+     （符合消委會指引嘅價格透明度）
+
+目標：10 項基本項目中至少完成 8 項
 ```
 
 ### 實戰練習：建立作者權威頁面
@@ -207,11 +231,15 @@
 
 品牌 Entity（Organization）：
 □ 1. 品牌名稱在所有平台上一致（沒有簡稱/全稱混用）
+     （香港：繁中名、英文名、簡中名要一一對應）
 □ 2. 品牌有 Wikidata 條目（如符合標準）
 □ 3. 品牌在同義詞/別名方面有清晰管理
-     （例如：陳大明牙醫診所 = Dr. Chan Dental）
+     （例如：陳大明牙醫診所 = Dr. Chan Dental = 陳大明牙科）
 □ 4. Organization Schema 包含 sameAs 連結
 □ 5. Google Business Profile 資訊完整且驗證
+     （香港本地 SEO 基石；NAP 用香港地址格式 + 852 電話）
+□ 5b. 香港本地目錄一致：OpenRice、HKTDC、商會目錄、
+     公司註冊處（ICRIS）資料與官網一致
 
 人物 Entity（Person）：
 □ 6. 核心人物（醫生/創始人）有獨立的 Person Schema
@@ -240,6 +268,9 @@
   ├── offers: Service: 牙齒美白
   ├── sameAs: https://www.facebook.com/chendamingdental
   ├── sameAs: https://www.instagram.com/chendamingdental
+  ├── sameAs: https://www.openrice.com/...（餐飲適用）
+  ├── sameAs: https://www.google.com/maps/place/...（GBP）
+  ├── sameAs: https://www.xiaohongshu.com/...（小紅書，如適用）
   └── aggregateRating: 4.8 (320 reviews)
 
   Person: 陳大明
@@ -272,6 +303,8 @@
       "sameAs": [
         "https://www.facebook.com/chendamingdental",
         "https://www.instagram.com/chendamingdental",
+        "https://www.linkedin.com/company/chendamingdental",
+        "https://www.google.com/maps/place/?q=place_id:XXXX（GBP）",
         "https://www.wikidata.org/wiki/Q123456"
       ]
     },
@@ -358,8 +391,12 @@
 □ 1. 文章有明確的發布日期和「最後更新」日期
 □ 2. 內容中的數據來自近 2 年內
 □ 3. 沒有過時資訊（例如舊的價格、舊的法規）
+     （香港：HK$ 價目表、政府政策如醫療券／居屋／
+       資助計劃金額、牌照要求都會定期改）
 □ 4. 文章中的「今年」/「最新」等詞語確實指向 2026 年
 □ 5. 外部連結的目標頁面仍然存在且相關
+□ 6. 香港地區資訊仍然正確（分店地址、營業時間、
+     18 區服務範圍、節日營業安排）
 
 時效性紅旗：
   ⚠️ 文章發布超過 2 年未更新
@@ -448,12 +485,19 @@ Step 3：數據檢查（5 分鐘）
 Step 4：權威度檢查（5 分鐘）
   → 確認作者資訊完整
   → 確認專業資格展示清晰
+  → 香港加項：監管機構註冊編號、HK$ 價目表、PDPO 私隱政策
 
 Step 5：時效性檢查（5 分鐘）
   → 檢查「最後更新」日期
   → 確認無過時資訊
 
-Step 6：行動清單（5 分鐘）
+Step 6：香港 AI 平台引用測試（5 分鐘）
+  → 用廣東話喺 Google（AI Overviews）、ChatGPT、Gemini、
+     Perplexity、Copilot 各問一條你嘅核心問題
+     （例：「香港植牙幾錢」「旺角有咩好食」）
+  → 記錄：有冇引用你？引用咩內容？競爭對手有冇出現？
+
+Step 7：行動清單（5 分鐘）
   → 記錄發現的問題
   → 建立修復優先級
 ```

@@ -5,17 +5,20 @@
 **HTTPS（HyperText Transfer Protocol Secure）** 是 HTTP 的加密版本，透過 **SSL/TLS 憑證** 在瀏覽器和伺服器之間建立加密連線。它確保使用者與網站之間傳輸的資料不會被第三方攔截、竄改或偽造。
 
 ```
-HTTP  → http://example.com   （明文傳輸，不安全）
-HTTPS → https://example.com  （加密傳輸，安全）
+HTTP  → http://www.hkseostore.com.hk   （明文傳輸，不安全）
+HTTPS → https://www.hkseostore.com.hk  （加密傳輸，安全）
 ```
 
 > **關鍵數據：** 截至 2026 年，Google Chrome 中超過 95% 的網頁載入都是透過 HTTPS 進行的。非 HTTPS 網站會在瀏覽器中顯示「不安全」警告。
+>
+> **香港情況：** 香港網店、餐廳訂枱、補習社報名表全部都會收個人資料（姓名、電話、地址）。喺 **PDPO《個人資料（私隱）條例》** 之下，個人資料嘅傳輸安全本身就係「保障資料原則」之一；冇 HTTPS 唔單止影響排名，仲有合規風險。
 
 ---
 
 ## HTTPS 對 SEO 的影響
 
 ### Google 的排名信號
+
 自 2014 年起，HTTPS 被 Google 正式確認為**排名因素**。雖然權重不高（Google 比喻為「tiebreaker」級別），但在 AI 搜尋時代其重要性持續上升：
 
 | 面向 | 影響 |
@@ -29,6 +32,8 @@ HTTPS → https://example.com  （加密傳輸，安全）
 ### 安全鎖頭的 CTR 影響
 
 研究顯示：瀏覽器地址欄的 🔒 安全鎖頭能顯著影響點擊行為。顯示「不安全」警告的網站有 **40-60% 的訪客會立即離開**。
+
+> **香港場景：** 香港用家對網上付款好敏感（尤其涉及信用卡、PayMe、FPS 轉數快）。瀏覽器彈「不安全」，香港客嘅即時反應通常係「閂咗佢去第二間」，流失率比平均水平更高。
 
 ---
 
@@ -57,25 +62,27 @@ HTTPS → https://example.com  （加密傳輸，安全）
 ### 1. DV（Domain Validation，域名驗證）
 - **驗證範圍：** 僅驗證域名控制權
 - **發證時間：** 數分鐘至數小時
-- **適用場景：** 個人部落格、小型網站、測試環境
-- **費用：** 免費（Let's Encrypt）至 $10/年
+- **適用場景：** 個人部落格、小型網站、測試環境、香港中小企官網
+- **費用：** 免費（Let's Encrypt）至約 HK$80/年
 - **瀏覽器顯示：** 🔒 安全鎖頭
 
 ### 2. OV（Organization Validation，組織驗證）
 - **驗證範圍：** 域名 + 組織合法性
 - **發證時間：** 1-3 個工作天
 - **適用場景：** 企業官網、中型商業網站
-- **費用：** $50-200/年
+- **費用：** 約 HK$400-1,600/年
 - **瀏覽器顯示：** 🔒 + 組織名稱
 
 ### 3. EV（Extended Validation，擴展驗證）
 - **驗證範圍：** 域名 + 嚴格組織審查
 - **發證時間：** 3-10 個工作天
 - **適用場景：** 銀行、金融機構、大型電商
-- **費用：** $200-1000/年
+- **費用：** 約 HK$1,600-8,000/年
 - **瀏覽器顯示：** 🏦 公司名稱（部分瀏覽器已淡化）
 
 > **2026 年趨勢：** EV 憑證的視覺優勢已被大幅削弱，多數瀏覽器已不再特別展示公司名稱。除非行業合規要求，DV 憑證已足夠滿足 SEO 和安全性需求。
+>
+> **香港實務：** 除非你係受 **證監會（SFC）**、**保監局（IA）** 或金管局規管嘅金融機構，或者係大型電商需要配合內部合規審計，否則一般香港 SME 用 Let's Encrypt（免費 DV）已經好夠。慳返嗰筆錢用落內容同連結建設，SEO 回報更高。
 
 ---
 
@@ -86,7 +93,7 @@ HTTPS → https://example.com  （加密傳輸，安全）
 ### 優點
 - ✅ 完全免費
 - ✅ 自動化部署與續期
-- ✅ 全球瀏覽器信任
+- ✅ 全球瀏覽器信任（香港用嘅 Chrome / Safari / Edge 全部認可）
 - ✅ DV 級別驗證
 
 ### 限制
@@ -98,7 +105,9 @@ HTTPS → https://example.com  （加密傳輸，安全）
 - **Certbot** — EFF 官方工具，支援 Apache、Nginx、各種 Linux 發行版
 - **acme.sh** — 純 Shell 腳本，輕量高效
 - **Caddy** — 內建自動 HTTPS，零配置
-- **主機面板** — cPanel、Plesk 多已內建 Let's Encrypt 支援
+- **主機面板** — cPanel、Plesk 多已內建 Let's Encrypt 支援（香港本地大部分網頁寄存服務都係 cPanel，通常一鍵開到）
+
+> **香港提示：** 如果你用 **Cloudflare**（香港網店同內容站好常用），可以直接開 Cloudflare 嘅 Universal SSL，免費兼自動續期，連 Certbot 都唔使裝。但要記得同時設定「源站憑證」（Origin Certificate）或者開「Full (Strict)」模式，否則會出現重定向循環。
 
 ---
 
@@ -119,7 +128,7 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 # Nginx
 server {
     listen 80;
-    server_name example.com www.example.com;
+    server_name hkseostore.com.hk www.hkseostore.com.hk;
     return 301 https://$server_name$request_uri;
 }
 ```
@@ -129,18 +138,18 @@ server {
 
 ```html
 <!-- 改前 -->
-<img src="http://example.com/logo.png">
+<img src="http://www.hkseostore.com.hk/logo.png">
 
 <!-- 改後（推薦） -->
-<img src="https://example.com/logo.png">
+<img src="https://www.hkseostore.com.hk/logo.png">
 
 <!-- 改後（次選 — 協議相對） -->
-<img src="//example.com/logo.png">
+<img src="//www.hkseostore.com.hk/logo.png">
 ```
 
 ### 第四步：更新 Canonical 標籤
 ```html
-<link rel="canonical" href="https://example.com/page" />
+<link rel="canonical" href="https://www.hkseostore.com.hk/page" />
 ```
 
 ### 第五步：更新 Sitemap
@@ -165,17 +174,19 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" alway
 | `includeSubDomains` | 也適用於所有子域名 |
 | `preload` | 申請加入瀏覽器的 HSTS Preload 清單 |
 
-### 第七步：更新 Google Search Console
-- 新增 HTTPS 版本的網站資源
+### 第七步：更新 Google Search Console 與 Bing Webmaster Tools
+- 新增 HTTPS 版本的網站資源（GSC 要新增一項 https:// 資源，唔會自動繼承）
 - 提交新的 HTTPS Sitemap
 - 使用「地址變更」工具通知 Google
+- **香港別漏：** 同步去 **Bing Webmaster Tools** 提交 HTTPS Sitemap（覆蓋 Bing + Yahoo 香港 + ChatGPT / Copilot 嘅索引來源）
 
 ### 第八步：更新第三方服務
 - Google Analytics 網址設定
-- 社群媒體分享連結
-- 廣告著陸頁 URL
+- 社群媒體分享連結（Facebook 專頁、Instagram bio、小紅書、LinkedIn）
+- 廣告著陸頁 URL（Google Ads、Meta Ads）
 - CDN 設定
 - email 簽名檔中的連結
+- **香港本地平台：** OpenRice 商戶頁、Google 商家檔案（GBP）、HKTDC 供應商目錄、TripAdvisor、Facebook 專頁「關於」欄嘅網站連結
 
 ---
 
@@ -186,8 +197,8 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" alway
 這是最常見的遷移問題——HTTPS 頁面中載入了 HTTP 資源（圖片、CSS、JS、iframe）：
 
 ```
-⚠️ Mixed Content: The page at 'https://example.com' was loaded over HTTPS,
-but requested an insecure image 'http://cdn.example.com/photo.jpg'.
+⚠️ Mixed Content: The page at 'https://www.hkseostore.com.hk' was loaded over HTTPS,
+but requested an insecure image 'http://cdn.hkseostore.com.hk/photo.jpg'.
 ```
 
 **解決方式：**
@@ -202,8 +213,8 @@ but requested an insecure image 'http://cdn.example.com/photo.jpg'.
 
 ### 問題 3：301 重定向鏈
 ```
-http://example.com → https://example.com（正確）
-http://www.example.com → https://www.example.com → https://example.com（多一跳）
+http://hkseostore.com.hk → https://hkseostore.com.hk（正確）
+http://www.hkseostore.com.hk → https://www.hkseostore.com.hk → https://hkseostore.com.hk（多一跳）
 ```
 
 **解決方式：** 將所有版本直接 301 重定向到最終的 HTTPS canonical URL，不要經過中間跳轉。
@@ -213,6 +224,12 @@ http://www.example.com → https://www.example.com → https://example.com（多
 
 **解決方式：** 選用支援免費 SSL 的 CDN（Cloudflare、CloudFront 等），確認 CDN 層和源站都正確配置 HTTPS。
 
+### 問題 5：香港常見 — Cloudflare 加密模式設定錯
+
+香港好多網站用 Cloudflare 做 CDN 同防護。如果 Cloudflare 設咗「Flexible」模式（用戶→CF 係 HTTPS，CF→源站係 HTTP），而源站又做 301 去 HTTPS，就會出現**無限重定向循環**（ERR_TOO_MANY_REDIRECTS）。
+
+**解決方式：** 源站裝好憑證後，將 Cloudflare 加密模式改為 **Full (Strict)**，一次過解決循環同 Mixed Content。
+
 ---
 
 ## SSL 憑證健康檢查清單
@@ -220,12 +237,13 @@ http://www.example.com → https://www.example.com → https://example.com（多
 | 檢查項目 | 工具 / 方法 |
 |----------|-------------|
 | 憑證是否有效、未過期 | SSL Labs、瀏覽器點擊鎖頭圖標 |
-| 憑證是否涵蓋所有域名 | 檢查 www / 裸域 / 子域名 |
+| 憑證是否涵蓋所有域名 | 檢查 www / 裸域 / 子域名（包括 `.hk` 與 `.com.hk` 兩個版本） |
 | 是否有 Mixed Content | Chrome DevTools → Security 面板 |
 | HSTS 是否設定 | Security Headers 檢測工具 |
 | 301 重定向是否正確 | 瀏覽器開發者工具 Network 面板 |
 | Sitemap URL 是否全為 HTTPS | 手動檢查 Sitemap 檔案 |
 | Search Console 是否包含 HTTPS 資源 | GSC 後台確認 |
+| Bing Webmaster Tools 是否已提交 HTTPS Sitemap | BWT 後台確認 |
 | 憑證自動續期是否正常 | 檢查 Cron job / Certbot timer |
 
 ---
@@ -234,16 +252,18 @@ http://www.example.com → https://www.example.com → https://example.com（多
 
 | 任務 | 說明 |
 |------|------|
-| ☐ 取得並安裝 SSL 憑證 | Let's Encrypt 免費方案為首選 |
-| ☐ 設定 301 重定向 | HTTP → HTTPS（所有版本） |
+| ☐ 取得並安裝 SSL 憑證 | Let's Encrypt 免費方案為首選（DV 已足夠一般香港網站） |
+| ☐ 設定 301 重定向 | HTTP → HTTPS（所有版本，包括 www / 裸域 / .hk / .com.hk） |
 | ☐ 更新全站資源 URL | 圖片、CSS、JS、iframe 全部 HTTPS |
 | ☐ 更新 canonical 標籤 | 指向 HTTPS 版本 |
 | ☐ 更新 Sitemap | 所有 URL 為 HTTPS |
 | ☐ 設定 HSTS | 加入 `Strict-Transport-Security` Header |
-| ☐ 更新 Search Console | 新增 HTTPS 資源，提交新 Sitemap |
-| ☐ 更新第三方服務 | GA、廣告、社群媒體、CDN |
+| ☐ 更新 Search Console + Bing Webmaster Tools | 新增 HTTPS 資源，提交新 Sitemap |
+| ☐ 更新第三方服務 | GA、廣告、社群媒體、CDN、OpenRice / GBP / HKTDC 商戶資料 |
+| ☐ 檢查 Cloudflare 加密模式 | 用 Full (Strict)，避免重定向循環 |
 | ☐ 設定憑證自動續期 | Cron job 或 Certbot auto-renewal |
 | ☐ 監控憑證到期時間 | 設定過期提醒（最佳是到期前 30 天） |
+| ☐ 個人資料傳輸合規 | 涉及個人資料嘅表單要符合 PDPO 保障原則 |
 
 ---
 

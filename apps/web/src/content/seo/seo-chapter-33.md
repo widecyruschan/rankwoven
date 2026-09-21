@@ -9,6 +9,8 @@
 傳統網站：伺服器直接返回 HTML → Googlebot 直接讀取 ✅
 JS 渲染網站：伺服器返回空的 HTML 框架 → 需要 JS 執行後才有內容 ⚠️
 
+> **香港場景：** 香港好多新興平台都用 React / Vue 起——餐廳訂枱平台、地產盤源搜尋（例如 28Hse 類型）、網店前台、活動售票網。呢啲網站最大嘅問題唔係「靚唔靚」，而係「Google 第一眼睇到嘅係一張白紙」。
+
 ---
 
 ## Google 如何處理 JavaScript
@@ -29,6 +31,8 @@ JS 渲染網站：伺服器返回空的 HTML 框架 → 需要 JS 執行後才�
 **關鍵問題：** 第一階段和第二階段之間存在**時間差**。Google 可能在第一階段就開始索引，也可能幾天甚至幾週後才進行第二階段的 JS 渲染。
 
 > **2026 年現狀：** Google 的 JS 渲染能力已大幅提升，但仍不是即時的。對於時效性內容，完全依賴 JS 渲染有風險。
+>
+> **香港例子：** 一間香港餐廳推出「週年限定 HK$188 晚市套餐」，活動只得兩星期。如果個優惠頁完全靠 JS 渲染，Google 可能喺活動完咗之後先「睇到」，白白錯過晒流量。時效性內容一定要 SSR / SSG。
 
 ---
 
@@ -46,7 +50,9 @@ JS 渲染網站：伺服器返回空的 HTML 框架 → 需要 JS 執行後才�
 | 首次載入速度 | ❌ 較慢（需先載入 JS） |
 | 開發體驗 | ✅ 前後端分離，開發效率高 |
 | Google 索引延遲 | ⚠️ 數天至數週 |
-| 社群媒體爬蟲 | ❌ Facebook/Twitter 無法讀取 JS 內容 |
+| 社群媒體爬蟲 | ❌ Facebook/Instagram/WhatsApp 預覽無法讀取 JS 內容 |
+
+> **香港補充：** 香港人極依賴 WhatsApp、Facebook Messenger、Instagram 分享連結。CSR 網站分享出嚟通常只會出個空白預覽圖，連 Open Graph 都讀唔到，間接影響點擊率。
 
 ### 2. SSR（Server-Side Rendering，伺服器端渲染）
 
@@ -75,6 +81,8 @@ JS 渲染網站：伺服器返回空的 HTML 框架 → 需要 JS 執行後才�
 | 動態內容 | ⚠️ 需在建置時決定，無法即時變更 |
 | 框架支援 | Next.js、Gatsby、Astro、Hugo、11ty |
 
+> **香港實務建議：** 香港網站嘅目標客群主要喺本地，伺服器多數放喺香港或新加坡數據中心，本身 TTFB 已經好快。若加上 Cloudflare CDN（香港有節點）做 SSG 快取，LCP 通常可以穩定喺 1.5 秒內——呢個組合喺香港市場性價比最高。
+
 ---
 
 ## JavaScript SEO 實戰檢查
@@ -101,6 +109,7 @@ JS 渲染網站：伺服器返回空的 HTML 框架 → 需要 JS 執行後才�
 ☐ 關閉 JS 後，結構化資料是否存在？
 ☐ 關閉 JS 後，<h1> 標題是否存在？
 ☐ 關閉 JS 後，內部連結是否可被發現？
+☐ 關閉 JS 後，Open Graph（og:image / og:title）是否存在？（影響 WhatsApp / FB 分享預覽）
 ```
 
 > **實用方法：** 在 Chrome 中安裝「Web Developer」擴充 → Disable JavaScript → 重新載入頁面，觀察內容是否仍然存在。
@@ -115,13 +124,13 @@ JS 渲染網站：伺服器返回空的 HTML 框架 → 需要 JS 執行後才�
 // 在需要 SEO 的頁面使用 SSR 或 SSG
 export async function getServerSideProps(context) {
   // SSR: 每次請求都在伺服器端渲染
-  const data = await fetch(`https://api.example.com/page/${context.params.id}`);
+  const data = await fetch(`https://api.hkseostore.com.hk/page/${context.params.id}`);
   return { props: { data } };
 }
 
 export async function getStaticProps() {
   // SSG: 建置時生成靜態 HTML
-  const data = await fetch('https://api.example.com/pages');
+  const data = await fetch('https://api.hkseostore.com.hk/pages');
   return { props: { data } };
 }
 ```
@@ -140,11 +149,12 @@ export default {
 
 | 做法 | 說明 |
 |------|------|
-| **動態 `<title>` 和 meta** | 使用 react-helmet（React）或 vue-meta（Vue）確保每個頁面的 meta 標籤正確 |
+| **動態 `<title>` 和 meta** | 使用 react-helmet（React）或 vue-meta（Vue）確保每個頁面的 meta 標籤正確；香港雙語網站記得 `<html lang="zh-HK">` |
 | **歷史路由模式** | 使用 History API（而非 hash `/#/`），確保 URL 乾淨 |
 | **Lazy Loading 謹慎使用** | 確保主要內容不在 lazy load 中 |
 | **避免 `window` / `document` 直接呼叫** | SSR 環境中沒有這些物件，會報錯 |
 | **關鍵 CSS 內聯** | 確保首屏樣式直接內嵌，不依賴 JS 下載 |
+| **Open Graph 伺服器端輸出** | 香港用戶大量經 WhatsApp / Facebook 分享，og 標籤要喺 HTML 入面 |
 
 ---
 
@@ -155,9 +165,11 @@ export default {
 伺服器日誌檔記錄了每一次被存取的請求，包括誰訪問了什麼、什麼時候、結果如何。對於 SEO 來說，最重要的是 **Googlebot 的爬取紀錄**。
 
 ```
-# Apache / Nginx 典型的 Log 格式
+# Apache / Nginx 典型的 Log 格式（注意香港時區 UTC+8）
 66.249.66.1 - - [23/Jul/2026:14:30:00 +0800] "GET /blog/seo-guide HTTP/1.1" 200 15240 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 ```
+
+> **香港提示：** 好多香港網站嘅 server log 預設用 **UTC / GMT**，睇落會慢咗 8 個鐘。分析爬取時段（例如想知 Googlebot 係咪喺香港時間凌晨三點嚟爬）之前，記得先轉換時區，否則會誤判。
 
 ### Log File 能回答的 SEO 問題
 
@@ -169,6 +181,23 @@ export default {
 | 哪個爬蟲最活躍？ | 按 User-Agent 分類統計 |
 | 靜態資源是否被大量爬取？ | JS/CSS/圖片被 Googlebot 請求的頻率 |
 | 是否有意外的爬蟲在大量請求？ | 異常的爬蟲行為 |
+
+### 香港要特別留意的爬蟲
+
+除咗 Googlebot，香港網站嘅 log 入面常見嘅仲有：
+
+| 爬蟲 | User-Agent 關鍵字 | 點解要留意 |
+|------|------------------|-----------|
+| **Bingbot** | `Bingbot` | Yahoo 香港（hk.yahoo.com）搜尋結果用 Bing 索引；ChatGPT 搜尋、Copilot 都用 Bing |
+| **GPTBot / OAI-SearchBot** | `GPTBot`、`OAI-SearchBot` | ChatGPT 訓練 / 即時搜尋引用（GEO 關鍵） |
+| **ClaudeBot / Claude-SearchBot** | `ClaudeBot`、`Claude-User` | Anthropic 嘅 Claude |
+| **PerplexityBot** | `PerplexityBot` | Perplexity AI 搜尋 |
+| **Baiduspider** | `Baiduspider` | 只有做內地 / 大灣區生意先需要理（香港本地唔係主戰場） |
+| **360Spider / Sogou** | `360Spider`、`Sogou web spider` | 同上，內地市場專用 |
+| **Applebot** | `Applebot` | Siri 建議、Spotlight 搜尋（香港 iPhone 滲透率極高，唔好忽略） |
+| **Google-Extended** | `Google-Extended` | Gemini / AI Overviews 訓練用途 |
+
+> **重點：** 如果你發現 `OAI-SearchBot` 或 `PerplexityBot` 從未出現喺 log，好可能係你喺 robots.txt 擋咗佢哋——咁 AI 搜尋就唔會引用你嘅內容（見第 29 章）。
 
 ### Log File 分析的 SEO 價值
 
@@ -202,21 +231,28 @@ Googlebot 的爬取總量 = Crawl Budget
 | **Splunk** | 大型企業的 Log 管理平台 |
 
 > **實務建議：** 對大多數網站來說，**Screaming Frog Log File Analyser** 已足夠。每年一次深度 Log 分析就能發現大量優化機會。
+>
+> **香港收費參考：** Screaming Frog SEO Spider 授權約 **HK$1,500/年**（£129），Log File Analyser 免費版可處理較細嘅 log；大型網站先需要升級。
 
 ---
 
 ## Log File 分析實戰流程
 
 ### 第一步：取得 Log 檔案
-- 從主機面板（cPanel / Plesk）下載
+- 從主機面板（cPanel / Plesk）下載——香港本地寄存服務多數係 cPanel，通常喺「Raw Access Logs」或者「Metrics」度搵到
 - 透過 SSH 存取 `/var/log/nginx/access.log` 或 `/var/log/apache2/access.log`
 - 使用 CDN 的話，Cloudflare / CloudFront 都有 Log 下載功能
+  - Cloudflare 免費版要開 **Logpush**（可推送到 R2 / S3）先攞到完整 log
 
 ### 第二步：過濾 Googlebot
 ```
 # Linux 命令列過濾 Googlebot
 grep "Googlebot" access.log > googlebot-requests.log
+
+# 順便睇吓有冇 AI 搜尋爬蟲嚟過
+grep -E "GPTBot|OAI-SearchBot|ClaudeBot|PerplexityBot|Bingbot|Applebot" access.log > ai-bots.log
 ```
+> **驗證真偽：** 記得用 reverse DNS 驗證（`host 66.249.66.1` 應該 resolve 去 `*.googlebot.com`），因為有唔少假扮 Googlebot 嘅爬蟲。
 
 ### 第三步：分析爬取模式
 - **哪些 URL** 被爬取最多 / 最少？
@@ -230,9 +266,10 @@ grep "Googlebot" access.log > googlebot-requests.log
 |------|------|
 | Googlebot 浪費時間在搜尋結果頁 | robots.txt 阻止搜尋結果頁 |
 | 重要產品頁很少被爬取 | 改善內部連結結構 |
-| 大量 5xx 錯誤 | 修復伺服器效能問題 |
+| 大量 5xx 錯誤 | 修復伺服器效能問題（香港共享主機喺促銷期好易爆） |
 | 圖片 URL 被大量爬取 | 確保圖片有正確的 `<img>` 標籤 |
 | 新文章多天未被爬取 | 檢查 Sitemap 更新和內部連結 |
+| AI 搜尋爬蟲從未出現 | 檢查 robots.txt 係咪擋咗佢哋 |
 
 ---
 
@@ -261,6 +298,8 @@ grep "Googlebot" access.log > googlebot-requests.log
 6. 確保 Sitemap 準確且即時更新
 7. 透過內部連結引導 Googlebot 到重要內容
 8. 合併分散在多個 URL 的內容
+9. 香港專屬：確保伺服器 / CDN 有香港或亞洲節點，降低 TTFB
+10. 香港專屬：放行 AI 搜尋爬蟲（OAI-SearchBot、PerplexityBot 等）做 GEO
 ```
 
 ---
@@ -273,11 +312,14 @@ grep "Googlebot" access.log > googlebot-requests.log
 | ☐ <title> / meta description 是否伺服器端渲染 | 不在 JS 中動態注入 |
 | ☐ Canonical 是否伺服器端輸出 | 確保 Google 第一階段就能爬取 |
 | ☐ 結構化資料是否伺服器端輸出 | JSON-LD 在 `<head>` 中預先存在 |
+| ☐ Open Graph 標籤是否伺服器端輸出 | 影響 WhatsApp / Facebook 分享預覽（香港用戶常用） |
 | ☐ 內部連結是否在 HTML 中 | 不是透過 JS onclick 事件跳轉 |
 | ☐ URL 使用 History API | 不使用 `#` hash 路由 |
 | ☐ 考慮 SSR / SSG | 評估是否適合改用 Next.js / Nuxt.js / SSG |
 | ☐ 取得 Log 檔案並分析 | 每年至少一次 Log 分析 |
 | ☐ 追蹤 Googlebot 爬取模式 | 使用 Screaming Frog Log Analyser |
+| ☐ 檢查 Bingbot / Applebot / AI 爬蟲 | 覆蓋 Yahoo 香港、Siri、ChatGPT、Perplexity |
+| ☐ 驗證 Googlebot 真偽 | 用 reverse DNS，避免假爬蟲污染數據 |
 | ☐ 優化 Crawl Budget | 阻止無效 URL 空間，加速重要頁面回應 |
 | ☐ 定期檢查 GSC 爬取統計 | 關注每日爬取頁面數和錯誤率 |
 

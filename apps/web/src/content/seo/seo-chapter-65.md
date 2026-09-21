@@ -4,6 +4,8 @@
 
 這份路線圖將 AISO、AEO、GEO 的所有概念轉化為**按月執行的行動計劃**。無論你是從零開始，還是已經有一定的 SEO 基礎，這份路線圖都可以幫你逐步建立 AI 時代的搜尋存在感。
 
+**香港版說明：** 本路線圖以香港市場為鏡頭 —— 主力平台係 **Google（~92-95% 份額，AI Overviews / AI Mode）**，同步照顧 **ChatGPT、Gemini、Perplexity、Claude** 同 **Microsoft Copilot**（影響 Yahoo 香港搜尋與企業 Windows 環境）。本地平台（**GBP、OpenRice、LIHKG、Discuss、Uwants、香港新聞媒體、小紅書**）會穿插喺各月份任務入面，全球來源（Wikipedia、Reddit、YouTube、LinkedIn）則維持原有做法。
+
 ```
 六個月目標：
 
@@ -32,18 +34,24 @@
   ☐ 在 ChatGPT Search 中搜尋你的核心關鍵字（5-10 個）
   ☐ 在 Perplexity 中搜尋同樣的關鍵字
   ☐ 在 Google 中搜尋（觀察 AI Overviews 是否出現）
+  ☐ 在 Gemini 與 Microsoft Copilot 各測一次
   ☐ 記錄你的品牌/內容是否被引用
+  ☐ 香港做法：用廣東話口語字測試
+     （「邊間好」「推介」「點揀」「幾錢」），
+     因為香港用家真係咁打
 
-建立基線試算表：
+建立基線試算表（香港版）：
 
-  關鍵字          | ChatGPT | Perplexity | Google AI Overviews
-  ───────────────┼─────────┼────────────┼───────────────────
-  香港植牙推薦    | 否      | 否         | 是（第 3 位）
-  中環牙醫        | 否      | 是（第 2） | 否
-  隱形牙套價錢    | 否      | 否         | 否
+  關鍵字            | ChatGPT | Perplexity | Google AI | Gemini | Copilot
+  ─────────────────┼─────────┼────────────┼───────────┼────────┼────────
+  香港植牙推介      | 否      | 否         | 是（第3位）| 否     | 否
+  中環牙醫 邊間好   | 否      | 是（第2）  | 否        | 否     | 是
+  隱形牙套 幾錢     | 否      | 否         | 否        | 否     | 否
   ...
 
 記錄競爭對手誰被引用了，他們為什麼被引用。
+（香港常見對手：大型連鎖、OpenRice 熱門店、
+  香港媒體報導過嘅品牌、LIHKG 有人討論嘅品牌）
 ```
 
 ```
@@ -51,11 +59,19 @@
 
   ☐ 確認 robots.txt 沒有阻擋重要頁面
   ☐ 確認 robots.txt 中沒有阻擋 AI 爬蟲
-     檢查：Google-Extended、GPTBot、CCBot、anthropic-ai
+     檢查：Google-Extended、GPTBot、OAI-SearchBot、
+           ClaudeBot、Claude-SearchBot、PerplexityBot、
+           anthropic-ai、CCBot
+     （香港做法同全球一致；另外留意 Cloudflare /
+        WAF / CDN 地理封鎖有冇誤傷爬蟲）
   ☐ 確認網站速度達標（PageSpeed Insights > 70 分）
+     （香港網站可用 Cloudflare 香港節點 / AWS ap-east-1）
   ☐ 確認網站有 HTTPS
   ☐ 確認 Schema 結構化資料至少有以下之一：
      Organization / LocalBusiness / Article / FAQ
+     （價錢用 HK$、地址用香港格式、電話用 +852）
+  ☐ 香港必做：喺 **Bing Webmaster Tools** 提交 Sitemap
+     （Yahoo 香港搜尋 + ChatGPT / Copilot 嘅索引來源）
 ```
 
 ### 第 2-3 週：內容審計
@@ -181,6 +197,19 @@
   ☐ 發布 1-2 篇有數據支持的行業見解內容
      （例如：「2026 年香港牙科市場 5 大趨勢」）
 
+  香港本地權威足跡（重點加項）：
+  ☐ 香港新聞媒體數位 PR：香港01、明報、經濟日報、
+     星島、東方、頭條日報、am730、信報、HKET
+  ☐ 官方 / 半官方收錄：公司註冊處（ICRIS）、
+     香港貿發局（HKTDC）、香港中華總商會、
+     生產力促進局、香港旅發局、政府「資料一線通」
+  ☐ 本地平台：GBP（NAP 一致）、OpenRice（餐飲）、
+     TripAdvisor（旅遊）、28Hse（地產）、Car1.hk（汽車）
+  ☐ 社群口碑：LIHKG（連登）、Discuss.com.hk、Uwants、
+     高登、Facebook 社團、Instagram、小紅書（RED）
+  ☐ 列明香港監管機構註冊編號（視行業而定：
+     牙管會、EAA、SFC、IA 等）
+
 任務 4：建立作者權威頁面（2 小時）
 
   ☐ 為每個核心作者建立詳細的專業背景頁面
@@ -269,20 +298,37 @@
 任務 2：AI 爬蟲管理（1 小時）
 
   ☐ 檢查和更新 robots.txt
-  ☐ 確認重要的 AI 爬蟲沒有被阻擋：
+  ☐ 確認重要的 AI 爬蟲沒有被阻擋
+     （香港做法同全球一致）：
      User-agent: Google-Extended
      Allow: /
 
      User-agent: GPTBot
      Allow: /
 
-     User-agent: CCBot
+     User-agent: OAI-SearchBot
+     Allow: /
+
+     User-agent: ClaudeBot
+     Allow: /
+
+     User-agent: Claude-SearchBot
+     Allow: /
+
+     User-agent: PerplexityBot
      Allow: /
 
      User-agent: anthropic-ai
      Allow: /
 
+     User-agent: CCBot
+     Allow: /
+
   ☐ 確認測試環境有正確封鎖
+  ☐ 香港加項：確認 Cloudflare / CDN 冇擋 AI 爬蟲，
+     並喺 Bing Webmaster Tools 重新提交 Sitemap
+  ☐ 香港加項：llms.txt 若有多語言版，
+     確認 /zh-hk/、/en-hk/、/zh-cn/ 連結正確對齊 hreflang
 ```
 
 ### 第 3-4 週：內容發現性強化
@@ -330,11 +376,13 @@
 
 AI 引用追蹤模板：
 
-  日期     | 關鍵字        | 平台       | 被引用？ | 引用排名 | 備註
-  ────────┼──────────────┼───────────┼─────────┼─────────┼─────
-  2026/07  | 植牙 香港     | ChatGPT    | 否       | -       |
-  2026/07  | 植牙 香港     | Perplexity | 是       | 第 2 位  | 新！
-  2026/07  | 牙醫 中環推薦  | Google AI  | 是       | 第 1 位  |
+  日期     | 關鍵字          | 平台        | 被引用？ | 引用排名 | 備註
+  ────────┼────────────────┼────────────┼─────────┼─────────┼─────
+  2026/07  | 植牙 香港       | ChatGPT     | 否       | -       |
+  2026/07  | 植牙 香港       | Perplexity  | 是       | 第 2 位  | 新！
+  2026/07  | 牙醫 中環推介   | Google AI   | 是       | 第 1 位  |
+  2026/07  | 牙醫 中環推介   | Copilot     | 否       | -       | 要交 Bing
+  2026/07  | 旺角 好食       | Gemini      | 否       | -       |
   ...
 
   追蹤 KPI：
@@ -399,17 +447,20 @@ AI 引用追蹤模板：
 如果你沒有 6 個月的時間，這是最精簡的版本：
 
 ```
-第 1 週：
-  ☐ 建立 AI 引用基線（測試 10 個關鍵字）
+第 1 週（香港版）：
+  ☐ 建立 AI 引用基線（用廣東話測 10 個關鍵字，
+     平台：Google AI、ChatGPT、Gemini、Perplexity、Copilot）
   ☐ 結構化改造 Top 3 頁面
 
 第 2 週：
   ☐ 為 Top 3 頁面加入 FAQ 和 HowTo Schema
   ☐ 建立 llms.txt
+  ☐ robots.txt 放行 AI 爬蟲 + 交 Bing Webmaster Tools
 
 第 3 週：
-  ☐ 優化 Organization 和 Person Schema
+  ☐ 優化 Organization 和 Person Schema（HK$、香港地址、+852）
   ☐ 為 Top 3 頁面建立引用句
+  ☐ 檢查 GBP / OpenRice / 香港目錄嘅 NAP 一致性
 
 第 4 週：
   ☐ 監控初始結果

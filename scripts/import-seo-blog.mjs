@@ -8,7 +8,7 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = process.env.SEO_ARTICLE_SOURCE ?? '/Volumes/Extreme SSD/gitCode/終身學習文件/SEO';
 const sourceChaptersDirectory = path.join(sourceRoot, 'chapters');
-const sourceImagesDirectory = path.join(sourceRoot, 'images');
+const sourceImagesDirectory = process.env.SEO_IMAGE_SOURCE ?? path.join(sourceRoot, 'generated-images');
 const contentDirectory = path.join(repositoryRoot, 'apps/web/src/content/seo');
 const imageDirectory = path.join(repositoryRoot, 'apps/web/public/blog/seo/images');
 
@@ -125,6 +125,30 @@ function getChapterNumber(fileName) {
   return match ? Number(match[1]) : null;
 }
 
+function parseFrontmatter(markdown) {
+  const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+  if (!match) return { attributes: {}, content: markdown };
+
+  const attributes = {};
+  for (const line of match[1].split(/\r?\n/)) {
+    const attribute = line.match(/^([a-z_]+):\s*(.*)$/i);
+    if (!attribute) continue;
+    const [, key, rawValue] = attribute;
+    const value = rawValue.trim();
+    attributes[key] = value.startsWith('"') && value.endsWith('"')
+      ? JSON.parse(value)
+      : value.startsWith("'") && value.endsWith("'")
+        ? value.slice(1, -1).replace(/''/g, "'")
+        : value;
+  }
+
+  return { attributes, content: markdown.slice(match[0].length) };
+}
+
+function normalizeArticleText(value) {
+  return value.replaceAll('香港本地', '香港本地');
+}
+
 function getCategoryId(chapterNumber) {
   return categoryRanges.find((range) => chapterNumber >= range.start && chapterNumber <= range.end)?.id ?? 'fundamentals';
 }
@@ -162,14 +186,9 @@ function getReadingMinutes(markdown) {
 }
 
 function rewriteMarkdown(markdown, chapterNumber, fileToSlug) {
-  const coverPattern = new RegExp(
-    `^!\\[[^\\]]*\\]\\(\\.\\./images/seo-chapter${chapterNumber}\\.png\\)\\s*$`,
-    'm'
-  );
-
-  return markdown
+  const rewritten = markdown
     .replace(/^#\s+.+\r?\n/, '')
-    .replace(coverPattern, '')
+    .replace(/^!\[[^\]]*\]\((?:\.\.\/)?(?:images|generated-images)\/[^\n]+\)\s*$/gm, '')
     .replace(/\(([^)\n]+\.md)(#[^)\n]*)?\)/g, (fullMatch, targetPath, hash = '') => {
       const decodedPath = decodeURIComponent(targetPath);
       if (decodedPath.endsWith('索引.md')) return '(/blog)';
@@ -181,6 +200,20 @@ function rewriteMarkdown(markdown, chapterNumber, fileToSlug) {
     .replace(/[ \t]+$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  const previousSlug = articleSlugs[chapterNumber - 2];
+  const nextSlug = articleSlugs[chapterNumber];
+  const hasPreviousLink = !previousSlug || rewritten.includes(`/blog/${previousSlug}`);
+  const hasNextLink = !nextSlug || rewritten.includes(`/blog/${nextSlug}`);
+  const hasIndexLink = rewritten.includes('/blog)');
+  if (hasPreviousLink && hasNextLink && hasIndexLink) return rewritten;
+
+  const navigation = [
+    previousSlug ? `[上一章：第 ${chapterNumber - 1} 章](/blog/${previousSlug})` : '',
+    '[回索引](/blog)',
+    nextSlug ? `[下一章：第 ${chapterNumber + 1} 章](/blog/${nextSlug})` : ''
+  ].filter(Boolean).join(' | ');
+  return `${rewritten}\n\n---\n\n${navigation}`;
 }
 
 async function clearGeneratedFiles(directory, extensions) {
@@ -193,10 +226,20 @@ async function clearGeneratedFiles(directory, extensions) {
   );
 }
 
+function findSourceImage(chapterNumber, imageFileNames) {
+  const matches = imageFileNames.filter((fileName) =>
+    new RegExp(`^${chapterNumber}(?:\\.|\\s|-)`, 'i').test(fileName)
+  );
+
+  if (matches.length !== 1) {
+    throw new Error(`Expected one generated image for chapter ${chapterNumber}, found: ${matches.join(', ') || 'none'}.`);
+  }
+
+  return path.join(sourceImagesDirectory, matches[0]);
+}
+
 await access(sourceChaptersDirectory);
 await access(sourceImagesDirectory);
-await clearGeneratedFiles(contentDirectory, ['.md', '.json']);
-await clearGeneratedFiles(imageDirectory, ['.webp']);
 
 const chapterFiles = (await readdir(sourceChaptersDirectory))
   .filter((fileName) => /^\d{2}-.+\.md$/.test(fileName))
@@ -205,6 +248,16 @@ const chapterFiles = (await readdir(sourceChaptersDirectory))
 if (chapterFiles.length !== articleSlugs.length) {
   throw new Error(`Expected ${articleSlugs.length} chapters, found ${chapterFiles.length}.`);
 }
+
+const imageFileNames = (await readdir(sourceImagesDirectory)).filter((fileName) =>
+  /\.(png|jpe?g|webp)$/i.test(fileName)
+);
+for (let chapterNumber = 1; chapterNumber <= articleSlugs.length; chapterNumber += 1) {
+  findSourceImage(chapterNumber, imageFileNames);
+}
+
+await clearGeneratedFiles(contentDirectory, ['.md', '.json']);
+await clearGeneratedFiles(imageDirectory, ['.webp']);
 
 const fileToSlug = new Map(
   chapterFiles.map((fileName) => {
@@ -220,11 +273,12 @@ for (const fileName of chapterFiles) {
   if (!chapterNumber) throw new Error(`Cannot parse chapter number from ${fileName}.`);
 
   const sourcePath = path.join(sourceChaptersDirectory, fileName);
-  const markdown = await readFile(sourcePath, 'utf8');
+  const rawMarkdown = normalizeArticleText(await readFile(sourcePath, 'utf8'));
+  const { attributes, content: markdown } = parseFrontmatter(rawMarkdown);
   const slug = articleSlugs[chapterNumber - 1];
   const outputFile = `seo-chapter-${String(chapterNumber).padStart(2, '0')}.md`;
   const outputImage = `seo-chapter-${String(chapterNumber).padStart(2, '0')}.webp`;
-  const sourceImage = path.join(sourceImagesDirectory, `seo-chapter${chapterNumber}.png`);
+  const sourceImage = findSourceImage(chapterNumber, imageFileNames);
   const targetImage = path.join(imageDirectory, outputImage);
 
   await access(sourceImage);
@@ -243,7 +297,11 @@ for (const fileName of chapterFiles) {
     categoryId: getCategoryId(chapterNumber),
     readingMinutes: getReadingMinutes(markdown),
     contentFile: outputFile,
-    coverImage: `/blog/seo/images/${outputImage}`
+    coverImage: `/blog/seo/images/${outputImage}`,
+    seoTitle: attributes.seo_title ?? getTitle(markdown, chapterNumber),
+    metaDescription: attributes.meta_description ?? getExcerpt(markdown),
+    longTailKeyword: attributes.long_tail_keyword ?? '',
+    focusKeyphrase: attributes.focus_keyphrase ?? ''
   });
 }
 

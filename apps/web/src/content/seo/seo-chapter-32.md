@@ -14,6 +14,8 @@
 | **4xx** | 400-499 | 用戶端錯誤 | ❌ 需修復 |
 | **5xx** | 500-599 | 伺服器錯誤 | 🔴 緊急修復 |
 
+> **香港場景：** 呢套邏輯無論你係中環嘅金融公司、旺角嘅零售網店、定係一間補習社網站都一樣。轉址搞錯，最直接嘅後果係舊客 click 你個 OpenRice 或者 Facebook 帖入面條 link 彈 404，生意即刻冇咗。
+
 ---
 
 ## SEO 相關重點狀態碼
@@ -31,13 +33,13 @@ rewrite ^/old-page$ /new-page permanent;
 
 ```apache
 # Apache .htaccess 301 重定向
-Redirect 301 /old-page https://example.com/new-page
+Redirect 301 /old-page https://www.hkseostore.com.hk/new-page
 ```
 
 **301 對 SEO 的影響：**
 - ✅ 將 90-99% 的 PageRank 傳遞給目標 URL
 - ✅ Google 會在索引中替換舊 URL 為新 URL
-- ✅ 適用於：網址結構改版、HTTP→HTTPS 遷移、域名更換
+- ✅ 適用於：網址結構改版、HTTP→HTTPS 遷移、域名更換（例如由 `.com` 轉 `.hk`）
 
 ### 302 Found — 暫時重定向
 告訴搜尋引擎：「這個頁面**暫時**搬到新地址，舊地址還是主人，排名權重請保留在舊地址。」
@@ -51,6 +53,11 @@ rewrite ^/promo$ /special-offer redirect;
 - ⚠️ 排名權重**不會**傳遞給目標 URL，保留在原始 URL
 - ⚠️ Google 可能繼續索引原始 URL
 - 適用於：暫時的促銷頁面、A/B 測試、維護中的頁面臨時替換
+
+**香港常見應用：**
+- 農曆新年 / 聖誕 / 雙十一 期間嘅推廣頁（節日過後會改返）
+- 颱風「八號風球」期間暫時將門市頁轉去「網上落單 / 暫停營業」公告
+- 限量優惠頁（例如「HK$100 現金券」活動完就撤）
 
 > **⚠️ 常見錯誤：** 將永久性的 URL 變更誤用 302。如果 SEO 想長期改網址，用 301；如果只是暫時性的改動，用 302。
 
@@ -82,11 +89,13 @@ rewrite ^/promo$ /special-offer redirect;
 
 **解決方式：** 讓真正的「無內容頁」返回 404 或 410 狀態碼，而非 200。
 
+> **香港常見：** 網店搜尋「波鞋」冇結果、地產網搜「將軍澳 三房」冇盤、餐廳網嘅「分店」頁被刪但 server 照出 200，呢啲都係 Soft 404 高危位。
+
 ### 410 Gone — 頁面已永久刪除
 比 404 更強烈的信號：「這個頁面曾經存在，但已經被**永久刪除**」。
 
 - Google 會比 404 更快地從索引中移除 410 頁面
-- 適用於：明確不再需要的內容、依法需刪除的內容
+- 適用於：明確不再需要的內容、依法需刪除的內容（例如限期完結嘅優惠、已結業分店頁）
 
 ### 500 Internal Server Error — 伺服器錯誤
 伺服器遇到未預期的錯誤，無法完成請求。
@@ -102,6 +111,8 @@ rewrite ^/promo$ /special-offer redirect;
 - ⚠️ 503 表示「暫時」問題，Google 會稍後再試
 - ⚠️ 如果 503 狀態持續數天，Google 會開始將其視為永久性問題
 
+> **香港實務：** 做大型促銷（双十一、Black Friday）或者伺服器搬去香港数据中心時，維護緊嘅幾小時應該出 **503 + `Retry-After` header**，而唔係出 502 / 500，Google 先會「等你返嚟」而唔係即刻降你排名。
+
 ---
 
 ## 301 重定向的 SEO 最佳實踐
@@ -109,12 +120,14 @@ rewrite ^/promo$ /special-offer redirect;
 ### 1. 直接重定向，避免鏈條
 ```bash
 # ❌ 錯誤 — 重定向鏈
-http://example.com → https://example.com → https://www.example.com → https://newdomain.com
+http://hkseostore.com → https://hkseostore.com → https://www.hkseostore.com → https://www.hkseostore.com.hk
 
 # ✅ 正確 — 直接跳到最終目的地
-http://example.com → https://newdomain.com
+http://hkseostore.com → https://www.hkseostore.com.hk
 ```
 每多一跳，PageRank 就會額外衰減，也會增加載入時間。
+
+> **香港常見錯誤：** 由 `.com` 轉做 `.hk`（或者由 `.com.hk` 轉 `.hk`）時，舊域名先 301 去 `www`，再去 `https`，再去新域名——三跳。記得寫成「一腳踢」直達最終 URL。
 
 ### 2. 重定向到相關頁面，非首頁
 ```bash
@@ -125,8 +138,17 @@ http://example.com → https://newdomain.com
 /old-product-page → /similar-new-product
 /old-category/old-product → /new-category/new-product
 ```
-
 把所有死連結全部導向首頁（blob redirect）會讓 Google 將它們視為 soft 404，失去 SEO 價值。
+
+**香港例子：**
+```bash
+# ❌ 尖沙咀分店結業，全部導去首頁
+/branches/tsim-sha-tsui → /
+
+# ✅ 導去最相關嘅替代頁
+/branches/tsim-sha-tsui → /branches/jordan     # 最近的佐敦分店
+/menu/lunch-set-2023 → /menu/lunch-set          # 最新午市套餐頁
+```
 
 ### 3. 大規模重定向的規劃
 網站改版、遷移時，使用以下工具規劃：
@@ -135,12 +157,17 @@ http://example.com → https://newdomain.com
 - 逐條驗證重定向設定正確
 - 在 Search Console 監控「找不到（404）」報告
 
-### 4. 域名更換的遷移流程
+### 4. 域名更換的遷移流程（香港公司升級 .com.hk / .hk 適用）
 1. 新域名設置並安裝 SSL
 2. 從舊域名 301 redirect 到新域名（頁面對頁面）
 3. 在 Google Search Console 使用「地址變更」工具
-4. 保留舊域名和 redirect 至少 **一年**（建議永久保留）
-5. 更新所有外部平台的連結（社群媒體、目錄網站、合作夥伴）
+4. 同時喺 **Bing Webmaster Tools** 提交新 sitemap（Yahoo 香港 + ChatGPT/Copilot 用 Bing 索引）
+5. 保留舊域名和 redirect 至少 **一年**（建議永久保留）
+6. 更新所有外部平台的連結：
+   - 社群媒體（Facebook 專頁、Instagram bio、LinkedIn、小紅書）
+   - 本地目錄（**Google 商家檔案 GBP、OpenRice、TripAdvisor、HKTDC 供應商目錄**）
+   - 商會目錄（香港中華總商會、香港生產力促進局）
+   - 合作夥伴網站、email 簽名檔、印刷品 QR code
 
 ---
 
@@ -150,8 +177,8 @@ http://example.com → https://newdomain.com
 
 ```apache
 # Apache .htaccess
-Redirect 301 /old-page.html https://example.com/new-page
-RedirectMatch 301 ^/blog/(.*)$ https://example.com/articles/$1
+Redirect 301 /old-page.html https://www.hkseostore.com.hk/new-page
+RedirectMatch 301 ^/blog/(.*)$ https://www.hkseostore.com.hk/articles/$1
 
 # 正則表達式批量重定向
 RewriteEngine On
@@ -168,7 +195,7 @@ rewrite ^/blog/(.*)$ /articles/$1 permanent;
 ```php
 <?php
 header("HTTP/1.1 301 Moved Permanently");
-header("Location: https://example.com/new-page");
+header("Location: https://www.hkseostore.com.hk/new-page");
 exit();
 ?>
 ```
@@ -176,15 +203,26 @@ SEO 角度不推薦：較慢，且必須確保伺服器層級優先。
 
 ### JavaScript 層級（最不推薦）
 ```javascript
-window.location.href = "https://example.com/new-page";
+window.location.href = "https://www.hkseostore.com.hk/new-page";
 ```
 Google 可以追蹤 JS 重定向，但比伺服器層級 301 效率差很多。**僅在前端 SPA 中無法用伺服器處理時才考慮。**
 
 ### HTML Meta Refresh（過時，不推薦）
 ```html
-<meta http-equiv="refresh" content="0; url=https://example.com/new-page">
+<meta http-equiv="refresh" content="0; url=https://www.hkseostore.com.hk/new-page">
 ```
 Google 會將其解釋為重定向，但不傳遞 PageRank，且有延遲。**不建議用於 SEO。**
+
+### 香港常見：Cloudflare 層級（Page Rules / Bulk Redirects）
+
+香港唔少網站用 Cloudflare，可以用 **Bulk Redirects** 或 **Page Rules** 做 301，兩大好處：① 唔使改 server config；② 喺 CDN 邊緣節點就完成跳轉，香港用戶延遲極低（通常 < 20ms）。
+
+```
+# Cloudflare Bulk Redirect 對照表範例
+https://old-hkshop.com/menu          → 301 → https://www.hkseostore.com.hk/menu
+https://old-hkshop.com/about         → 301 → https://www.hkseostore.com.hk/about-us
+https://old-hkshop.com/*             → 301 → https://www.hkseostore.com.hk/
+```
 
 ---
 
@@ -193,9 +231,9 @@ Google 會將其解釋為重定向，但不傳遞 PageRank，且有延遲。**�
 | 策略 | PageRank 傳遞 | 索引影響 | 適用場景 |
 |------|--------------|----------|----------|
 | **301** | 90-99% | 搜尋引擎替換 URL | 永久改版、HTTPS 遷移、域名更換 |
-| **302** | 0%（保留在原 URL） | 原始 URL 繼續被索引 | 暫時促銷頁、A/B 測試 |
+| **302** | 0%（保留在原 URL） | 原始 URL 繼續被索引 | 暫時促銷頁（節日活動）、A/B 測試 |
 | **JS 重定向** | 部分傳遞，不穩定 | 可能延遲或失敗 | 僅 SPA 無法伺服器端處理時 |
-| **Meta Refresh** | 幾乎不傳遞 | 不推薦用於 SEO | 不建議使用 |
+| **Meta Refresh** | 幾乎不傳遞 | 不推薦對於 SEO | 不建議使用 |
 | **Canonical** | 信號而非強制 | 原始 URL 保留在索引 | 多版本頁面共存時 |
 
 ---
@@ -205,6 +243,7 @@ Google 會將其解釋為重定向，但不傳遞 PageRank，且有延遲。**�
 | 工具 | 用途 |
 |------|------|
 | **Google Search Console** | 查看「找不到（404）」報告、索引涵蓋範圍 |
+| **Bing Webmaster Tools** | 覆蓋 Bing / Yahoo 香港嘅爬蟲報告 |
 | **Screaming Frog** | 爬取全站，檢查所有重定向鏈和狀態碼 |
 | **Ahrefs Site Audit** | 監控 3xx/4xx/5xx 錯誤、重定向鏈 |
 | **curl -I** | 命令列檢查 HTTP 回應頭 |
@@ -213,10 +252,10 @@ Google 會將其解釋為重定向，但不傳遞 PageRank，且有延遲。**�
 
 ### curl 檢測指令
 ```bash
-curl -I https://example.com/old-page
+curl -I https://www.hkseostore.com.hk/old-page
 # 檢查回應的 HTTP Status Code 和 Location Header
 
-curl -L -o /dev/null -s -w '%{url_effective}\n' https://example.com
+curl -L -o /dev/null -s -w '%{url_effective}\n' https://www.hkseostore.com.hk
 # 追蹤完整的重定向鏈，顯示最終的 URL
 ```
 
@@ -228,12 +267,15 @@ curl -L -o /dev/null -s -w '%{url_effective}\n' https://example.com
 |------|------|
 | ☐ 所有重要頁面返回 200 | 確保沒有主要 URL 返回錯誤狀態碼 |
 | ☐ 永久變更使用 301 | 不要誤用 302 處理永久性改動 |
+| ☐ 暫時活動頁用 302 / 307 | 節日推廣、颱風停業公告、A/B 測試 |
 | ☐ 刪除頁面返回 410 或 404 | 不要返回 200 然後顯示「找不到」 |
 | ☐ 重定向直接跳最終 URL | 避免重定向鏈（多於一跳） |
-| ☐ 404 導向相關頁面 | 不要全部導向首頁 |
+| ☐ 404 導向相關頁面 | 不要全部導向首頁（分店頁導去就近分店） |
 | ☐ 監控 Search Console 404 報告 | 每月檢查一次 |
 | ☐ 500 錯誤立即修復 | 關鍵頁面 500 影響排名 |
-| ☐ 保留舊域名重定向至少一年 | 域名遷移後不要急著關閉舊域名 |
+| ☐ 維護期間用 503 + Retry-After | 避免 Google 誤判為永久錯誤 |
+| ☐ 保留舊域名重定向至少一年 | 域名遷移（.com → .hk）後不要急著關閉舊域名 |
+| ☐ 更新本地目錄連結 | GBP、OpenRice、TripAdvisor、HKTDC、商會目錄 |
 | ☐ 定期爬取全站檢查 | Screaming Frog / Site Audit 每月一次 |
 | ☐ 使用伺服器層級重定向 | 不要依賴 JS 或 meta refresh |
 

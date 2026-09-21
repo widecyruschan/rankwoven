@@ -8,6 +8,8 @@
 
 一個完整的 SEO KPI 體系應該涵蓋七個維度，從流量到轉換，從技術到品牌，讓你清楚知道「SEO 到底為公司帶來了什麼」。
 
+> **香港版說明：** 本章指標以香港市場為主鏡頭 —— 主要流量來源係 **Google（~92-95% 份額）**，但報告要補 **Bing / Yahoo 香港（~3-6%）** 同 **AI 平台引用**（Google AI Overviews / AI Mode、ChatGPT、Gemini、Perplexity、Copilot）。本地業務仲要加 **GBP 洞察**與 **OpenRice / LIHKG 等本地平台**嘅口碑數據。營收一律用 **HK$** 計。
+
 ---
 
 ## 七大 KPI 群組總覽
@@ -37,8 +39,12 @@
 
 **解讀要點：**
 - 看趨勢（月比月、年比年），不要只看單月數字
-- 注意季節性波動（電商 1111、旅遊暑假等）
+- 注意季節性波動（香港：農曆新年前後、暑假 7-8 月、
+  雙 11 / 聖誕大減價、書展、演唱會開賣、開學季、
+  稅季 1-4 月等；零售與餐飲尤其明顯）
 - 流量上升不代表 SEO 做得好，可能是品牌搜尋增加
+- 香港加項：GA4 記得設定地區篩選為「Hong Kong」，
+  並分開睇本地流量與海外 / 內地流量（兩者意圖差好遠）
 
 **健康基準：**
 | 狀態 | 月增率 | 說明 |
@@ -121,7 +127,20 @@
 - Featured Snippet（精選摘要）
 - People Also Ask（大家也在問）
 - Image Pack / Video Pack
-- AI Overviews 引用
+- AI Overviews / AI Mode 引用
+- Local Pack（香港本地查詢最常見：「旺角 餐廳」
+  「沙田 補習社」類查詢必爭）
+
+### 3.4 AI 時代新增指標（香港網站必追）
+
+| 指標 | 定義 | 香港追蹤方式 |
+|------|------|------------|
+| AI 引用率 | 核心關鍵字中，有幾多比例被 AI 引用 | 每月用廣東話喺 Google AI、ChatGPT、Gemini、Perplexity、Copilot 各測一次 |
+| AI 平台覆蓋數 | 你喺幾個 AI 平台出現 | 同上，記錄平台數 |
+| AI 來源流量 | 由 AI 平台轉介嘅 session | GA4 → 推薦來源（perplexity.ai、chatgpt.com、gemini.google.com、copilot.microsoft.com） |
+| Bing / Yahoo 香港份額 | 非 Google 嘅搜尋流量 | Bing Webmaster Tools；香港 Yahoo 搜尋用 Bing 技術，約 3-6% |
+| GBP 互動數 | 撳電話、撳路線、網站點擊 | Google 商家檔案「洞察」報表 |
+| 本地平台口碑 | OpenRice / LIHKG / Discuss / 小紅書 mention | 手動或用 Brand24 監測 |
 
 ---
 
@@ -161,15 +180,18 @@ SEO 的長期指標，反映內容是否有持續價值。
 **GA4 路徑探索：** 查看「有機搜尋」在轉換路徑中的位置（起始/中間/結尾）。
 
 ### 5.3 SEO ROI（投資回報率）
-**簡單公式：**
+**簡單公式（營收與成本一律用 HK$）：**
 ```
-SEO ROI = (有機流量帶來的營收 — SEO 成本) ÷ SEO 成本 × 100%
+SEO ROI = (有機流量帶來的營收 HK$ — SEO 成本 HK$) ÷ SEO 成本 HK$ × 100%
 ```
 
 **進階公式（考慮 LTV）：**
 ```
-SEO ROI = (有機用戶數 × 平均轉換率 × 平均客單價 × LTV 乘數 — SEO 成本) ÷ SEO 成本 × 100%
+SEO ROI = (有機用戶數 × 平均轉換率 × 平均客單價 HK$
+          × LTV 乘數 — SEO 成本 HK$) ÷ SEO 成本 HK$ × 100%
 ```
+
+> **香港例子：** 一間銅鑼灣美容院，月 SEO 成本 HK$12,000（內容 + 技術），有機流量帶來 40 個新客，平均客單價 HK$1,800 → 營收 HK$72,000，ROI = (72,000 − 12,000) ÷ 12,000 = **500%**。計 ROI 時記得連 GBP 帶嚟嘅電話與門市查詢都算入去。
 
 ### 5.4 微轉換（Micro-Conversions）
 不只追蹤最終購買，也追蹤中間行為：
@@ -233,6 +255,16 @@ SEO ROI = (有機用戶數 × 平均轉換率 × 平均客單價 × LTV 乘數 �
 ### 7.3 品牌提及（Brand Mentions）
 沒有連結的純文字品牌提及也開始有 SEO 價值（Implicit Links）。追蹤品牌在網路上被提及的頻率。
 
+**香港要監測嘅 mention 來源：**
+- 討論區：LIHKG（連登）、Discuss.com.hk、Uwants、高登
+- 餐飲 / 生活：OpenRice、TripAdvisor、小紅書（RED）
+- 社群：Facebook 專頁與社團、Instagram、Threads、YouTube
+- 新聞媒體：香港01、明報、經濟日報、星島、東方、頭條日報、
+  am730、信報、HKET、商業電台、TVB
+- 商會 / 官方：HKTDC、香港中華總商會、政府「資料一線通」
+
+呢啲 mention 唔單止影響 SEO，仲係 AI 判斷你「本地可信度」嘅重要訊號。
+
 ### 7.4 Domain Rating / Domain Authority 趨勢
 雖然非 Google 官方指標，DR/DA 是快速判斷網站權威度變化的參考值。
 
@@ -277,9 +309,12 @@ SEO ROI = (有機用戶數 × 平均轉換率 × 平均客單價 × LTV 乘數 �
 |------|------|------|
 | Google Search Console | 曝光/點擊/排名/CTR/技術 | 免費 |
 | Google Analytics 4 | 流量/行為/轉換 | 免費 |
+| Bing Webmaster Tools | 香港必備：Yahoo 香港搜尋 + ChatGPT / Copilot 索引來源 | 免費 |
+| Google 商家檔案（GBP）洞察 | 香港本地：撳電話、撳路線、網站點擊 | 免費 |
 | Looker Studio | Dashboard 視覺化 | 免費 |
 | Ahrefs / SEMrush | 排名/連結/競品 | 付費 |
 | Screaming Frog | 技術 SEO 爬取 | 免費版可用 |
+| Brand24 / Mention | 監測 LIHKG、Discuss、OpenRice、小紅書 mention | 付費（有試用） |
 
 ---
 
@@ -305,10 +340,14 @@ SEO 最少 3-6 個月才能看到明顯成效。第一個月就要求 ROI 是不
 ## 實戰練習
 
 1. **打開 GSC**，查看過去 3 個月的曝光與點擊趨勢，計算月增率
-2. **打開 GA4**，篩選有機流量，查看參與率和轉換率
-3. **選擇 10 個核心關鍵字**，記錄當前排名作為基準
+2. **打開 GA4**，篩選有機流量 + 地區設為 Hong Kong，查看參與率和轉換率
+3. **選擇 10 個核心關鍵字**（用香港用家真實打法：廣東話口語字），記錄當前排名作為基準
 4. **計算你的品牌 vs 非品牌流量比例**
 5. **建立每月 KPI 追蹤表**，設定 3 個月後的目標值
+6. **香港加做：** 用廣東話喺 Google AI、ChatGPT、Gemini、
+   Perplexity、Copilot 各問 5 條核心問題，記錄被引用情況作為 AI 基線
+7. **香港加做：** 檢查 GBP 洞察（電話、路線、網站點擊）與
+   OpenRice / LIHKG mention，加入月報
 
 ---
 

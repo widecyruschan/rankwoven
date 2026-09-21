@@ -2,7 +2,9 @@
 
 ## GEO 是什麼？與傳統 SEO 的關鍵區別
 
-**GEO（Generative Engine Optimization）** 是針對生成式 AI 搜尋引擎（ChatGPT Search、Perplexity、Google AI Overviews 等）的優化策略。與傳統 SEO 不同，GEO 的目標不是「排名」，而是「被 AI 引用並正確呈現」。
+**GEO（Generative Engine Optimization）** 是針對生成式 AI 搜尋引擎（ChatGPT Search、Perplexity、Google AI Overviews / AI Mode、Gemini、Microsoft Copilot 等）的優化策略。與傳統 SEO 不同，GEO 的目標不是「排名」，而是「被 AI 引用並正確呈現」。
+
+> **香港視角：** 香港用家嘅 AI 接觸點以 **Google AI Overviews / AI Mode** 為主（Google 喺香港佔 ~92-95%），其次係 **ChatGPT、Gemini、Perplexity、Claude**；**Microsoft Copilot / Bing** 雖然只有約 3-5% 份額，但要計埋 **Yahoo 香港搜尋（用 Bing 技術，~3-6%）**同企業 Windows / Edge 環境，實際影響大過數字。AI 搵香港本地資訊時，除咗全球來源（Wikipedia、Reddit、YouTube、LinkedIn），仲會參考 **LIHKG、Discuss.com.hk、Uwants、高登、OpenRice、香港新聞媒體**，以及年輕人愛用嘅 **小紅書（RED）**。
 
 ```
 傳統 SEO 漏斗：
@@ -65,6 +67,8 @@ AI 引用內容時，偏好以下特性：
    ✅ 高可引用性：
      「2026 年香港大學牙醫學院的研究顯示，
      香港成年人中有 45% 曾考慮接受植牙治療。」
+     （香港內容嘅獨特數據特別值錢：AI 搵「香港植牙」時，
+      全球來源通常冇本地數字，你嘅原創數據就係首選）
 
 3. 結構化的定義
    AI 偏好引用清晰的定義句。
@@ -103,6 +107,12 @@ AI 引用內容時，偏好以下特性：
 引用句 4（建議型）：
   「牙醫建議，每天佩戴隱形牙套 20-22 小時，
   僅在進食和刷牙時取下，以確保最佳矯正效果。」
+
+引用句 5（香港本地型 — 本地查詢最易被引用）：
+  「香港私家診所隱形牙套療程一般 HK$25,000 起，
+   另設銅鑼灣、尖沙咀、沙田分店，覆診約 6-8 次。」
+   → 包埋 HK$ 價錢、地區、分店，AI 答「香港 Invisalign 幾錢」
+     時可以直接拎嚟用
 
 將這些引用句放在文章中的顯眼位置（開頭、h2 下的第一段、
 重要結論），而非埋在文章深處。
@@ -146,10 +156,24 @@ AI 的品牌權威度判斷維度：
 
   ☐ 行業目錄（確保 NAP 一致）
   ☐ 專業協會網站
-  ☐ Google Business Profile
+  ☐ Google Business Profile（香港本地 SEO 基石）
+  ☐ Bing Places / Bing Webmaster Tools
+     （Yahoo 香港搜尋 + ChatGPT / Copilot 索引來源）
   ☐ Wikipedia / Wikidata（如符合標準）
   ☐ Crunchbase / 企業資訊平台
   ☐ 行業報告和研究（被引用）
+
+  香港本地足跡（AI 搵本地答案時會參考）：
+  ☐ 香港新聞媒體：香港01、明報、經濟日報、星島、東方、
+     頭條日報、am730、信報、HKET、商業電台、TVB
+  ☐ OpenRice（餐飲）、TripAdvisor（旅遊）、
+     28Hse / 星之谷（地產）、Car1.hk（汽車）
+  ☐ 社群口碑：LIHKG（連登）、Discuss.com.hk、Uwants、
+     高登、Facebook 社團、Instagram
+  ☐ 小紅書（RED）：香港年輕人 discovery 入口，影響力上升中
+  ☐ 官方 / 半官方：公司註冊處（ICRIS）、香港貿發局（HKTDC）、
+     香港中華總商會、生產力促進局、香港旅發局、
+     政府「資料一線通」
 
 策略 2：專業背書可視化
 
@@ -168,6 +192,12 @@ AI 的品牌權威度判斷維度：
   → 報導中包含你的完整品牌名稱和核心服務描述
   → 報導中包含你的專業背景
   → 線上版本中確保品牌名稱是文字（不是圖片）
+
+  香港數位 PR 重點媒體：
+  → 大眾：香港01、明報、東方日報、星島日報、頭條日報、am730
+  → 財經 / B2B：信報、經濟日報、HKET
+  → 廣播：商業電台、TVB
+  → 呢批媒體喺 Google 權威度高，AI 引用香港資訊時經常拎佢哋做來源
 ```
 
 ---
@@ -229,9 +259,21 @@ AI 的語義理解：
   不僅僅是你的網站，在外部平台上也建立主題內容：
 
   → 在 Medium / Substack 發表行業文章
-  → 在 LinkedIn 發布專業見解
+  → 在 LinkedIn 發布專業見解（香港 B2B / 金融 / 專業服務必爭）
   → 在行業論壇回答專業問題
   → 成為媒體報導中的專家評論來源
+
+  香港等效平台（本地語義存在感）：
+  → LIHKG（連登）、Discuss.com.hk、Uwants、高登
+    → 香港最大討論區，Google 權威高，AI 會當作「本地真實意見」
+  → OpenRice（餐飲）、TripAdvisor（旅遊）
+  → Facebook 社團（香港家長 / 消費者 / 行業群組極活躍）
+  → 小紅書（RED）：美妝、餐飲、旅遊、生活資訊嘅香港 discovery 入口
+  → YouTube（香港 KOL / 教學片，Google 索引強）
+
+  ⚠️ 但書：國際 AI 仍然大量引用 Wikipedia、Reddit、YouTube、
+     LinkedIn 等全球英文來源，呢點唔會變。
+     本地平台係「補充」，唔係「取代」——兩層都要做。
 
   效果：
   → AI 在不同平台上看到你的專業內容
@@ -291,13 +333,13 @@ AI 的語義理解：
 
 做法 3：建立獨立的數據頁面
 
-  /data/dental-implant-statistics-2026/
+  /data/hk-dental-implant-statistics-2026/
 
   內容：
-  → 2026 年植牙市場數據
+  → 2026 年香港植牙市場數據
   → 成功率統計
-  → 費用範圍統計
-  → 各國植牙數量對比
+  → 費用範圍統計（以 HK$ 計，分港島 / 九龍 / 新界）
+  → 各地區植牙數量對比
 
   在整個網站中引用這個數據頁面，
   使其成為「數據樞紐」。
@@ -363,9 +405,12 @@ Perplexity 優化重點：
   被引用的來源：
   ✅ 「根據 2026 年香港牙醫學會調查，
       香港單顆植牙的平均費用為 HK$20,000-35,000。」
+  ✅ 香港新聞媒體（經濟日報 / 香港01）嘅醫療費用報導
+  ✅ OpenRice 式本地目錄、診所官網嘅清晰價目表
 
   ❌ 不容易被引用的：
      「植牙費用因人而異，最好諮詢牙醫獲取報價。」
+     「價錢實惠，歡迎查詢。」（冇數字 = 冇得引用）
 ```
 
 ### 實例 3：ChatGPT Search 優化策略
@@ -382,12 +427,16 @@ ChatGPT Search 優化重點：
   ✅ 內容中預測並回答後續問題
 
 實例：
-  使用者問 ChatGPT：「香港中環有好的牙醫嗎？」
+  香港使用者問 ChatGPT：「中環有咩牙醫推介？」
 
   ChatGPT 可能引用你的內容，如果：
-  → 你的頁面中有「中環牙醫推薦」相關內容
-  → 你的頁面提到具體服務和價格
+  → 你的頁面中有「中環牙醫推介」相關內容
+     （用粵語口語字都包埋，對應真實查詢）
+  → 你的頁面提到具體服務和 HK$ 價格
   → 你的 GBP 資訊完整（ChatGPT 會參考 GBP 數據）
+  → 你喺 Bing 索引入面（ChatGPT 搜尋大量依賴 Bing，
+     所以香港網站一定要交 Bing Webmaster Tools）
+  → 你嘅品牌喺 LIHKG / OpenRice / 香港媒體有正面討論
 ```
 
 ---
@@ -409,17 +458,22 @@ GEO 需要的新 KPI：
 
 目前的追蹤方法：
   1. 手動測試（最可靠）
-     定期在 ChatGPT、Perplexity、Google 中
+     定期在 ChatGPT、Gemini、Perplexity、Copilot、
+     Google（AI Overviews / AI Mode）中
      搜尋你的行業關鍵字，記錄你的品牌是否被引用
+     → 香港做法：用廣東話 + 粵語口語字測試
+       （「邊間好」「推介」「點揀」「平唔平」）
 
   2. 新興工具
      → ZipTie（AI 引用監控）
      → AIOSEO 引用追蹤功能
      → 使用 Brand24 追蹤品牌被提及
+       （記得設定監測 LIHKG、Discuss、Uwants、小紅書）
 
   3. GA4 輔助
      查看 Referral 流量中是否有來自
-     perplexity.ai、chatgpt.com 等來源
+     perplexity.ai、chatgpt.com、gemini.google.com、
+     copilot.microsoft.com 等來源
 ```
 
 ---
@@ -439,9 +493,12 @@ GEO 需要的新 KPI：
 
 ```
 ☐ 在 Wikidata 建立品牌條目（如符合標準）
-☐ 確保所有平台 NAP 一致
+☐ 確保所有平台 NAP 一致（香港地址格式 + 852 電話）
 ☐ 在行業平台上建立專業檔案
+   （GBP、OpenRice、HKTDC、商會目錄、香港媒體）
 ☐ 發布 2-3 篇數據驅動的行業報告
+   （最好係香港本地數據，全球來源通常冇）
+☐ 香港加做：數位 PR 爭取香港01 / 經濟日報 / 明報報導
 ```
 
 ### 第 5-6 個月：擴展語義存在感
@@ -462,10 +519,12 @@ GEO 需要的新 KPI：
 | ☐ 為核心文章建立引用句 | 每篇 3-5 個精確、可引用的句子 |
 | ☐ 加入 FAQ 和 How-to 格式 | 配合對應 Schema |
 | ☐ 強化內容中的數據點 | 引用研究、統計、調查 |
-| ☐ 建立品牌權威度 | Wikidata、行業目錄、媒體曝光 |
+| ☐ 建立品牌權威度 | Wikidata、行業目錄、香港媒體曝光 |
 | ☐ 建立主題集群 | 樞紐頁面 + 8-10 集群頁面 |
-| ☐ 在外部平台發布專業內容 | Medium、LinkedIn、行業論壇 |
-| ☐ 手動測試 AI 引用情況 | 每月定期在主要 AI 平台測試 |
+| ☐ 在外部平台發布專業內容 | LinkedIn、Medium、LIHKG / Discuss / Uwants、小紅書 |
+| ☐ 香港本地平台足跡 | GBP、OpenRice、HKTDC、Facebook 社團 |
+| ☐ 交 Bing Webmaster Tools | Yahoo 香港搜尋 + ChatGPT / Copilot 索引 |
+| ☐ 手動測試 AI 引用情況 | 每月用粵語查詢在主要 AI 平台測試 |
 | ☐ 建立引用追蹤機制 | 新興工具 + GA4 輔助 |
 
 ---

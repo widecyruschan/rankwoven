@@ -12,6 +12,8 @@ Google Search Console（簡稱 GSC，前身為 Google Webmaster Tools）是 Goog
 - 即時反映網站與搜尋引擎的互動狀態
 - 是發現 SEO 問題的最早警報系統
 
+> **香港版提示：** Google 喺香港佔約 **92-95%** 搜尋份額，GSC 基本上就係香港 SEO 嘅主儀表板。但香港仲有 **Yahoo 香港搜尋（hk.yahoo.com，用 Bing 技術，約 3-6% 份額，35+ 族群偏高）** 同 **Bing（約 3-5%，Edge / Windows 預設）**，而 **ChatGPT 搜尋與 Microsoft Copilot** 亦大量依賴 Bing 索引 —— 所以做完 GSC，記得再開 **Bing Webmaster Tools** 交同一份 Sitemap（本章末有清單）。
+
 ---
 
 ## 第一步：驗證網站擁有權
@@ -28,7 +30,7 @@ Google Search Console（簡稱 GSC，前身為 Google Webmaster Tools）是 Goog
 
 ### 推薦流程（DNS 驗證法）
 1. 登入 [search.google.com/search-console](https://search.google.com/search-console)
-2. 選擇「新增資源」→ 輸入網域（如 `example.com`）
+2. 選擇「新增資源」→ 輸入網域（如 `example.hk` 或 `example.com.hk`）
 3. 選擇「DNS 記錄」→ 複製 TXT 記錄
 4. 到域名 DNS 管理台（如 Cloudflare、GoDaddy），新增 TXT 記錄
 5. 回到 GSC 點「驗證」
@@ -37,12 +39,14 @@ Google Search Console（簡稱 GSC，前身為 Google Webmaster Tools）是 Goog
 
 | 類型 | 格式 | 使用時機 |
 |------|------|----------|
-| 網域資源 | `example.com` | 跨子網域統一管理（推薦） |
-| URL 前綴 — https:// | `https://example.com` | 只追蹤 HTTPS |
-| URL 前綴 — http:// | `http://example.com` | 舊 http 網站 |
-| URL 前綴 — www | `https://www.example.com` | 含 www 版本 |
+| 網域資源 | `example.hk` | 跨子網域統一管理（推薦） |
+| URL 前綴 — https:// | `https://example.hk` | 只追蹤 HTTPS |
+| URL 前綴 — http:// | `http://example.hk` | 舊 http 網站 |
+| URL 前綴 — www | `https://www.example.com.hk` | 含 www 版本 |
 
-> 💡 **推薦使用「網域資源」**，自動涵蓋所有子網域（www、blog、shop）和所有通訊協定（http/https）。
+> 💡 **推薦使用「網域資源」**，自動涵蓋所有子網域（www、blog、shop、en）和所有通訊協定（http/https）。
+>
+> **香港多語言網站提示：** 如果你用 `/zh-hk/`、`/en-hk/`、`/zh-cn/` 子目錄，全部都喺同一個網域資源入面，記得配合 hreflang；如果英文版用獨立網域或子網域（`en.example.hk`），網域資源驗證可以一次過包晒。
 
 ---
 
@@ -67,7 +71,8 @@ Google Search Console（簡稱 GSC，前身為 Google Webmaster Tools）是 Goog
 |--------|------|----------|
 | 查詢（Queries） | 看哪些關鍵字帶來流量 | 排除品牌關鍵字看純 SEO 成效 |
 | 網頁（Pages） | 看哪些頁面表現好 | 找出流量暴跌的頁面 |
-| 國家（Countries） | 看流量來自哪裡 | 多語言網站的市場分析 |
+| 國家（Countries） | 看流量來自哪裡 | 香港網站主力應為 Hong Kong；若出現大量內地／海外流量，要確認 hreflang 與語言版本有冇錯配 |
+| 地區（香港） | 本地流量佔比 | 做本地生意應以香港流量為主要 KPI，並分開睇內地客流量 |
 | 裝置（Devices） | 手機/電腦/平板 | 手機佔比低 → 行動版可能有問題 |
 | 搜尋外觀（Search Appearance） | 含 SERP 功能 | 看產品摘要/FAQ/影片等效果 |
 | 日期（Date） | 時間範圍比較 | 對比去年同期排除季節性 |
@@ -233,13 +238,25 @@ GSC → 成效 → 日期 → 比較
 ```
 // 找出所有問句形式的搜尋（適合內容創作靈感）
 (怎麼|如何|什麼|為什麼|哪裡|何時)
+// 香港粵語版（香港用家真實打法）
+(點樣|點解|邊度|幾時|係咪|有冇|好唔好)
 
 // 找出含價格意圖的搜尋
 (便宜|價格|多少錢|費用|優惠|特價)
+// 香港粵語版
+(幾錢|平唔平|收費|價錢|值唔值|抵唔抵|優惠碼)
 
 // 找出比較型搜尋
 (vs|比較|推薦|哪個好|排行|評價)
+// 香港粵語版
+(推介|邊間好|點揀|比較|好唔好|邊間平)
+
+// 香港地區型搜尋（本地 SEO 必用）
+(中環|銅鑼灣|灣仔|尖沙咀|旺角|觀塘|沙田|元朗|
+ 將軍澳|荃灣|屯門|大埔|北角|鰂魚涌|西環|深水埗)
 ```
+
+> **香港用法：** 香港用家好少打標準書面語，regex 一定要包埋粵語口語字同地區名，否則會漏咗大量真實查詢。搵到呢啲字之後，就係你下一篇內容嘅題目。
 
 ### 技巧三：導出數據到 Google Sheets
 
@@ -282,8 +299,8 @@ GSC 的限制是單次只能檢查一個 URL，但你可以用 API 批量處理�
 ```python
 # 概念示範：批量檢查 URL 狀態（需要設定 GSC API）
 urls_to_check = [
-    "https://example.com/page1",
-    "https://example.com/page2",
+    "https://www.example.hk/zh-hk/page1",
+    "https://www.example.hk/zh-hk/page2",
     # ...
 ]
 # 使用 searchconsole.query.inspect() 批量查詢
@@ -342,6 +359,18 @@ urls_to_check = [
 ☐ 體驗報表：檢查 Core Web Vitals
 ☐ 體驗報表：檢查行動可用性問題
 ☐ 手動操作：確認沒有新的懲罰或安全問題
+
+香港加做（每月）：
+☐ Bing Webmaster Tools：確認 Sitemap 狀態
+   （Yahoo 香港搜尋 + ChatGPT / Copilot 索引來源）
+☐ 國家篩選確認「Hong Kong」流量佔比正常
+☐ 用廣東話 regex（邊間好 / 幾錢 / 點揀）檢查新查詢機會
+☐ 用 Google AI / ChatGPT / Gemini / Perplexity / Copilot
+   各測 5 條核心問題，記錄 AI 引用情況
+☐ 檢查 Google 商家檔案（GBP）洞察：電話、路線、網站點擊
+☐ 檢查 robots.txt 有冇誤封 AI 爬蟲
+   （GPTBot、OAI-SearchBot、ClaudeBot、Claude-SearchBot、
+     PerplexityBot、Google-Extended）
 ```
 
 ---

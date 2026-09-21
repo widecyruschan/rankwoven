@@ -42,13 +42,16 @@ Crawl Budget = Crawl Rate Limit × Crawl Demand
 
 ### 典型的高風險網站
 
-| 網站類型 | 為什麼 Crawl Budget 是問題 |
-|----------|--------------------------|
-| **電商網站** | 篩選組合產生數萬 URL、分頁、商品變體 |
-| **新聞媒體** | 大量存檔頁面、分類頁面、標籤頁面 |
-| **分類廣告** | 過期的廣告頁面仍然存在 |
-| **論壇** | 大量低內容頁面、會員頁面、重複討論 |
-| **房地產** | 已售出/下架的物件頁面仍然可訪問 |
+| 網站類型 | 香港常見例子 | 為什麼 Crawl Budget 是問題 |
+|----------|------------|--------------------------|
+| **電商網站** | 香港網店（HKTVmall 式大型目錄、時裝/美妝網店、Shopify / SHOPLINE 商店） | 篩選組合產生數萬 URL、分頁、商品變體 |
+| **新聞媒體** | 香港01、經濟日報、明報、星島、東方、頭條日報 | 大量存檔頁面、分類頁面、標籤頁面 |
+| **分類廣告** | Car1.hk（搵車）、DCFever 二手區、28Hse / 星之谷（樓盤） | 過期的廣告頁面仍然存在 |
+| **論壇** | LIHKG（連登）、Discuss.com.hk、Uwants、高登 | 大量低內容頁面、會員頁面、重複討論 |
+| **房地產** | 中原、美聯、利嘉閣、28Hse | 已售出 / 已租出 / 下架的樓盤頁面仍然可訪問 |
+| **餐飲 / 生活平台** | OpenRice（開飯喇）式目錄、預約平台 | 店舖頁 × 地區 × 菜式 × 評分組合產生大量近似 URL |
+
+> **香港情境提示：** 香港網站多數以 `.hk` / `.com.hk` 或 `/zh-hk/` 子目錄營運，繁中、英文、簡中版本並存時，URL 數量會瞬間變成 2–3 倍。做 Crawl Budget 審計時，記得把三個語言版本一併計入，並確認 hreflang 指向的頁面冇被 robots.txt 封錯。
 
 ---
 
@@ -57,14 +60,18 @@ Crawl Budget = Crawl Rate Limit × Crawl Demand
 ### 原因 1：Faceted Navigation（分面導航）URL 爆炸
 
 ```
-電商網站典型問題：
+香港網店典型問題（例如一間旺角時裝網店，價錢以 HK$ 計）：
 
-  一個商品分類 + 5 種顏色 + 5 種尺寸 + 3 個價格範圍 =
+  一個商品分類（女裝波鞋）+ 5 種顏色 + 5 種尺碼
+   + 3 個價格範圍（HK$300-600 / HK$600-1,000 / HK$1,000 以上）=
    1 × 5 × 5 × 3 = 75 種組合 URL
 
   每個組合都是一個可爬取的 URL！
-  Googlebot 花時間爬取 /shoes/?color=red&size=9
-  而不是爬取你的新商品頁面。
+  Googlebot 花時間爬取 /shoes/?color=red&size=9&price=hkd600-1000
+  而不是爬取你今季新上架的商品頁面。
+
+  再加上地區篩選（門市自取：尖沙咀 / 銅鑼灣 / 沙田 / 將軍澳）
+  → URL 數量再乘 4 倍。
 ```
 
 ### 原因 2：低品質頁面
@@ -72,11 +79,13 @@ Crawl Budget = Crawl Rate Limit × Crawl Demand
 ```
 低品質頁面消耗 Crawl Budget 的典型：
 
-  → 內容少於 200 字的頁面
+  → 內容少於 200 字的頁面（例如只得一句「銅鑼灣分店」的門市頁）
   → 自動生成的頁面（例如：標籤頁面）
   → 沒有獨特價值的分類/存檔頁面
   → 搜尋結果頁面（內部搜尋功能產生的 URL）
   → 重複內容頁面（例如：印刷版本、PDF 版本）
+  → 同一篇文章的繁中 / 英文 / 簡中版本未做好 hreflang，被當成重複內容
+  → 18 區地區頁（中西區、觀塘、元朗……）內容只差地區名，其餘完全一樣
 ```
 
 ### 原因 3：無限空間（Infinite Spaces）
@@ -86,9 +95,13 @@ Crawl Budget = Crawl Rate Limit × Crawl Demand
 
   日曆頁面 → /events/2026/01/01, /events/2026/01/02, ...
   → 無窮無盡的 URL！
+  （香港例子：演唱會 / 展覽 / 會議日程頁、
+    OpenRice 式訂枱時間頁、補習社時間表）
 
   搜尋過濾功能 → 每個搜尋詞產生一個 URL
   → 理論上無限的 URL 數量
+  （香港例子：樓盤搜尋「沙田 兩房 HK$600 萬以下」、
+    搵車頁「HK$10 萬內 七座」）
 
 Googlebot 一旦進入這些「兔子洞」，
 會浪費大量 Crawl Budget。
@@ -151,10 +164,15 @@ Disallow: /tag/
 
 優化方向：
   ✅ 使用 CDN（內容傳遞網路）
+     → 香港網站特別受惠：Cloudflare / Akamai / AWS CloudFront
+       都有香港或亞洲邊緣節點，Googlebot 由最近節點抓取，TTFB 明顯下降
+     → 若主要客群喺香港，可選香港本地主機（HK colo）
+       或 AWS ap-east-1（香港 region），延遲最低
   ✅ 優化伺服器回應時間（Time To First Byte < 200ms）
   ✅ 壓縮圖片和靜態資源
   ✅ 使用快取策略減少伺服器負載
-  ✅ 確保主機方案足夠應付流量（共享主機經常是瓶頸）
+  ✅ 確保主機方案足夠應付流量（平價共享主機經常是瓶頸，
+     尤其本地促銷日如雙 11、新年大減價、演唱會開賣）
 ```
 
 ### 策略 3：保持網站「乾淨」
@@ -188,9 +206,11 @@ Sitemap 是你的 Crawl Budget 使用說明書：
      → 例如：sitemap-products.xml、sitemap-blog.xml
   ✅ 在 robots.txt 中引用 Sitemap
 
-範例 robots.txt：
-  Sitemap: https://yoursite.com/sitemap_index.xml
+範例 robots.txt（香港網店 .hk 域名）：
+  Sitemap: https://www.yoursite.hk/sitemap_index.xml
 ```
+
+> **香港提示：** 記得同時喺 **Bing Webmaster Tools** 提交 Sitemap。香港 Bing 份額約 3–5%（Yahoo 香港搜尋亦用 Bing 技術），而且 ChatGPT 搜尋與 Microsoft Copilot 大量依賴 Bing 索引——AI 時代唔可以只交 Google。
 
 ### 策略 5：內部連結結構優化
 
@@ -198,8 +218,10 @@ Sitemap 是你的 Crawl Budget 使用說明書：
 Google 通過內部連結發現新頁面：
 
   → 確保重要頁面在網站導航中（距首頁 3 次點擊內）
+     （例如：首頁 → 服務 →「中環美容療程」）
   → 不要讓重要內容深埋在 /category/subcategory/subsubcategory/.../
   → 使用麵包屑（Breadcrumbs）導航
+     （香港常見：首頁 > 九龍 > 油尖旺 > 尖沙咀 > 餐廳）
   → HTML Sitemap 頁面（人工可讀的網站地圖頁面）可以幫助 Google 發現頁面
   → 確保分頁連結使用 <a href> 而不是 JavaScript
 ```
@@ -326,8 +348,20 @@ Search Console → 設定 → 爬取統計資料
   ✅ 減少伺服器負載 → Google 可以增加 Crawl Rate
   ✅ 加快回應時間 → 相同時間內可以爬取更多頁面
   ✅ 全球節點 → Googlebot 從最近的節點爬取，速度更快
+     （香港網站應確認 CDN 有啟用香港 / 亞洲 PoP）
 
   但注意：確保 CDN 不會阻擋 Googlebot！
+  ⚠️ 常見錯誤：CDN / WAF 的地理封鎖（geo-blocking）或
+     保安規則把 Googlebot（主要來自美國 IP）擋掉，
+     令香港網站「自己封咗自己」。
+     同時記得放行 AI 爬蟲（GPTBot、OAI-SearchBot、ClaudeBot、
+     PerplexityBot、Google-Extended），做法同全球一致。
+
+  驗證方法：Search Console → 網址檢查 →「即時測試」，
+  或用 DNS / IP 反查確認 Googlebot 真身未被防火牆誤擋。
+
+  香港用家常用 Cloudflare：留意 Bot Fight Mode /
+  Managed Rules 有機會誤傷爬蟲，建議加白名單規則。
 ```
 
 ---

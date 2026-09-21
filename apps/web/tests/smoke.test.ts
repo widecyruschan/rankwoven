@@ -203,6 +203,12 @@ describe('web smoke test', () => {
 
     const firstArticle = await loadBlogArticle('seo-introduction');
     expect(firstArticle?.title).toContain('SEO 是什麼');
+    expect(firstArticle?.seoTitle).toContain('2026 香港新手');
+    expect(firstArticle?.metaDescription).toContain('香港市場');
+    expect(firstArticle?.focusKeyphrase).toBe('SEO是什麼');
+    expect(firstArticle?.html).not.toContain('seo_title');
+    expect(firstArticle?.html).not.toContain('meta_description');
+    expect(firstArticle?.html).toContain('香港本地');
     expect(firstArticle?.html).toContain('/blog/seo-business-value');
     expect(firstArticle?.html).not.toContain('<script');
     expect(firstArticle?.tableOfContents.length).toBeGreaterThan(3);
@@ -216,6 +222,19 @@ describe('web smoke test', () => {
     const seoDescription = getBlogArticleSeoDescription(shortExcerptArticle!);
     expect([...seoDescription].length).toBeGreaterThanOrEqual(120);
     expect([...seoDescription].length).toBeLessThanOrEqual(156);
+  });
+
+  it('uses imported SEO attributes for the blog head instead of article body content', async () => {
+    const blogArticleViewSource = await readFile(resolve('src/views/BlogArticleView.vue'), 'utf8');
+    const importScriptSource = await readFile(resolve('../../scripts/import-seo-blog.mjs'), 'utf8');
+
+    expect(blogArticleViewSource).toContain('currentArticle.seoTitle');
+    expect(blogArticleViewSource).toContain('currentArticle.metaDescription');
+    expect(blogArticleViewSource).toContain('currentArticle.focusKeyphrase');
+    expect(importScriptSource).toContain('parseFrontmatter');
+    expect(importScriptSource).toContain("replaceAll('香港本地', '香港本地')");
+    expect(importScriptSource).toContain('seoTitle: attributes.seo_title');
+    expect(importScriptSource).toContain('generated-images');
   });
 
   it('builds a keyword-aligned public SEO head without indexing private pages', () => {

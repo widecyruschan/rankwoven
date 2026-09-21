@@ -8331,3 +8331,119 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 以真實測試帳戶補做 customer／admin 的登入後桌面及手機走查。
 - 若要追求更接近截圖的數據密度，可再按頁面逐一收斂 dashboard card 間距與圖表樣式。
+
+## 會話總結（2026-09-22）— 更新 SEO 專欄文章與章節配圖
+
+### 會話主要目的
+
+根據最新 `/Volumes/Extreme SSD/gitCode/終身學習文件/SEO/chapters/` 內容，更新前端 Blog 文章，並用 `generated-images/` 為每章配上新封面。
+
+### 完成的主要任務
+
+- 匯入最新 86 章 Markdown，重建 Blog article manifest、標題、摘要、分類與閱讀時間。
+- 將 `generated-images/` 按章節前綴匹配，轉換為 86 張 WebP 封面並覆蓋 `apps/web/public/blog/seo/images/`。
+- 保留章節內非封面圖片；只清除舊封面引用。
+- 為缺少上一章／下一章／索引連結的最新文章補上 Blog 導覽兜底。
+- 更新 `scripts/import-seo-blog.mjs`，以後可直接從同一個 SEO 文件目錄重複匯入。
+
+### 關鍵決策和解決方案
+
+- 以章節編號作為文章與配圖的唯一對應鍵，避免依賴不穩定的中文檔名或圖片標題。
+- 只提交專案內產生的 Markdown、manifest、WebP 和匯入腳本，不把外部 SEO 文件目錄納入 Git。
+- 保留既有 slug／分類邏輯，避免 Blog URL、sitemap 與內部連結失效。
+
+### 使用的技術棧
+
+- Node.js ESM、Markdown、`marked`、DOMPurify、`cwebp`、Vue 3 Blog manifest。
+
+### 新增或修改文件
+
+- `scripts/import-seo-blog.mjs`
+- `apps/web/src/content/seo/articles.json`
+- `apps/web/src/content/seo/seo-chapter-01.md` 至 `seo-chapter-86.md`
+- `apps/web/public/blog/seo/images/seo-chapter-01.webp` 至 `seo-chapter-86.webp`
+- `README.md`
+
+### 驗證結果
+
+- 匯入腳本成功：86 articles。
+- manifest：86 篇、86 個唯一 slug、86 個唯一封面。
+- 圖片：86 張 WebP，封面尺寸 1672×941。
+- Web tests：21 passed。
+- Web build：通過；保留既有大型 Ant Design Vue bundle 警告。
+- Blog 文章內部路徑檢查：未發現未處理的 `.md` 連結。
+
+### 下一步行動清單
+
+- 部署後檢查 `/blog`、`/blog/seo-introduction` 與最後一章的封面、正文、目錄及前後章導覽。
+- 如 SEO 原文再次更新，只需重跑 `node scripts/import-seo-blog.mjs` 並重新驗證 Blog build。
+
+## 會話總結（2026-09-22）— 將文章 SEO 屬性移出正文並寫入 head
+
+### 會話主要目的
+
+修正最新 SEO 文章的 frontmatter 被當成文章正文渲染的問題，讓每篇文章的 SEO 屬性分別寫入 HTML head。
+
+### 完成的主要任務
+
+- 匯入腳本解析 `seo_title`、`meta_description`、`long_tail_keyword`、`focus_keyphrase` frontmatter。
+- 將 SEO 欄位寫入 `articles.json`，並從正文 Markdown 移除 YAML frontmatter。
+- Blog 動態頁使用 `seo_title` 作 `<title>`、`meta_description` 作 description，並將焦點／長尾關鍵詞寫入 keywords 與 BlogPosting schema。
+- build-time SEO fallback 同步使用相同 head 屬性，避免 SPA 與靜態 HTML metadata 不一致。
+- 將 Blog 封面 `<img>` 尺寸對齊最新 WebP 圖片的 1672×941 比例。
+- 將 description 驗證門檻調整為 70–160 字，尊重來源 frontmatter 的合法 SEO 長度。
+
+### 關鍵決策和解決方案
+
+- 保留公開 route slug 穩定性，不用 frontmatter 的 `slug` 覆蓋既有 URL；slug 不是 head 屬性。
+- SEO metadata 與正文內容分層保存，正文只渲染文章 H1、章節、表格及正文圖片。
+- 同時修正 client runtime 與 Vite build-time fallback，確保搜尋引擎讀到的初始 HTML 和瀏覽器導航後 metadata 一致。
+
+### 使用的技術棧
+
+- Node.js ESM、Vue 3、Vue I18n、`marked`、DOMPurify、JSDOM、Schema.org BlogPosting。
+
+### 新增或修改文件
+
+- `scripts/import-seo-blog.mjs`
+- `apps/web/src/blog/articles.ts`
+- `apps/web/src/views/BlogArticleView.vue`
+- `apps/web/scripts/generate-seo-pages.mjs`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- 匯入後 86 篇文章均具 SEO metadata，正文不含 `seo_title`／`meta_description` 欄位。
+- 靜態 `/blog/seo-introduction/index.html` 已驗證 title、description、keywords 使用 frontmatter 值。
+- Web tests：22 passed。
+- Web lint：通過。
+- Web build：通過；保留既有 bundle size warning。
+- `git diff --check`：通過。
+
+### 下一步行動清單
+
+- 部署後抽查 `/blog/seo-introduction`、`/blog/keyword-research` 與 `/blog/nap-citations` 的 view-source head metadata。
+
+## 會話總結（2026-09-22）— 統一 SEO 文章用詞
+
+### 會話主要目的
+
+將 SEO 專欄文章內所有「香港本地」統一改為「香港本地」。
+
+### 完成的主要任務
+
+- 更新 86 篇已匯入文章正文與 SEO manifest 文字。
+- 在 `scripts/import-seo-blog.mjs` 加入匯入時文字正規化，避免下一次重新匯入時舊用詞再次出現。
+- 保留 SEO head、文章 slug、圖片與內部連結結構不變。
+
+### 驗證結果
+
+- `apps/web/src/content/seo` 內「香港本地」出現次數：0。
+- Web tests：22 passed。
+- Web lint：通過。
+- Web build：通過。
+
+### 下一步行動清單
+
+- 若未來來源文章仍使用「香港本地」，重跑匯入腳本會自動轉成「香港本地」。

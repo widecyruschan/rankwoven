@@ -9,6 +9,16 @@
 - 提供額外的排名信號（Alt Text、檔案名稱）
 - 讓你的頁面有資格出現在 Google 圖片搜尋和 Google Lens 結果中
 
+### 香港市場嘅三個額外理由
+
+| 理由 | 說明 |
+|------|------|
+| **手機主導** | 香港手機上網滲透率極高，圖片載入慢直接趕客；Google 亦以行動版為準做索引（見第 27 章） |
+| **餐飲 / 零售 / 旅遊視覺先行** | 香港人搵餐廳、酒店、Spa、裝修案例，第一步就係睇相。OpenRice、TripAdvisor、Instagram、小紅書都係以圖行先，你嘅網站圖片質素直接影響轉換 |
+| **Google Lens 同以圖搜圖** | 香港用家愈來愈多用 Google Lens 掃實物／餐牌／產品搵資訊，圖片 SEO 由「加分」變成「必要」 |
+
+> **香港本地機會**：Google 圖片搜尋「旺角 裝修 案例」「中環 lunch 推介」呢類字，本地中小企嘅原創相好易排到前排——因為大平台嘅相多數係圖庫相，而你嘅實拍相先係 Google 想要嘅原創內容。
+
 ---
 
 ## 圖片 SEO 五大支柱
@@ -34,11 +44,14 @@
 |------|------|------|
 | 描述性 | `golden-retriever-puppy-food.jpg` | `IMG_4582.jpg` |
 | 使用連字號 | `dog-food-comparison-chart.png` | `dog_food_comparison_chart.png` |
-| 包含關鍵字 | `seo-checklist-2024.jpg` | `image1.jpg` |
+| 包含關鍵字 | `seo-checklist-2026.jpg` | `image1.jpg` |
 | 避免關鍵字堆砌 | `dog-food-guide.jpg` | `best-dog-food-cheap-dog-food-top-dog-food.jpg` |
 | 小寫英文 | `royal-canin-small-breed.jpg` | `Royal_Canin_Small_Breed.JPG` |
+| **加入地區（香港適用）** | `mong-kok-store-interior.jpg`、`tsim-sha-tsui-restaurant-menu.jpg` | `shop1.jpg` |
 
 > 與 URL 相同，Google 將連字號視為分隔符，底線不被視為分隔符。
+
+**香港地名拼法建議**（同第 20 章一致）：`mong-kok`（旺角）、`causeway-bay`（銅鑼灣）、`tsim-sha-tsui`（尖沙咀）、`sha-tin`（沙田）、`tseung-kwan-o`（將軍澳）、`central`（中環）。
 
 ---
 
@@ -49,7 +62,7 @@
 Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀器描述圖片的依據。對 SEO 而言，它是 Google 理解圖片內容的**最強信號**。
 
 ```html
-<img src="dog-food-comparison.jpg" alt="2024 年 5 款熱門狗飼料營養成分比較表">
+<img src="dog-food-comparison.jpg" alt="2026 年 5 款熱門狗糧營養成分比較表">
 ```
 
 ### Alt Text 四大原則
@@ -58,16 +71,19 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 |------|------|
 | **描述性** | 準確描述圖片內容，想像你在向看不見的人描述這張圖 |
 | **簡潔** | 控制在 125 字元以內（螢幕閱讀器通常在此截斷） |
-| **自然融入關鍵字** | 如果合理，將相關關鍵字自然融入 |
-| **避免關鍵字堆砌** | `alt="狗飼料推薦狗飼料品牌狗飼料評價"` 會被視為垃圾 |
+| **自然融入關鍵字** | 如果合理，將相關關鍵字自然融入（**用香港用語**：狗糧推介、HK$ 價錢） |
+| **避免關鍵字堆砌** | `alt="狗糧推介狗糧品牌狗糧評價"` 會被視為垃圾 |
 
-### Alt Text 範例對比
+### Alt Text 範例對比（香港場景）
 
 | 圖片內容 | ⭕ 好的 Alt Text | ❌ 差的 Alt Text |
 |----------|-----------------|-----------------|
-| 狗飼料成分表 | `小型犬幼犬飼料主要營養成分對照表` | `表格` |
+| 狗糧成分表 | `小型犬幼犬狗糧主要營養成分對照表` | `表格` |
 | SEO 流程圖 | `SEO 優化四步驟流程圖：研究→創作→優化→追蹤` | `SEO 流程圖 SEO 策略 SEO 優化` |
-| 產品照片 | `皇家 S 系列小型犬飼料 2kg 包裝正面` | `產品圖片` |
+| 產品照片 | `皇家 S 系列小型犬狗糧 2kg 包裝正面` | `產品圖片` |
+| 旺角門市相 | `PetHK 旺角門市店內狗糧貨架` | `門市` |
+| 餐廳菜牌相 | `中環日式餐廳午市定食餐牌（HK$98 起）` | `menu` |
+| 裝修案例相 | `沙田兩房單位北歐風裝修實拍（客厅）` | `IMG_2041` |
 
 ### 何時 Alt Text 可以留空？
 
@@ -78,6 +94,8 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 ```
 
 設為空字串（不是不寫）告訴螢幕閱讀器這張圖可以略過。
+
+> **香港合規補充**：香港政府網站同受資助機構項目，圖片 Alt Text 係 **WCAG 2.1 AA** 合規要求之一，唔係純 SEO 考慮。
 
 ---
 
@@ -101,6 +119,8 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 | 縮圖 | 20-50KB | 適當降低解析度 |
 | Hero 大圖 | 300-500KB | 使用懶加載（Lazy Loading） |
 | Logo / 圖標 | 5-20KB | SVG 優先 |
+
+> **香港情境提醒**：雖然香港 5G 同光纖入屋普及，但好多用家係喺港鐵、商場、街上用手機網絡瀏覽。圖超過 200KB，喺地鐵入面隨時 load 唔到——LCP 會爆、跳出率會升。
 
 ### 壓縮工具推薦
 
@@ -128,7 +148,7 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
      sizes="(max-width: 600px) 100vw,
             (max-width: 900px) 50vw,
             800px"
-     alt="小型犬飼料包裝正面照">
+     alt="小型犬狗糧包裝正面照">
 ```
 
 #### 方式 2：`<picture>` 元素（格式切換）
@@ -137,7 +157,7 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 <picture>
   <source srcset="dog-food.webp" type="image/webp">
   <source srcset="dog-food.avif" type="image/avif">
-  <img src="dog-food.jpg" alt="小型犬飼料包裝正面照">
+  <img src="dog-food.jpg" alt="小型犬狗糧包裝正面照">
 </picture>
 ```
 
@@ -175,11 +195,11 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 {
   "@context": "https://schema.org",
   "@type": "ImageObject",
-  "contentUrl": "https://example.com/images/dog-food-comparison.jpg",
-  "name": "2024 年狗飼料營養成分比較表",
-  "description": "5 款熱門小型犬飼料的蛋白質、脂肪、纖維含量比較",
-  "creditText": "PetHome",
-  "license": "https://example.com/license"
+  "contentUrl": "https://pethk.hk/images/dog-food-comparison.jpg",
+  "name": "2026 年狗糧營養成分比較表",
+  "description": "5 款熱門小型犬狗糧嘅蛋白質、脂肪、纖維含量比較（香港售價 HK$）",
+  "creditText": "PetHK 毛孩百貨",
+  "license": "https://pethk.hk/license"
 }
 </script>
 
@@ -189,13 +209,15 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
   "@type": "WebPage",
   "primaryImageOfPage": {
     "@type": "ImageObject",
-    "url": "https://example.com/images/dog-food-comparison.jpg",
+    "url": "https://pethk.hk/images/dog-food-comparison.jpg",
     "width": 1200,
     "height": 800
   }
 }
 </script>
 ```
+
+> **餐飲 / 實體店補充**：香港餐廳、店舖想喺 Google 圖片搜尋同 Google 地圖突圍，除咗 ImageObject，記得配合 **Google 商家檔案（GBP）** 上載原創相（店面、餐點、菜牌、環境），並保持 NAP 一致。
 
 ---
 
@@ -224,11 +246,11 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
-    <loc>https://example.com/blog/dog-food-guide.html</loc>
+    <loc>https://pethk.hk/blog/dog-food-guide.html</loc>
     <image:image>
-      <image:loc>https://example.com/images/dog-food-comparison.jpg</image:loc>
-      <image:title>狗飼料營養成分比較表</image:title>
-      <image:caption>2024 年 5 款熱門狗飼料營養對照</image:caption>
+      <image:loc>https://pethk.hk/images/dog-food-comparison.jpg</image:loc>
+      <image:title>狗糧營養成分比較表</image:title>
+      <image:caption>2026 年 5 款熱門狗糧營養同香港售價對照</image:caption>
     </image:image>
   </url>
 </urlset>
@@ -239,10 +261,12 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 確保每個重要頁面有專門的 OG 圖片（1200×630px），用於社群分享：
 
 ```html
-<meta property="og:image" content="https://example.com/images/og/dog-food-guide-og.jpg">
+<meta property="og:image" content="https://pethk.hk/images/og/dog-food-guide-og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 ```
+
+> **香港分享場景**：香港人最常用 **WhatsApp**、Facebook、IG 轉發連結。WhatsApp 預覽會讀取 OG 圖片同 OG 描述——如果冇設，預覽會空白或者揀錯圖，點擊率會大跌。
 
 ### 4. CDN 加速圖片傳輸
 
@@ -251,6 +275,8 @@ Alt Text 是當圖片無法顯示時替代顯示的文字，也是螢幕閱讀�
 - 自動壓縮
 - 自動調整尺寸
 - 圖片快取
+
+> **香港選點建議**：香港本身網絡基建好，但如果你的客源包埋大灣區或東南亞，記得揀**有香港 / 亞洲節點**嘅 CDN（Cloudflare 香港節點、BunnyCDN 亞洲節點等），否則 TTFB 會拉長 LCP。
 
 ---
 
@@ -266,12 +292,15 @@ Google Discover（Google 探索）是一個重要的圖片驅動流量來源。�
 <meta name="robots" content="max-image-preview:large">
 ```
 
+> **香港補充**：Discover 喺香港 Android 手機同 Google App 上面滲透率好高，餐飲、旅遊、消費、樓市、財經內容特別容易入流。原創實拍相比圖庫相更容易被揀中。
+
 ---
 
 ## 圖片 SEO 檢查清單
 
 - [ ] 圖片檔名具有描述性，使用連字號分隔單詞
-- [ ] 所有內容圖片都有恰當的 Alt Text（非堆砌）
+- [ ] 香港相關圖片檔名有加地區（mong-kok、central、sha-tin…）
+- [ ] 所有內容圖片都有恰當的 Alt Text（非堆砌，用香港用語）
 - [ ] 裝飾性圖片設為 `alt=""`
 - [ ] 使用 WebP 或 AVIF 格式
 - [ ] 圖片檔案大小已壓縮（內容圖 < 200KB）
@@ -280,9 +309,11 @@ Google Discover（Google 探索）是一個重要的圖片驅動流量來源。�
 - [ ] 其他圖片使用 `loading="lazy"`
 - [ ] 重要頁面有 ImageObject 結構化資料
 - [ ] 已建立圖片 Sitemap（建議）
-- [ ] 使用 CDN 加速圖片傳輸
-- [ ] OG 圖片設置完整（1200×630px）
+- [ ] 使用 CDN 加速圖片傳輸（有香港／亞洲節點）
+- [ ] OG 圖片設置完整（1200×630px，WhatsApp 預覽正常）
 - [ ] 重要圖片寬度至少 1200px（Google Discover）
+- [ ] GBP（Google 商家檔案）已上載原創店舖／產品相
+- [ ] 沒有使用侵權圖庫相（香港版權條例嚴格，勿亂抓圖）
 
 ---
 
@@ -291,9 +322,10 @@ Google Discover（Google 探索）是一個重要的圖片驅動流量來源。�
 1. **圖片搜尋佔 Google 總搜尋 20-25%**——圖片 SEO 是個不該忽視的流量來源
 2. **五大支柱**：檔名、Alt Text、格式壓縮、尺寸、結構化資料
 3. **WebP 是網頁圖片首選格式**——檔案小、品質好、Google 推薦
-4. **Alt Text 是最強的圖片理解信號**——描述性、簡潔、自然融入關鍵字
+4. **Alt Text 是最強的圖片理解信號**——描述性、簡潔、自然融入香港用語關鍵字
 5. **響應式圖片（srcset + sizes）+ 懶加載** = 速度與體驗的最佳組合
 6. **1200px 以上寬度的原創圖片**才能進入 Google Discover 流量池
+7. **香港場景特別值錢**：餐飲、零售、裝修、旅遊全靠圖說話；WhatsApp 轉發要靠 OG 圖
 
 ---
 

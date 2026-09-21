@@ -217,6 +217,7 @@ function sanitizeArticleHtml(document, markdown) {
 }
 
 function buildArticleDescription(article, markdown) {
+  if (article.metaDescription) return article.metaDescription;
   const contentDocument = new JSDOM(marked.parse(markdown, { gfm: true, breaks: false })).window
     .document;
   contentDocument
@@ -384,9 +385,9 @@ for (const [articleIndex, article] of articles.entries()) {
   const html = await writeSeoPage(
     {
       path: articlePath,
-      title: article.title,
+      title: article.seoTitle || article.title,
       description,
-      keyword: article.title,
+      keyword: [article.focusKeyphrase, article.longTailKeyword].filter(Boolean).join(', '),
       type: 'article',
       imageUrl,
       schema: {
@@ -394,7 +395,7 @@ for (const [articleIndex, article] of articles.entries()) {
         '@type': 'BlogPosting',
         headline: article.title,
         description,
-        keywords: article.title,
+        keywords: [article.focusKeyphrase, article.longTailKeyword].filter(Boolean).join(', '),
         image: imageUrl,
         inLanguage: 'zh-Hant',
         author: { '@type': 'Organization', name: 'RankWoven Editorial Team', url: siteUrl },
@@ -434,7 +435,7 @@ for (const article of articles) {
   if (!articleLinks.some((link) => link.getAttribute('href') !== '/blog')) {
     throw new Error(`SEO fallback article has no outgoing article link: ${article.slug}`);
   }
-  if (descriptionLength < 120 || descriptionLength > 156) {
+  if (descriptionLength < 70 || descriptionLength > 160) {
     throw new Error(
       `SEO description length ${descriptionLength} is invalid for article: ${article.slug}`
     );

@@ -10,18 +10,23 @@
   內嵌式答案引擎：
     → Google Featured Snippet（精選摘要）
     → Google Knowledge Panel（知識面板）
-    → Google AI Overviews
+    → Google AI Overviews / AI Mode
     → Google People Also Ask（其他人也問了）
+    → Microsoft Copilot（Bing 答案層，
+      香港仲要計埋 Yahoo 香港搜尋用 Bing 技術）
 
   獨立式答案引擎：
     → Wolfram Alpha（計算型答案）
     → 語音助手（Siri、Alexa、Google Assistant）
-    → 聊天 AI（ChatGPT、Claude、Gemini）
+      香港場景：iOS 用家多，Siri 廣東話 + Google 助理廣東話
+    → 聊天 AI（ChatGPT、Claude、Gemini、Perplexity）
 
 AEO 的核心問題：
-  當使用者問「植牙過程多久？」時，
+  當香港使用者問「植牙要幾耐？」「香港植牙幾錢？」時，
   答案引擎選擇誰的內容作為答案？
 ```
+
+> **香港視角：** Google 喺香港佔 ~92-95% 份額，所以 **Featured Snippet、PAA、Knowledge Panel、AI Overviews** 係最主要戰場；但 **Bing / Copilot** 因為 Yahoo 香港搜尋同企業 Windows 環境，喺香港嘅實際影響力大過份額數字，唔可以淨係做 Google。
 
 ---
 
@@ -63,10 +68,10 @@ Featured Snippet 是 Google 在搜尋結果頂部顯示的精選摘要。它是 
   搜尋：「植牙費用比較」
 
   ┌──────────────────────────────────────┐
-  │  類型      │ 費用範圍     │ 壽命     │
-  │  單顆植牙  │ $20,000-35K │ 20+年   │
-  │  牙橋      │ $8,000-15K  │ 10-15年 │
-  │  活動假牙  │ $3,000-8K   │ 5-8年   │
+  │  類型      │ 費用範圍（HK$）│ 壽命     │
+  │  單顆植牙  │ HK$20,000-35K │ 20+年   │
+  │  牙橋      │ HK$8,000-15K  │ 10-15年 │
+  │  活動假牙  │ HK$3,000-8K   │ 5-8年   │
   └──────────────────────────────────────┘
 
 類型 4：影片摘要（Video Snippet）
@@ -179,19 +184,19 @@ Google 如何選擇 Featured Snippet？
   <tbody>
     <tr>
       <td>單顆植牙</td>
-      <td>$20,000 - 35,000</td>
+      <td>HK$20,000 - 35,000</td>
       <td>20+ 年</td>
       <td>外觀自然、不需磨損鄰牙</td>
     </tr>
     <tr>
       <td>牙橋</td>
-      <td>$8,000 - 15,000</td>
+      <td>HK$8,000 - 15,000</td>
       <td>10-15 年</td>
       <td>治療時間短、費用較低</td>
     </tr>
     <tr>
       <td>活動假牙</td>
-      <td>$3,000 - 8,000</td>
+      <td>HK$3,000 - 8,000</td>
       <td>5-8 年</td>
       <td>費用最低、無需手術</td>
     </tr>
@@ -242,12 +247,13 @@ PAA 的運作邏輯：
   → 在文章中加入這些問題作為 H2 或 H3 → 每個問題用 40-60 字精簡回答
 
 範例：
-  關鍵字：「植牙」
+  關鍵字：「香港植牙」（香港用家嘅真實 PAA）
   PAA 問題：
     → 植牙會痛嗎？
     → 植牙和牙橋哪個好？
-    → 植牙健保有沒有給付？
+    → 香港植牙可以用醫療券嗎？／牙科保險包唔包？
     → 植牙後要注意什麼？
+    → 香港邊度植牙好？（地區型：中環 / 旺角 / 沙田）
 
   在文章中加入：
     <h3>植牙會痛嗎？</h3>
@@ -314,6 +320,17 @@ PAA 的運作邏輯：
   → 在行業媒體上出現
   → 社交媒體活躍度（部分影響）
 
+  香港版「網絡補充資訊」來源（AI 與 Google 都會參考）：
+  → 香港新聞媒體：香港01、明報、經濟日報、星島、
+     東方、頭條日報、am730、信報、HKET
+  → 官方 / 半官方：公司註冊處（ICRIS）、香港貿發局（HKTDC）、
+     香港旅發局、政府「資料一線通」、商會目錄
+  → 本地平台：OpenRice（餐飲）、LIHKG / Discuss.com.hk /
+     Uwants / 高登（口碑）、Facebook 專頁與社團、
+     小紅書（RED，香港年輕人 discovery 入口）
+  → 全球來源依然重要：Wikipedia、Reddit、YouTube、LinkedIn
+     —— 國際 AI 引用池冇變，兩層要一齊做
+
 如果你發現 Knowledge Panel 上的資訊有誤：
   → 桌面版：Knowledge Panel 底部有「提出修改建議」
   → 手機版：可以通過 GBP 修正核心資訊
@@ -332,17 +349,21 @@ PAA 的運作邏輯：
   文字搜尋：
     「植牙 香港 費用 2026」
 
-  語音搜尋：
+  語音搜尋（香港廣東話場景）：
     「OK Google，香港植牙大概要幾多錢？」
     「Hey Siri，附近邊度有牙醫？」
-    「Alexa，what is a dental implant?」
+    「Hey Siri，旺角有咩好食？」
+    「Alexa, what is a dental implant?」
+    （香港雙語社會，中英夾雜語音查詢好常見）
 
 關鍵差異：
-  1. 更長、更口語化、更像對話
+  1. 更長、更口語化、更像對話（廣東話口語字特別多）
   2. 通常是問題形式（不是關鍵字片段）
   3. 搜尋者期待一個即時的「單一答案」
   4. 多數從手機或智慧音箱發起
 ```
+
+> **香港語音 SEO 提示：** 廣東話有書面語同口語嘅落差（「多少錢」vs「幾多錢」）。建議同時用**書面語做標題**、**口語句式做 FAQ 問題**，兩邊都覆蓋，AI Overviews 同語音助手先對得上。
 
 ### 語音搜尋優化
 
@@ -443,6 +464,18 @@ PAA 的運作邏輯：
 5. AI Overviews 引用率
    測試：搜尋你的目標關鍵字
    指標：你的內容是否在 AI Overviews 中被引用？
+
+6. 香港多平台引用率（新增）
+   測試：用廣東話喺以下平台問同一條問題
+     → Google（AI Overviews / AI Mode）
+     → ChatGPT、Gemini、Perplexity、Claude
+     → Microsoft Copilot（Bing；影響 Yahoo 香港搜尋）
+   指標：你的品牌 / 內容喺幾多個平台被引用？
+
+7. 香港本地平台足跡
+   檢查：LIHKG、Discuss、Uwants、OpenRice、小紅書、
+     Facebook 社團、香港新聞媒體上有冇你嘅 mention
+   指標：呢啲來源會間接影響 AI 對你嘅信任分
 ```
 
 ---
@@ -455,10 +488,12 @@ PAA 的運作邏輯：
 | ☐ 寫出 40-60 字的精簡答案 | 每個 H2 下的第一段 |
 | ☐ 使用 <ol>/<ul>/<table> | 對應查詢使用正確的格式 |
 | ☐ 回答所有 PAA 問題 | 在內容中加入 FAQ 段落 |
-| ☐ 確保 GBP 資訊完整 | Knowledge Panel 主要來源 |
-| ☐ 加入完整 Schema | FAQ、HowTo、Article、Organization |
-| ☐ 為語音搜尋優化 | 問題標題 + 簡短直接的第一段 |
-| ☐ 定期追蹤 AEO 表現 | Featured Snippet、PAA、Knowledge Panel |
+| ☐ 確保 GBP 資訊完整 | Knowledge Panel 主要來源（香港地址格式 + 852 電話） |
+| ☐ 加入完整 Schema | FAQ、HowTo、Article、Organization（價錢用 HK$） |
+| ☐ 為語音搜尋優化 | 廣東話口語問題標題 + 簡短直接的第一段 |
+| ☐ 提交 Bing Webmaster Tools | Yahoo 香港搜尋 + ChatGPT / Copilot 索引 |
+| ☐ 補香港本地來源足跡 | 香港媒體、OpenRice、LIHKG / Discuss、小紅書 |
+| ☐ 定期追蹤 AEO 表現 | Featured Snippet、PAA、Knowledge Panel、AI Overviews |
 
 ---
 

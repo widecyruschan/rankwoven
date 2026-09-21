@@ -3,11 +3,15 @@
     "chapter": 1,
     "slug": "seo-introduction",
     "title": "SEO 是什麼？搜尋引擎優化完整入門",
-    "excerpt": "SEO，全名 Search Engine Optimization，中文稱為「搜尋引擎優化」。簡單來說，SEO 是一套透過調整網站架構、內容品質與技術設定，讓網站在 Google、Bing 等搜尋引擎的「自然搜尋結果」中取得更高排名的策…",
+    "excerpt": "SEO，全名 Search Engine Optimization，中文稱為「搜尋引擎優化」。簡單來說，SEO 是一套透過調整網站架構、內容品質與技術設定，讓網站在 Google、Bing、Yahoo 香港等搜尋引擎的「自然搜尋結果」中…",
     "categoryId": "fundamentals",
-    "readingMinutes": 4,
+    "readingMinutes": 5,
     "contentFile": "seo-chapter-01.md",
-    "coverImage": "/blog/seo/images/seo-chapter-01.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-01.webp",
+    "seoTitle": "SEO 是什麼？2026 香港新手必讀的搜尋引擎優化入門指南",
+    "metaDescription": "SEO是什麼？本篇以香港市場為例，用白話解析搜尋引擎優化的定義、核心三角（技術、內容、權威）與運作邏輯，比較自然搜尋與付費廣告的差異，帶香港新手一次搞懂 SEO 基礎觀念與學習路線。",
+    "longTailKeyword": "香港搜尋引擎優化seo完整入門教學",
+    "focusKeyphrase": "SEO是什麼"
   },
   {
     "chapter": 2,
@@ -15,9 +19,13 @@
     "title": "SEO 的四大好處與商業價值",
     "excerpt": "這是 SEO 最核心的商業價值。不同於廣告投放 —— 廣告費一停、流量就歸零 —— SEO 建立起來的排名能夠持續為網站帶來源源不絕的自然流量。",
     "categoryId": "fundamentals",
-    "readingMinutes": 5,
+    "readingMinutes": 6,
     "contentFile": "seo-chapter-02.md",
-    "coverImage": "/blog/seo/images/seo-chapter-02.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-02.webp",
+    "seoTitle": "SEO 的四大好處與商業價值：為什麼香港企業都搶自然流量",
+    "metaDescription": "SEO的好處有哪些？以香港市場為例，解析自然流量為企業帶來的四大商業價值，包括低成本持續獲客、長期複利效應、高轉換率的搜尋流量與品牌信任建立，附實際數據與評估方法。",
+    "longTailKeyword": "香港seo對企業的四大好處與商業價值",
+    "focusKeyphrase": "SEO的好處"
   },
   {
     "chapter": 3,
@@ -25,9 +33,13 @@
     "title": "SEO 與 SEM 的差異與互補策略",
     "excerpt": "雖然第一章已經簡單提過，但在深入比較之前，先確保定義完全清晰：",
     "categoryId": "fundamentals",
-    "readingMinutes": 5,
+    "readingMinutes": 6,
     "contentFile": "seo-chapter-03.md",
-    "coverImage": "/blog/seo/images/seo-chapter-03.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-03.webp",
+    "seoTitle": "SEO 與 SEM 差異比較：香港市場付費與自然搜尋如何互補搭配",
+    "metaDescription": "SEO與SEM差異在哪？以香港市場為例，從成本結構、見效時程、點擊率到適用情境完整比較兩者的優缺點，並教你如何分配預算，將自然搜尋與付費廣告策略互補整合發揮最大效益。",
+    "longTailKeyword": "香港seo與sem差異比較與互補策略",
+    "focusKeyphrase": "SEO與SEM差異"
   },
   {
     "chapter": 4,
@@ -35,9 +47,13 @@
     "title": "SEO 基礎名詞辭典——從零開始建立你的 SEO 詞彙庫",
     "excerpt": "SEO 領域充滿大量專業術語與縮寫。對初學者來說，光是看到「SERP」、「CTR」、「DA」、「Sitemap」這些詞就足以讓人卻步。本章整理 50+ 個 SEO 核心名詞，按類別分組，讓你快速建立完整的詞彙地圖。",
     "categoryId": "fundamentals",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-04.md",
-    "coverImage": "/blog/seo/images/seo-chapter-04.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-04.webp",
+    "seoTitle": "SEO 基礎名詞辭典：香港新手必懂的搜尋引擎優化術語",
+    "metaDescription": "SEO名詞看不懂？本篇整理香港新手必懂的 SEO 基礎名詞辭典，爬取、索引、DA、反向連結、GBP 等術語中英對照加上白話解釋，一次搞懂所有常用詞彙，打好搜尋引擎優化基礎。",
+    "longTailKeyword": "香港seo基礎名詞術語中英對照辭典",
+    "focusKeyphrase": "SEO名詞"
   },
   {
     "chapter": 5,
@@ -45,9 +61,13 @@
     "title": "搜尋引擎如何運作？——檢索、索引、排名三階段完整解析",
     "excerpt": "Crawl → Index → Rank。爬蟲抓網頁 → 存入索引資料庫 → 演算法排順序。SEO 就係圍繞呢三個環節做優化。",
     "categoryId": "search-engines",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-05.md",
-    "coverImage": "/blog/seo/images/seo-chapter-05.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-05.webp",
+    "seoTitle": "搜尋引擎如何運作？檢索、索引、排名三階段完整解析（香港版）",
+    "metaDescription": "搜尋引擎如何運作？完整解析 Google 檢索、索引、排名三大階段，了解爬蟲如何抓取頁面、資料如何被收錄，以及排名訊號如何被評估，對症下藥做好香港 SEO。",
+    "longTailKeyword": "搜尋引擎運作原理檢索索引排名三階段",
+    "focusKeyphrase": "搜尋引擎如何運作"
   },
   {
     "chapter": 6,
@@ -55,9 +75,13 @@
     "title": "SERP 搜尋結果頁全解析——你以為的「十個藍色連結」早就不存在了",
     "excerpt": "如果你還停留在「搜尋結果就是一排藍色的網站連結」的印象，那你對 SEO 的認知大概落後了十年。2026 年的 Google SERP（Search Engine Results Page）是一個資訊密度極高、功能極其豐富的動態頁面。",
     "categoryId": "search-engines",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-06.md",
-    "coverImage": "/blog/seo/images/seo-chapter-06.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-06.webp",
+    "seoTitle": "SERP 搜尋結果頁全解析：香港版 10 種版位類型與搶佔策略",
+    "metaDescription": "SERP搜尋結果頁不只是十個藍色連結！以香港搜尋結果為例，解析精選摘要、知識面板、People Also Ask、圖片、AI 概覽等版位類型，教你掌握每種 SERP 特徵的搶佔策略，爭取更多曝光。",
+    "longTailKeyword": "香港serp搜尋結果頁版位類型全解析",
+    "focusKeyphrase": "SERP搜尋結果頁"
   },
   {
     "chapter": 7,
@@ -65,9 +89,13 @@
     "title": "四大搜尋意圖——搞懂用戶「真正想找什麼」是 SEO 的第一步",
     "excerpt": "Google 的終極目標不是匹配關鍵字，而是滿足意圖。",
     "categoryId": "search-engines",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-07.md",
-    "coverImage": "/blog/seo/images/seo-chapter-07.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-07.webp",
+    "seoTitle": "四大搜尋意圖完整解析：搞懂香港用戶真正想搵咩，對準需求寫內容",
+    "metaDescription": "為什麼內容寫得再好也沒排名？關鍵在搜尋意圖。以香港搜尋行為為例，解析資訊型、導航型、交易型、商業調查型四大搜尋意圖的判斷方法，以及對應的內容格式與關鍵字布局策略。",
+    "longTailKeyword": "香港四大搜尋意圖類型與內容對應策略",
+    "focusKeyphrase": "搜尋意圖"
   },
   {
     "chapter": 8,
@@ -75,9 +103,13 @@
     "title": "Google 演算法全景——從 Panda 到 MUM，13 年演算法進化史",
     "excerpt": "不理解 Google 的過去，你就無法預判它的未來。",
     "categoryId": "algorithms",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-08.md",
-    "coverImage": "/blog/seo/images/seo-chapter-08.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-08.webp",
+    "seoTitle": "Google 演算法進化史：從 Panda 到 MUM 的完整全景（香港版）",
+    "metaDescription": "Google演算法如何進化？從 Panda、Penguin、Hummingbird、RankBrain、BERT 到 MUM，一次梳理 13 年演算法進化史，理解每個重大更新的目的與影響，以及對香港網站的實質啟示。",
+    "longTailKeyword": "google演算法進化史panda到mum香港",
+    "focusKeyphrase": "Google演算法"
   },
   {
     "chapter": 9,
@@ -85,9 +117,13 @@
     "title": "Google 核心更新（Core Updates）應對指南——排名暴跌時的生存手冊",
     "excerpt": "Core Update = Google 重新定義「什麼是好內容」的時刻。",
     "categoryId": "algorithms",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-09.md",
-    "coverImage": "/blog/seo/images/seo-chapter-09.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-09.webp",
+    "seoTitle": "Google 核心更新應對指南：香港網站排名暴跌時的生存手冊",
+    "metaDescription": "Google核心更新後排名暴跌怎麼辦？教你判斷是否受更新影響、用 Search Console 分析香港市場的暴跌原因、理解內容自評面向，以及核心更新後的恢復與應對完整步驟。",
+    "longTailKeyword": "香港google核心更新排名暴跌應對方法",
+    "focusKeyphrase": "Google核心更新"
   },
   {
     "chapter": 10,
@@ -95,9 +131,13 @@
     "title": "E-E-A-T 內容品質評估機制完整指南",
     "excerpt": "E-E-A-T 是 Google 用來評估內容品質的核心框架，由四個英文單字的縮寫組成：",
     "categoryId": "algorithms",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-10.md",
-    "coverImage": "/blog/seo/images/seo-chapter-10.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-10.webp",
+    "seoTitle": "E-E-A-T 完整指南：Google 如何評估香港網站的內容品質與信任度",
+    "metaDescription": "E-E-A-T 是什麼？解析 Google 如何用經驗、專業、權威、信任四大指標評估內容品質，說明香港哪些產業受影響最大，以及作者資訊、引用來源、公司資料等提升 E-E-A-T 的實戰做法。",
+    "longTailKeyword": "香港eeat內容品質評估指標提升方法",
+    "focusKeyphrase": "E-E-A-T"
   },
   {
     "chapter": 11,
@@ -105,9 +145,13 @@
     "title": "SEO 排名五大決定因素",
     "excerpt": "Google 的排名演算法考慮超過 200 個信號（Signals），但如果要歸納出最核心的決定因素，可以濃縮為五大支柱。這五個因素不僅決定了你的網站能否排上第一頁，更決定了你能否留在第一頁。",
     "categoryId": "algorithms",
-    "readingMinutes": 8,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-11.md",
-    "coverImage": "/blog/seo/images/seo-chapter-11.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-11.webp",
+    "seoTitle": "SEO 排名五大決定因素：影響 Google 排名的關鍵全解析（香港版）",
+    "metaDescription": "SEO 排名因素到底有邊幾樣？香港篇幫你拆解內容品質、關鍵字與內容覆蓋、網站權威性、技術體驗同網站結構五大支柱，講清各自嘅權重思維同常見優化誤區，等你知資源應該放邊度，先至排得上 Google 第一頁。",
+    "longTailKeyword": "香港影響google seo排名的五大決定因素",
+    "focusKeyphrase": "SEO排名因素"
   },
   {
     "chapter": 12,
@@ -115,9 +159,13 @@
     "title": "Helpful Content 實用內容演算法",
     "excerpt": "Google 的 Helpful Content System（實用內容系統） 是 2022 年 8 月首次推出的一個全站性信號，它的核心目標只有一個：在搜尋結果中優先展示「為人類創作」的內容，而非「為搜尋引擎排名」創作的內容。",
     "categoryId": "algorithms",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-12.md",
-    "coverImage": "/blog/seo/images/seo-chapter-12.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-12.webp",
+    "seoTitle": "Helpful Content 演算法解析：香港網站實用內容準則與應對策略",
+    "metaDescription": "Google 實用內容演算法如何運作？解析 Helpful Content 的評估準則、以人為本的內容判斷標準與全站性影響機制，以及香港網站避免被降權的內容經營策略與自查方法。",
+    "longTailKeyword": "香港helpful content實用內容演算法應對策略",
+    "focusKeyphrase": "Helpful Content"
   },
   {
     "chapter": 13,
@@ -125,9 +173,13 @@
     "title": "關鍵字研究完整方法論",
     "excerpt": "關鍵字研究是整個 SEO 策略的地基。所有後續的內容創作、頁面優化、內部連結布局，都必須建立在正確的關鍵字研究之上。",
     "categoryId": "on-page",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-13.md",
-    "coverImage": "/blog/seo/images/seo-chapter-13.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-13.webp",
+    "seoTitle": "關鍵字研究完整方法論：香港市場從選題到排序的系統化流程",
+    "metaDescription": "關鍵字研究點做？香港篇由種子關鍵字發想、搜尋量與競爭度評估、搜尋意圖判讀一路講到分組排序，教你建立一套可以重複執行嘅關鍵字研究方法論，喺香港呢個細市場搵到品牌真正贏得起嘅流量機會。",
+    "longTailKeyword": "香港關鍵字研究完整流程與方法論",
+    "focusKeyphrase": "關鍵字研究"
   },
   {
     "chapter": 14,
@@ -135,19 +187,27 @@
     "title": "長尾關鍵字挖掘與應用策略",
     "excerpt": "長尾關鍵字（Long-Tail Keywords） 是指搜尋量較低、通常字數較長、但意圖更精確的關鍵字詞組。",
     "categoryId": "on-page",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-14.md",
-    "coverImage": "/blog/seo/images/seo-chapter-14.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-14.webp",
+    "seoTitle": "長尾關鍵字挖掘與應用：香港市場低競爭流量的獲取策略",
+    "metaDescription": "長尾關鍵字是什麼？以香港市場為例，解析長尾理論在 SEO 的應用價值，教你用工具、自動完成、LIHKG 與相關搜尋挖掘低競爭、高轉換的長尾關鍵字，並實際應用在內容規劃與流量成長策略上。",
+    "longTailKeyword": "香港長尾關鍵字挖掘工具與應用策略",
+    "focusKeyphrase": "長尾關鍵字"
   },
   {
     "chapter": 15,
     "slug": "competitor-keyword-gap",
     "title": "競品關鍵字分析與缺口策略",
-    "excerpt": "你不需要從零開始猜測哪些關鍵字有用——你的競爭對手已經用他們的排名告訴你了。",
+    "excerpt": "做香港市場嘅競品分析，第一件事係設定正確嘅地區。所有關鍵字工具都要揀 Hong Kong，SERP 要用 google.com.hk（地區設為香港），否則你會用咗台灣、美國甚至大陸嘅數據去做決策。",
     "categoryId": "on-page",
-    "readingMinutes": 6,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-15.md",
-    "coverImage": "/blog/seo/images/seo-chapter-15.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-15.webp",
+    "seoTitle": "競品關鍵字分析（香港篇）：找出對手有而你沒有的流量缺口",
+    "metaDescription": "香港 SEO 點樣由競爭對手身上挖流量？教你用 Ahrefs、SEMrush 針對 google.com.hk 做競品關鍵字分析，配合連登、OpenRice、小紅書挖香港本地字，找出關鍵字缺口並排定搶佔優先級。",
+    "longTailKeyword": "香港競品關鍵字缺口分析實戰方法",
+    "focusKeyphrase": "競品關鍵字分析"
   },
   {
     "chapter": 16,
@@ -155,9 +215,13 @@
     "title": "建立 SEO 關鍵字矩陣",
     "excerpt": "關鍵字矩陣（Keyword Matrix） 是一種將大量關鍵字系統化組織、分類和排定優先級的管理工具。它不是單純的關鍵字列表，而是將關鍵字按照多個維度（搜尋意圖、競爭難度、商業價值、內容類型）進行交叉分析，幫助你做出更精準的 SEO 資…",
     "categoryId": "on-page",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-16.md",
-    "coverImage": "/blog/seo/images/seo-chapter-16.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-16.webp",
+    "seoTitle": "SEO 關鍵字矩陣建立教學（香港篇）：系統化配置網站內容藍圖",
+    "metaDescription": "關鍵字矩陣係乜、點解香港網站特別需要？教你用香港搜尋量、競爭難度同商業價值建立二維矩陣，再按優先級將關鍵字分配到首頁、分類頁同文章頁，系統化規劃整站內容藍圖，唔使再嘥資源喺贏唔到嘅戰場。",
+    "longTailKeyword": "香港seo關鍵字矩陣建立與配置教學",
+    "focusKeyphrase": "關鍵字矩陣"
   },
   {
     "chapter": 17,
@@ -165,9 +229,13 @@
     "title": "Title Tag 完整優化指南",
     "excerpt": "Title Tag（標題標籤） 是 HTML 文件 <head 區域中的一個元素，用來定義網頁的標題。它是搜尋引擎結果頁面（SERP）中最顯眼的元素，通常以藍色、可點擊的大字顯示。",
     "categoryId": "on-page",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-17.md",
-    "coverImage": "/blog/seo/images/seo-chapter-17.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-17.webp",
+    "seoTitle": "Title Tag 完整優化指南（香港篇）：撰寫高點擊率標題的技巧",
+    "metaDescription": "Title Tag 優化點做？香港篇教你用繁中 ＋ 粵語口語字寫標題，解析長度限制、關鍵字位置、地區名與 HK$ 嘅運用，說明 Google 改寫標題嘅原因，避開關鍵字堆砌，寫出高點擊率 Title。",
+    "longTailKeyword": "香港title tag標題標籤優化撰寫技巧",
+    "focusKeyphrase": "Title Tag優化"
   },
   {
     "chapter": 18,
@@ -175,9 +243,13 @@
     "title": "Meta Description 全攻略",
     "excerpt": "Meta Description（元描述） 是 HTML 文件 <head 區域中的一個標籤，用來提供頁面內容的簡短摘要。它通常顯示在搜尋結果頁面（SERP）的標題下方，以灰色小字呈現。",
     "categoryId": "on-page",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-18.md",
-    "coverImage": "/blog/seo/images/seo-chapter-18.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-18.webp",
+    "seoTitle": "Meta Description 全攻略（香港篇）：撰寫提高點擊率的描述標籤",
+    "metaDescription": "Meta Description 會影響排名嗎？香港篇解析描述標籤長度限制、搜尋字詞粗體化機制同高點擊率寫作公式，附繁中／粵語常見錯誤與前後對照範例，教你寫出提升 CTR 嘅 Description。",
+    "longTailKeyword": "香港meta description撰寫與優化全攻略",
+    "focusKeyphrase": "Meta Description"
   },
   {
     "chapter": 19,
@@ -185,9 +257,13 @@
     "title": "Header 標籤（H1-H6）優化策略",
     "excerpt": "Header 標籤（H1-H6） 是 HTML 中用來定義標題層級的標記，從最重要的 H1 到最次要的 H6，共六個層級。它們為頁面提供清晰的內容結構，就像一本書的章節標題。",
     "categoryId": "on-page",
-    "readingMinutes": 5,
+    "readingMinutes": 6,
     "contentFile": "seo-chapter-19.md",
-    "coverImage": "/blog/seo/images/seo-chapter-19.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-19.webp",
+    "seoTitle": "H1-H6 Header 標籤優化策略（香港篇）：建立清晰的內容層級",
+    "metaDescription": "Header 標籤點樣優化？香港篇解析 H1 到 H6 正確用法、層級規劃原則同常見濫用問題，教你用清晰標題結構幫 Google 理解內容，同時照顧香港雙語讀者與 Featured Snippet。",
+    "longTailKeyword": "香港h1到h6標題標籤seo優化策略",
+    "focusKeyphrase": "Header標籤優化"
   },
   {
     "chapter": 20,
@@ -195,9 +271,13 @@
     "title": "URL 結構優化完整指南",
     "excerpt": "URL（網址）是使用者和搜尋引擎接觸你網站的第一個技術層面。一個好的 URL 結構不僅幫助 Google 理解頁面主題，更能提升使用者點擊意願和信任度。",
     "categoryId": "on-page",
-    "readingMinutes": 5,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-20.md",
-    "coverImage": "/blog/seo/images/seo-chapter-20.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-20.webp",
+    "seoTitle": "URL 結構優化指南（香港篇）：設計對 SEO 友善的網址規則",
+    "metaDescription": "URL 結構點樣優化？香港篇解析網址長度、關鍵字包含、階層結構同靜態網址設計原則，比較 .hk / .com.hk 與 zh-hk 子目錄做法，教你規劃對 Google 同香港用家都友善嘅網址。",
+    "longTailKeyword": "香港url結構seo優化設計原則",
+    "focusKeyphrase": "URL結構優化"
   },
   {
     "chapter": 21,
@@ -205,9 +285,13 @@
     "title": "圖片 SEO 完整指南",
     "excerpt": "圖片搜尋佔 Google 總搜尋量約 20-25%，是一個常被忽視的龐大流量來源。更重要的的是，優化圖片不僅能帶來圖片搜尋流量，還能通過以下方式幫助你的網頁排名：",
     "categoryId": "on-page",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-21.md",
-    "coverImage": "/blog/seo/images/seo-chapter-21.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-21.webp",
+    "seoTitle": "圖片 SEO 完整指南（香港篇）：alt 文字、壓縮與圖片搜尋流量",
+    "metaDescription": "圖片 SEO 點做？香港篇教你寫 alt 文字、檔名命名、WebP 壓縮與 lazy loading，配合 Google 圖片搜尋、Google Lens 同小紅書，令香港網店、餐廳、服務業嘅圖片都帶到搜尋流量。",
+    "longTailKeyword": "香港圖片seo優化alt文字設定技巧",
+    "focusKeyphrase": "圖片SEO"
   },
   {
     "chapter": 22,
@@ -215,9 +299,13 @@
     "title": "內容結構與格式化",
     "excerpt": "Google 不只是「閱讀」你的內容——它在嘗試「理解」你的內容。良好的內容結構就像給 Google 一張清晰的地圖，告訴它：哪些是重點、哪些是次要、這些概念之間有什麼關係。",
     "categoryId": "on-page",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-22.md",
-    "coverImage": "/blog/seo/images/seo-chapter-22.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-22.webp",
+    "seoTitle": "內容結構與格式化（香港篇）：提升可讀性與停留時間的排版術",
+    "metaDescription": "點解文章要排版？香港篇教你用倒金字塔、段落黃金法則、表格同粗體強調做內容結構，兼顧香港手機讀者與 AI 搜尋（ChatGPT、Gemini、AI Overviews）摘錄，提升停留時間與轉換。",
+    "longTailKeyword": "香港seo內容結構與排版格式化技巧",
+    "focusKeyphrase": "內容結構"
   },
   {
     "chapter": 23,
@@ -225,9 +313,13 @@
     "title": "內部連結 SEO 戰術",
     "excerpt": "內部連結（Internal Links） 是指從你網站上的一個頁面連結到同網站的另一個頁面。與反向連結（Backlinks）不同，內部連結是你完全可控的排名助力。",
     "categoryId": "on-page",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-23.md",
-    "coverImage": "/blog/seo/images/seo-chapter-23.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-23.webp",
+    "seoTitle": "內部連結 SEO 戰術（香港篇）：傳遞權重與提升收錄的連結架構",
+    "metaDescription": "內部連結點做最有效？香港篇教你用扁平化架構、Hub & Spoke 模型同錨點文字策略，處理香港 18 區頁、中英雙語站嘅內部連結，提升整站排名、收錄效率與瀏覽深度。",
+    "longTailKeyword": "香港內部連結seo優化戰術與架構設計",
+    "focusKeyphrase": "內部連結"
   },
   {
     "chapter": 24,
@@ -235,9 +327,13 @@
     "title": "結構化資料（Schema Markup）完整入門",
     "excerpt": "結構化資料（Structured Data） 是一種標準化的資料格式，用來明確告訴搜尋引擎「這個頁面上的內容是什麼」。它是搜尋引擎的「翻譯官」，將人類閱讀的內容轉換為機器可以精確理解的格式。",
     "categoryId": "on-page",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-24.md",
-    "coverImage": "/blog/seo/images/seo-chapter-24.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-24.webp",
+    "seoTitle": "結構化資料 Schema Markup 入門（香港篇）：讓 Google 更懂你的網站",
+    "metaDescription": "Schema Markup 係乜？香港篇教你用 JSON-LD 寫 Organization、Product、FAQ、LocalBusiness 等 Schema，價錢用 HKD、地址用香港格式，附可直接套用嘅程式碼範例與驗證工具。",
+    "longTailKeyword": "香港結構化資料schema markup完整教學",
+    "focusKeyphrase": "Schema Markup"
   },
   {
     "chapter": 25,
@@ -245,9 +341,13 @@
     "title": "網站速度優化",
     "excerpt": "Google 自 2010 年起就將網站速度納入排名信號，2018 年更進一步推出「速度更新（Speed Update）」，明確宣布行動版頁面的載入速度直接影響行動搜尋排名。",
     "categoryId": "technical",
-    "readingMinutes": 4,
+    "readingMinutes": 6,
     "contentFile": "seo-chapter-25.md",
-    "coverImage": "/blog/seo/images/seo-chapter-25.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-25.webp",
+    "seoTitle": "網站速度優化指南（香港篇）：壓縮、快取與 CDN 加速實戰",
+    "metaDescription": "網站速度點樣優化？香港篇由圖片壓縮、瀏覽器快取、程式碼精簡到 CDN（香港／亞洲節點）設定，逐步執行優化，照顧香港手機用家同 Google 行動版排名，全面提升載入速度。",
+    "longTailKeyword": "香港網站速度優化壓縮快取cdn實戰",
+    "focusKeyphrase": "網站速度優化"
   },
   {
     "chapter": 26,
@@ -255,9 +355,13 @@
     "title": "Core Web Vitals 完整解析",
     "excerpt": "Core Web Vitals（核心網頁體驗指標） 是 Google 定義的一組用於衡量網頁使用者體驗的關鍵指標。自 2021 年 6 月起，Core Web Vitals 正式成為 Google 排名信號的一部分。",
     "categoryId": "technical",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-26.md",
-    "coverImage": "/blog/seo/images/seo-chapter-26.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-26.webp",
+    "seoTitle": "Core Web Vitals 完整解析（香港篇）：LCP、INP、CLS 指標優化",
+    "metaDescription": "Core Web Vitals 係乜？香港篇解析 LCP、INP、CLS 三大指標定義、標準值同常見瓶頸，教你用 PageSpeed Insights 同 GSC 現場數據監測香港真實用家體驗，逐步優化通過 Google 門檻。",
+    "longTailKeyword": "香港core web vitals三大指標優化教學",
+    "focusKeyphrase": "Core Web Vitals"
   },
   {
     "chapter": 27,
@@ -265,9 +369,13 @@
     "title": "行動優先索引與 RWD 響應式設計",
     "excerpt": "行動優先索引（Mobile-First Indexing） 是 Google 自 2018 年起逐步推行的索引策略：Google 主要使用網站的行動版內容進行索引和排名，而非桌面版。",
     "categoryId": "technical",
-    "readingMinutes": 5,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-27.md",
-    "coverImage": "/blog/seo/images/seo-chapter-27.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-27.webp",
+    "seoTitle": "行動優先索引與 RWD（香港篇）：行動版 SEO 完整對策",
+    "metaDescription": "Google 已全面採用行動優先索引！香港篇解析行動優先索引對香港網站嘅影響、RWD 響應式設計原則、in-app browser（WhatsApp / IG）測試重點，以及常見行動版內容不一致錯誤與修正方法。",
+    "longTailKeyword": "香港行動優先索引與rwd響應式seo對策",
+    "focusKeyphrase": "行動優先索引"
   },
   {
     "chapter": 28,
@@ -275,9 +383,13 @@
     "title": "Sitemap 製作與提交完整教學",
     "excerpt": "Sitemap（網站地圖） 是一份列出網站所有重要頁面的檔案，作用是告訴搜尋引擎「我網站上有這些頁面、它們的優先級如何、多久更新一次」。對於大型網站、新網站、或含有大量孤立頁面的網站來說，Sitemap 是確保搜尋引擎能完整索引的關鍵工…",
     "categoryId": "technical",
-    "readingMinutes": 6,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-28.md",
-    "coverImage": "/blog/seo/images/seo-chapter-28.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-28.webp",
+    "seoTitle": "Sitemap 製作與提交教學（香港篇）：讓 Google 更快收錄網站",
+    "metaDescription": "Sitemap 點樣製作同提交？香港篇教你產生 XML Sitemap、處理 .hk 網域與 zh-hk / en-hk 雙語站，並提交到 Google Search Console 同 Bing Webmaster Tools（照顧 Yahoo 香港與 AI 搜尋）。",
+    "longTailKeyword": "香港xml sitemap製作與提交教學",
+    "focusKeyphrase": "Sitemap"
   },
   {
     "chapter": 29,
@@ -285,9 +397,13 @@
     "title": "robots.txt 與 Meta Robots 完整教學",
     "excerpt": "robots.txt 是一個純文字檔案，放在網站的根目錄下，用來告訴搜尋引擎爬蟲：「哪些目錄或頁面你不要爬」。它是爬蟲造訪網站時第一個讀取的檔案，也是控制 crawl budget 的第一道關卡。",
     "categoryId": "technical",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-29.md",
-    "coverImage": "/blog/seo/images/seo-chapter-29.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-29.webp",
+    "seoTitle": "robots.txt 與 Meta Robots 教學（香港篇）：點樣控管爬蟲與 AI 搜尋",
+    "metaDescription": "robots.txt 點寫先啱？香港篇教你用 Disallow、Allow 同 Sitemap 指令控管爬蟲，搞清 Meta Robots、noindex 同 X-Robots-Tag 嘅分別，並拆解擋錯 CSS、AI 爬蟲一刀切等常見錯誤，唔使怕成個站被 Google 漏收。",
+    "longTailKeyword": "robots txt與meta robots設定教學",
+    "focusKeyphrase": "robots.txt"
   },
   {
     "chapter": 30,
@@ -295,9 +411,13 @@
     "title": "Canonical 標記與重複內容處理",
     "excerpt": "Canonical（標準網址標記） 是告訴搜尋引擎「這幾個 URL 雖然不同，但內容本質上是一樣的，請把 SEO 權重集中到這個標準版本」的機制。它是解決重複內容問題最核心、最重要的技術 SEO 工具。",
     "categoryId": "technical",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-30.md",
-    "coverImage": "/blog/seo/images/seo-chapter-30.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-30.webp",
+    "seoTitle": "Canonical 標記與重複內容（香港篇）：rel=canonical 正確用法",
+    "metaDescription": "重複內容搞到排名分散？香港篇教你用 Canonical 標記整合 URL 參數、http/https、WWW 與分頁重複頁；並釐清 301、noindex、hreflang 幾時用邊個，附 self-referencing canonical 寫法同常見錯誤清單。",
+    "longTailKeyword": "canonical標記與重複內容處理方法",
+    "focusKeyphrase": "Canonical標記"
   },
   {
     "chapter": 31,
@@ -305,9 +425,13 @@
     "title": "SSL 憑證與 HTTPS 完整指南",
     "excerpt": "HTTPS（HyperText Transfer Protocol Secure） 是 HTTP 的加密版本，透過 SSL/TLS 憑證 在瀏覽器和伺服器之間建立加密連線。它確保使用者與網站之間傳輸的資料不會被第三方攔截、竄改或偽造。",
     "categoryId": "technical",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-31.md",
-    "coverImage": "/blog/seo/images/seo-chapter-31.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-31.webp",
+    "seoTitle": "SSL 憑證與 HTTPS 完整指南：安全性對 SEO 的影響",
+    "metaDescription": "SSL 憑證會唔會影響 Google 排名？呢篇教你點樣揀 DV/OV/EV、用 Let's Encrypt 免費申請安裝，同埋由 HTTP 轉 HTTPS 嘅完整遷移步驟，附香港常見陷阱同 PDPO 合規提示。",
+    "longTailKeyword": "ssl憑證https設定與seo影響",
+    "focusKeyphrase": "SSL憑證HTTPS"
   },
   {
     "chapter": 32,
@@ -315,9 +439,13 @@
     "title": "301/302 轉址與 HTTP 狀態碼完整指南",
     "excerpt": "每當瀏覽器向伺服器發出請求時，伺服器會返回一個三位數的 HTTP 狀態碼 來說明請求的結果。對 SEO 來說，理解這些狀態碼至關重要，因為它們直接影響搜尋引擎如何索引和排名你的頁面。",
     "categoryId": "technical",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-32.md",
-    "coverImage": "/blog/seo/images/seo-chapter-32.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-32.webp",
+    "seoTitle": "301/302 轉址與 HTTP 狀態碼指南：SEO 必懂的規則",
+    "metaDescription": "301 同 302 轉址點揀？幾時用邊個？本文一次過講解 HTTP 狀態碼嘅 SEO 含義、轉址設定方法同常見錯誤，教你安全改網址結構而唔流失排名，香港網站換 .hk 網域必讀。",
+    "longTailKeyword": "301轉址與http狀態碼seo設定規則",
+    "focusKeyphrase": "301轉址"
   },
   {
     "chapter": 33,
@@ -325,9 +453,13 @@
     "title": "JavaScript SEO 與 Log File 分析",
     "excerpt": "在 SPA（Single Page Application）和前端框架（React、Vue、Angular）日益普及的時代，JavaScript SEO 成為技術 SEO 中最具挑戰性的領域。核心問題很簡單：",
     "categoryId": "technical",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-33.md",
-    "coverImage": "/blog/seo/images/seo-chapter-33.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-33.webp",
+    "seoTitle": "JavaScript SEO 與 Log 檔分析：解決 SPA 網站收錄問題",
+    "metaDescription": "JavaScript SEO 點做？React、Vue 網站點解 Google 收唔到？本文比較 SSR、CSR、SSG 渲染策略，再教你用 Log File 分析 Googlebot 爬取行為，徹底解決 SPA 收錄問題。",
+    "longTailKeyword": "javascript seo與log file分析實戰",
+    "focusKeyphrase": "JavaScript SEO"
   },
   {
     "chapter": 34,
@@ -335,9 +467,13 @@
     "title": "技術 SEO 總覽與檢查清單",
     "excerpt": "技術 SEO 是 SEO 三大支柱（技術、內容、連結）中最基礎的一環。沒有良好的技術基礎，再好的內容也可能無法被搜尋引擎發現、爬取和索引。",
     "categoryId": "technical",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-34.md",
-    "coverImage": "/blog/seo/images/seo-chapter-34.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-34.webp",
+    "seoTitle": "技術 SEO 檢查清單：香港網站體質健檢完整項目總覽",
+    "metaDescription": "技術 SEO 要檢查啲咩？呢份香港版完整檢查清單涵蓋收錄、爬取、網站速度、行動版、HTTPS 同結構化資料，逐項畀你檢測工具同合格標準，照住做就可以全面健檢網站體質。",
+    "longTailKeyword": "技術seo檢查清單總覽與健檢",
+    "focusKeyphrase": "技術SEO"
   },
   {
     "chapter": 35,
@@ -345,9 +481,13 @@
     "title": "內容行銷與 SEO 的戰略整合",
     "excerpt": "在 2026 年，內容行銷和 SEO 不再是兩個獨立的部門或策略。它們是同一個硬幣的兩面：",
     "categoryId": "content",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-35.md",
-    "coverImage": "/blog/seo/images/seo-chapter-35.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-35.webp",
+    "seoTitle": "內容行銷與 SEO 戰略整合：主題集群與內容飛輪實戰藍圖",
+    "metaDescription": "內容行銷同 SEO 點樣整合先有效？本文教你用主題集群同支柱頁規劃內容、對應搜尋漏斗同香港季節性主題，打造帶動自然流量嘅行銷飛輪，由零開始建立內容策略。",
+    "longTailKeyword": "內容行銷與seo戰略整合方法",
+    "focusKeyphrase": "內容行銷SEO"
   },
   {
     "chapter": 36,
@@ -355,9 +495,13 @@
     "title": "高品質 SEO 內容的黃金法則",
     "excerpt": "在 Google 的 Helpful Content 和 E-E-A-T 框架下，高品質 SEO 內容不是「為 SEO 寫的內容」，而是為人類寫、同時讓搜尋引擎能理解的內容。",
     "categoryId": "content",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-36.md",
-    "coverImage": "/blog/seo/images/seo-chapter-36.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-36.webp",
+    "seoTitle": "高品質 SEO 內容的黃金法則：寫出兼顧排名與轉換的文章",
+    "metaDescription": "點樣寫出高品質 SEO 內容？本文拆解七大黃金法則：滿足搜尋意圖、原創深度、E-E-A-T 展示同內容新鮮度，幫你寫出兼顧 Google 排名同轉換嘅香港繁中文章。",
+    "longTailKeyword": "高品質seo內容寫作黃金法則",
+    "focusKeyphrase": "高品質SEO內容"
   },
   {
     "chapter": 37,
@@ -365,9 +509,13 @@
     "title": "SEO 文章寫作實戰框架",
     "excerpt": "寫一篇能排名的 SEO 文章不是靈感來了就寫，而是有一套可複製的流程。本章提供一套經過驗證的 五階段寫作框架，涵蓋從關鍵字研究到發布後追蹤的完整流程。",
     "categoryId": "content",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-37.md",
-    "coverImage": "/blog/seo/images/seo-chapter-37.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-37.webp",
+    "seoTitle": "SEO 文章寫作實戰框架：由大綱到完稿的五階段完整流程",
+    "metaDescription": "SEO 文章點寫先排得上第一頁？提供可直接套用嘅五階段寫作框架，由關鍵字布局、大綱設計、引言鉤子到完稿檢查，一步步教你寫出香港人睇得入腦嘅 SEO 文章。",
+    "longTailKeyword": "seo文章寫作框架與完整流程",
+    "focusKeyphrase": "SEO文章寫作"
   },
   {
     "chapter": 38,
@@ -375,9 +523,13 @@
     "title": "內容更新與 Content Pruning 策略",
     "excerpt": "許多網站經營者陷入一個迷思：SEO = 不斷產出新內容。但現實是：",
     "categoryId": "content",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-38.md",
-    "coverImage": "/blog/seo/images/seo-chapter-38.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-38.webp",
+    "seoTitle": "內容更新與 Content Pruning：舊文翻新的流量回收術",
+    "metaDescription": "舊文章仲有冇得救？教你點樣判斷內容更新時機、用四級分類翻新舊文，再用 Content Pruning 修剪拖累全站嘅低價值頁面，回收香港價錢同法規過時內容嘅流量。",
+    "longTailKeyword": "內容更新與content pruning修剪策略",
+    "focusKeyphrase": "內容更新"
   },
   {
     "chapter": 39,
@@ -385,9 +537,13 @@
     "title": "轉換率優化（CRO）與 SEO 的協同效應",
     "excerpt": "很多人把 SEO 的目標設定為「獲得更多流量」，但流量本身不是終點。真正的目標是轉換——讓訪客完成你希望他們做的行動：",
     "categoryId": "content",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-39.md",
-    "coverImage": "/blog/seo/images/seo-chapter-39.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-39.webp",
+    "seoTitle": "CRO 與 SEO 協同效應：流量變訂單的轉換優化方法",
+    "metaDescription": "CRO 轉換優化點樣同 SEO 互相加成？由落地頁設計、CTA 擺位、表單優化到香港信任元素（WhatsApp、HK$ 明碼實價），教你將辛苦搵返嚟嘅自然流量變成實際訂單同查詢。",
+    "longTailKeyword": "cro轉換率優化與seo協同效應",
+    "focusKeyphrase": "CRO轉換優化"
   },
   {
     "chapter": 40,
@@ -395,9 +551,13 @@
     "title": "十倍內容（10x Content）創作方法",
     "excerpt": "10x Content（十倍內容） 是 Rand Fishkin（Moz 創辦人）提出的概念：不是比競爭對手好 10%，而是好 10 倍。",
     "categoryId": "content",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-40.md",
-    "coverImage": "/blog/seo/images/seo-chapter-40.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-40.webp",
+    "seoTitle": "十倍內容 10x Content 創作法：做出超越對手十倍的內容",
+    "metaDescription": "乜嘢係 10x 十倍內容？本文講解十倍內容嘅判斷標準，教你逆向研究現有第一名、用原創數據同互動工具做出超越對手十倍嘅內容，喺香港細市場搶落競爭關鍵字。",
+    "longTailKeyword": "十倍內容10x content創作方法",
+    "focusKeyphrase": "10x Content"
   },
   {
     "chapter": 41,
@@ -405,19 +565,27 @@
     "title": "反向連結（Backlink）完整指南",
     "excerpt": "反向連結（Backlink） 是其他網站連結到你網站的連結。在 Google 的演算法中，反向連結就像「投票」：每個從其他網站指向你的連結，都是一個對你內容品質的認可。",
     "categoryId": "off-page",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-41.md",
-    "coverImage": "/blog/seo/images/seo-chapter-41.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-41.webp",
+    "seoTitle": "反向連結 Backlink 完整指南：權重、品質與取得策略",
+    "metaDescription": "反向連結還重要嗎？解析 Backlink 在 Google 排序中的角色、連結品質的判斷標準、Dofollow 與 Nofollow 的差異，以及安全取得高權重連結的策略與風險避免。",
+    "longTailKeyword": "反向連結backlink取得與品質判斷",
+    "focusKeyphrase": "反向連結"
   },
   {
     "chapter": 42,
     "slug": "white-hat-link-building",
-    "title": "白帽連結建設六大方法",
+    "title": "白帽連結建設六大方法（香港實戰版）",
     "excerpt": "白帽連結建設（White Hat Link Building） 是透過創造真正的價值來自然地獲取反向連結，而不是透過購買、交換、垃圾留言等違反 Google 指南的方式。",
     "categoryId": "off-page",
-    "readingMinutes": 7,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-42.md",
-    "coverImage": "/blog/seo/images/seo-chapter-42.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-42.webp",
+    "seoTitle": "白帽連結建設六大方法：香港網站如何安全取得高品質反向連結",
+    "metaDescription": "想知點樣安全地建立反向連結？本篇拆解白帽連結建設六大方法：連結磁鐵、來賓投稿、數位公關、資源頁連結、破損連結同競品連結複製，附香港媒體、大學與商會實戰例子，逐步教你避開黑帽風險。",
+    "longTailKeyword": "白帽連結建設六大方法大全",
+    "focusKeyphrase": "白帽連結建設"
   },
   {
     "chapter": 43,
@@ -425,9 +593,13 @@
     "title": "錨點文字（Anchor Text）策略",
     "excerpt": "錨點文字（Anchor Text） 是超連結中可點擊的文字部分。它對 SEO 的重要性在於：Google 會將錨點文字視為對目標頁面內容的「描述」。",
     "categoryId": "off-page",
-    "readingMinutes": 6,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-43.md",
-    "coverImage": "/blog/seo/images/seo-chapter-43.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-43.webp",
+    "seoTitle": "錨點文字 Anchor Text 策略：香港網站的連結文字優化比例與技巧",
+    "metaDescription": "錨點文字會影響排名嗎？解析完全符合、部分符合、品牌與裸連結等錨點類型，說明自然的配置比例與過度優化的風險，教你用錨點文字傳遞正確的連結訊號。",
+    "longTailKeyword": "錨點文字anchor text配置比例策略",
+    "focusKeyphrase": "錨點文字"
   },
   {
     "chapter": 44,
@@ -435,9 +607,13 @@
     "title": "PageRank 與連結權重傳遞原理",
     "excerpt": "PageRank 是 Google 創始人 Larry Page 在史丹佛大學開發的演算法，也是 Google 搜尋引擎的原始核心。它的基本邏輯：",
     "categoryId": "off-page",
-    "readingMinutes": 6,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-44.md",
-    "coverImage": "/blog/seo/images/seo-chapter-44.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-44.webp",
+    "seoTitle": "PageRank 與連結權重傳遞：了解 Google 的連結評分原理",
+    "metaDescription": "PageRank 還存在嗎？解析 PageRank 的原始原理、連結權重傳遞的計算思維、nofollow 對權重流動的影響，以及內外部連結的權重分配策略，理解 Google 的連結評分邏輯。",
+    "longTailKeyword": "pagerank連結權重傳遞原理",
+    "focusKeyphrase": "PageRank"
   },
   {
     "chapter": 45,
@@ -445,19 +621,27 @@
     "title": "有害連結辨識與 Disavow 拒絕工具",
     "excerpt": "有害連結（Toxic Backlinks） 是來自低品質、垃圾或不相關網站的連結，這些連結可能對你網站的 SEO 產生負面影響。",
     "categoryId": "off-page",
-    "readingMinutes": 7,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-45.md",
-    "coverImage": "/blog/seo/images/seo-chapter-45.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-45.webp",
+    "seoTitle": "有害連結辨識與 Disavow：香港網站拒絕垃圾連結的完整流程",
+    "metaDescription": "Disavow有害連結怎麼處理？教你辨識有害連結的常見特徵與來源，說明何時需要使用 Google Disavow Tool，以及拒絕壞連結的完整流程、檔案格式與注意事項。",
+    "longTailKeyword": "有害連結辨識與disavow拒絕流程",
+    "focusKeyphrase": "Disavow有害連結"
   },
   {
     "chapter": 46,
     "slug": "local-seo",
-    "title": "在地 SEO 完整入門",
-    "excerpt": "在地 SEO（Local SEO） 是針對「地理位置相關搜尋」的優化策略。當使用者搜尋帶有地理意圖的關鍵字時，Google 會顯示在地搜尋結果。",
+    "title": "本地 SEO 完整入門（香港篇）",
+    "excerpt": "本地 SEO（Local SEO） 是針對「地理位置相關搜尋」的優化策略。當使用者搜尋帶有地理意圖的關鍵字時，Google 會顯示本地搜尋結果。",
     "categoryId": "local",
-    "readingMinutes": 5,
+    "readingMinutes": 7,
     "contentFile": "seo-chapter-46.md",
-    "coverImage": "/blog/seo/images/seo-chapter-46.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-46.webp",
+    "seoTitle": "香港本地 SEO 完整入門：讓附近客人在 Google 搵到你間舖",
+    "metaDescription": "香港本地SEO點做？解析 Google 地圖排名的運作原理、Local Pack 的機制，由 GBP、OpenRice 評論到 18 區本地引用，等附近客人主動搵上門。",
+    "longTailKeyword": "香港本地seo本地商家優化完整入門",
+    "focusKeyphrase": "本地SEO"
   },
   {
     "chapter": 47,
@@ -465,79 +649,111 @@
     "title": "Google 商家檔案（GBP）完整設定教學",
     "excerpt": "Google 商家檔案（Google Business Profile，簡稱 GBP，前身為 Google My Business） 是 Google 提供的免費工具，讓商家管理在 Google 搜尋和 Google Maps 上的呈現…",
     "categoryId": "local",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-47.md",
-    "coverImage": "/blog/seo/images/seo-chapter-47.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-47.webp",
+    "seoTitle": "Google 商家檔案 GBP 設定教學：香港店家搶佔地圖排名第一步",
+    "metaDescription": "香港Google商家檔案點設定？由註冊驗證、類別選擇、香港地址與+852電話填寫、營業時間到相片與貼文經營，完整教學每一項細節，幫店家打好本地 SEO 基礎。",
+    "longTailKeyword": "香港google商家檔案gbp完整設定教學",
+    "focusKeyphrase": "Google商家檔案"
   },
   {
     "chapter": 48,
     "slug": "google-reviews",
-    "title": "Google 評論管理與回覆策略",
-    "excerpt": "Google 評論是在地 SEO 排名因素的重中之重，同時也是影響消費者決策的最強工具。",
+    "title": "Google 評論管理與回覆策略（香港篇）",
+    "excerpt": "Google 評論是本地 SEO 排名因素的重中之重，同時也是影響香港消費者決策的最強工具。",
     "categoryId": "local",
-    "readingMinutes": 6,
+    "readingMinutes": 8,
     "contentFile": "seo-chapter-48.md",
-    "coverImage": "/blog/seo/images/seo-chapter-48.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-48.webp",
+    "seoTitle": "Google 評論管理與回覆策略：香港店家提升星等的實戰技巧",
+    "metaDescription": "香港Google評論管理點做？解析評論數量與星等對 Local Pack 嘅作用、索取評論嘅正確時機與話術（附 OpenRice 餐飲做法）、負評回覆流程，全面提升店家轉換率。",
+    "longTailKeyword": "香港google評論管理與負評回覆技巧",
+    "focusKeyphrase": "Google評論管理"
   },
   {
     "chapter": 49,
     "slug": "nap-citations",
-    "title": "NAP 一致性與在地引用管理",
+    "title": "NAP 一致性與本地引用管理（香港篇）",
     "excerpt": "NAP 是三個元素的縮寫：",
     "categoryId": "local",
-    "readingMinutes": 8,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-49.md",
-    "coverImage": "/blog/seo/images/seo-chapter-49.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-49.webp",
+    "seoTitle": "NAP 一致性與本地引用：香港本地 SEO 的信任訊號基礎",
+    "metaDescription": "NAP一致性係乜？解析香港店家名稱、地址、+852 電話喺 Google、OpenRice、Facebook 同目錄網站之間嘅一致性原則，說明香港本地引用建立方法與常見 NAP 錯誤。",
+    "longTailKeyword": "香港nap一致性與本地引用管理方法",
+    "focusKeyphrase": "NAP一致性"
   },
   {
     "chapter": 50,
     "slug": "local-pack",
-    "title": "Local Pack 排名策略",
-    "excerpt": "Local Pack（在地套件）是 Google 針對具有在地意圖的搜尋查詢，在搜尋結果頁面（SERP）頂部顯示的三個商家結果，通常伴隨地圖顯示。",
+    "title": "Local Pack 排名策略（香港篇）",
+    "excerpt": "Local Pack（本地套件）是 Google 針對具有本地意圖的搜尋查詢，在搜尋結果頁面（SERP）頂部顯示的三個商家結果，通常伴隨地圖顯示。",
     "categoryId": "local",
-    "readingMinutes": 9,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-50.md",
-    "coverImage": "/blog/seo/images/seo-chapter-50.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-50.webp",
+    "seoTitle": "Local Pack 排名策略：香港店家搶入 Google 地圖前三名",
+    "metaDescription": "香港Local Pack點排上去？解析 Google 地圖排名嘅關鍵因素、距離與關聯性嘅權重思維，以及搶佔本地搜尋前三大版位嘅實戰策略，等客人第一眼就見到你。",
+    "longTailKeyword": "香港local pack地圖排名提升策略",
+    "focusKeyphrase": "Local Pack"
   },
   {
     "chapter": 51,
     "slug": "multi-location-seo",
-    "title": "多分店與服務區域商家 SEO",
-    "excerpt": "在地 SEO 面對兩種類型的複雜商家結構，各自有獨特的挑戰：",
+    "title": "多分店與服務區域商家 SEO（香港篇）",
+    "excerpt": "本地 SEO 面對兩種類型的複雜商家結構，各自有獨特的挑戰：",
     "categoryId": "local",
-    "readingMinutes": 10,
+    "readingMinutes": 12,
     "contentFile": "seo-chapter-51.md",
-    "coverImage": "/blog/seo/images/seo-chapter-51.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-51.webp",
+    "seoTitle": "多分店與服務區域商家 SEO：香港連鎖與上門服務的本地曝光策略",
+    "metaDescription": "香港有多間分店或做上門服務，SEO 應該點做？本頁教你管理 18 區多個 Google 商家檔案、避免分店互相蠶食，並設計各分店獨立頁面；SAB（通渠、清潔、搬屋）隱藏地址下點搶地圖版位，附常見違規地雷檢查。",
+    "longTailKeyword": "香港多分店與服務區域商家seo策略",
+    "focusKeyphrase": "多分店SEO"
   },
   {
     "chapter": 52,
     "slug": "local-business-schema",
-    "title": "結構化資料 — LocalBusiness Schema 完整指南",
+    "title": "結構化資料 — LocalBusiness Schema 完整指南（香港篇）",
     "excerpt": "結構化資料（Structured Data） 是一種標準化的資料格式，用來「標記」網頁內容，讓搜尋引擎更容易理解你的網頁在說什麼。",
     "categoryId": "advanced",
-    "readingMinutes": 8,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-52.md",
-    "coverImage": "/blog/seo/images/seo-chapter-52.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-52.webp",
+    "seoTitle": "LocalBusiness Schema 設定指南：香港本地商家結構化資料實戰",
+    "metaDescription": "香港本地商家都要結構化資料！解析 LocalBusiness Schema 必填欄位、香港地址與 +852 電話嘅 JSON-LD 撰寫範例、常見錯誤與檢測方式，強化舖頭喺搜尋同地圖嘅能見度。",
+    "longTailKeyword": "香港localbusiness schema本地商家設定教學",
+    "focusKeyphrase": "LocalBusiness Schema"
   },
   {
     "chapter": 53,
     "slug": "multilingual-seo",
-    "title": "多語言 SEO 策略",
-    "excerpt": "在香港這個多語言市場，多語言 SEO 不是選項，而是基本配置。",
+    "title": "多語言 SEO 策略（香港雙語篇）",
+    "excerpt": "香港本身係雙語社會（繁體中文 + 英文），加上大灣區跨境需求，多語言 SEO 唔係「進軍國際」嘅進階選項，而係香港網站嘅基本配置。",
     "categoryId": "advanced",
-    "readingMinutes": 9,
+    "readingMinutes": 13,
     "contentFile": "seo-chapter-53.md",
-    "coverImage": "/blog/seo/images/seo-chapter-53.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-53.webp",
+    "seoTitle": "多語言 SEO 策略：香港雙語網站的 hreflang 與本地化設定",
+    "metaDescription": "香港多語言SEO點做？解析繁中（zh-HK）、英文（en-HK）、簡中（zh-CN）三語架構、.hk/.com.hk 與子目錄選擇、hreflang 正確設定、粵語本地化內容，避免多語站互相競爭。",
+    "longTailKeyword": "香港多語言seo hreflang設定策略",
+    "focusKeyphrase": "多語言SEO"
   },
   {
     "chapter": 54,
     "slug": "international-seo",
-    "title": "國際 SEO 完整指南",
+    "title": "國際 SEO 完整指南（香港跨境篇）",
     "excerpt": "國際 SEO（International SEO） 是針對不同國家和語言的受眾，優化網站的策略。它不只是多語言翻譯，而是涉及地理定位、當地搜尋引擎、文化差異、技術架構等全面策略。",
     "categoryId": "advanced",
-    "readingMinutes": 9,
+    "readingMinutes": 12,
     "contentFile": "seo-chapter-54.md",
-    "coverImage": "/blog/seo/images/seo-chapter-54.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-54.webp",
+    "seoTitle": "國際 SEO 完整指南：由香港出發嘅跨境搜尋策略（大灣區篇）",
+    "metaDescription": "香港公司想做大灣區、東南亞或海外港人生意，國際 SEO 點起步？本頁由 .hk/.com.hk 地理定位、hreflang 跨境架構講到百度、微信、小紅書、抖音，幫你按實際客源規劃一套香港出發嘅跨境搜尋藍圖。",
+    "longTailKeyword": "香港國際seo跨境搜尋市場擴張策略",
+    "focusKeyphrase": "國際SEO"
   },
   {
     "chapter": 55,
@@ -545,9 +761,13 @@
     "title": "分頁 SEO 與無限滾動策略",
     "excerpt": "分頁（Pagination） 是將大量內容拆分成多個頁面的技術。如果你的網站有 500 件商品、200 篇部落格文章、或任何需要多頁展示的內容，你就必須處理分頁 SEO。",
     "categoryId": "advanced",
-    "readingMinutes": 8,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-55.md",
-    "coverImage": "/blog/seo/images/seo-chapter-55.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-55.webp",
+    "seoTitle": "分頁 SEO 與無限滾動：香港大型網站的內容架構解法",
+    "metaDescription": "分頁SEO點處理？解析香港網店分頁標記、rel=prev/next 退場後嘅因應對策、無限滾動與 Load More 按鈕嘅收錄問題，確保深層內容（產品、餐廳、樓盤）都俾 Google 收錄。",
+    "longTailKeyword": "分頁seo與無限滾動收錄對策",
+    "focusKeyphrase": "分頁SEO"
   },
   {
     "chapter": 56,
@@ -555,9 +775,13 @@
     "title": "Crawl Budget 爬取預算優化",
     "excerpt": "Crawl Budget（爬取預算） 是 Googlebot 在你的網站上，每天願意爬取的 URL 數量上限。它不是一個固定數字，而是由兩個因素決定的動態配額。",
     "categoryId": "advanced",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-56.md",
-    "coverImage": "/blog/seo/images/seo-chapter-56.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-56.webp",
+    "seoTitle": "Crawl Budget 爬取預算優化：別讓 Google 浪費爬蟲資源（香港實戰）",
+    "metaDescription": "香港大型網站收錄不完整？解析 Crawl Budget 爬取預算的意義與影響因素，以香港網店、新聞媒體、地產與討論區為例，教你用 robots.txt、參數處理、分頁政策與內部連結優化爬取效率，讓重要頁面優先被收錄。",
+    "longTailKeyword": "crawl budget爬取預算優化方法香港",
+    "focusKeyphrase": "Crawl Budget"
   },
   {
     "chapter": 57,
@@ -565,9 +789,13 @@
     "title": "網站搬遷與域名遷移 SEO SOP",
     "excerpt": "網站搬遷（Site Migration） 是 SEO 中風險最高的操作之一。如果處理不當，可能導致流量暴跌 50-90%，且需要數月才能恢復。",
     "categoryId": "advanced",
-    "readingMinutes": 8,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-57.md",
-    "coverImage": "/blog/seo/images/seo-chapter-57.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-57.webp",
+    "seoTitle": "網站搬遷與域名遷移 SEO SOP：不掉排名的完整流程（香港版）",
+    "metaDescription": "香港網站搬遷 SEO 點做先唔掉排名？提供 .hk / .com.hk 域名遷移 SEO SOP，由備份與風險評估、301 轉址映射表、hreflang 繁中英文版處理，到 Google Search Console 與 Bing Webmaster Tools 驗證監控。",
+    "longTailKeyword": "香港網站搬遷域名遷移seo sop流程",
+    "focusKeyphrase": "網站搬遷SEO"
   },
   {
     "chapter": 58,
@@ -575,9 +803,13 @@
     "title": "AI 時代 SEO 全景 — AISO / AEO / GEO 名詞解析與分工",
     "excerpt": "2000-2015：傳統 SEO（Traditional SEO） 目標：在 Google 的 10 個藍色連結中排名 策略：關鍵字密度、Meta Tags、反向連結數量 主角：Google Search",
     "categoryId": "ai-search",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-58.md",
-    "coverImage": "/blog/seo/images/seo-chapter-58.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-58.webp",
+    "seoTitle": "AI 時代 SEO 全景：香港 AISO、AEO、GEO 分工一次搞清",
+    "metaDescription": "AI 時代 SEO 仲值唔值得做？本頁用香港視角一次講清 AISO、AEO、GEO 嘅定義、差異同分工，對照 Google AI Overviews、ChatGPT、Perplexity 與 Copilot 嘅玩法，幫你判斷邊樣要即刻做、邊樣傳統 SEO 繼續留低。",
+    "longTailKeyword": "香港ai時代seo aiso aeo geo名詞解析",
+    "focusKeyphrase": "AI時代SEO"
   },
   {
     "chapter": 59,
@@ -585,9 +817,13 @@
     "title": "AISO 的核心原理 — AI 如何「讀懂」你的內容",
     "excerpt": "要理解 AISO，首先要打破一個迷思：AI 不像人類一樣逐字閱讀你的內容。AI 將你的內容轉換成數學表示（向量），並在語義空間中理解它的含義。",
     "categoryId": "ai-search",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-59.md",
-    "coverImage": "/blog/seo/images/seo-chapter-59.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-59.webp",
+    "seoTitle": "AISO 核心原理：AI 搜尋點樣讀懂香港內容並揀選引用來源",
+    "metaDescription": "點解 AI 引用嘅係對手而唔係你？AISO 核心原理拆解 ChatGPT、Gemini、Perplexity 同 Google AI Overviews 點樣做語意向量化、實體辨識同可信度判斷，教你按香港粵語查詢習慣改寫內容，提升被 AI 揀中引用嘅機會。",
+    "longTailKeyword": "香港aiso核心原理ai如何讀懂內容",
+    "focusKeyphrase": "AISO原理"
   },
   {
     "chapter": 60,
@@ -595,19 +831,27 @@
     "title": "AISO 入門三件事",
     "excerpt": "你不需要從零開始重建 SEO。你只需要在現有基礎上，做三件關鍵的事：結構化你的內容、強化你的 Entity 身分、讓 AI 更容易找到你。",
     "categoryId": "ai-search",
-    "readingMinutes": 8,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-60.md",
-    "coverImage": "/blog/seo/images/seo-chapter-60.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-60.webp",
+    "seoTitle": "AISO 入門三件事：香港品牌開始被 AI 引用的基本功",
+    "metaDescription": "想畀 ChatGPT、Gemini 或 Google AI Overviews 引用，第一步做乜？本頁歸納 AISO 入門三件事：內容結構化、強化 Entity 身分（GBP、OpenRice、LIHKG 足跡）、開放 AI 爬蟲權限，照做即可提升香港品牌喺 AI 回答出現嘅機會。",
+    "longTailKeyword": "香港aiso入門三件事基本操作",
+    "focusKeyphrase": "AISO入門"
   },
   {
     "chapter": 61,
     "slug": "geo-generative-engine-optimization",
     "title": "GEO 生成式引擎優化完整實戰",
-    "excerpt": "GEO（Generative Engine Optimization） 是針對生成式 AI 搜尋引擎（ChatGPT Search、Perplexity、Google AI Overviews 等）的優化策略。與傳統 SEO 不同，GE…",
+    "excerpt": "GEO（Generative Engine Optimization） 是針對生成式 AI 搜尋引擎（ChatGPT Search、Perplexity、Google AI Overviews / AI Mode、Gemini、Micr…",
     "categoryId": "ai-search",
-    "readingMinutes": 9,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-61.md",
-    "coverImage": "/blog/seo/images/seo-chapter-61.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-61.webp",
+    "seoTitle": "GEO 生成式引擎優化實戰：香港品牌搶進 AI Overview 與 ChatGPT",
+    "metaDescription": "香港 GEO 生成式引擎優化點做？解析內容引用格式、HK$ 數據呈現、本地權威強化（香港媒體 / OpenRice / LIHKG）與可引用段落設計，幫品牌搶進 AI Overview、ChatGPT、Gemini 與 Perplexity。",
+    "longTailKeyword": "香港geo生成式引擎優化實戰技巧",
+    "focusKeyphrase": "GEO生成式引擎優化"
   },
   {
     "chapter": 62,
@@ -615,9 +859,13 @@
     "title": "AEO 答案引擎優化完整指南",
     "excerpt": "AEO（Answer Engine Optimization） 是優化內容以成為「答案引擎」首選來源的策略。答案引擎與傳統搜尋引擎的區別在於：它們直接提供答案，而非提供連結列表。",
     "categoryId": "ai-search",
-    "readingMinutes": 9,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-62.md",
-    "coverImage": "/blog/seo/images/seo-chapter-62.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-62.webp",
+    "seoTitle": "AEO 答案引擎優化指南：攻佔精選摘要、AI Overviews 與廣東話語音搜尋（香港版）",
+    "metaDescription": "香港 AEO 答案引擎優化是什麼？解析攻佔 Google 精選摘要、AI Overviews、Knowledge Panel 與廣東話語音搜尋的核心技巧，用簡潔答案與問答結構抓住零點擊時代曝光。",
+    "longTailKeyword": "香港aeo答案引擎優化完整指南",
+    "focusKeyphrase": "AEO答案引擎優化"
   },
   {
     "chapter": 63,
@@ -625,9 +873,13 @@
     "title": "網站如何被 AI 引用？六大內容訊號實戰手冊",
     "excerpt": "第 59 章介紹了 AI 引用的六大內容訊號。本章將每個訊號轉化為可執行的檢查清單和實戰練習。如果你只能做一件事來提升被 AI 引用的機率，請完成本章的所有檢查清單。",
     "categoryId": "ai-search",
-    "readingMinutes": 9,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-63.md",
-    "coverImage": "/blog/seo/images/seo-chapter-63.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-63.webp",
+    "seoTitle": "香港網站如何被 AI 引用？影響 AI 引用的六大內容訊號",
+    "metaDescription": "香港網站點樣先會被 AI 引用？解析影響 ChatGPT、Gemini、Perplexity、Google AI Overviews 引用來源的六大內容訊號，包括結構、權威、Entity 與 HK$ 資料格式。",
+    "longTailKeyword": "香港網站如何被ai引用六大內容訊號",
+    "focusKeyphrase": "被AI引用"
   },
   {
     "chapter": 64,
@@ -635,9 +887,13 @@
     "title": "llms.txt — AI 搜尋優化新標準",
     "excerpt": "llms.txt 是 2025 年由知名開發者 Jeremy Howard 提出的新標準，專為大型語言模型（LLM）和 AI 爬蟲設計。它類似於 robots.txt，但用途完全不同。",
     "categoryId": "ai-search",
-    "readingMinutes": 8,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-64.md",
-    "coverImage": "/blog/seo/images/seo-chapter-64.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-64.webp",
+    "seoTitle": "llms.txt 是什麼？AI 搜尋優化新標準完整解析（香港版）",
+    "metaDescription": "香港網站要不要加 llms.txt？解析這個 AI 搜尋新標準的格式規範、用途、各大平台（ChatGPT / Gemini / Perplexity / Copilot）支援現況，以及香港多語言網站的實務建議。",
+    "longTailKeyword": "香港llms.txt ai搜尋優化新標準解析",
+    "focusKeyphrase": "llms.txt"
   },
   {
     "chapter": 65,
@@ -645,9 +901,13 @@
     "title": "AI SEO 的六個月起步路線圖",
     "excerpt": "這份路線圖將 AISO、AEO、GEO 的所有概念轉化為按月執行的行動計劃。無論你是從零開始，還是已經有一定的 SEO 基礎，這份路線圖都可以幫你逐步建立 AI 時代的搜尋存在感。",
     "categoryId": "ai-search",
-    "readingMinutes": 9,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-65.md",
-    "coverImage": "/blog/seo/images/seo-chapter-65.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-65.webp",
+    "seoTitle": "AI SEO 六個月路線圖：香港網站從零開始的轉型執行計畫",
+    "metaDescription": "香港 AI SEO 路線圖點行？提供六個月轉型計畫，按月規劃內容改造、結構化升級、本地權威建立（香港媒體 / OpenRice / LIHKG）與成效追蹤，讓香港網站過渡到 AI 時代。",
+    "longTailKeyword": "香港ai seo六個月轉型路線圖",
+    "focusKeyphrase": "AI SEO路線圖"
   },
   {
     "chapter": 66,
@@ -655,9 +915,13 @@
     "title": "Query Fan-out 查詢擴散與 Entity SEO",
     "excerpt": "Query Fan-out（查詢擴散） 描述了 AI 如何從一個簡單的查詢出發，自動擴展成一連串相關的子問題。理解這個機制，可以幫助你建立能「覆蓋整個問題網絡」的內容策略。",
     "categoryId": "ai-search",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-66.md",
-    "coverImage": "/blog/seo/images/seo-chapter-66.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-66.webp",
+    "seoTitle": "Query Fan-out 與 Entity SEO：香港 AI 搜尋的查詢擴散原理",
+    "metaDescription": "AI 搜尋背後的 Query Fan-out 是什麼？以香港市場為例，解析廣東話查詢擴散機制、18 區地區擴散與實體 SEO 的關係，教你建立 Entity 知識與品牌訊號。",
+    "longTailKeyword": "香港query fan-out與entity seo解析",
+    "focusKeyphrase": "Query Fan-out"
   },
   {
     "chapter": 67,
@@ -665,9 +929,13 @@
     "title": "SEO 七大 KPI 指標體系",
     "excerpt": "沒有數據的 SEO 就像閉著眼睛開車 — 你可能感覺在動，但你不知道方向對不對。",
     "categoryId": "analytics",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-67.md",
-    "coverImage": "/blog/seo/images/seo-chapter-67.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-67.webp",
+    "seoTitle": "SEO 七大 KPI 指標體系：香港市場衡量成效該看哪些數據",
+    "metaDescription": "香港 SEO KPI 要睇邊啲？解析自然流量、關鍵字排名、點擊率、轉換率等七大指標定義與解讀，補上 AI 引用與香港本地平台指標，建立完整 SEO 成效衡量體系。",
+    "longTailKeyword": "香港seo七大kpi成效指標體系",
+    "focusKeyphrase": "SEO KPI"
   },
   {
     "chapter": 68,
@@ -675,188 +943,264 @@
     "title": "Google Search Console 完整操作教學",
     "excerpt": "GSC 是 Google 給你的一面鏡子 — 它告訴你 Google 眼中的你長什麼樣。而這面鏡子，完全免費。",
     "categoryId": "analytics",
-    "readingMinutes": 8,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-68.md",
-    "coverImage": "/blog/seo/images/seo-chapter-68.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-68.webp",
+    "seoTitle": "Google Search Console 完整操作教學：香港 SEO 必備免費工具",
+    "metaDescription": "香港網站點用 Google Search Console？由驗證 .hk 域名、提交 Sitemap 到解讀成效報表、索引狀態與體驗報表，完整教學挖掘官方免費數據，附香港關鍵字 regex 與 Bing 配套。",
+    "longTailKeyword": "香港google search console完整操作教學",
+    "focusKeyphrase": "Google Search Console"
   },
   {
     "chapter": 69,
     "slug": "ga4-seo",
     "title": "Google Analytics 4 與 SEO 數據整合",
-    "excerpt": "GA4 不是 Universal Analytics 的升級版 — 它是一個全新的物種。學好它，你的 SEO 數據分析能力直接翻倍。",
+    "excerpt": "GA4 唔係 Universal Analytics 嘅升級版 — 佢係一個全新嘅物種。學好佢，你嘅 SEO 數據分析能力直接翻倍。對香港網站嚟講，呢點特別重要：香港市場細、流量池細，每一個有機 visit 都要計得清清楚楚。",
     "categoryId": "analytics",
-    "readingMinutes": 8,
+    "readingMinutes": 12,
     "contentFile": "seo-chapter-69.md",
-    "coverImage": "/blog/seo/images/seo-chapter-69.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-69.webp",
+    "seoTitle": "GA4 與 SEO 數據整合：香港網站用分析工具看清流量真相",
+    "metaDescription": "香港 GA4 與 SEO 整合點做？解析 GA4 自然流量報表設定、與 Search Console 連動、UTM 追蹤原理與關鍵維度應用，整合數據看清香港 SEO 流量全貌。",
+    "longTailKeyword": "香港ga4與seo數據整合分析教學",
+    "focusKeyphrase": "GA4與SEO整合"
   },
   {
     "chapter": 70,
     "slug": "seo-data-diagnosis",
     "title": "SEO 數據分析常見診斷流程",
-    "excerpt": "SEO 出問題的時候，最危險的反應是「憑感覺亂改」。本章給你一套標準化的診斷 SOP，像醫生看診一樣：問症狀 → 做檢查 → 下診斷 → 開藥方。",
+    "excerpt": "SEO 出事嘅時候，最危險嘅反應係「憑感覺亂改」。本章畀你一套標準化嘅診斷 SOP，好似醫生睇症咁：問症狀 → 做檢查 → 下診斷 → 開藥方。",
     "categoryId": "analytics",
-    "readingMinutes": 10,
+    "readingMinutes": 13,
     "contentFile": "seo-chapter-70.md",
-    "coverImage": "/blog/seo/images/seo-chapter-70.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-70.webp",
+    "seoTitle": "SEO 數據分析診斷流程：香港網站流量異常排查步驟",
+    "metaDescription": "香港 SEO 數據分析點做？網站流量突然跌唔使慌！本教學畀你一套標準化診斷 SOP：由確認下跌範圍、區分演算法與技術原因、檢查收錄同 CTR，到對症下藥，系統化排查八大常見流量異常。",
+    "longTailKeyword": "香港seo數據分析與流量診斷流程",
+    "focusKeyphrase": "SEO數據分析"
   },
   {
     "chapter": 71,
     "slug": "white-grey-black-hat-seo",
     "title": "白帽 vs 灰帽 vs 黑帽 SEO 完整比較",
-    "excerpt": "「SEO 唔係關於點樣呃 Google，而係關於點樣幫 Google 幫你。」— 白帽 SEO 的核心哲學。",
+    "excerpt": "「SEO 唔係關於點樣呃 Google，而係關於點樣幫 Google 幫你。」— 白帽 SEO 嘅核心哲學。 香港市場細，一旦被罰，你嘅對手好快就食晒你個位；而香港用戶又鍾意上連登、OpenRice 討論，品牌名譽一旦衰咗就好難補返。所…",
     "categoryId": "risk",
-    "readingMinutes": 7,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-71.md",
-    "coverImage": "/blog/seo/images/seo-chapter-71.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-71.webp",
+    "seoTitle": "白帽 vs 灰帽 vs 黑帽 SEO：香港網站風險與效果完整比較",
+    "metaDescription": "白帽黑帽 SEO 差喺邊？香港視角解析白帽、灰帽、黑帽 SEO 手法差異、效果時程與風險代價，講清常見灰色地帶判斷原則，幫你揀一條唔使賭上網站前途嘅路。",
+    "longTailKeyword": "香港白帽灰帽黑帽seo手法風險比較",
+    "focusKeyphrase": "白帽黑帽SEO"
   },
   {
     "chapter": 72,
     "slug": "google-penalties",
     "title": "Google 手動處罰與演算法懲罰",
-    "excerpt": "被 Google 處罰的感覺，就像在高速公路上突然被警察攔下來。你不知道自己做錯了什麼，但你知道事情大條了。",
+    "excerpt": "被 Google 處罰嘅感覺，就好似喺青馬大橋上面突然被警察截停。你唔知道自己做錯咗啲乜，但你知件事大鑊。 香港網站嘅常見劇本：老闆請咗一間「保證三個月上第一頁」嘅本地 SEO 公司，半年後流量歸零，先知對方用黑帽手法 — 呢個時候公司…",
     "categoryId": "risk",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-72.md",
-    "coverImage": "/blog/seo/images/seo-chapter-72.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-72.webp",
+    "seoTitle": "Google 手動處罰與演算法懲罰：香港網站辨別與解除流程",
+    "metaDescription": "香港網站被 Google 處罰點解除？解析手動處罰與演算法懲罰差異、GSC 查看位置與常見類型，以及清理有害連結、提交重審到解除處罰嘅完整流程。",
+    "longTailKeyword": "香港google手動處罰與演算法懲罰解除",
+    "focusKeyphrase": "Google手動處罰"
   },
   {
     "chapter": 73,
     "slug": "negative-seo",
     "title": "負面 SEO 攻擊辨識與應對",
-    "excerpt": "你的競爭對手可能不會偷你的產品，但他們可能試圖摧毀你的 SEO。負面 SEO 是真實存在的威脅，你需要知道如何辨識、防禦、反擊。",
+    "excerpt": "你嘅競爭對手可能唔會偷你嘅產品，但佢哋可能會試圖摧毀你嘅 SEO。負面 SEO 係真實存在嘅威脅，你要知道點樣辨識、防禦、反擊。 香港市場細、競爭密度高，加上用戶好活躍喺連登（LIHKG）、Facebook 社團、OpenRice、Go…",
     "categoryId": "risk",
-    "readingMinutes": 8,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-73.md",
-    "coverImage": "/blog/seo/images/seo-chapter-73.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-73.webp",
+    "seoTitle": "負面 SEO 攻擊辨識與應對：香港網站被惡意攻擊點算好",
+    "metaDescription": "香港網站遇到負面 SEO 點應對？解析垃圾連結、內容抄襲、假評論與駭客入侵等攻擊手法，講清辨識方式、監控工具與防禦方法，保護排名不受惡意攻擊影響。",
+    "longTailKeyword": "香港負面seo攻擊辨識與防禦應對",
+    "focusKeyphrase": "負面SEO攻擊"
   },
   {
     "chapter": 74,
     "slug": "seo-budget",
     "title": "SEO 預算規劃與方案選擇",
-    "excerpt": "SEO 不是一筆「費用」，而是一項「投資」。但任何投資都需要預算規劃，否則錢燒完了還沒看到結果。",
+    "excerpt": "SEO 唔係一筆「費用」，而係一項「投資」。但任何投資都要有預算規劃，否則錢燒完都未見到結果。 香港市場細、人工貴，SEO 報價嘅落差可以好大 — 由 HK$2,000 一個月嘅「學生仔套餐」到 HK$100,000+ 嘅 4A 級代理…",
     "categoryId": "management",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-74.md",
-    "coverImage": "/blog/seo/images/seo-chapter-74.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-74.webp",
+    "seoTitle": "SEO 預算規劃與方案選擇：香港企業投入幾多錢先合理",
+    "metaDescription": "香港 SEO 預算點規劃？解析自行操作、外包代操與顧問三種方案嘅 HK$ 收費結構與適合情境，教你評估報價合理性、辨識黑心方案，規劃符合企業階段嘅預算。",
+    "longTailKeyword": "香港seo預算規劃與方案費用選擇",
+    "focusKeyphrase": "SEO預算規劃"
   },
   {
     "chapter": 75,
     "slug": "seo-project-roadmap",
     "title": "SEO 專案 12 個月里程碑規劃",
-    "excerpt": "SEO 最難的不是知道要做什麼，而是知道「什麼時候做什麼」。本章給你一個完整的 12 個月路線圖，讓你知道每個月該專注什麼。",
+    "excerpt": "SEO 最難嘅唔係知道要做啲乜，而係知道「幾時做啲乜」。本章畀你一個完整嘅 12 個月路線圖，等你清楚每個月應該專注喺邊度。 香港版嘅特別之處：香港市場細、季節性強（農曆新年、暑假、颱風季），加上本地 SEO（GBP、OpenRice、…",
     "categoryId": "management",
-    "readingMinutes": 8,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-75.md",
-    "coverImage": "/blog/seo/images/seo-chapter-75.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-75.webp",
+    "seoTitle": "SEO 專案 12 個月里程碑規劃：香港網站由導入到收割",
+    "metaDescription": "香港 SEO 專案點排程？以 12 個月為期規劃里程碑，由技術改善、內容產出、本地權重建立到流量收割，掌握各階段執行目標、重點工作與驗收標準。",
+    "longTailKeyword": "香港seo專案12個月里程碑時程規劃",
+    "focusKeyphrase": "SEO專案規劃"
   },
   {
     "chapter": 76,
     "slug": "seo-team",
     "title": "SEO 團隊角色與技能配置",
-    "excerpt": "一個人的 SEO 可以做出成績，但一個對的團隊可以把 SEO 變成公司的核心成長引擎。",
+    "excerpt": "一個人嘅 SEO 可以做出成績，但一個啱嘅團隊可以把 SEO 變成公司嘅核心增長引擎。 香港嘅現實：SEO 人才池細、人工貴、請人難。所以香港公司好少會一開始就砌完整團隊 — 多數係「一個 SEO Manager + 外包寫手 + 同…",
     "categoryId": "management",
-    "readingMinutes": 8,
+    "readingMinutes": 12,
     "contentFile": "seo-chapter-76.md",
-    "coverImage": "/blog/seo/images/seo-chapter-76.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-76.webp",
+    "seoTitle": "SEO 團隊角色與技能配置：香港企業點樣砌 SEO 班底",
+    "metaDescription": "香港 SEO 團隊點配置？解析 SEO 主管、內容企劃、技術工程與外鏈專員嘅分工與技能要求，比較一人團隊、小團隊與大型部門嘅組織配置建議，幫你用最少人手砌出最啱嘅 SEO 班底。",
+    "longTailKeyword": "香港seo團隊角色分工與技能配置",
+    "focusKeyphrase": "SEO團隊配置"
   },
   {
     "chapter": 77,
     "slug": "seo-launch-checklist",
     "title": "新網站上線前 SEO 檢查清單",
-    "excerpt": "網站上線後才發現 SEO 問題，就像房子蓋好才發現忘了鋪水管 — 要改可以，但代價大多了。",
+    "excerpt": "網站上線後先發現 SEO 問題，就好似樓起到頂先發覺冇鋪水喉 — 改得切，但代價大多了。 香港網站仲有幾樣嘢要額外留意：.hk 域名、中英雙語 hreflang、Bing Webmaster Tools（Yahoo 香港用 Bing 索…",
     "categoryId": "operations",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-77.md",
-    "coverImage": "/blog/seo/images/seo-chapter-77.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-77.webp",
+    "seoTitle": "新網站上線前 SEO 檢查清單：香港網站上線前必做準備",
+    "metaDescription": "香港新網站上線前 SEO 要檢查啲乜？整理索引設定、速度、行動版、結構化資料、HTTPS、.hk 域名與 hreflang 等檢查清單，逐項確認，避免起步就踩坑。",
+    "longTailKeyword": "香港新網站上線前seo檢查清單",
+    "focusKeyphrase": "上線前SEO檢查"
   },
   {
     "chapter": 78,
     "slug": "website-redesign-migration",
     "title": "網站改版/搬家 SEO 完整 SOP",
-    "excerpt": "網站改版是 SEO 最危險的時刻之一。一個錯誤的 301 可以讓你好幾年的 SEO 努力化為烏有。這份 SOP 讓你安全過渡。",
+    "excerpt": "網站改版係 SEO 最危險嘅時刻之一。一條錯嘅 301 可以令你幾年嘅 SEO 努力化為烏有。呢份 SOP 等你安全過渡。 香港常見嘅改版情境有四種：① 換設計但唔換 URL（最安全）、② 由 .com 轉 .hk／.com.hk、③…",
     "categoryId": "operations",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-78.md",
-    "coverImage": "/blog/seo/images/seo-chapter-78.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-78.webp",
+    "seoTitle": "網站改版搬家的 SEO SOP：香港網站改版唔掉流量嘅流程",
+    "metaDescription": "香港網站改版 SEO 點做？改版最怕流量歸零！提供改版與搬家前後嘅 SEO SOP，涵蓋網址對照表、301 轉址規劃、測試驗證、GBP 與本地引用更新，安全過渡。",
+    "longTailKeyword": "香港網站改版搬家seo sop完整流程",
+    "focusKeyphrase": "網站改版SEO"
   },
   {
     "chapter": 79,
     "slug": "monthly-seo-maintenance",
     "title": "每月 SEO 維運工作清單",
-    "excerpt": "SEO 不是一個「做完就沒事」的專案 — 它是一個需要持續維運的系統。這份每月清單讓你不會忘記任何重要的事。",
+    "excerpt": "SEO 唔係一個「做完就冇事」嘅 project — 佢係一個要持續維運嘅系統。呢份每月清單等你唔會忘記任何重要嘅事。 香港版加咗幾樣嘢：Google 商家檔案（GBP）維護、OpenRice／TripAdvisor 等本地平台、Bin…",
     "categoryId": "operations",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-79.md",
-    "coverImage": "/blog/seo/images/seo-chapter-79.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-79.webp",
+    "seoTitle": "每月 SEO 維運工作清單：香港網站日常保養例行公事",
+    "metaDescription": "香港 SEO 維運清單有啲乜？SEO 唔係做好就唔使理！整理每月例行工作，涵蓋排名流量檢查、內容更新、GBP 與本地引用、連結健檢、技術監控與競品追蹤。",
+    "longTailKeyword": "香港每月seo維運例行工作清單",
+    "focusKeyphrase": "SEO維運清單"
   },
   {
     "chapter": 80,
     "slug": "seo-health-check",
     "title": "SEO 自我健檢 8 步驟",
-    "excerpt": "不需要是 SEO 專家也能完成的網站健檢。8 個步驟，1 小時內找到你網站最需要修復的 SEO 問題。",
+    "excerpt": "唔使係 SEO 專家都做得到嘅網站健檢。8 個步驟，1 小時內搵出你網站最需要修嘅 SEO 問題。 香港版加咗幾樣本地嘢：.hk 域名檢查、中英雙語 hreflang、Google 商家檔案（GBP）、OpenRice／本地引用、Yah…",
     "categoryId": "operations",
-    "readingMinutes": 7,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-80.md",
-    "coverImage": "/blog/seo/images/seo-chapter-80.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-80.webp",
+    "seoTitle": "SEO 自我健檢 8 步驟：香港網站唔使錢診斷 SEO 體質",
+    "metaDescription": "香港 SEO 自我健檢點做？跟住 8 個步驟檢查網站體質，由收錄狀態、排名體檢、內容品質到技術與本地 SEO 檢查，唔使付費工具都可以系統化搵出問題。",
+    "longTailKeyword": "香港seo自我健檢八步驟診斷",
+    "focusKeyphrase": "SEO自我健檢"
   },
   {
     "chapter": 81,
     "slug": "youtube-seo",
     "title": "YouTube SEO 完整教學",
-    "excerpt": "YouTube 是世界第二大搜尋引擎（僅次於 Google 本身）。如果你有影片內容，YouTube SEO 是一個完全不同的遊戲規則。",
+    "excerpt": "YouTube 係世界第二大搜尋引擎（只係輸俾 Google 本身）。喺香港，YouTube 更加係「第二個 Google」— 唔少人搵食評、開箱、補習、裝修、按揭資訊，第一站唔係網頁，而係直接上 YouTube 打「邊間好」「推介」「…",
     "categoryId": "specialized",
-    "readingMinutes": 7,
+    "readingMinutes": 11,
     "contentFile": "seo-chapter-81.md",
-    "coverImage": "/blog/seo/images/seo-chapter-81.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-81.webp",
+    "seoTitle": "YouTube SEO 完整教學：香港影片搜尋排名優化攻略",
+    "metaDescription": "影片都想俾人搜到？解析 YouTube SEO 嘅標題、說明、標籤同縮圖優化，說明觀眾留存率同互動訊號對排名嘅影響，並加入香港廣東話頻道、粵語字幕同本地搜尋習慣嘅實戰做法，等條片喺 Google 同 YouTube 雙平台都有曝光。",
+    "longTailKeyword": "youtube seo影片搜尋排名優化教學香港",
+    "focusKeyphrase": "YouTube SEO"
   },
   {
     "chapter": 82,
     "slug": "ecommerce-multilingual-seo",
-    "title": "跨境電商與多語系 SEO 完整指南",
-    "excerpt": "跨境電商的 SEO 不只是「把網站翻譯成英文」這麼簡單。每個市場都有自己的搜尋習慣、文化偏好和搜尋引擎生態。",
+    "title": "跨境電商與多語系 SEO 完整指南（香港視角）",
+    "excerpt": "對香港公司嚟講，跨境 SEO 唔係「將網站翻譯成英文咁簡單」。香港本身已經係一個雙語市場（繁體中文 + 英文），同時仲有「北上」（大灣區／內地客）同「出海」（國際市場）兩條完全唔同嘅路線 — 兩邊用嘅搜尋引擎、平台、語言習慣完全唔同，要…",
     "categoryId": "specialized",
-    "readingMinutes": 6,
+    "readingMinutes": 13,
     "contentFile": "seo-chapter-82.md",
-    "coverImage": "/blog/seo/images/seo-chapter-82.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-82.webp",
+    "seoTitle": "跨境電商與多語系 SEO：香港雙語市場與大灣區跨境攻略",
+    "metaDescription": "香港跨境電商 SEO 點做？以香港雙語（繁中＋英文）為主場，向北覆蓋大灣區／內地（百度、微信、小紅書、抖音），向南出海國際。解析 .hk/.com.hk 網域策略、hreflang 設定與本地化關鍵字研究。",
+    "longTailKeyword": "香港跨境電商多語系seo大灣區攻略",
+    "focusKeyphrase": "跨境電商SEO"
   },
   {
     "chapter": 83,
     "slug": "taiwan-social-seo",
-    "title": "台灣社群 SEO（PTT / Dcard）整合策略",
-    "excerpt": "在台灣，人們不只 Google — 他們也在 PTT 和 Dcard 上搜尋。這些平台不只是社群，它們是台灣使用者獲取資訊的重要搜尋入口。",
+    "title": "香港社群 SEO（LIHKG / 連登 / Uwants）整合策略",
+    "excerpt": "喺香港，人哋唔淨係 Google — 佢哋仲會上連登（LIHKG）、Uwants、Discuss.com.hk、Facebook 社團、小紅書搵嘢。呢啲平台唔只係社群，佢哋係香港人搵資訊、睇評價、做決定嘅重要搜尋入口。",
     "categoryId": "specialized",
-    "readingMinutes": 6,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-83.md",
-    "coverImage": "/blog/seo/images/seo-chapter-83.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-83.webp",
+    "seoTitle": "香港社群 SEO：LIHKG（連登）、Uwants 聲量與搜尋排名整合策略",
+    "metaDescription": "香港社群 SEO 點經營？連登（LIHKG）、Uwants、Discuss.com.hk 嘅帖會唔會影響 Google 排名？解析香港討論區嘅搜尋曝光機制、口碑經營與 UGC 內容特性，說明整合操作策略。",
+    "longTailKeyword": "lihkg連登uwants香港社群seo聲量策略",
+    "focusKeyphrase": "香港社群SEO"
   },
   {
     "chapter": 84,
     "slug": "yahoo-bing-seo",
-    "title": "Yahoo 奇摩與 Bing SEO 策略",
-    "excerpt": "Google 不是唯一的搜尋引擎。在台灣，Yahoo 奇摩仍然有一席之地；在全球，Bing 正在因為 AI 整合（Copilot）而快速崛起。忽略它們等於放棄 10-25% 的搜尋流量。",
+    "title": "Yahoo 香港與 Bing SEO 策略",
+    "excerpt": "Google 唔係唯一嘅搜尋引擎。喺香港，Yahoo 香港（hk.yahoo.com）仍然有一班 35+ 嘅忠實用家；而 Bing 就因為 AI 整合（Microsoft Copilot）喺全球快速崛起。雖然兩者加埋唔夠 Google…",
     "categoryId": "specialized",
-    "readingMinutes": 6,
+    "readingMinutes": 10,
     "contentFile": "seo-chapter-84.md",
-    "coverImage": "/blog/seo/images/seo-chapter-84.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-84.webp",
+    "seoTitle": "Yahoo 香港與 Bing SEO：香港第二搜尋戰場攻略",
+    "metaDescription": "香港做 SEO 淨係做 Google 夠唔夠？解析 Yahoo 香港（hk.yahoo.com）與 Bing 嘅香港市佔、同 Google 嘅排名差異、Bing Webmaster Tools 用法，以及點樣俾 Microsoft Copilot 同 ChatGPT 引用。",
+    "longTailKeyword": "yahoo香港與bing seo優化策略",
+    "focusKeyphrase": "Yahoo香港與Bing SEO"
   },
   {
     "chapter": 85,
     "slug": "seo-faq",
     "title": "SEO 常見問題 FAQ 全集",
-    "excerpt": "從新手到進階，這份 FAQ 涵蓋了 SEO 最常被問到的問題。每個答案都直接、實用、不廢話。",
+    "excerpt": "由新手到進階，呢份 FAQ 涵蓋咗 SEO 最常被問到嘅問題。每個答案都直接、實用、唔講廢話，並以香港市場（Google 主導、繁中＋英文雙語、港元計價）為主要情境。",
     "categoryId": "faq",
-    "readingMinutes": 7,
+    "readingMinutes": 12,
     "contentFile": "seo-chapter-85.md",
-    "coverImage": "/blog/seo/images/seo-chapter-85.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-85.webp",
+    "seoTitle": "SEO 常見問題 FAQ 全集：香港新手最常問的疑難雜症",
+    "metaDescription": "SEO常見問題有哪些？收錄香港新手最常問嘅 SEO 疑難雜症與專業解答，涵蓋見效時程、費用成本（HK$）、工具選擇與常見操作錯誤，仲有小紅書、OpenRice、連登等香港平台問題，快速解決你對搜尋引擎優化的疑惑。",
+    "longTailKeyword": "seo常見問題faq香港新手疑問解答",
+    "focusKeyphrase": "SEO常見問題"
   },
   {
     "chapter": 86,
     "slug": "seo-myths",
     "title": "SEO 十大迷思破解",
-    "excerpt": "「關鍵字密度 3% 才會有排名」、「SEO 死咗啦」— SEO 界的都市傳說多得驚人。本章用事實和邏輯逐一擊破。",
+    "excerpt": "「關鍵字密度 3% 先會有排名」、「SEO 死咗啦」、「買幾個 .hk 連結就上到第一頁」— 香港 SEO 界嘅都市傳說多得驚人，尤其係啲「包上第一頁 HK$1,000/月」嘅推銷電話。本章用事實同邏輯逐一擊破。",
     "categoryId": "faq",
-    "readingMinutes": 6,
+    "readingMinutes": 9,
     "contentFile": "seo-chapter-86.md",
-    "coverImage": "/blog/seo/images/seo-chapter-86.webp"
+    "coverImage": "/blog/seo/images/seo-chapter-86.webp",
+    "seoTitle": "SEO 十大迷思破解：香港市場常見錯誤觀念與正確做法全解析",
+    "metaDescription": "SEO迷思破解一次睇！關鍵字密度越高越好？SEO 做一次就永久有效？用香港市場例子（旺角餐廳、補習社、地產代理、連登、OpenRice）破解十個最常見嘅 SEO 迷思，逐一分析錯誤觀念嘅來源與正確做法。",
+    "longTailKeyword": "seo十大迷思破解香港市場觀念導正",
+    "focusKeyphrase": "SEO迷思破解"
   }
 ]

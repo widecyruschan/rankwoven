@@ -18,10 +18,37 @@ SEO 的三個時代：
 2024-現在：AI 時代 SEO（AISO / AEO / GEO）
   目標：在 AI 的回答中被引用、被推薦、被看見
   策略：Entity SEO、權威度建立、內容結構化、llms.txt
-  主角：Google AI Overviews、ChatGPT、Perplexity、Claude、Gemini
+  主角：Google AI Overviews / AI Mode、ChatGPT、Perplexity、
+        Claude、Gemini、Microsoft Copilot
 ```
 
 > **核心轉變：** 從「讓搜尋引擎找到我」變成「讓 AI 認識我、信任我、推薦我」。
+
+### 香港市場的特殊性
+
+```
+香港用家的 AI 搜尋行為（2026）：
+
+  Google 喺香港佔 ~92-95% 搜尋份額
+    → AI Overviews / AI Mode 係香港最主要嘅 AI 搜尋接觸點
+    → 加埋 YouTube（Google 生態）、Google 商家檔案，仍然是主戰場
+
+  Microsoft Copilot / Bing
+    → Windows + Edge 預設，香港企業、金融、B2B 場景常見
+    → Yahoo 香港搜尋（hk.yahoo.com）用 Bing 技術，仍有 ~3-6% 份額，
+      35+ 族群偏高 → 唔可以當佢唔存在
+    → ChatGPT 搜尋亦大量依賴 Bing 索引
+
+  ChatGPT / Gemini / Claude / Perplexity
+    → 香港用家普遍直接問 AI：「邊間好」「推介」「點揀」「平唔平」
+    → 繁中 + 粵語口語查詢多，AI 對「香港本地資訊」嘅來源需求大
+
+  小紅書（RED）
+    → 香港年輕人重要嘅「發現 / 搜尋」入口（美妝、穿搭、餐飲、旅遊）
+    → 部分內容會被 Google 索引，亦逐漸被 AI 當作推薦與口碑來源
+```
+
+> **香港結論：** 主戰場仍然係 Google（AI Overviews），但 Bing / Copilot 喺香港有額外加成（Yahoo 香港 + 企業 Windows 環境），而小紅書係香港新興嘅 discovery 入口。三條線都要佈局。
 
 ---
 
@@ -38,18 +65,21 @@ AISO（AI Search Optimization）— AI 搜尋優化
 
 AEO（Answer Engine Optimization）— 答案引擎優化
   專注於讓你的內容成為 AI 回答問題時的首選來源。
-  當 AI 需要回答「香港最好的牙醫是誰？」時，
+  當 AI 需要回答「香港邊間牙醫診所好？」時，
   你是否在被引用的名單中？
 
   「如何成為 AI 答案中的權威來源？」
 
 GEO（Generative Engine Optimization）— 生成式引擎優化
-  專注於針對生成式 AI 搜尋引擎（如 ChatGPT、Perplexity）的優化。
+  專注於針對生成式 AI 搜尋引擎（如 ChatGPT、Gemini、
+  Perplexity、Copilot）的優化。
   這些引擎不是提供連結列表，而是直接生成答案。
   你的內容需要被這些引擎「理解、吸收、引用」。
 
   「如何在 AI 生成的答案中獲得引用和曝光？」
 ```
+
+> **香港例子：** 用家問 Perplexity「旺角有咩好食？」、問 ChatGPT「香港邊間補習社比較好？」，AI 會優先引用佢「睇得到、信得過」嘅來源：OpenRice、香港新聞媒體、Wikipedia、YouTube，以及有清晰結構嘅品牌官網。你要做嘅，就係令自己進入呢張引用清單。
 
 ### 三者的關係
 
@@ -61,10 +91,11 @@ GEO（Generative Engine Optimization）— 生成式引擎優化
 │  │  （答案引擎優化）  │  │  （生成式引擎優化） │  │
 │  │                 │  │                 │  │
 │  │ Google AI       │  │ ChatGPT Search  │  │
-│  │ Overviews        │  │ Perplexity      │  │
-│  │ Featured Snippet │  │ Claude Search   │  │
-│  │ Knowledge Graph  │  │ Gemini Deep     │  │
-│  │                  │  │ Research        │  │
+│  │ Overviews /      │  │ Perplexity      │  │
+│  │ AI Mode         │  │ Claude Search   │  │
+│  │ Featured Snippet │  │ Gemini Deep     │  │
+│  │ Knowledge Graph  │  │ Research        │  │
+│  │                  │  │ Copilot（Bing）  │  │
 │  └─────────────────┘  └─────────────────┘  │
 └───────────────────────────────────────────┘
 ```
@@ -83,10 +114,15 @@ Google：
   SGE（Search Generative Experience）— Google 的 AI 搜尋實驗
   → 對傳統 SEO 衝擊最大！AI 回答搶走了大量點擊。
 
-Bing：
-  Bing Chat / Copilot — 整合 GPT-4 的對話式搜尋
+Bing / Microsoft Copilot：
+  Bing Chat / Copilot — 整合 GPT 模型的對話式搜尋
   Deep Search — 使用 AI 進行深度搜尋
-  → 佔有率較低，但在歐美有一定市場。
+  → 香港份額約 3-5%（Edge / Windows 預設），
+    但重要性高於份額：
+     ✅ Yahoo 香港（hk.yahoo.com）搜尋用 Bing 技術，仍有 ~3-6% 份額
+     ✅ ChatGPT 搜尋與 Copilot 大量依賴 Bing 索引
+     ✅ 香港金融、B2B、企業環境普遍用 Windows + Edge
+    → 所以香港網站一定要交 Bing Webmaster Tools（全球做法一樣）
 ```
 
 ### 類別 2：獨立 AI 搜尋引擎
@@ -105,10 +141,12 @@ Perplexity：
 Claude（Anthropic）：
   → 具有網頁搜尋能力的對話 AI
   → 注重安全和準確性
+  → 香港專業人士做法律 / 金融 / 研究較常用
 
 Gemini（Google）：
   → Google 的多模態 AI 助手
   → 整合 Google 搜尋的生態系統
+  → 在香港：Android 用家比例高，Gemini 滲透率自然高
 ```
 
 ### 類別 3：垂直領域 AI 搜尋
@@ -162,9 +200,9 @@ AISO 的漏斗：
 **AI Overviews** 是 Google 在搜尋結果頂部顯示的、由 AI 自動生成的摘要答案。它從多個網頁中提取資訊，合成一個完整的回答。
 
 ```
-當使用者搜尋：
+當香港使用者搜尋：
 
-  「香港牙醫 植牙過程 注意事項」
+  「香港植牙 過程 注意事項 價錢」
 
 Google AI Overviews 顯示：
 
@@ -178,6 +216,7 @@ Google AI Overviews 顯示：
   │  3. 骨整合期：約需 3-6 個月...             │
   │  4. 安裝牙冠：最終裝上假牙...               │
   │                                           │
+  │  香港私家診所植牙費用一般約 HK$15,000 起... │
   │  常見注意事項包括...                        │
   │                                           │
   │  [來源 1] [來源 2] [來源 3]  ← 你的網站！  │
@@ -210,6 +249,10 @@ Google AI Overviews 顯示：
 1. 權威度（Authority）
    AI 傾向引用公認的權威來源：
    → 知名媒體、學術機構、政府網站、行業權威
+   → 香港例子：香港01、明報、經濟日報、星島、頭條日報、
+     香港政府「資料一線通」、香港旅發局、HKTDC、消委會、
+     大學（港大 / 中大 / 科大）；
+     餐飲場景就係 OpenRice，討論區場景就係 LIHKG / Discuss
 
 2. 內容一致性（Consensus）
    如果多個權威來源說同樣的事，
@@ -230,6 +273,19 @@ Google AI Overviews 顯示：
 6. 數據和事實的明確性
    有具體數字、統計資料、研究支持的內容，
    比模糊的內容更容易被引用。
+   （香港內容要寫明 HK$ 價錢、地區、時間，
+     例如「中環 / 尖沙咀 / 沙田分店，逢星期一至六 10:00-20:00」）
+
+7. 第三方平台的口碑足跡（香港特別要補）
+   國際 AI 仍然大量引用 Wikipedia、Reddit、YouTube、LinkedIn
+   等全球來源 —— 呢點唔會變。
+   但香港等效平台同樣係 AI 搵「本地真實意見」嘅地方：
+   → LIHKG（連登）、Discuss.com.hk、Uwants、高登
+   → OpenRice（餐飲）、TripAdvisor（旅遊）
+   → 香港新聞媒體、Facebook 社團、Instagram
+   → 小紅書（RED）：香港年輕人搜尋美妝 / 餐飲 / 旅遊嘅重要入口，
+     影響力持續上升
+   品牌喺呢啲平台嘅可見度，會間接影響 AI 對你嘅「信任分」。
 ```
 
 ---
@@ -261,11 +317,18 @@ AISO 新增技能（必須學習）：
 ### 第 1-2 個月：理解與準備
 
 ```
-☐ 了解 AI Overviews 在你的行業中如何顯示
+☐ 了解 AI Overviews 在香港的行業查詢中如何顯示
+   （用繁中 + 粵語口語字測試：「邊間好」「推介」「點揀」）
 ☐ 分析競爭對手是否被 AI 引用
 ☐ 建立 Entity SEO 的基礎（Google Knowledge Graph）
 ☐ 審查網站現有的 Schema 標記
-☐ 為網站設定 llms.txt（見第 64 章）
+☐ 為網站設定 llms.txt 並確認 robots.txt 放行 AI 爬蟲
+   （GPTBot / OAI-SearchBot / ClaudeBot / Claude-SearchBot /
+     PerplexityBot / Googlebot / Google-Extended，見第 64 章）
+☐ 喺 Bing Webmaster Tools 提交 Sitemap
+   （香港 Yahoo 搜尋 + ChatGPT / Copilot 嘅索引來源）
+☐ 盤點品牌喺香港本地平台嘅足跡：
+   LIHKG、Discuss、Uwants、OpenRice、小紅書、Facebook 社團
 ```
 
 ### 第 3-4 個月：內容重構
@@ -293,11 +356,13 @@ AISO 新增技能（必須學習）：
 | 工具 | 用途 |
 |------|------|
 | **Google Search Console** | 監控 AI Overviews 的曝光（新指標） |
+| **Bing Webmaster Tools** | 香港必交：Yahoo 香港搜尋 + ChatGPT / Copilot 索引來源 |
 | **Semrush / Ahrefs** | 追蹤關鍵字在 AI Overviews 中的出現 |
 | **ZipTie / AIOSEO** | AI 引用監控工具 |
-| **Google Trends** | 追蹤話題趨勢，預測 AI 會關注什麼 |
+| **Google Trends**（地區設為「香港」） | 追蹤香港話題趨勢，預測 AI 會關注什麼 |
 | **Schema Markup Validator** | 確保結構化資料正確 |
-| **Perplexity / ChatGPT** | 手動測試你的品牌/內容是否被引用 |
+| **Perplexity / ChatGPT / Gemini / Copilot** | 手動測試你的品牌/內容是否被引用（用粵語查詢試） |
+| **小紅書（RED）** | 香港 discovery 入口，睇品牌討論與口碑 |
 
 ---
 

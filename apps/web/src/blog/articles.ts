@@ -32,6 +32,10 @@ export interface BlogArticleSummary {
   readingMinutes: number;
   contentFile: string;
   coverImage: string;
+  seoTitle: string;
+  metaDescription: string;
+  longTailKeyword: string;
+  focusKeyphrase: string;
 }
 
 export interface BlogTableOfContentsItem {

@@ -34,7 +34,8 @@ C 沒有連結出去 → C 的 PageRank 不傳遞（阻尼）
 
 ```
 來自高 PageRank 頁面的連結  >  來自低 PageRank 頁面的連結
-來自 nytimes.com 的連結    >  來自不知名部落格的連結
+來自 香港01 / 明報 / 經濟日報 的連結  >  來自不知名香港部落格的連結
+來自 .edu.hk（大學）或 .gov.hk（政府）的連結  >  來自一般商業網站的連結
 ```
 
 ### 3. 投票的價值被稀釋
@@ -50,16 +51,20 @@ C 沒有連結出去 → C 的 PageRank 不傳遞（阻尼）
 ```
 
 > **這就是為什麼「連結越多不一定越好」——來自一個只有 2 個外部連結的頁面的連結，價值遠高於來自一個有 200 個外部連結的頁面。**
+>
+> 例子：一條來自「香港旅遊發展局」某個專題頁嘅連結，通常比 50 條嚟自目錄站嘅連結更值錢。
 
 ### 4. Nofollow 連結不傳遞 PageRank
 
 ```html
 <!-- 這個連結傳遞 PageRank -->
-<a href="https://example.com">推薦網站</a>
+<a href="https://www.example.com.hk">推介網站</a>
 
 <!-- 這個連結不傳遞 PageRank -->
-<a href="https://example.com" rel="nofollow">推薦網站</a>
+<a href="https://www.example.com.hk" rel="nofollow">推介網站</a>
 ```
+
+> **香港場景提醒：** Facebook 帖文、Instagram bio、LIHKG 留言、小紅書筆記多數係 `nofollow` 或 `ugc`，佢哋帶嚟流量同品牌曝光，但**唔傳遞 PageRank**。想要 PageRank，仲係要靠媒體報導、商會/機構目錄、合作夥伴網站呢啲 dofollow 來源。
 
 ---
 
@@ -93,7 +98,7 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
 
 3. 爬取優先級（Crawl Prioritization）
    → 高 PageRank 的頁面被 Google 爬取得更頻繁
-   → 這影響 Crawl Budget 的分配
+   → 這影響 Crawl Budget 的分配（詳見第 56 章）
 ```
 
 ---
@@ -128,10 +133,12 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
   └─ 文章列表 → 個別文章（依連結數分配 PR）
 
 策略：
-→ 首頁連結到最重要的頁面
+→ 首頁連結到最重要的頁面（例如 /zh-hk/ 首頁 → 分店頁、主打服務頁）
 → 用內部連結把權重從「強頁面」導向「需要排名提升的頁面」
 → 使用 nofollow 阻止權重流向不重要的頁面（如登入頁、購物車）
 ```
+
+> **雙語站注意：** 如果你同時有 `/zh-hk/` 同 `/en/` 版本，兩個版本各自有自己嘅內部連結結構。唔好淨係喺中文版做好內部連結，英文版甩底——英文版嘅 PR 一樣影響你喺香港英文搜尋（例如「dentist Central Hong Kong」）嘅表現。
 
 ---
 
@@ -143,9 +150,9 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
 
 ```html
 <!-- 傳統做法 -->
-<a href="/login" rel="nofollow">登入</a>
-<a href="/cart" rel="nofollow">購物車</a>
-<a href="/important-page">重要頁面</a>  ← 獲得更集中的 PageRank
+<a href="/zh-hk/login" rel="nofollow">登入</a>
+<a href="/zh-hk/cart" rel="nofollow">購物車</a>
+<a href="/zh-hk/important-page">重要頁面</a>  ← 獲得更集中的 PageRank
 ```
 
 ### 現代 PageRank Sculpting（2009 年後）
@@ -198,9 +205,9 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
 
 | 指標用途 | 正確用法 | 錯誤用法 |
 |----------|---------|----------|
-| **競品對比** | 「我的 DR 30，對手 DR 50，我需要改善連結建設」 | 「DR 50 的網站一定比 DR 30 排名好」 |
+| **競品對比** | 「我的 DR 30，對手（例如銅鑼灣另一間診所）DR 50，我需要改善連結建設」 | 「DR 50 的網站一定比 DR 30 排名好」 |
 | **趨勢追蹤** | 「我的 DR 從 20 成長到 35，表示連結策略有效」 | 「我需要讓 DR 達到 100 才算成功」 |
-| **連結機會評估** | 「這個網站 DR 高，獲取連結的價值較高」 | 「我只接受 DR > 50 的網站的連結」 |
+| **連結機會評估** | 「這個香港網站 DR 高，獲取連結的價值較高」 | 「我只接受 DR > 50 的網站的連結」 |
 
 > **注意：** 這些都是第三方估算，不是 Google 的真實指標。用於相對比較和趨勢追蹤，而非絕對判斷。
 
@@ -214,9 +221,9 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
 
 ```
 首頁的連結策略：
-  ☑ 連結到核心商業頁面（產品/服務）
+  ☑ 連結到核心商業頁面（產品/服務，例如 /zh-hk/services/）
   ☑ 連結到最重要的部落格內容
-  ☑ 連結到「關於我們」和「聯絡我們」
+  ☑ 連結到「關於我們」和「聯絡我們」（含香港地址 + 電話）
   ☐ 不要連結到隱私政策、條款等低價值頁面（放在頁尾）
 ```
 
@@ -246,6 +253,13 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
 
 301 重定向保留約 90-99% 的 PageRank。當你刪除或合併頁面時，永遠使用 301 將舊 URL 的 PR 保留到新 URL。
 
+```
+香港常見場景：
+→ 分店搬遷：/stores/tsim-sha-tsui/ → /stores/jordan/ 用 301
+→ 網站改版換 domain：old.com.hk → new.hk 全站 301（見第 33 章）
+→ 換語言目錄結構：/hk/ → /zh-hk/ 一對一 301
+```
+
 ---
 
 ## 總結檢查清單
@@ -260,6 +274,7 @@ Google 的 Gary Illyes 在 2024 年確認：「PageRank 仍然是我們的排名
 | ☐ 使用 DR/DA 做競品對比 | 追蹤自己的進展和競爭差距 |
 | ☐ 保持每個頁面連結數合理 | 一個頁面上不要有數百個連結 |
 | ☐ 301 重定向保留 PR | 刪除頁面時永遠做 301 |
+| ☐ 中英文版本各自做好內部連結 | 唔好淨係照顧繁中版 |
 
 ---
 
