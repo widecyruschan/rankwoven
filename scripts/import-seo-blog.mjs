@@ -146,7 +146,7 @@ function parseFrontmatter(markdown) {
 }
 
 function normalizeArticleText(value) {
-  return value.replaceAll('香港本地', '香港本地');
+  return value.replaceAll('在地', '本地');
 }
 
 function getCategoryId(chapterNumber) {

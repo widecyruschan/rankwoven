@@ -232,7 +232,7 @@ describe('web smoke test', () => {
     expect(blogArticleViewSource).toContain('currentArticle.metaDescription');
     expect(blogArticleViewSource).toContain('currentArticle.focusKeyphrase');
     expect(importScriptSource).toContain('parseFrontmatter');
-    expect(importScriptSource).toContain("replaceAll('香港本地', '香港本地')");
+    expect(importScriptSource).toContain("replaceAll('在地', '本地')");
     expect(importScriptSource).toContain('seoTitle: attributes.seo_title');
     expect(importScriptSource).toContain('generated-images');
   });
