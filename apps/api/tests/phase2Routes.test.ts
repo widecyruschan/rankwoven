@@ -256,8 +256,9 @@ describe('phase 2 contract routes', () => {
       headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'keyword-run-1' },
       payload: { seedKeywords: ['eco-friendly yoga mat'] }
     });
-    expect(run.statusCode).toBe(503);
-    expect(run.json().error.code).toBe('PROVIDER_UNAVAILABLE');
+    // Free keyword provider is always available; without entitlement the run is blocked.
+    expect(run.statusCode).toBe(403);
+    expect(run.json().error.code).toBe('ENTITLEMENT_REQUIRED');
   });
 
   it('queues a keyword research run with provider metadata and quota governance', async () => {
