@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createDeterministicUuid,
+  expandLongTailKeywords,
   hashRequestBody,
   hashContentSnapshot,
   sanitizeContentSnapshot,
@@ -12,6 +13,7 @@ import {
 } from '@aieo/ai-providers';
 import { fetchValidatedPublicUrl, UnsafeTargetUrlError, validatePublicUrl } from '@aieo/security';
 import type { AuthService } from './auth';
+import { apiConfig } from './config';
 import type { SiteConnectionRepository } from './siteConnections';
 import {
   createRequestContext,
@@ -47,6 +49,13 @@ const createResearchRunSchema = z.object({
   productContext: z.string().trim().max(1_000).optional(),
   audience: z.string().trim().max(500).optional(),
   conversionGoal: z.string().trim().max(500).optional()
+});
+
+const expandKeywordsSchema = z.object({
+  seeds: z.array(z.string().trim().min(1).max(300)).min(1).max(5),
+  market: z.string().trim().min(2).max(120).default('HK'),
+  language: z.string().trim().min(2).max(40).default('zh-Hant'),
+  maxKeywords: z.coerce.number().int().min(10).max(200).default(100)
 });
 
 const keywordFiltersSchema = z.object({
@@ -310,6 +319,55 @@ export function registerPhase2FeatureRoutes(
     if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
     const result = await repository.listKeywordResearchProjects(user.workspaceId, normalizePagination(parsed.data));
     return { success: true, message: '操作成功', data: result };
+  });
+
+  app.post('/api/v1/keyword-research/expand', async (request, reply) => {
+    const user = await requireRole(authService, request, reply, 'editor');
+    if (!user) return reply;
+    const parsed = expandKeywordsSchema.safeParse(request.body);
+    if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
+
+    const entitlement = await repository.findActiveEntitlement(user.workspaceId, 'keyword_research');
+    if (!entitlement) {
+      return reply.status(403).send({
+        success: false,
+        message: '目前套餐未包含關鍵詞研究額度',
+        error: { code: 'ENTITLEMENT_REQUIRED' }
+      });
+    }
+
+    const keywords = await expandLongTailKeywords(parsed.data.seeds, {
+      market: parsed.data.market,
+      language: parsed.data.language,
+      maxKeywords: parsed.data.maxKeywords,
+      bingApiKey: apiConfig.BING_WEBMASTER_API_KEY?.trim() || undefined,
+      braveApiKey: apiConfig.BRAVE_SEARCH_API_KEY?.trim() || undefined,
+      timeoutMs: 12_000
+    });
+
+    await repository.recordAudit({
+      workspaceId: user.workspaceId,
+      actorType: 'user',
+      actorId: user.id,
+      action: 'keyword_research.expand',
+      resourceType: 'keyword_research',
+      requestId: request.id,
+      metadata: { seedCount: parsed.data.seeds.length, resultCount: keywords.length }
+    });
+
+    return {
+      success: true,
+      message: '長尾關鍵詞已生成',
+      data: {
+        keywords: keywords.map((item) => ({
+          keyword: item.keyword,
+          intent: item.intent,
+          source: item.source,
+          volume: item.volume
+        })),
+        sources: ['google_autocomplete', 'datamuse', 'wikipedia', 'suffix', ...(apiConfig.BRAVE_SEARCH_API_KEY ? ['brave'] : [])]
+      }
+    };
   });
 
   app.get('/api/v1/keyword-research/projects/:projectId', async (request, reply) => {

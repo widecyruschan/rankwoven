@@ -2,8 +2,11 @@ import { createDecipheriv, createHash } from 'node:crypto';
 import { createWordPressAdapter } from '@aieo/cms-adapters';
 import {
   createAiGatewayAdapter,
+  compareSitemapContentGaps,
   createDataForSeoKeywordResearchProvider,
+  createEnrichingKeywordResearchProvider,
   createFallbackKeywordResearchProvider,
+  createFreeKeywordResearchProvider,
   createRedisTaskGovernance,
   createSemrushKeywordResearchProvider,
   createSerpApiKeywordResearchProvider,
@@ -486,7 +489,7 @@ async function processGatewayModelSyncTask(
   }
 }
 
-function createKeywordResearchProviderFromEnvironment(fetchImpl: typeof fetch): KeywordResearchProvider | undefined {
+function createKeywordResearchProviderFromEnvironment(fetchImpl: typeof fetch): KeywordResearchProvider {
   const provider = process.env.KEYWORD_VOLUME_PROVIDER;
   const apiUrl = process.env.KEYWORD_VOLUME_API_URL;
   const apiKey = process.env.KEYWORD_VOLUME_API_KEY;
@@ -494,6 +497,12 @@ function createKeywordResearchProviderFromEnvironment(fetchImpl: typeof fetch): 
   const serpApi = serpApiKey
     ? createSerpApiKeywordResearchProvider({ apiKey: serpApiKey, fetchImpl })
     : undefined;
+  const free = createFreeKeywordResearchProvider({
+    fetchImpl,
+    bingApiKey: process.env.BING_WEBMASTER_API_KEY?.trim() || undefined,
+    braveApiKey: process.env.BRAVE_SEARCH_API_KEY?.trim() || undefined,
+    validateUrl: async (url) => validatePublicUrl(url)
+  });
 
   let primary: KeywordResearchProvider | undefined;
   if (isDataForSeoKeywordResearchConfiguration(provider, apiUrl, apiKey) && apiUrl && apiKey) {
@@ -507,9 +516,12 @@ function createKeywordResearchProviderFromEnvironment(fetchImpl: typeof fetch): 
   }
 
   if (primary && serpApi && primary.id !== serpApi.id) {
-    return createFallbackKeywordResearchProvider(primary, serpApi);
+    return createEnrichingKeywordResearchProvider(
+      createFallbackKeywordResearchProvider(primary, serpApi),
+      free
+    );
   }
-  return primary ?? serpApi;
+  return createEnrichingKeywordResearchProvider(primary ?? serpApi ?? free, free);
 }
 
 function parseKeywordIdeas(value: string) {
@@ -654,7 +666,6 @@ async function processKeywordResearchTask(
 ) {
   if (!task.runId || !task.projectId || !task.market || !task.language || task.seedKeywords.length === 0) throw new Error('KEYWORD_RESEARCH_INPUT_INVALID');
   const provider = createKeywordResearchProviderFromEnvironment(fetchImpl);
-  if (!provider) throw new Error('PROVIDER_UNAVAILABLE');
   if (process.env.NODE_ENV === 'production' && !governance) throw new Error('RATE_LIMIT_UNAVAILABLE');
   if (governance) {
     const circuit = await governance.allowProvider(provider.id, 'keyword_research', providerCircuitPolicy);
@@ -783,6 +794,51 @@ async function processKeywordResearchTask(
       );
     }
   }
+
+  if (task.ownDomain) {
+    for (const domain of task.competitorDomains.slice(0, 3)) {
+      try {
+        const contentGaps = await compareSitemapContentGaps(task.ownDomain, domain, {
+          fetchImpl,
+          validateUrl: async (url) => validatePublicUrl(url),
+          maxSitemapUrls: 150
+        });
+        for (const gap of contentGaps.slice(0, 40)) {
+          const key = gap.keyword.toLowerCase();
+          const candidateId = candidateIds.get(key) ?? await saveWorkerKeywordCandidate(client, task, {
+            keyword: gap.keyword,
+            locale: task.locale ?? task.language,
+            intent: undefined,
+            sourceType: 'deterministic_check',
+            sourceRef: `sitemap-gap:${domain}`,
+            score: 35,
+            scoreConfidence: 0.35,
+            modelVersion: 'free-sitemap-content-gap-v1'
+          });
+          candidateIds.set(key, candidateId);
+          await client.query(
+            `INSERT INTO keyword_gap_snapshots (
+               id, workspace_id, run_id, candidate_id, classification, competitor_best_rank,
+               competitor_ids, evidence_refs, score, score_confidence, provider, provider_snapshot_id, collected_at
+             ) VALUES ($1, $2, $3, $4, 'missing', NULL, $5::jsonb, $6::jsonb, $7, $8, 'free', $9, $10)
+             ON CONFLICT (run_id, candidate_id) DO UPDATE SET
+               evidence_refs = EXCLUDED.evidence_refs,
+               score = COALESCE(keyword_gap_snapshots.score, EXCLUDED.score),
+               score_confidence = COALESCE(keyword_gap_snapshots.score_confidence, EXCLUDED.score_confidence),
+               collected_at = EXCLUDED.collected_at`,
+            [
+              crypto.randomUUID(), task.workspaceId, task.runId, candidateId,
+              JSON.stringify([]), JSON.stringify([gap.competitorUrl]), 35, 0.35,
+              `sitemap-gap:${domain}`, new Date().toISOString()
+            ]
+          );
+        }
+      } catch {
+        // Sitemap gap enrichment is best-effort and must not fail the whole run.
+      }
+    }
+  }
+
   await client.query(`UPDATE keyword_research_runs SET status = 'completed', provider_snapshot_id = $2, provider_methodology_version = $3, collected_at = $4, partial_reason = $5 WHERE id = $1 AND workspace_id = $6`, [task.runId, metricResult.providerSnapshotId, metricResult.methodologyVersion, metricResult.collectedAt, aiIdeas.length > 0 ? null : 'AI gateway unavailable; deterministic expansion used', task.workspaceId]);
   if (task.reservationId) {
     await client.query(

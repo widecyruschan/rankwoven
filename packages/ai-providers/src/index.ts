@@ -4,6 +4,7 @@ export * from './phase2.js';
 export * from './phase2Gateway.js';
 export * from './taskGovernance.js';
 export * from './keywordResearch.js';
+export * from './freeKeywordResearch.js';
 export * from './contentOptimizer.js';
 export type AiEmbeddingProviderName = 'wenwen' | 'openai' | 'google';
 export type AiImageProviderName =

@@ -18,12 +18,21 @@ export interface KeywordGap {
   classification: 'missing' | 'weak' | 'strong' | 'shared';
   score?: number;
   competitorBestRank?: number;
+  displayKeyword?: string;
+  evidenceRefs?: string[];
 }
 
 export interface KeywordResearchRunState {
   status: string;
   progress: number;
   errorCode?: string;
+}
+
+export interface ExpandedKeyword {
+  keyword: string;
+  intent?: string;
+  source: string;
+  volume?: number;
 }
 
 function getToken() {
@@ -44,6 +53,14 @@ async function request<T>(path: string, init: RequestInit) {
   return body.data;
 }
 
+function hostnameFromSiteUrl(siteUrl: string) {
+  try {
+    return new URL(siteUrl).hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
 export async function createCompetitorResearchProject(siteId: string, name: string) {
   return request<{ project: { id: string } }>('/api/v1/keyword-research/projects', {
     method: 'POST',
@@ -52,11 +69,37 @@ export async function createCompetitorResearchProject(siteId: string, name: stri
   });
 }
 
-export async function runCompetitorResearch(projectId: string, competitorDomain: string) {
+export async function runCompetitorResearch(
+  projectId: string,
+  competitorDomain: string,
+  options: { seedKeywords?: string[]; ownDomain?: string } = {}
+) {
   return request<{ runId: string; taskId: string; status: string }>(`/api/v1/keyword-research/projects/${projectId}/runs`, {
     method: 'POST',
     headers: { 'Idempotency-Key': `research-run-${crypto.randomUUID()}` },
-    body: JSON.stringify({ seedKeywords: [], competitorDomains: [competitorDomain], locale: 'zh-Hant' })
+    body: JSON.stringify({
+      seedKeywords: options.seedKeywords ?? [],
+      competitorDomains: [competitorDomain],
+      ownDomain: options.ownDomain,
+      locale: 'zh-Hant'
+    })
+  });
+}
+
+export async function expandLongTailKeywords(input: {
+  seeds: string[];
+  market?: string;
+  language?: string;
+  maxKeywords?: number;
+}) {
+  return request<{ keywords: ExpandedKeyword[]; sources: string[] }>('/api/v1/keyword-research/expand', {
+    method: 'POST',
+    body: JSON.stringify({
+      seeds: input.seeds,
+      market: input.market ?? 'HK',
+      language: input.language ?? 'zh-Hant',
+      maxKeywords: input.maxKeywords ?? 100
+    })
   });
 }
 
@@ -80,3 +123,5 @@ export function getResearchKeywords(projectId: string) {
 export function getResearchGaps(projectId: string) {
   return request<{ items: KeywordGap[] }>(`/api/v1/keyword-research/projects/${projectId}/gaps?page=1&pageSize=100`, { method: 'GET' });
 }
+
+export { hostnameFromSiteUrl };

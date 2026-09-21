@@ -71,6 +71,8 @@ export const apiConfigSchema = z.object({
   SEMRUSH_API_KEY: z.string().optional(),
   SERPAPI_KEY: z.string().optional(),
   SERPAPI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(250),
+  BING_WEBMASTER_API_KEY: optionalStringSchema,
+  BRAVE_SEARCH_API_KEY: optionalStringSchema,
   CRUX_API_KEY: z.string().optional(),
   CRUX_API_URL: optionalUrlSchema,
   STRIPE_SECRET_KEY: optionalStringSchema,

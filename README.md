@@ -260,11 +260,14 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `POST /api/v1/site-connections/:siteId/suggestions`：手動建立優化建議記錄。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/approve`：批准待處理建議。
 - `POST /api/v1/site-connections/:siteId/suggestions/:suggestionId/apply`：為已批准建議建立 WordPress 寫回任務，並建立套用前後快照。
+- `POST /api/v1/site-connections/:siteId/suggestions/batch-apply`：批量建立已批准建議的寫回任務；帶 `safeOnly: true` 時只允許標題、Meta Description 和圖片文字欄位的一鍵修復。
 - `GET /api/v1/site-connections/:siteId/apply-queue`：查看站點已批准建議、寫回/回滾任務和套用快照。
 - `POST /api/v1/site-connections/:siteId/apply-snapshots/:snapshotId/rollback`：為已套用快照建立回滾任務。
 - `GET /api/v1/analytics/overview?siteId=&startDate=&endDate=`：讀取 GA4 或示範分析數據，支援站點 host 篩選與日期範圍。
 - `PUT /api/v1/site-connections/:siteId/analytics-settings`：由工作區用戶保存站點 GA4 Property ID；手動網站只連接唯讀流量分析，不開啟 CMS 寫回。
 - `POST /api/v1/keyword-suggestions`：產生關鍵詞建議，優先使用第三方搜尋量/難度 API，其次 AI Provider，最後才回退本地 fallback。
+- `GET /api/v1/search-console/keywords?siteId=&startDate=&endDate=`：按 Search Console `query` 維度讀取點擊、曝光、CTR 與平均排名。
+- `GET /api/v1/search-console/pages?siteId=&startDate=&endDate=`：按 Search Console `page` 維度讀取全站頁面搜尋表現，供 SEO 網站檢測頁展示。
 
 站點連接、Token Hash、Token Preview、Token 狀態、Token 最近使用時間、WordPress 管理員應用程式密碼加密密文、同步任務、任務範圍、目標 CMS ID、重試次數、退避時間、死信狀態、文章同步資料、文章 Meta Description、媒體同步資料、同步批次記錄、SEO 審計、審計問題、優化建議和寫回快照已落到 PostgreSQL。文章與媒體列表已支援 `page` / `pageSize` 分頁查詢，避免資料量增長後一次讀取過多。若未配置 `DATABASE_URL`，API 仍可使用內存 Repository 進行單元測試；Docker Desktop 開發環境使用 `docker compose --profile data up -d postgres` 啟動 PostgreSQL。資料庫 schema 已開始使用 `db/migrations/*.sql` 版本化管理，可用 `npm run db:migrate` 套用 migration，並用 `npm run db:backup` 建立 `pg_dump` 備份。客戶後台 `/app/sites` 已使用 `GET /api/v1/site-connections` 顯示站點列表；`/app/article-sync` 已接入站點同步狀態、手動刷新任務建立、任務列表和 batch 進度；`/app/apply` 已接入真實已批准建議寫回隊列、批次預覽、任務狀態和回滾入口。手動刷新、已批准建議寫回與快照回滾任務由 Worker 從 PostgreSQL `sync_tasks` 隊列領取並執行，失敗時按退避時間重新排隊，超過最大重試次數後進入 `dead_letter`。
 
@@ -274,7 +277,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 
 ## AI Provider 使用說明
 
-目前已新增 `@aieo/ai-providers` 共享包，提供最小 Provider Adapter 介面、問問 OpenAI-compatible Text Provider、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；當 `WENWEN_API_KEY` 已配置時 API 會切到正式問問 Text Provider，未配置時保留 Noop/fallback 以支援本地測試。圖片存儲使用七牛雲 Kodo。關鍵詞建議已改為 Provider 化流程：配置 `KEYWORD_VOLUME_API_URL` 和 `KEYWORD_VOLUME_API_KEY` 時優先讀取第三方搜尋量/競爭度資料，支援常見 `keywords`、`data`、`results` 和 DataForSEO `tasks[].result` 回傳形狀，並映射 `source`、月搜尋量、CPC 和競爭度；未配置時使用 AI Text Provider 產生建議，Provider 不可用時才使用本地 fallback 並標記 `source: fallback`。真實 Search Console OAuth 關鍵詞來源尚未接入，後續應在同一服務介面下擴展。
+目前已新增 `@aieo/ai-providers` 共享包，提供最小 Provider Adapter 介面、問問 OpenAI-compatible Text Provider、Noop Provider Registry、用量成本估算、AI 用量記錄和內存 Repository。MVP 的 OpenAI、Google Gemini、DeepSeek 等模型統一通過問問 API 代理接入；當 `WENWEN_API_KEY` 已配置時 API 會切到正式問問 Text Provider，未配置時保留 Noop/fallback 以支援本地測試。圖片存儲使用七牛雲 Kodo。關鍵詞建議已改為 Provider 化流程：配置 `KEYWORD_VOLUME_API_URL` 和 `KEYWORD_VOLUME_API_KEY` 時優先讀取第三方搜尋量/競爭度資料，支援常見 `keywords`、`data`、`results` 和 DataForSEO `tasks[].result` 回傳形狀，並映射 `source`、月搜尋量、CPC 和競爭度；未配置時使用 AI Text Provider 產生建議，Provider 不可用時才回退本地 fallback 並標記 `source: fallback`。Search Console 現已同時提供 `query` 關鍵詞和 `page` 頁面表現查詢，客戶後台 SEO 網站檢測會展示實際點擊、曝光、CTR 與平均排名。
 
 Google Analytics 由每個客戶在 WordPress 插件後台輸入該站點的 GA4 Property ID，插件會同步到 `PUT /api/v1/site-connections/:siteId/analytics-settings`。SaaS 後端仍使用平台級 Google 服務帳號憑據讀取 GA4 Data API，因此正式環境需要將該服務帳號加入客戶 GA4 Property 的可讀權限；未配置站點 GA4 Property ID 或服務帳號憑據時，分析頁返回示範數據。
 
@@ -7913,3 +7916,200 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - Docker exec 恢復後補跑 WordPress PHP lint 與前台 description 數量檢查。
 - 若需要覆蓋獨立 WordPress Hosting 插件，需確認 Hostinger WordPress 站點部署接口和目标域名；本次未执行外部插件覆盖上传。
+
+## 會話總結（2026-09-21）— SEO Title 與 Meta Description 字數規則
+
+### 會話主要目的
+
+統一 SEO 優化的 Title 與 Meta Description 字數評分規則。
+
+### 完成的主要任務
+
+- SEO title 合格範圍統一為 25 至 65 字。
+- Meta Description 合格範圍統一為 70 至 160 字。
+- 同步 WordPress 編輯頁本地評分、SaaS editor SEO 評分、文章 SEO 審計及站點監測規則。
+- 新增站點監測邊界回歸測試，確認 70 和 160 為有效邊界，低於 70 或高於 160 會被標記。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/src/siteAuditMonitoring.ts`
+- `apps/api/tests/siteAuditMonitoring.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- 待修改完成後執行 API／插件相關測試與 lint。
+- WordPress PHP 執行期驗證仍取決於本機 Docker exec 恢復。
+
+### 下一步行動清單
+
+- 確認邊界測試通過後，再推送並部署此規則更新。
+
+## 會話總結（2026-09-21）— 競品分析可否改用 Google Analytics API
+
+### 會話主要目的
+
+評估競品關鍵詞／長尾分析能否改用 Google Analytics（或相近 Google API）取代現有 DataForSEO／SerpAPI 路徑。
+
+### 完成的主要任務
+
+- 對照 PRD 與現有 GSC／GA4 能力，說明為何無法用 Google Analytics／Search Console 讀取任意競品域名的關鍵詞。
+- 釐清可行替代：自家站用 GSC Search Analytics；競品仍需 SEO Provider（DataForSEO／SerpAPI 等）。
+
+### 關鍵決策和解決方案
+
+- **不改**競品研究資料源為 GA4／GSC：第三方網址無授權，API 只能讀已驗證／已授權資源。
+- 若要強化「自家站關鍵字與長尾」，應擴充既有 Search Console 整合，而非替換競品 Provider。
+
+### 使用的技術棧
+
+- 既有 GA4 Data API、GSC Search Analytics、DataForSEO／SerpAPI 競品研究（說明層面，未改碼）。
+
+### 新增或修改文件
+
+- `README.md`（本會話總結）
+- 未修改業務程式碼，只提供方案說明。
+
+### 驗證結果
+
+- 未跑測試（無代碼變更）。
+
+### 下一步行動清單
+
+- 若用戶要「自家站 GSC 長尾機會」，可另開任務擴充 Search Console 關鍵詞頁／與研究專案合併。
+- 套餐管理（升級／停止自動續費）仍為待實作項目。
+
+## 會話總結（2026-09-21）— 評估 zens-ink-seo 能否接入客戶後台
+
+### 會話主要目的
+
+評估 npm 套件 `zens-ink-seo`（ZensInk SEO Toolkit）能否結合進 RankWoven 網站客戶後台。
+
+### 完成的主要任務
+
+- 查閱 npm／PyPI／GitHub 說明：實質為 **Python CLI／Agent Skill**，非可直接 `import` 的 Node 函式庫。
+- 對照 RankWoven 既有 GSC、Site Audit、競品研究、keyword research 能力，給出整合建議與不建議整包接入的原因。
+
+### 關鍵決策和解決方案
+
+- **不建議**把 `zens-ink-seo` 整包掛進 Vue／Fastify 客戶後台作為產品依賴。
+- 若需要類似能力，應在既有 API／Worker 內**挑功能重做或適配**（如 Autocomplete 長尾、sitemap gap），並維持 workspace／entitlement／用量治理。
+
+### 使用的技術棧
+
+- 說明層面：npm `zens-ink-seo`、PyPI `zens-ink`、RankWoven Fastify + Vue 客戶後台（未改碼）。
+
+### 新增或修改文件
+
+- `README.md`（本會話總結）
+- 未修改業務程式碼，只提供方案說明。
+
+### 驗證結果
+
+- 未跑測試（無代碼變更）。
+
+### 下一步行動清單
+
+- 若要採用「Google Autocomplete 長尾」或「sitemap 競品 gap」作為低成本補充，另開任務在 API／Worker 實作，而非依賴 zens-ink runtime。
+
+## 會話總結（2026-09-21）— 免費數據源長尾／競品內容分析
+
+### 會話主要目的
+
+結合 Google Autocomplete、Datamuse、Wikipedia、可選 Brave／Bing 等免費來源，在客戶後台增加長尾關鍵詞生成與競品內容（Sitemap）缺口分析。
+
+### 完成的主要任務
+
+- 新增 `free` Keyword Research Provider 與 enriching 合併層（付費指標優先，免費來源補長尾）。
+- 新增同步 API `POST /api/v1/keyword-research/expand`。
+- Worker 在有 `ownDomain` 時比對自家／競品 Sitemap，寫入內容缺口。
+- 客戶後台 `KeywordResearchView` 增加種子詞長尾生成與內容缺口表。
+- Migration `0026` 允許 `provider = free`；環境變數 `BING_WEBMASTER_API_KEY`、`BRAVE_SEARCH_API_KEY`（可選）。
+
+### 關鍵決策和解決方案
+
+- 不引入 zens-ink／Python CLI；能力以 TypeScript 重做並接入既有 entitlement／task 流程。
+- 未接入 Google Trends（無官方 API）、Yandex Wordstat（需申請）、TinyFn、Google Ads Keyword Planner（需 Ads 帳號）；GSC 維持既有整合。
+- 無付費 Provider 時仍可僅用免費來源完成研究。
+
+### 使用的技術棧
+
+- TypeScript、Fastify、Vue 3、Vitest、Google Autocomplete／Datamuse／Wikipedia／Brave（可選）
+
+### 新增或修改文件
+
+- `packages/ai-providers/src/freeKeywordResearch.ts`
+- `packages/ai-providers/tests/freeKeywordResearch.test.ts`
+- `packages/ai-providers/src/phase2.ts`、`index.ts`
+- `db/migrations/0026_keyword_research_free_provider.sql`
+- `apps/api/src/keywordResearchService.ts`、`phase2FeatureRoutes.ts`、`phase2Repository.ts`、`config.ts`
+- `apps/worker/src/index.ts`
+- `apps/web/src/views/KeywordResearchView.vue`、`api/keywordResearch.ts`、`i18n.ts`
+- `.env.example`、`README.md`
+
+### 驗證結果
+
+- `@aieo/ai-providers` keyword／free 測試通過（11）。
+- `api`／`worker`／`web` build 通過。
+- 未對生產環境部署；需跑 `db:migrate` 後再推送。
+
+### 下一步行動清單
+
+- 本地／生產執行 migration `0026`。
+- 可選設定 `BRAVE_SEARCH_API_KEY` 強化需求交叉驗證。
+- 授權後再 commit／push／deploy。
+
+## 會話總結（2026-09-21）— 客戶後台 SEO 網站檢測、插件分類與 GSC 頁面數據
+
+### 會話主要目的
+
+完善客戶後台 SEO 網站檢測，讓檢測分類、AI 建議和安全一鍵修復與 WordPress 插件一致，並按 Google 官方 Search Console API 文檔補上全站頁面搜尋表現。
+
+### 完成的主要任務
+
+- SaaS SEO 審計本地文章問題統一寫入插件 canonical 分類：`content`、`links`、`images`；建議記錄同步保存分類、規則編號與 AI／系統建議來源。
+- 客戶後台 SEO 審計增加 15 類插件分類篩選與統計，統一展示 RankWoven／Ahrefs 問題、建議內容、目標頁地址和建議來源。
+- 一鍵修復改為優先用審計問題 ID／CMS ID 匹配建議，支持標題、Meta Description 和安全媒體欄位；手動站點與不可安全寫回問題只提示手動修改。
+- 新增 `GET /api/v1/search-console/pages`，按 GSC `page` 維度讀取頁面點擊、曝光、CTR、平均排名，SEO 檢測頁增加 GSC 數據卡和受表現頁面列表。
+- Search Console 檢測使用站點工作區 ID 查找已選網站，服務帳戶沒有 property 權限時返回可讀的不可用提示，不洩露憑證。
+
+### 關鍵決策和解決方案
+
+- GSC 只負責搜尋表現與頁面級證據；Title、Meta、H1、圖片、內部連結等 HTML 結構問題仍由插件同步審計與全站爬蟲檢查，避免誤把 GSC 當成 HTML 檢測器。
+- 一鍵修復沿用後端 `canWriteBack`、批准、快照和 Worker 寫回隊列，不對 Ahrefs 站點級問題或手動站點直接寫回。
+- 參考 Google 官方 Search Console API 文檔：`searchanalytics.query()` 按 `page` 維度查詢；服務帳戶須具備 property owner/full/read 權限。
+
+### 使用的技術棧
+
+- Vue 3、TypeScript、Ant Design Vue、Vue I18n、Fastify、Zod、PostgreSQL Repository、Google Search Console REST API、Vitest。
+
+### 新增或修改文件
+
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/src/searchConsole.ts`
+- `apps/api/tests/searchConsoleSitemap.test.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `apps/web/src/api/appInsights.ts`
+- `apps/web/src/api/siteConnections.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint -- --no-cache` 通過。
+- `npm run build -w @aieo/api` 通過。
+- `npm run build -w @aieo/web` 通過。
+- API 全量測試通過：114 passed、8 skipped；Web 20、Worker 11 及共享包測試亦通過；包含新增 Search Console `page` 維度與 `safeOnly` 寫回測試。
+- `npm run security:audit` 通過（0 vulnerabilities）；WordPress Docker PHP lint 仍未執行；本輪未提交、未推送、未部署。
+- 未追蹤的 `0.jpeg` 保持排除，未加入 Git。
+
+### 下一步行動清單
+
+- 需要部署前再執行全倉測試、build、安全審計和 `git diff --check`。
+- 生產環境需確認 Google 服務帳戶已對每個站點的 Search Console property 授予 owner/full/read 權限，再在 `/app/site-audit` 驗證 GSC 頁面數據。

@@ -237,7 +237,8 @@ function mapKeywordGapSnapshot(row: QueryResultRow): KeywordGapSnapshot {
     scoreConfidence: row.score_confidence === null ? undefined : Number(row.score_confidence),
     provider: row.provider,
     providerSnapshotId: row.provider_snapshot_id ?? undefined,
-    collectedAt: new Date(row.collected_at).toISOString()
+    collectedAt: new Date(row.collected_at).toISOString(),
+    displayKeyword: row.display_keyword ?? undefined
   };
 }
 
@@ -1533,7 +1534,10 @@ export class PostgresPhase2Repository implements Phase2Repository {
     if (filters.competitorId) { values.push(filters.competitorId); clauses.push(`g.competitor_ids @> $${values.length}::jsonb`); }
     const itemParams = [...values, pageSize, offset];
     const items = await this.pool.query(
-      `SELECT g.* FROM keyword_gap_snapshots g WHERE ${clauses.join(' AND ')}
+      `SELECT g.*, c.display_keyword
+       FROM keyword_gap_snapshots g
+       JOIN keyword_candidates c ON c.id = g.candidate_id AND c.workspace_id = g.workspace_id
+       WHERE ${clauses.join(' AND ')}
        ORDER BY g.score DESC NULLS LAST, g.collected_at DESC
        LIMIT $${itemParams.length - 1} OFFSET $${itemParams.length}`,
       filters.competitorId ? [...values.slice(0, -1), JSON.stringify([filters.competitorId]), pageSize, offset] : itemParams
