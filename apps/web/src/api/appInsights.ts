@@ -248,6 +248,7 @@ export interface SearchConsoleKeywordsResult {
 }
 
 export interface SearchConsoleKeywordsParams {
+  siteId?: string;
   siteUrl?: string;
   startDate?: string;
   endDate?: string;
@@ -262,6 +263,10 @@ export async function getSearchConsoleKeywords(
     searchParams.set('siteUrl', params.siteUrl);
   }
 
+  if (params.siteId) {
+    searchParams.set('siteId', params.siteId);
+  }
+
   if (params.startDate) {
     searchParams.set('startDate', params.startDate);
   }
@@ -273,6 +278,43 @@ export async function getSearchConsoleKeywords(
   const queryString = searchParams.toString();
   return requestApi<SearchConsoleKeywordsResult>(
     `/api/v1/search-console/keywords${queryString ? `?${queryString}` : ''}`
+  );
+}
+
+export interface SearchConsolePagePerformance {
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface SearchConsolePagesResult {
+  configured: boolean;
+  source: string;
+  siteUrl: string;
+  startDate: string;
+  endDate: string;
+  pages: SearchConsolePagePerformance[];
+  totals: {
+    totalClicks: number;
+    totalImpressions: number;
+    averageCtr: number;
+    averagePosition: number;
+  };
+}
+
+export async function getSearchConsolePages(
+  params: SearchConsoleKeywordsParams = {}
+): Promise<SearchConsolePagesResult> {
+  const searchParams = new URLSearchParams();
+  if (params.siteId) searchParams.set('siteId', params.siteId);
+  if (params.siteUrl) searchParams.set('siteUrl', params.siteUrl);
+  if (params.startDate) searchParams.set('startDate', params.startDate);
+  if (params.endDate) searchParams.set('endDate', params.endDate);
+  const queryString = searchParams.toString();
+  return requestApi<SearchConsolePagesResult>(
+    `/api/v1/search-console/pages${queryString ? `?${queryString}` : ''}`
   );
 }
 

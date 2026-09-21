@@ -107,6 +107,10 @@ describe('web smoke test', () => {
     expect(auditViewSource).toContain('selectedSite?.canWriteBack');
     expect(auditViewSource).toContain("safeOneClickSuggestionTypes.has(suggestion.suggestionType)");
     expect(auditViewSource).toContain("batchApplyOptimizationSuggestions(selectedSiteId.value");
+    expect(auditViewSource).toContain('canonicalSeoCategories');
+    expect(auditViewSource).toContain('recommendationAi');
+    expect(auditViewSource).toContain('getSearchConsolePages');
+    expect(auditViewSource).toContain('handleIssueFixForRow');
   });
 
   it('keeps a single current-site context across customer navigation', async () => {

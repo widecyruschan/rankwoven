@@ -52,6 +52,10 @@ final class RankWoven_SEO_Plugin
     private const SYNC_PAGE_SIZE = 100;
     private const SYNC_MAX_BATCH_PAGES = 10000;
     private const REST_NAMESPACE = 'rankwoven/v1';
+    private const SEO_TITLE_MIN_WIDTH = 25;
+    private const SEO_TITLE_MAX_WIDTH = 65;
+    private const META_DESCRIPTION_MIN_LENGTH = 70;
+    private const META_DESCRIPTION_MAX_LENGTH = 160;
 
     /**
      * @var RankWoven_Image_Optimizer|null
@@ -1631,11 +1635,11 @@ final class RankWoven_SEO_Plugin
         $checks[] = $this->build_editor_seo_score_check(
             'title-length',
             __('SEO title width', 'rankwoven-seo'),
-            $title_display_width >= 30 && $title_display_width <= 60 ? 'pass' : ($title_display_width >= 24 && $title_display_width <= 70 ? 'warning' : 'fail'),
+            $title_display_width >= self::SEO_TITLE_MIN_WIDTH && $title_display_width <= self::SEO_TITLE_MAX_WIDTH ? 'pass' : ($title_display_width >= 20 && $title_display_width <= 70 ? 'warning' : 'fail'),
             7,
-            $title_display_width >= 30 && $title_display_width <= 60
+            $title_display_width >= self::SEO_TITLE_MIN_WIDTH && $title_display_width <= self::SEO_TITLE_MAX_WIDTH
                 ? sprintf(__('SEO title 顯示寬度約 %d 單位，符合建議。', 'rankwoven-seo'), $title_display_width)
-                : sprintf(__('SEO title 顯示寬度約 %d 單位，建議調整至 30-60 單位。', 'rankwoven-seo'), $title_display_width)
+                : sprintf(__('SEO title 顯示寬度約 %d 單位，建議調整至 25-65 單位。', 'rankwoven-seo'), $title_display_width)
         );
         $checks[] = $this->build_editor_seo_score_check(
             'focus-in-title',
@@ -1649,11 +1653,11 @@ final class RankWoven_SEO_Plugin
         $checks[] = $this->build_editor_seo_score_check(
             'meta-length',
             __('Meta description length', 'rankwoven-seo'),
-            $meta_length >= 120 && $meta_length <= 156 ? 'pass' : ($meta_length >= 70 && $meta_length <= 160 ? 'warning' : 'fail'),
+            $meta_length >= self::META_DESCRIPTION_MIN_LENGTH && $meta_length <= self::META_DESCRIPTION_MAX_LENGTH ? 'pass' : ($meta_length >= 50 && $meta_length <= 180 ? 'warning' : 'fail'),
             6,
-            $meta_length >= 120 && $meta_length <= 156
+            $meta_length >= self::META_DESCRIPTION_MIN_LENGTH && $meta_length <= self::META_DESCRIPTION_MAX_LENGTH
                 ? sprintf(__('Meta description 長度為 %d 字，符合建議。', 'rankwoven-seo'), $meta_length)
-                : sprintf(__('Meta description 長度為 %d 字，建議調整至 120-156 字。', 'rankwoven-seo'), $meta_length)
+                : sprintf(__('Meta description 長度為 %d 字，建議調整至 70-160 字。', 'rankwoven-seo'), $meta_length)
         );
         $checks[] = $this->build_editor_seo_score_check(
             'focus-in-meta',
@@ -4056,7 +4060,7 @@ final class RankWoven_SEO_Plugin
         $this->assert_admin_action('rankwoven_rescan_internal_links');
 
         $this->run_content_sync(true, 'link_assistant');
-        $audit_result = $this->request_saas_site_api('POST', 'audits');
+        $audit_result = $this->request_saas_site_api('POST', 'audits?source=wordpress-plugin');
         if (is_wp_error($audit_result)) {
             $this->redirect_with_status('internal_links_rescan_failed', 'link_assistant');
         }
@@ -4221,7 +4225,7 @@ final class RankWoven_SEO_Plugin
     {
         $this->assert_admin_action('rankwoven_run_seo_audit');
 
-        $result = $this->request_saas_site_api('POST', 'audits');
+        $result = $this->request_saas_site_api('POST', 'audits?source=wordpress-plugin');
         if (is_wp_error($result)) {
             $this->redirect_with_status('seo_audit_failed', 'dashboard');
         }

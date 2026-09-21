@@ -254,6 +254,7 @@ SUPPORT_EMAIL=support@rankwoven.com
 - `GET /api/v1/site-connections/:siteId/articles?page=&pageSize=`：帶 Bearer Token 或登入用戶權限查看已同步文章分頁列表。
 - `GET /api/v1/site-connections/:siteId/media?page=&pageSize=`：帶 Bearer Token 或登入用戶權限查看已同步媒體分頁列表。
 - `POST /api/v1/site-connections/:siteId/audits`：以已同步文章與媒體執行第一批 SEO 規則審計，並產生可審核建議。
+- `POST /api/v1/site-connections/:siteId/audits?source=wordpress-plugin|customer-dashboard`：執行 SEO 審計並保存來源標記；插件與客戶後台讀取同一筆最新結果。
 - `GET /api/v1/site-connections/:siteId/audits`：查看站點 SEO 審計記錄和最近一次審計問題。
 - `POST /api/v1/site-connections/:siteId/site-audit/manual-runs`：對已連接站點的單一公開 URL，或已同步且已發布的文章／商品執行只讀檢測；只返回問題與手動修復建議，不建立 CMS 寫回任務。
 - `GET /api/v1/site-connections/:siteId/suggestions`：查看文章與媒體優化建議，並返回最近一次 SEO 審計分數、規則版本和問題數摘要。
@@ -8144,3 +8145,52 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 需要部署前再執行全倉測試、build、安全審計和 `git diff --check`。
 - 生產環境需確認 Google 服務帳戶已對每個站點的 Search Console property 授予 owner/full/read 權限，再在 `/app/site-audit` 驗證 GSC 頁面數據。
+
+## 會話總結（2026-09-21）— 同步 WordPress 插件 SEO 檢測結果到客戶後台
+
+### 會話主要目的
+
+讓 WordPress 插件執行的 SEO 檢測結果與客戶後台 SEO 網站檢查共用同一筆 SaaS 審計資料。
+
+### 完成的主要任務
+
+- 插件執行內容同步後的 SEO 分析，以及 Link Assistant 的重新掃描分析，均改用 `POST /audits?source=wordpress-plugin`。
+- SaaS SEO 審計保存 `auditSource` 和 `auditSourceRecordedAt` metadata。
+- 客戶後台 SEO 網站檢查讀取同一個最新審計，按來源顯示「插件同步結果」或「客戶端檢測結果」。
+- 保持同一套分類、分數、受影響頁面、AI／系統建議和安全寫回隊列，不建立第二套插件規則。
+- 更新插件使用文件與測試清單，補充插件到客戶後台的同步驗證步驟。
+
+### 關鍵決策和解決方案
+
+- 使用審計來源 metadata 追蹤來源，不複製審計資料表，也不讓插件直接寫入客戶端資料庫。
+- 插件仍只透過已授權的 SaaS Bearer Token 寫入；客戶後台以工作區站點讀取最新結果。
+- 客戶端重新執行檢測時仍可使用 `customer-dashboard` 來源，最後一次執行的完整結果保持唯一且可追蹤。
+
+### 使用的技術棧
+
+- WordPress PHP、Fastify、TypeScript、PostgreSQL Repository、Vue 3、Vue I18n、Vitest。
+
+### 新增或修改文件
+
+- `plugins/wordpress/rankwoven-seo/rankwoven-seo.php`
+- `plugins/wordpress/README.md`
+- `plugins/wordpress/TESTING.md`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint -- --no-cache` 通過。
+- API `siteConnections.test.ts`：42 tests passed。
+- API build 通過。
+- Web build 通過。
+- 先前全倉測試、安全審計和完整 build 已通過；本輪未執行 WordPress Docker PHP lint，因未確認 Docker 執行期可用。
+- 未提交、未推送、未部署；`0.jpeg` 保持未追蹤。
+
+### 下一步行動清單
+
+- 在 WordPress 測試站執行一次「SEO 網站檢測」，再於客戶後台刷新 `/app/site-audit`，確認來源標籤和分數一致。
+- Docker 可用後按 `plugins/wordpress/TESTING.md` 補跑 PHP lint 和插件執行期回歸。

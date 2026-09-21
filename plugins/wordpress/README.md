@@ -27,6 +27,7 @@ Settings -> RankWoven SEO
 
 - 根頁直接提供 `SEO 網站檢測` 表，並保留 `一般設定`、`搜尋外觀`、`網站地圖`、`Link Assistant`、`SEO 分析`、`圖片屬性`、`工具類` 和 `診斷` 管理入口。
 - `SEO 網站檢測` 可按已連接站點保存 Ahrefs Project ID 與 crawl 日期；Ahrefs API key 只保存在 SaaS，檢測會顯示 provider 健康度、Error／Warning／Notice、受影響頁面、變化量、分類及修復建議。
+- 插件執行 SEO 網站檢測時會把結果標記為 `wordpress-plugin` 寫入 SaaS；客戶後台 `/app/site-audit` 讀取同一筆最新審計，因此分數、分類、受影響頁面與建議保持一致。
 - 後台 UI 使用 WordPress 原生 admin 元件加 RankWoven 輕量樣式，提供卡片化儀表板、連線狀態、快速操作與更清楚的設定分區；插件主容器會自動鋪滿 WordPress 後台可用寬度，並兼容側欄收合與手機版，不額外載入前端 SPA 框架。
 - 設定 RankWoven API Base URL，例如 `http://localhost:3011` 或 `https://api.rankwoven.com`。
 - 手動保存 `Site ID` 和 `Site Token`。
@@ -85,6 +86,8 @@ http://host.docker.internal:3011
 - Slug
 - Meta description
 - Content SEO score（只讀）
+
+SEO title 建議控制在 25 至 65 字；Meta description 建議控制在 70 至 160 字。
 
 可用操作：
 
@@ -203,7 +206,7 @@ Settings -> RankWoven SEO -> Diagnostics
 | `POST` | `/api/v1/site-connections/:siteId/search-console/sitemaps` | 將 WordPress 的 `sitemap.xml` 提交到 Google Search Console |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks` | 建立同步任務，可帶 `updatedAfter` |
 | `POST` | `/api/v1/site-connections/:siteId/sync-tasks/:syncTaskId/batches` | 分頁推送文章與媒體同步批次 |
-| `POST` | `/api/v1/site-connections/:siteId/audits` | 重新產生 SEO 分析與內部連結建議 |
+| `POST` | `/api/v1/site-connections/:siteId/audits?source=wordpress-plugin` | 插件觸發並同步 SEO 分析與內部連結建議；客戶後台讀取同一筆審計 |
 | `GET` | `/api/v1/site-connections/:siteId/suggestions` | 讀取可審核與可套用的優化建議 |
 | `POST` | `/api/v1/site-connections/:siteId/sync` | 舊版單次同步兼容接口 |
 

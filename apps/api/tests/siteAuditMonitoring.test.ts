@@ -38,6 +38,19 @@ describe('site audit monitoring domain', () => {
     expect(findings.find((finding) => finding.title === '發現孤島頁面')?.affectedUrls).toEqual(['https://example.com/orphan']);
   });
 
+  it('flags meta descriptions outside the 70-160 character range', () => {
+    const findings = analyzeAuditPageGraph([
+      { url: 'https://example.com/short', httpStatus: 200, metaDescription: 'short' },
+      { url: 'https://example.com/valid', httpStatus: 200, metaDescription: 'v'.repeat(70) },
+      { url: 'https://example.com/long', httpStatus: 200, metaDescription: 'l'.repeat(161) }
+    ], 'https://example.com', { includeOrphanCheck: false });
+
+    expect(findings.find((finding) => finding.title === 'Meta Description 長度不符合要求')?.affectedUrls).toEqual([
+      'https://example.com/short',
+      'https://example.com/long'
+    ]);
+  });
+
   it('detects localhost image URLs and HTTPS mixed content with resource evidence', () => {
     const findings = analyzeAuditPageGraph([
       {

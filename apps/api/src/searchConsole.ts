@@ -9,6 +9,28 @@ const searchConsoleScope = 'https://www.googleapis.com/auth/webmasters.readonly'
 const searchConsoleWriteScope = 'https://www.googleapis.com/auth/webmasters';
 const searchConsoleBaseUrl = 'https://searchconsole.googleapis.com/webmasters/v3';
 
+async function resolveAuthorizedSiteUrl(
+  siteRepository: SiteConnectionRepository,
+  workspaceId: string,
+  siteId?: string,
+  siteUrl?: string
+) {
+  if (siteId) {
+    const site = await siteRepository.findForWorkspace(siteId, workspaceId);
+    return site?.siteUrl;
+  }
+
+  if (siteUrl) {
+    const normalizedUrl = siteUrl.trim().replace(/\/$/, '').toLowerCase();
+    const site = (await siteRepository.list(workspaceId)).find((candidate) =>
+      candidate.siteUrl.trim().replace(/\/$/, '').toLowerCase() === normalizedUrl
+    );
+    return site?.siteUrl;
+  }
+
+  return undefined;
+}
+
 // ── In-memory GSC keyword cache ──────────────────────────────────
 // keyed by normalized lowercase keyword, maps to GSC performance data
 const gscKeywordCache = new Map<string, KeywordGscData>();
@@ -30,6 +52,29 @@ export interface SearchConsoleKeywordsResult {
   source: 'search-console' | 'demo' | 'unavailable';
   siteUrl?: string;
   keywords: SearchConsoleKeyword[];
+  totals: {
+    totalClicks: number;
+    totalImpressions: number;
+    averageCtr: number;
+    averagePosition: number;
+  };
+}
+
+export interface SearchConsolePagePerformance {
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface SearchConsolePagesResult {
+  configured: boolean;
+  source: 'search-console' | 'unavailable';
+  siteUrl?: string;
+  startDate: string;
+  endDate: string;
+  pages: SearchConsolePagePerformance[];
   totals: {
     totalClicks: number;
     totalImpressions: number;
@@ -109,6 +154,54 @@ async function fetchSearchConsoleKeywords(
   }
 
   return keywords;
+}
+
+async function fetchSearchConsolePages(
+  siteUrl: string,
+  accessToken: string,
+  startDate: string,
+  endDate: string
+): Promise<SearchConsolePagePerformance[]> {
+  const pages: SearchConsolePagePerformance[] = [];
+  let startRow = 0;
+  const rowLimit = 250;
+
+  while (true) {
+    const response = await fetch(`${searchConsoleBaseUrl}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        startDate,
+        endDate,
+        dimensions: ['page'],
+        rowLimit,
+        startRow,
+        aggregationType: 'auto'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Search Console API returned ${response.status}`);
+    }
+
+    const body = (await response.json()) as { rows?: Array<{ keys: string[]; clicks: number; impressions: number; ctr: number; position: number }> };
+    const rows = body.rows ?? [];
+    pages.push(...rows.map((row) => ({
+      page: row.keys[0] ?? '',
+      clicks: row.clicks,
+      impressions: row.impressions,
+      ctr: row.ctr,
+      position: row.position
+    })));
+
+    if (rows.length < rowLimit) break;
+    startRow += rowLimit;
+  }
+
+  return pages;
 }
 
 function getDefaultDateRange(daysBack = 28) {
@@ -219,6 +312,49 @@ export function createSearchConsoleService() {
       }
     },
 
+    async getPages(
+      siteUrl: string,
+      credentials: GoogleServiceAccountCredentials,
+      startDate?: string,
+      endDate?: string
+    ): Promise<SearchConsolePagesResult> {
+      const defaultDateRange = getDefaultDateRange(28);
+      const sd = startDate ?? defaultDateRange.startDate;
+      const ed = endDate ?? defaultDateRange.endDate;
+
+      try {
+        const accessToken = await requestGoogleAccessToken(credentials, searchConsoleScope);
+        for (const candidate of getSearchConsolePropertyCandidates(siteUrl)) {
+          try {
+            const pages = await fetchSearchConsolePages(candidate, accessToken, sd, ed);
+            return {
+              configured: true,
+              source: 'search-console',
+              siteUrl: candidate,
+              startDate: sd,
+              endDate: ed,
+              pages,
+              totals: computeTotals(pages.map((page) => ({ query: page.page, clicks: page.clicks, impressions: page.impressions, ctr: page.ctr, position: page.position })))
+            };
+          } catch {
+            continue;
+          }
+        }
+      } catch {
+        // Fall through to a stable unavailable response for the dashboard.
+      }
+
+      return {
+        configured: false,
+        source: 'unavailable',
+        siteUrl,
+        startDate: sd,
+        endDate: ed,
+        pages: [],
+        totals: { totalClicks: 0, totalImpressions: 0, averageCtr: 0, averagePosition: 0 }
+      };
+    },
+
     async submitSitemap(
       siteUrl: string,
       credentials: GoogleServiceAccountCredentials,
@@ -288,19 +424,20 @@ export function registerSearchConsoleRoutes(
 
     let siteUrl: string | undefined;
 
-    if (parsedQuery.data.siteId) {
-      const site = await siteRepository.findForWorkspace(parsedQuery.data.siteId, user.workspaceId);
-      if (!site) {
+    if (parsedQuery.data.siteId || parsedQuery.data.siteUrl) {
+      siteUrl = await resolveAuthorizedSiteUrl(
+        siteRepository,
+        user.workspaceId,
+        parsedQuery.data.siteId,
+        parsedQuery.data.siteUrl
+      );
+      if (!siteUrl) {
         return reply.status(404).send({
           success: false,
-          message: '找不到站點連接',
+          message: '找不到工作區內的站點連接',
           error: { code: 'SITE_NOT_FOUND' }
         });
       }
-
-      siteUrl = site.siteUrl;
-    } else if (parsedQuery.data.siteUrl) {
-      siteUrl = parsedQuery.data.siteUrl;
     } else {
       return reply.status(400).send({
         success: false,
@@ -334,5 +471,64 @@ export function registerSearchConsoleRoutes(
         parsedQuery.data.endDate
       )
     };
+  });
+
+  app.get('/api/v1/search-console/pages', async (request, reply: FastifyReply) => {
+    const user = await requireAuth(authService, request, reply);
+    if (!user) return reply;
+
+    const parsedQuery = searchConsoleQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) return validationError(reply, parsedQuery.error);
+
+    let siteUrl: string | undefined;
+    if (parsedQuery.data.siteId || parsedQuery.data.siteUrl) {
+      siteUrl = await resolveAuthorizedSiteUrl(
+        siteRepository,
+        user.workspaceId,
+        parsedQuery.data.siteId,
+        parsedQuery.data.siteUrl
+      );
+      if (!siteUrl) {
+        return reply.status(404).send({ success: false, message: '找不到工作區內的站點連接', error: { code: 'SITE_NOT_FOUND' } });
+      }
+    } else {
+      return reply.status(400).send({ success: false, message: '請提供 siteId 或 siteUrl', error: { code: 'VALIDATION_ERROR' } });
+    }
+
+    const credentials = await readGoogleCredentials();
+    if (!credentials) {
+      return {
+        success: true,
+        message: '未配置 Google 憑證',
+        data: {
+          configured: false,
+          source: 'unavailable',
+          siteUrl,
+          startDate: parsedQuery.data.startDate ?? getDefaultDateRange(28).startDate,
+          endDate: parsedQuery.data.endDate ?? getDefaultDateRange(28).endDate,
+          pages: [],
+          totals: { totalClicks: 0, totalImpressions: 0, averageCtr: 0, averagePosition: 0 }
+        } satisfies SearchConsolePagesResult
+      };
+    }
+
+    return {
+      success: true,
+      message: '操作成功',
+      data: await searchConsoleService.getPages(
+        siteUrl,
+        credentials,
+        parsedQuery.data.startDate,
+        parsedQuery.data.endDate
+      )
+    };
+  });
+}
+
+function validationError(reply: FastifyReply, error: z.ZodError) {
+  return reply.status(400).send({
+    success: false,
+    message: '請求資料格式不正確',
+    error: { code: 'VALIDATION_ERROR', details: error.issues }
   });
 }

@@ -111,6 +111,7 @@ diff "/Volumes/Extreme SSD/gitCode/AIEO/plugins/wordpress/rankwoven-seo/assets/a
 - [ ] RankWoven Web `/app/tasks` 任務列表能看到對應任務且狀態為完成。
 - [ ] RankWoven Web 的同步內容中能保留 `post`、`page`、`portfolio`、`product` 類型，未啟用的 post type 不應造成同步失敗。
 - [ ] `RankWoven SEO -> SEO 分析` 載入最新審計後，問題列表按內容種類分組顯示文章、頁面、商品、Portfolio、圖片和其他媒體；分組表格不再顯示「種類」欄。
+- [ ] 從插件執行 SEO 網站檢測後，客戶後台 `/app/site-audit` 刷新可看到同一個分數、分類、問題與建議，審計來源標記為「插件同步結果」。
 - [ ] `SEO 分析` 每行問題都顯示 `修改` 按鈕；文章標題 / Meta Description、媒體 Title / Caption / Description / Alt Text 這類安全欄位顯示可用 `套用` 按鈕，其餘需人工檢查的問題保持 `套用` 停用。
 
 ### 3A. SEO 網站檢測與 Ahrefs Site Audit
@@ -179,6 +180,7 @@ curl -fsS -H "Authorization: Bearer <SITE_TOKEN>" \
 - [ ] 輸入 `Focus keyphrase` 後，點擊 `Generate & Apply SEO` 能生成並套用 SEO title、Slug 和 Meta description。
 - [ ] 無論 AI 回傳、手動輸入或 WordPress 原有 slug 是否包含中文、URL encode、數字、空格或連字號，保存後 Slug 都只包含英文小寫字母與下劃線，例如 `wordpress_seo_settings`。
 - [ ] `Content SEO score` 會按當前內容即時計算並更新分數。
+- [ ] `SEO title` 長度 25 至 65 字與 `Meta description` 長度 70 至 160 字時，對應檢查顯示為通過；超出範圍時顯示警告或錯誤。
 - [ ] 文章正文使用 Gutenberg 圖片區塊、`[gallery]` 短碼或頁面建構器輸出圖片時，`Images` 檢查會正確顯示正文圖片數量，不會誤報「正文尚未包含圖片」。
 - [ ] 面板中的分析結果會更新，且 Slug 會同步到當前內容。
 - [ ] 點擊 `Save SEO Fields` 會保存手動編輯的 SEO 欄位，並重新分析當前內容 SEO 分數。

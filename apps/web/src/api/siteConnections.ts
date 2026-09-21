@@ -652,12 +652,16 @@ export interface BatchApplyResult {
   failed: number;
 }
 
-export async function batchApplyOptimizationSuggestions(siteId: string, suggestionIds: string[]) {
+export async function batchApplyOptimizationSuggestions(
+  siteId: string,
+  suggestionIds: string[],
+  options: { safeOnly?: boolean } = {}
+) {
   return requestApi<BatchApplyResult>(
     `/api/v1/site-connections/${encodeURIComponent(siteId)}/suggestions/batch-apply`,
     {
       method: 'POST',
-      body: JSON.stringify({ suggestionIds })
+      body: JSON.stringify({ suggestionIds, ...(options.safeOnly ? { safeOnly: true } : {}) })
     }
   );
 }

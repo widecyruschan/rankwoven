@@ -16,6 +16,7 @@ import {
   Progress,
   Tag,
   Table,
+  Select,
   Empty,
   Descriptions,
   DescriptionsItem,
@@ -26,6 +27,7 @@ import {
 } from 'ant-design-vue';
 import { h } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getSearchConsolePages, type SearchConsolePagesResult } from '../api/appInsights';
 import {
   getSiteConnections,
   getSiteAuditConfig,
@@ -36,6 +38,7 @@ import {
   getSiteAuditMonitoringRun,
   getAdminSerpapiUsage,
   getSyncedArticles,
+  getSyncedMedia,
   createSeoAudit,
   getSeoAudits,
   getAhrefsSiteAuditConfig,
@@ -55,10 +58,12 @@ import type {
   SiteAuditMetric,
   SerpapiUsageStats,
   SyncedArticle,
+  SyncedMedia,
   AhrefsSiteAuditConfig,
   AhrefsSiteAuditIssuePages,
   SeoAudit,
-  SeoAuditIssue
+  SeoAuditIssue,
+  OptimizationSuggestion
 } from '../api/siteConnections';
 
 const { t } = useI18n();
@@ -81,15 +86,22 @@ const latestResult = ref<SiteAuditResultWithIssues | null>(null);
 const latestMetrics = ref<SiteAuditMetric[]>([]);
 const quotaStats = ref<SerpapiUsageStats | null>(null);
 const syncedContent = ref<SyncedArticle[]>([]);
+const syncedMedia = ref<SyncedMedia[]>([]);
 const manualTargetUrl = ref('');
 const manualContentCmsId = ref<string>();
 const ahrefsConfig = ref<AhrefsSiteAuditConfig | null>(null);
 const ahrefsPlatformAvailable = ref(false);
 const ahrefsProviderErrorCode = ref('');
+const latestSeoAudit = ref<SeoAudit | null>(null);
+const latestSeoIssues = ref<SeoAuditIssue[]>([]);
+const latestSuggestions = ref<OptimizationSuggestion[]>([]);
+const gscPerformance = ref<SearchConsolePagesResult | null>(null);
+const gscError = ref('');
 const latestAhrefsAudit = ref<SeoAudit | null>(null);
 const latestAhrefsIssues = ref<SeoAuditIssue[]>([]);
 const ahrefsIssuePages = ref<Record<string, AhrefsSiteAuditIssuePages>>({});
 const loadingAhrefsIssueId = ref<string>();
+const seoCategoryFilter = ref('all');
 
 // ── form model ──
 const formSchedule = ref<SiteAuditSchedule>('disabled');
@@ -140,6 +152,72 @@ const canUseAhrefsFullSite = computed(() =>
 
 const hasAhrefsAuthError = computed(() => ahrefsProviderErrorCode.value === 'AHREFS_SITE_AUDIT_HTTP_401');
 
+const canonicalSeoCategories = [
+  'indexability',
+  'ai_discoverability',
+  'links',
+  'redirects',
+  'content',
+  'social_tags',
+  'duplicates',
+  'localization',
+  'performance',
+  'images',
+  'javascript',
+  'css',
+  'sitemaps',
+  'external_pages',
+  'other'
+] as const;
+
+const legacyCategoryMap: Record<string, string> = {
+  meta_tags: 'content',
+  headings: 'content',
+  content_quality: 'content',
+  structured_data: 'ai_discoverability',
+  mobile: 'performance',
+  security: 'other'
+};
+
+const canonicalCategoryOptions = computed(() => [
+  { value: 'all', label: tc('categoryAll') },
+  ...canonicalSeoCategories.map((category) => ({
+    value: category,
+    label: tc(`ahrefsCategory_${category}`)
+  }))
+]);
+
+const filteredSeoIssues = computed(() => {
+  if (seoCategoryFilter.value === 'all') return latestSeoIssues.value;
+  return latestSeoIssues.value.filter((issue) => getCanonicalSeoCategory(issue.category) === seoCategoryFilter.value);
+});
+
+const seoCategoryCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const issue of latestSeoIssues.value) {
+    const category = getCanonicalSeoCategory(issue.category);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1])
+    .map(([category, count]) => ({ category, count }));
+});
+
+const seoIssueDistribution = computed(() => {
+  const counts = { error: 0, warning: 0, notice: 0, total: latestSeoIssues.value.length };
+  for (const issue of latestSeoIssues.value) {
+    const providerSeverity = issue.metadata?.providerSeverity;
+    if (providerSeverity === 'error' || issue.severity === 'high') counts.error += 1;
+    else if (providerSeverity === 'warning' || issue.severity === 'medium') counts.warning += 1;
+    else counts.notice += 1;
+  }
+  return counts;
+});
+
+const isLatestAuditFromPlugin = computed(() =>
+  latestSeoAudit.value?.metadata?.auditSource === 'wordpress-plugin'
+);
+
 const ahrefsIssueDistribution = computed(() => {
   const counts = { error: 0, warning: 0, notice: 0, total: latestAhrefsIssues.value.length };
   for (const issue of latestAhrefsIssues.value) {
@@ -151,14 +229,21 @@ const ahrefsIssueDistribution = computed(() => {
   return counts;
 });
 
-const ahrefsIssueColumns = computed(() => [
+const seoIssueColumns = computed(() => [
   { title: tc('category'), dataIndex: 'category', key: 'category', width: 150 },
   { title: tc('severity'), dataIndex: 'severity', key: 'severity', width: 100 },
   { title: tc('issueTitle'), dataIndex: 'message', key: 'message', ellipsis: true },
+  { title: tc('recommendationSource'), dataIndex: 'source', key: 'source', width: 120 },
+  { title: tc('issueAffectedUrl'), key: 'targetUrl', ellipsis: true, width: 240 },
   { title: tc('affected'), dataIndex: 'affectedPages', key: 'affectedPages', width: 110 },
   { title: tc('change'), dataIndex: 'change', key: 'change', width: 100 },
-  { title: tc('issueRecommendation'), dataIndex: 'suggestedValue', key: 'suggestedValue', ellipsis: true, width: 280 }
+  { title: tc('issueRecommendation'), dataIndex: 'suggestedValue', key: 'suggestedValue', ellipsis: true, width: 280 },
+  { title: tc('action'), key: 'action', width: 120 }
 ]);
+
+// Keep the legacy Ahrefs section compatible while the unified SEO audit table
+// becomes the primary customer-facing view.
+const ahrefsIssueColumns = seoIssueColumns;
 
 const issueColumns = computed(() => [
   {
@@ -287,15 +372,36 @@ async function loadResults() {
   try {
     const result = await getSeoAudits(selectedSiteId.value);
     const audit = result.audits[0];
+    latestSeoAudit.value = audit ?? null;
+    latestSeoIssues.value = result.issues;
     latestAhrefsAudit.value = audit?.metadata?.ahrefs ? audit : null;
     latestAhrefsIssues.value = latestAhrefsAudit.value
       ? result.issues.filter((issue) => issue.source === 'ahrefs')
       : [];
-  } catch {
+  } catch (error) {
+    latestSeoAudit.value = null;
+    latestSeoIssues.value = [];
     latestAhrefsAudit.value = null;
     latestAhrefsIssues.value = [];
+    console.warn('Unable to load SEO audit results.', error);
+  }
+
+  try {
+    const suggestions = await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 });
+    latestSuggestions.value = suggestions.suggestions;
+  } catch (error) {
+    latestSuggestions.value = [];
+    console.warn('Unable to load SEO optimization suggestions.', error);
   } finally {
     loadingResults.value = false;
+  }
+
+  try {
+    gscError.value = '';
+    gscPerformance.value = await getSearchConsolePages({ siteId: selectedSiteId.value });
+  } catch (error) {
+    gscPerformance.value = null;
+    gscError.value = error instanceof Error ? error.message : tc('gscUnavailable');
   }
 }
 
@@ -306,6 +412,17 @@ async function loadSyncedContent() {
     syncedContent.value = result.articles;
   } catch {
     syncedContent.value = [];
+  }
+}
+
+async function loadSyncedMedia() {
+  if (!selectedSiteId.value) return;
+  try {
+    const result = await getSyncedMedia(selectedSiteId.value, { page: 1, pageSize: 100 });
+    syncedMedia.value = result.media;
+  } catch (error) {
+    syncedMedia.value = [];
+    console.warn('Unable to load synced media for SEO audit targets.', error);
   }
 }
 
@@ -350,14 +467,19 @@ function handleRunAudit() {
     onOk: async () => {
       runningAudit.value = true;
       try {
+        const seoAuditResult = await createSeoAudit(selectedSiteId.value);
+        latestSeoAudit.value = seoAuditResult.audit;
+        latestSeoIssues.value = seoAuditResult.issues;
+        const seoSuggestions = await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 });
+        latestSuggestions.value = seoSuggestions.suggestions;
+
         if (useAhrefsFullSite) {
-          const result = await createSeoAudit(selectedSiteId.value);
-          if (result.audit.metadata?.ahrefs) {
+          if (seoAuditResult.audit.metadata?.ahrefs) {
             latestResult.value = null;
             results.value = [];
             latestMetrics.value = [];
-            latestAhrefsAudit.value = result.audit;
-            latestAhrefsIssues.value = result.issues.filter((issue) => issue.source === 'ahrefs');
+            latestAhrefsAudit.value = seoAuditResult.audit;
+            latestAhrefsIssues.value = seoAuditResult.issues.filter((issue) => issue.source === 'ahrefs');
             ahrefsIssuePages.value = {};
             const refreshed = await getAhrefsSiteAuditConfig(selectedSiteId.value);
             ahrefsConfig.value = refreshed.config;
@@ -366,8 +488,8 @@ function handleRunAudit() {
             message.success(tc('status_completed'));
             return;
           }
-          ahrefsProviderErrorCode.value = typeof result.audit.metadata?.ahrefsErrorCode === 'string'
-            ? result.audit.metadata.ahrefsErrorCode
+          ahrefsProviderErrorCode.value = typeof seoAuditResult.audit.metadata?.ahrefsErrorCode === 'string'
+            ? seoAuditResult.audit.metadata.ahrefsErrorCode
             : '';
           message.error(ahrefsProviderErrorCode.value === 'AHREFS_SITE_AUDIT_HTTP_401' ? tc('ahrefsAuthFailed') : tc('ahrefsUnavailable'));
         }
@@ -383,6 +505,8 @@ function handleRunAudit() {
         const res = await getSiteAuditResults(selectedSiteId.value);
         latestResult.value = res.latest;
         results.value = res.results;
+        const suggestions = await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 }).catch(() => ({ suggestions: [] }));
+        latestSuggestions.value = suggestions.suggestions;
         message.success(tc('status_completed'));
       } catch (e: unknown) {
         const errMsg = e instanceof Error ? e.message : '';
@@ -456,6 +580,130 @@ function tc(key: string): string {
 function getAhrefsIssueId(issue: SeoAuditIssue) {
   const issueId = issue.metadata?.providerIssueId;
   return typeof issueId === 'string' ? issueId : '';
+}
+
+function getCanonicalSeoCategory(category?: string) {
+  const normalized = (category ?? '').trim().toLowerCase();
+  if ((canonicalSeoCategories as readonly string[]).includes(normalized)) {
+    return normalized;
+  }
+  return legacyCategoryMap[normalized] ?? 'other';
+}
+
+function getRecommendationSource(record: { metadata?: Record<string, unknown> }) {
+  return record.metadata?.recommendationSource === 'ai' ? 'ai' : 'deterministic';
+}
+
+function formatSuggestionStatus(status: OptimizationSuggestion['status']) {
+  return tc(`suggestionStatus_${status}`);
+}
+
+function getSuggestionForIssue(issue: SeoAuditIssue) {
+  return latestSuggestions.value.find((suggestion) => suggestion.auditIssueId === issue.id)
+    ?? latestSuggestions.value.find((suggestion) =>
+      suggestion.targetType === issue.targetType
+      && suggestion.targetCmsId === issue.targetCmsId
+      && suggestion.fieldName === issue.fieldName
+    );
+}
+
+function getIssueTargetUrl(issue: SeoAuditIssue) {
+  if (issue.source === 'ahrefs') {
+    return ahrefsIssuePages.value[issue.id]?.urls[0] ?? '';
+  }
+  if (issue.targetType === 'media') {
+    return syncedMedia.value.find((media) => media.cmsId === issue.targetCmsId)?.url ?? '';
+  }
+  return syncedContent.value.find((content) => content.cmsId === issue.targetCmsId)?.url ?? '';
+}
+
+function getIssueSuggestionForRow(record: Record<string, unknown>) {
+  return getSuggestionForIssue(record as unknown as SeoAuditIssue);
+}
+
+function getIssueTargetUrlForRow(record: Record<string, unknown>) {
+  return getIssueTargetUrl(record as unknown as SeoAuditIssue);
+}
+
+function handleIssueFixForRow(record: Record<string, unknown>) {
+  void handleIssueFix(record as unknown as SeoAuditIssue);
+}
+
+function loadAhrefsIssueUrlsForRow(record: Record<string, unknown>) {
+  void loadAhrefsIssueUrls(record as unknown as SeoAuditIssue);
+}
+
+function canApplySuggestion(suggestion: OptimizationSuggestion | undefined) {
+  if (!suggestion || !selectedSite.value?.canWriteBack) return false;
+  return safeOneClickSuggestionTypes.has(suggestion.suggestionType)
+    && ['pending', 'approved'].includes(suggestion.status);
+}
+
+function expandedSeoIssueRow({ record }: { record: SeoAuditIssue }) {
+  const suggestion = getSuggestionForIssue(record);
+  const targetUrl = getIssueTargetUrl(record);
+  return h('div', { class: 'issue-expanded-row' }, [
+    h('div', { class: 'issue-detail-section' }, [
+      h('div', { class: 'issue-detail-label' }, tc('issueCurrentValue')),
+      h('p', { class: 'issue-detail-text' }, record.currentValue || '-')
+    ]),
+    h('div', { class: 'issue-detail-section' }, [
+      h('div', { class: 'issue-detail-label' }, tc('issueRecommendation')),
+      h('p', { class: 'issue-detail-text' }, record.suggestedValue || tc('noSuggestion'))
+    ]),
+    targetUrl
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('issueAffectedUrl')),
+          h('a', { href: targetUrl, target: '_blank', rel: 'noopener', class: 'issue-detail-link' }, targetUrl)
+        ])
+      : null,
+    suggestion
+      ? h('div', { class: 'issue-detail-section' }, [
+          h('div', { class: 'issue-detail-label' }, tc('suggestionStatus')),
+          h('span', { class: 'issue-detail-text' }, formatSuggestionStatus(suggestion.status))
+        ])
+      : null
+  ]);
+}
+
+async function handleIssueFix(issue: SeoAuditIssue) {
+  const suggestion = getSuggestionForIssue(issue);
+  if (!suggestion) {
+    message.info(tc('noSuggestion'));
+    return;
+  }
+  if (!selectedSite.value?.canWriteBack) {
+    message.info(tc('manualFix'));
+    return;
+  }
+  if (!canApplySuggestion(suggestion)) {
+    message.info(tc('unsafeFix'));
+    return;
+  }
+
+  Modal.confirm({
+    title: tc('applyFixTitle'),
+    content: suggestion.suggestedValue,
+    okText: tc('applyFix'),
+    cancelText: tc('cancel'),
+    onOk: async () => {
+      try {
+        let approvedSuggestion = suggestion;
+        if (suggestion.status === 'pending') {
+          const approved = await batchApproveOptimizationSuggestions(selectedSiteId.value, [suggestion.id]);
+          if (approved.succeeded !== 1) throw new Error(tc('applyFixFailed'));
+          approvedSuggestion = { ...suggestion, status: 'approved' };
+        }
+        const applied = await batchApplyOptimizationSuggestions(selectedSiteId.value, [approvedSuggestion.id], { safeOnly: true });
+        if (applied.succeeded !== 1) throw new Error(tc('applyFixFailed'));
+        message.success(tc('applyFixQueued'));
+        const refreshed = await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 });
+        latestSuggestions.value = refreshed.suggestions;
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : tc('applyFixFailed'));
+      }
+    }
+  });
 }
 
 function getAhrefsCrawledUrls(audit: SeoAudit | null) {
@@ -595,27 +843,14 @@ function getAffectedUrls(record: { affectedUrls?: string[]; url?: string }) {
   return record.affectedUrls?.length ? record.affectedUrls : record.url ? [record.url] : [];
 }
 
-function normalizeAuditUrl(value: string) {
-  try {
-    const url = new globalThis.URL(value);
-    return `${url.origin.toLowerCase()}${url.pathname.replace(/\/+$/, '') || '/'}${url.search}`;
-  } catch {
-    return value.trim().replace(/\/+$/, '').toLowerCase();
-  }
-}
-
 const safeOneClickSuggestionTypes = new Set([
   'title',
-  'meta_description'
+  'meta_description',
+  'media_title',
+  'media_caption',
+  'media_description',
+  'media_alt_text'
 ]);
-
-function getAffectedUrlSet() {
-  const urls = [
-    ...(latestResult.value?.issues.flatMap((issue) => issue.affectedUrls?.length ? issue.affectedUrls : issue.url ? [issue.url] : []) ?? []),
-    ...Object.values(ahrefsIssuePages.value).flatMap((result) => result.urls)
-  ];
-  return new Set(urls.map(normalizeAuditUrl));
-}
 
 async function handleOneClickFix() {
   if (!selectedSite.value?.canWriteBack || !selectedSiteId.value) return;
@@ -627,18 +862,16 @@ async function handleOneClickFix() {
     onOk: async () => {
       oneClickFixing.value = true;
       try {
-        await createSeoAudit(selectedSiteId.value);
+        const audit = await createSeoAudit(selectedSiteId.value);
+        latestSeoAudit.value = audit.audit;
+        latestSeoIssues.value = audit.issues;
         const result = await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 });
-        const affectedUrls = getAffectedUrlSet();
-        const contentUrlByCmsId = new Map(
-          syncedContent.value
-            .filter((content) => content.url)
-            .map((content) => [content.cmsId, normalizeAuditUrl(content.url)])
-        );
+        latestSuggestions.value = result.suggestions;
+        const auditIssueIds = new Set(audit.issues.map((issue) => issue.id));
         const eligible = result.suggestions.filter((suggestion) =>
-          safeOneClickSuggestionTypes.has(suggestion.suggestionType) &&
-          suggestion.status === 'pending' &&
-          affectedUrls.has(contentUrlByCmsId.get(suggestion.targetCmsId) ?? '')
+          safeOneClickSuggestionTypes.has(suggestion.suggestionType)
+          && suggestion.status === 'pending'
+          && (!suggestion.auditIssueId || auditIssueIds.has(suggestion.auditIssueId))
         );
         if (eligible.length === 0) {
           message.info(tc('oneClickFixNoEligible'));
@@ -648,8 +881,9 @@ async function handleOneClickFix() {
         const approval = await batchApproveOptimizationSuggestions(selectedSiteId.value, pendingIds);
         const approvedIds = approval.results.filter((item) => item.success).map((item) => item.suggestionId);
         const applyResult = approvedIds.length > 0
-          ? await batchApplyOptimizationSuggestions(selectedSiteId.value, approvedIds)
+          ? await batchApplyOptimizationSuggestions(selectedSiteId.value, approvedIds, { safeOnly: true })
           : { succeeded: 0, failed: 0, total: 0 };
+        latestSuggestions.value = (await getOptimizationSuggestions(selectedSiteId.value, { limit: 500 })).suggestions;
         message.success(tc('oneClickFixSuccess').replace('{succeeded}', String(applyResult.succeeded)).replace('{failed}', String(approval.failed + applyResult.failed)));
       } catch (error) {
         message.error(error instanceof Error ? error.message : tc('oneClickFixFailed'));
@@ -672,16 +906,23 @@ watch(selectedSiteId, () => {
     loadConfig();
     loadResults();
     loadSyncedContent();
+    loadSyncedMedia();
   } else {
     config.value = null;
     results.value = [];
     latestResult.value = null;
     latestMetrics.value = [];
+    latestSeoAudit.value = null;
+    latestSeoIssues.value = [];
+    latestSuggestions.value = [];
+    gscPerformance.value = null;
+    gscError.value = '';
     ahrefsConfig.value = null;
     latestAhrefsAudit.value = null;
     latestAhrefsIssues.value = [];
     ahrefsIssuePages.value = {};
     syncedContent.value = [];
+    syncedMedia.value = [];
     manualTargetUrl.value = '';
     manualContentCmsId.value = undefined;
   }
@@ -813,7 +1054,173 @@ onMounted(async () => {
         />
 
         <Card
-          v-if="latestAhrefsAudit"
+          v-if="latestSeoAudit"
+          :title="tc('seoAuditTitle')"
+          class="result-card"
+          size="small"
+        >
+          <template #extra>
+            <Tag :color="isLatestAuditFromPlugin ? 'green' : 'blue'">
+              {{ isLatestAuditFromPlugin ? tc('pluginAuditSource') : tc('dashboardAuditSource') }}
+            </Tag>
+          </template>
+
+          <Row :gutter="16" class="metrics-row">
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic
+                  :title="tc('overallScore')"
+                  :value="latestSeoAudit.score"
+                  suffix="/ 100"
+                  :value-style="{ color: latestSeoAudit.score >= 80 ? '#52c41a' : latestSeoAudit.score >= 60 ? '#faad14' : '#ff4d4f' }"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic :title="tc('issues')" :value="seoIssueDistribution.total" />
+              </Card>
+            </Col>
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic :title="tc('ahrefsErrors')" :value="seoIssueDistribution.error" :value-style="{ color: '#ff4d4f' }" />
+              </Card>
+            </Col>
+            <Col :xs="12" :sm="6">
+              <Card size="small">
+                <Statistic :title="tc('ahrefsWarnings')" :value="seoIssueDistribution.warning" :value-style="{ color: '#faad14' }" />
+              </Card>
+            </Col>
+          </Row>
+
+          <div class="audit-category-toolbar">
+            <Select
+              v-model:value="seoCategoryFilter"
+              :options="canonicalCategoryOptions"
+              :placeholder="tc('category')"
+              style="min-width: 220px"
+            />
+            <div class="audit-category-tags">
+              <Tag v-for="item in seoCategoryCounts" :key="item.category" color="blue">
+                {{ tc(`ahrefsCategory_${item.category}`) }}: {{ item.count }}
+              </Tag>
+            </div>
+          </div>
+
+          <Table
+            v-if="filteredSeoIssues.length > 0"
+            :columns="seoIssueColumns"
+            :data-source="filteredSeoIssues"
+            :pagination="{ pageSize: 10 }"
+            :expanded-row-render="expandedSeoIssueRow"
+            :expand-row-by-click="true"
+            size="small"
+            row-key="id"
+            class="issues-table"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'category'">
+                {{ tc(`ahrefsCategory_${getCanonicalSeoCategory(record.category)}`) }}
+              </template>
+              <template v-if="column.key === 'severity'">
+                <Tag :color="severityColorMap[record.severity]">
+                  {{ tc(`severity_${record.severity}`) }}
+                </Tag>
+              </template>
+              <template v-if="column.key === 'source'">
+                <Tag :color="getRecommendationSource(record) === 'ai' ? 'purple' : 'default'">
+                  {{ getRecommendationSource(record) === 'ai' ? tc('recommendationAi') : tc('recommendationSystem') }}
+                </Tag>
+              </template>
+              <template v-if="column.key === 'targetUrl'">
+                <div v-if="getIssueTargetUrlForRow(record)" class="issue-url-preview">
+                  <a
+                    :href="getIssueTargetUrlForRow(record)"
+                    target="_blank"
+                    rel="noopener"
+                    class="issue-detail-link"
+                  >
+                    {{ getIssueTargetUrlForRow(record) }}
+                  </a>
+                </div>
+                <Button
+                  v-else-if="record.source === 'ahrefs'"
+                  size="small"
+                  @click.stop="loadAhrefsIssueUrlsForRow(record)"
+                >
+                  {{ tc('ahrefsLoadUrls') }}
+                </Button>
+                <span v-else>-</span>
+              </template>
+              <template v-if="column.key === 'affectedPages'">
+                {{ record.affectedPages ?? (getIssueTargetUrlForRow(record) || '-') }}
+              </template>
+              <template v-if="column.key === 'action'">
+                <Button
+                  v-if="canApplySuggestion(getIssueSuggestionForRow(record))"
+                  size="small"
+                  type="primary"
+                  @click.stop="handleIssueFixForRow(record)"
+                >
+                  {{ tc('applyFix') }}
+                </Button>
+                <Tag v-else>{{ selectedSite?.canWriteBack ? tc('manualFix') : tc('readOnlyFix') }}</Tag>
+              </template>
+            </template>
+          </Table>
+          <Empty v-else :description="tc('allPassed')" />
+        </Card>
+
+        <Card
+          v-if="gscPerformance || gscError"
+          :title="tc('gscAuditTitle')"
+          class="result-card"
+          size="small"
+        >
+          <Alert
+            v-if="gscError || !gscPerformance?.configured"
+            type="warning"
+            show-icon
+            :message="tc('gscUnavailable')"
+            :description="gscError || tc('gscUnavailableDescription')"
+          />
+          <template v-else-if="gscPerformance">
+            <Descriptions bordered size="small" :column="2" class="ahrefs-summary-desc">
+              <DescriptionsItem :label="tc('gscDateRange')">
+                {{ gscPerformance.startDate }} - {{ gscPerformance.endDate }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="tc('gscPagesReturned')">
+                {{ gscPerformance.pages.length }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="tc('gscClicks')">
+                {{ gscPerformance.totals.totalClicks }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="tc('gscImpressions')">
+                {{ gscPerformance.totals.totalImpressions }}
+              </DescriptionsItem>
+            </Descriptions>
+            <Table
+              :data-source="gscPerformance.pages.slice(0, 50)"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              row-key="page"
+              class="issues-table"
+            >
+              <a-table-column key="page" :title="tc('issueAffectedUrl')" data-index="page" ellipsis />
+              <a-table-column key="clicks" :title="tc('gscClicks')" data-index="clicks" />
+              <a-table-column key="impressions" :title="tc('gscImpressions')" data-index="impressions" />
+              <a-table-column key="ctr" :title="tc('gscCtr')" data-index="ctr">
+                <template #default="{ record }">{{ (record.ctr * 100).toFixed(2) }}%</template>
+              </a-table-column>
+              <a-table-column key="position" :title="tc('gscPosition')" data-index="position">
+                <template #default="{ record }">{{ record.position.toFixed(1) }}</template>
+              </a-table-column>
+            </Table>
+          </template>
+        </Card>
+
+        <Card
+          v-if="latestAhrefsAudit && !latestSeoAudit"
           :title="tc('ahrefsLatestAudit')"
           class="result-card"
           size="small"
@@ -1006,7 +1413,7 @@ onMounted(async () => {
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'category'">
-                {{ tc(`category_${record.category}`) }}
+                {{ tc(`ahrefsCategory_${getCanonicalSeoCategory(record.category)}`) }}
               </template>
               <template v-if="column.key === 'severity'">
                 <Tag :color="severityColorMap[record.severity]">
@@ -1053,7 +1460,7 @@ onMounted(async () => {
 
         <!-- no results -->
         <Empty
-          v-if="!latestResult && !latestAhrefsAudit && !loadingResults"
+          v-if="!latestResult && !latestSeoAudit && !latestAhrefsAudit && !loadingResults"
           :description="tc('noResults')"
         />
 
@@ -1217,6 +1624,20 @@ onMounted(async () => {
 
 .issues-table {
   margin-top: 12px;
+}
+
+.audit-category-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.audit-category-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .issue-expanded-row {

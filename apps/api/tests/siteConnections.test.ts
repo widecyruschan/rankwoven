@@ -1929,6 +1929,37 @@ describe('site connection routes', () => {
     }
   });
 
+  it('accepts the configured SEO title and meta description boundaries', async () => {
+    const { server, body } = await createWordPressConnection();
+    const cases = [
+      { title: 'T'.repeat(25), description: 'D'.repeat(70) },
+      { title: 'T'.repeat(65), description: 'D'.repeat(160) }
+    ];
+
+    for (const testCase of cases) {
+      const response = await server.inject({
+        method: 'POST',
+        url: `/api/v1/site-connections/${body.data.site.id}/editor-seo`,
+        headers: { authorization: `Bearer ${body.data.apiToken}` },
+        payload: {
+          mode: 'analyze',
+          postType: 'post',
+          currentSeoTitle: testCase.title,
+          currentSlug: 'seo_boundary_test',
+          currentMetaDescription: testCase.description,
+          currentUrl: 'https://example.com/seo-boundary-test/',
+          contentHtml: '<p>SEO boundary test content.</p>'
+        }
+      });
+
+      expect(response.statusCode).toBe(200);
+      const responseBody = response.json<{ data: { scoreChecks: Array<{ key: string; status: string }> } }>();
+      const checks = new Map(responseBody.data.scoreChecks.map((check) => [check.key, check.status]));
+      expect(checks.get('title-length')).toBe('pass');
+      expect(checks.get('meta-length')).toBe('pass');
+    }
+  });
+
   it('does not award readability points to empty content or match keyphrases inside other words', async () => {
     const { server, body } = await createWordPressConnection();
     const response = await server.inject({
@@ -3370,7 +3401,7 @@ describe('site connection routes', () => {
 
     const auditResponse = await server.inject({
       method: 'POST',
-      url: `/api/v1/site-connections/${body.data.site.id}/audits`,
+      url: `/api/v1/site-connections/${body.data.site.id}/audits?source=wordpress-plugin`,
       headers: {
         authorization: `Bearer ${authToken}`
       }
@@ -3380,6 +3411,7 @@ describe('site connection routes', () => {
         audit: {
           id: string;
           score: number;
+          metadata?: Record<string, unknown>;
         };
         issues: Array<{
           ruleCode: string;
@@ -3389,6 +3421,7 @@ describe('site connection routes', () => {
 
     expect(auditResponse.statusCode).toBe(201);
     expect(auditBody.data.audit.score).toBeLessThan(100);
+    expect(auditBody.data.audit.metadata).toMatchObject({ auditSource: 'wordpress-plugin' });
     expect(auditBody.data.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ruleCode: 'ARTICLE_TITLE_LENGTH' }),
@@ -3870,6 +3903,49 @@ describe('site connection routes', () => {
       success: false,
       error: {
         code: 'SITE_TOKEN_INVALID'
+      }
+    });
+  });
+
+  it('rejects unsafe suggestions when a batch apply is explicitly marked safe-only', async () => {
+    const { server, body } = await createWordPressConnection({
+      wordpressAdminUsername: 'site-admin',
+      wordpressApplicationPassword: 'abcd efgh ijkl mnop'
+    });
+    const authToken = await loginDemoUser(server);
+    const suggestionResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions`,
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        targetType: 'article',
+        targetCmsId: 'unsafe-article',
+        suggestionType: 'content',
+        fieldName: 'contentHtml',
+        currentValue: '<p>Original</p>',
+        suggestedValue: '<p>Rewrite</p>'
+      }
+    });
+    const suggestionId = suggestionResponse.json<{ data: { suggestion: { id: string } } }>().data.suggestion.id;
+    await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions/${suggestionId}/approve`,
+      headers: { authorization: `Bearer ${authToken}` }
+    });
+
+    const applyResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/site-connections/${body.data.site.id}/suggestions/batch-apply`,
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: { suggestionIds: [suggestionId], safeOnly: true }
+    });
+
+    expect(applyResponse.statusCode).toBe(201);
+    expect(applyResponse.json()).toMatchObject({
+      data: {
+        succeeded: 0,
+        failed: 1,
+        results: [{ suggestionId, success: false, error: 'SUGGESTION_REQUIRES_MANUAL_REVIEW' }]
       }
     });
   });

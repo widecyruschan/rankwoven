@@ -32,6 +32,42 @@ type SuggestionType =
 type IssueSeverity = 'low' | 'medium' | 'high';
 type MediaSuggestionField = 'title' | 'caption' | 'description' | 'altText' | 'fileName';
 
+const SEO_TITLE_MIN_WIDTH = 25;
+const SEO_TITLE_MAX_WIDTH = 65;
+const META_DESCRIPTION_MIN_LENGTH = 70;
+const META_DESCRIPTION_MAX_LENGTH = 160;
+const canonicalSeoCategories = new Set([
+  'indexability',
+  'ai_discoverability',
+  'links',
+  'redirects',
+  'content',
+  'social_tags',
+  'duplicates',
+  'localization',
+  'performance',
+  'images',
+  'javascript',
+  'css',
+  'sitemaps',
+  'external_pages',
+  'other'
+]);
+
+function normalizeSeoAuditCategory(category?: string) {
+  const normalized = String(category ?? '').trim().toLowerCase();
+  const legacyCategoryMap: Record<string, string> = {
+    meta_tags: 'content',
+    headings: 'content',
+    content_quality: 'content',
+    structured_data: 'ai_discoverability',
+    mobile: 'performance',
+    security: 'other'
+  };
+  const canonical = legacyCategoryMap[normalized] ?? normalized;
+  return canonicalSeoCategories.has(canonical) ? canonical : 'other';
+}
+
 export interface SeoAudit {
   id: string;
   siteId: string;
@@ -283,6 +319,9 @@ const ahrefsSiteAuditIssuePagesQuerySchema = z.object({
 });
 
 const ahrefsSiteAuditIssueIdSchema = z.string().trim().min(1).max(160).regex(/^[A-Za-z0-9._:-]+$/);
+const seoAuditQuerySchema = z.object({
+  source: z.enum(['wordpress-plugin', 'customer-dashboard']).default('customer-dashboard')
+});
 
 const defaultRulesVersion = '2026-08-04.image-context-1';
 const auditBatchSize = 100;
@@ -515,30 +554,34 @@ async function buildSeoIssues(
 
   for (const article of articles) {
     const titleLength = article.title.trim().length;
-    if (titleLength < 25 || titleLength > 65) {
+    if (titleLength < SEO_TITLE_MIN_WIDTH || titleLength > SEO_TITLE_MAX_WIDTH) {
       issues.push({
         targetType: 'article',
         targetCmsId: article.cmsId,
         ruleCode: 'ARTICLE_TITLE_LENGTH',
+        category: 'content',
         severity: titleLength < 10 ? 'high' : 'medium',
         message: '文章標題長度未落在建議範圍',
         currentValue: article.title,
         suggestedValue: normalizeTitleSuggestion(article.title),
-        fieldName: 'title'
+        fieldName: 'title',
+        metadata: { recommendationSource: 'deterministic' }
       });
     }
 
     const metaDescription = article.metaDescription?.trim() ?? '';
-    if (metaDescription.length < 70 || metaDescription.length > 160) {
+    if (metaDescription.length < META_DESCRIPTION_MIN_LENGTH || metaDescription.length > META_DESCRIPTION_MAX_LENGTH) {
       issues.push({
         targetType: 'article',
         targetCmsId: article.cmsId,
         ruleCode: 'ARTICLE_META_DESCRIPTION_LENGTH',
+        category: 'content',
         severity: metaDescription.length === 0 || metaDescription.length > 220 ? 'high' : 'medium',
         message: '文章 Meta Description 未落在建議範圍',
         currentValue: metaDescription,
         suggestedValue: normalizeMetaDescriptionSuggestion(article),
-        fieldName: 'metaDescription'
+        fieldName: 'metaDescription',
+        metadata: { recommendationSource: 'deterministic' }
       });
     }
 
@@ -548,11 +591,13 @@ async function buildSeoIssues(
         targetType: 'article',
         targetCmsId: article.cmsId,
         ruleCode: 'ARTICLE_H1_COUNT',
+        category: 'content',
         severity: h1Matches.length === 0 ? 'medium' : 'high',
         message: '文章內容應保留一個清楚的 H1',
         currentValue: String(h1Matches.length),
         suggestedValue: '保留一個主要 H1，其他段落標題改用 H2/H3',
-        fieldName: 'contentHtml'
+        fieldName: 'contentHtml',
+        metadata: { recommendationSource: 'deterministic' }
       });
     }
 
@@ -562,11 +607,13 @@ async function buildSeoIssues(
         targetType: 'article',
         targetCmsId: article.cmsId,
         ruleCode: 'ARTICLE_INTERNAL_LINKS',
+        category: 'links',
         severity: 'low',
         message: '文章內部連結不足',
         currentValue: String(internalLinks.length),
         suggestedValue: buildInternalLinkSuggestionValue(article, articles),
-        fieldName: 'contentHtml'
+        fieldName: 'contentHtml',
+        metadata: { recommendationSource: 'deterministic' }
       });
     }
   }
@@ -591,11 +638,13 @@ async function buildSeoIssues(
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: 'MEDIA_TITLE_CONTEXT',
+        category: 'images',
         severity: 'medium',
         message: '圖片標題應結合所屬內容上下文',
         currentValue: mediaItem.title,
         suggestedValue: suggestedTitle,
-        fieldName: 'title'
+        fieldName: 'title',
+        metadata: { recommendationSource: aiSuggestions ? 'ai' : 'deterministic' }
       });
     }
 
@@ -605,11 +654,13 @@ async function buildSeoIssues(
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: 'MEDIA_CAPTION_CONTEXT',
+        category: 'images',
         severity: 'medium',
         message: '圖片簡介應根據文章或頁面上下文優化',
         currentValue: mediaItem.caption ?? '',
         suggestedValue: suggestedCaption,
-        fieldName: 'caption'
+        fieldName: 'caption',
+        metadata: { recommendationSource: aiSuggestions ? 'ai' : 'deterministic' }
       });
     }
 
@@ -619,11 +670,13 @@ async function buildSeoIssues(
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: 'MEDIA_DESCRIPTION_CONTEXT',
+        category: 'images',
         severity: 'low',
         message: '圖片說明應根據文章或頁面上下文優化',
         currentValue: mediaItem.description ?? '',
         suggestedValue: suggestedDescription,
-        fieldName: 'description'
+        fieldName: 'description',
+        metadata: { recommendationSource: aiSuggestions ? 'ai' : 'deterministic' }
       });
     }
 
@@ -633,11 +686,13 @@ async function buildSeoIssues(
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: 'MEDIA_ALT_TEXT_CONTEXT',
+        category: 'images',
         severity: 'high',
         message: '圖片 Alt Text 應結合所屬內容上下文',
         currentValue: mediaItem.altText ?? '',
         suggestedValue: suggestedAltText,
-        fieldName: 'altText'
+        fieldName: 'altText',
+        metadata: { recommendationSource: aiSuggestions ? 'ai' : 'deterministic' }
       });
     }
 
@@ -647,11 +702,13 @@ async function buildSeoIssues(
         targetType: 'media',
         targetCmsId: mediaItem.cmsId,
         ruleCode: mediaContext.contextSlug ? 'MEDIA_FILE_NAME_CONTEXT' : 'MEDIA_FILE_NAME_FORMAT',
+        category: 'images',
         severity: 'medium',
         message: mediaContext.contextSlug ? '圖片檔名應根據關聯內容 slug 命名' : '圖片檔名不利於搜尋引擎理解',
         currentValue: mediaItem.fileName ?? '',
         suggestedValue: suggestedFileName,
-        fieldName: 'fileName'
+        fieldName: 'fileName',
+        metadata: { recommendationSource: aiSuggestions ? 'ai' : 'deterministic' }
       });
     }
 
@@ -796,7 +853,7 @@ function createAhrefsAuditIssue(issue: AhrefsSiteAuditIssue, recommendation: str
     suggestedValue: recommendation,
     fieldName: 'siteAudit',
     source: 'ahrefs',
-    category: issue.category,
+    category: normalizeSeoAuditCategory(issue.category),
     affectedPages: issue.affectedPages,
     change: issue.change,
     metadata: {
@@ -1856,13 +1913,13 @@ function buildEditorSeoScore(
     buildWeightedEditorSeoScoreCheck(
       'title-length',
       'SEO title width',
-      seoTitleDisplayWidth >= 30 && seoTitleDisplayWidth <= 60
+      seoTitleDisplayWidth >= SEO_TITLE_MIN_WIDTH && seoTitleDisplayWidth <= SEO_TITLE_MAX_WIDTH
         ? 'pass'
-        : seoTitleDisplayWidth >= 24 && seoTitleDisplayWidth <= 70 ? 'warning' : 'fail',
+        : seoTitleDisplayWidth >= 20 && seoTitleDisplayWidth <= 70 ? 'warning' : 'fail',
       7,
-      seoTitleDisplayWidth >= 30 && seoTitleDisplayWidth <= 60
+      seoTitleDisplayWidth >= SEO_TITLE_MIN_WIDTH && seoTitleDisplayWidth <= SEO_TITLE_MAX_WIDTH
         ? `SEO title 顯示寬度約 ${seoTitleDisplayWidth} 單位，符合建議。`
-        : `SEO title 顯示寬度約 ${seoTitleDisplayWidth} 單位，建議調整至 30-60 單位。`
+        : `SEO title 顯示寬度約 ${seoTitleDisplayWidth} 單位，建議調整至 25-65 單位。`
     )
   );
 
@@ -1879,13 +1936,13 @@ function buildEditorSeoScore(
     buildWeightedEditorSeoScoreCheck(
       'meta-length',
       'Meta description length',
-      metaDescription.length >= 120 && metaDescription.length <= 156
+      metaDescription.length >= META_DESCRIPTION_MIN_LENGTH && metaDescription.length <= META_DESCRIPTION_MAX_LENGTH
         ? 'pass'
-        : metaDescription.length >= 70 && metaDescription.length <= 160 ? 'warning' : 'fail',
+        : metaDescription.length >= 50 && metaDescription.length <= 180 ? 'warning' : 'fail',
       6,
-      metaDescription.length >= 120 && metaDescription.length <= 156
+      metaDescription.length >= META_DESCRIPTION_MIN_LENGTH && metaDescription.length <= META_DESCRIPTION_MAX_LENGTH
         ? `Meta description 長度為 ${metaDescription.length} 字，符合建議。`
-        : `Meta description 長度為 ${metaDescription.length} 字，建議調整至 120-156 字。`
+        : `Meta description 長度為 ${metaDescription.length} 字，建議調整至 70-160 字。`
     ),
     buildWeightedEditorSeoScoreCheck(
       'focus-in-meta',
@@ -2401,7 +2458,8 @@ export function createInMemorySeoOptimizationRepository(): SeoOptimizationReposi
         auditId: audit.id,
         siteId,
         createdAt: audit.createdAt,
-        ...issueInput
+        ...issueInput,
+        category: normalizeSeoAuditCategory(issueInput.category)
       }));
 
       audits.set(audit.id, audit);
@@ -2639,7 +2697,7 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
             issueInput.suggestedValue ?? null,
             issueInput.fieldName,
             issueInput.source ?? 'rankwoven',
-            issueInput.category ?? null,
+            normalizeSeoAuditCategory(issueInput.category),
             issueInput.affectedPages ?? null,
             issueInput.change ?? null,
             JSON.stringify(issueInput.metadata ?? {})
@@ -2655,7 +2713,13 @@ export class PostgresSeoOptimizationRepository implements SeoOptimizationReposit
             suggestionType: toSuggestionType(issue),
             fieldName: issue.fieldName,
             currentValue: issue.currentValue,
-            suggestedValue: issue.suggestedValue!
+            suggestedValue: issue.suggestedValue!,
+            metadata: {
+              ...(issue.metadata ?? {}),
+              category: issue.category,
+              ruleCode: issue.ruleCode,
+              recommendationSource: issue.metadata?.recommendationSource ?? 'deterministic'
+            }
           }, issue.id);
         }
       }
@@ -3055,7 +3119,13 @@ function createSuggestionFromIssue(siteId: string, issue: SeoAuditIssue): Optimi
       suggestionType: toSuggestionType(issue),
       fieldName: issue.fieldName,
       currentValue: issue.currentValue,
-      suggestedValue: issue.suggestedValue ?? issue.message
+      suggestedValue: issue.suggestedValue ?? issue.message,
+      metadata: {
+        ...(issue.metadata ?? {}),
+        category: issue.category,
+        ruleCode: issue.ruleCode,
+        recommendationSource: issue.metadata?.recommendationSource ?? 'deterministic'
+      }
     },
     issue.id
   );
@@ -3183,6 +3253,15 @@ function ensureSiteCanWriteBack(reply: FastifyReply, site: { connectionMode: str
     return false;
   }
   return true;
+}
+
+function isSafeAutomaticSuggestion(suggestion: OptimizationSuggestion) {
+  return suggestion.targetType === 'article'
+    ? suggestion.suggestionType === 'title' || suggestion.suggestionType === 'meta_description'
+    : suggestion.suggestionType === 'media_title'
+      || suggestion.suggestionType === 'media_caption'
+      || suggestion.suggestionType === 'media_description'
+      || suggestion.suggestionType === 'media_alt_text';
 }
 
 async function listAllArticlesForAudit(siteRepository: SiteConnectionRepository, siteId: string) {
@@ -3453,7 +3532,7 @@ export function registerSeoOptimizationRoutes(
     await seoRepository.close?.();
   });
 
-  app.post<{ Params: { siteId: string } }>(
+  app.post<{ Params: { siteId: string }; Querystring: { source?: string } }>(
     '/api/v1/site-connections/:siteId/audits',
     async (request, reply) => {
       const site = await ensureSiteTokenOrWorkspaceAccess(
@@ -3465,6 +3544,11 @@ export function registerSeoOptimizationRoutes(
       );
       if (!site) {
         return reply;
+      }
+
+      const parsedQuery = seoAuditQuerySchema.safeParse(request.query);
+      if (!parsedQuery.success) {
+        return validationError(reply, parsedQuery.error);
       }
 
       const articles = await listAllArticlesForAudit(siteRepository, site.id);
@@ -3491,6 +3575,8 @@ export function registerSeoOptimizationRoutes(
           rulesVersion: ahrefs.report ? '2026-09-14.ahrefs-site-audit-v1' : defaultRulesVersion,
           metadata: {
             healthScoreSource: ahrefs.report?.healthScore === undefined ? 'rankwoven_deterministic' : 'ahrefs',
+            auditSource: parsedQuery.data.source,
+            auditSourceRecordedAt: new Date().toISOString(),
             ahrefs: ahrefs.report
               ? {
                   projectId: ahrefs.report.projectId,
@@ -4166,7 +4252,7 @@ export function registerSeoOptimizationRoutes(
     }
   );
 
-  app.post<{ Params: { siteId: string }; Body: { suggestionIds: string[] } }>(
+  app.post<{ Params: { siteId: string }; Body: { suggestionIds: string[]; safeOnly?: boolean } }>(
     '/api/v1/site-connections/:siteId/suggestions/batch-apply',
     async (request, reply) => {
       const site = await ensureSiteTokenOrWorkspaceAccess(
@@ -4183,7 +4269,7 @@ export function registerSeoOptimizationRoutes(
         return reply;
       }
 
-      const { suggestionIds } = request.body;
+      const { suggestionIds, safeOnly = false } = request.body;
 
       if (!Array.isArray(suggestionIds) || suggestionIds.length === 0) {
         return reply.status(400).send({
@@ -4210,6 +4296,11 @@ export function registerSeoOptimizationRoutes(
 
           if (suggestion.status !== 'approved') {
             results.push({ suggestionId, success: false, error: 'SUGGESTION_NOT_APPROVED' });
+            continue;
+          }
+
+          if (safeOnly && !isSafeAutomaticSuggestion(suggestion)) {
+            results.push({ suggestionId, success: false, error: 'SUGGESTION_REQUIRES_MANUAL_REVIEW' });
             continue;
           }
 
