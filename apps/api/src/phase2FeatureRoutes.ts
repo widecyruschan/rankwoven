@@ -92,6 +92,7 @@ const createContentOptimizationSchema = z.object({
   locale: z.string().trim().min(2).max(20).default('zh-Hant'),
   targetMarket: z.string().trim().min(2).max(80).optional(),
   dialect: z.string().trim().min(2).max(40).optional(),
+  tone: z.string().trim().min(2).max(80).optional(),
   audience: z.string().trim().max(500).optional(),
   funnelStage: z.string().trim().max(80).optional(),
   rulesVersion: z.string().trim().min(1).max(80).default('phase2-v1'),
@@ -630,7 +631,8 @@ export function registerPhase2FeatureRoutes(
       const inputHash = hashRequestBody({
         contentHash: hashContentSnapshot(source.contentText), focusKeyword: parsed.data.focusKeyword,
         secondaryKeywords: parsed.data.secondaryKeywords, locale: parsed.data.locale,
-        targetMarket: parsed.data.targetMarket, dialect: parsed.data.dialect, rulesVersion: parsed.data.rulesVersion,
+        targetMarket: parsed.data.targetMarket, dialect: parsed.data.dialect, tone: parsed.data.tone,
+        rulesVersion: parsed.data.rulesVersion,
         promptVersion: parsed.data.promptVersion, schemaVersion: parsed.data.schemaVersion, modelId: profile.modelId
       });
       const cachedRun = await repository.findContentOptimizationRunByInput(parsed.data.siteId, user.workspaceId, inputHash, profile.modelId);
@@ -646,7 +648,12 @@ export function registerPhase2FeatureRoutes(
         costEstimate: Number(priceSnapshot.inputPrice ?? 0), provider: 'wenwen', providerKey: 'wenwen',
         gatewayModel: profile.modelId, priceSnapshotId: priceSnapshot.id, requestHash: inputHash,
         sourceKind: source.sourceKind, sourceUrl: source.sourceUrl, contentText: source.contentText, contentHash: inputHash,
-        metadata: { ...source.metadata, audience: parsed.data.audience ?? '', funnelStage: parsed.data.funnelStage ?? '' },
+        metadata: {
+          ...source.metadata,
+          tone: parsed.data.tone ?? '',
+          audience: parsed.data.audience ?? '',
+          funnelStage: parsed.data.funnelStage ?? ''
+        },
         articleId: parsed.data.articleId, locale: parsed.data.locale, targetMarket: parsed.data.targetMarket, dialect: parsed.data.dialect,
         focusKeyword: parsed.data.focusKeyword, secondaryKeywords: parsed.data.secondaryKeywords,
         rulesVersion: parsed.data.rulesVersion, promptVersion: parsed.data.promptVersion, schemaVersion: parsed.data.schemaVersion,

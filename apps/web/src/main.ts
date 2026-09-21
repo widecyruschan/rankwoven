@@ -29,7 +29,7 @@ import App from './App.vue';
 import { initializeTheme, useTheme } from './composables/useTheme';
 import { i18n } from './i18n';
 import { router } from './router';
-import { darkAntDesignTheme } from './theme/darkWorkspaceTheme';
+import { darkAntDesignTheme, lightWorkspaceTheme } from './theme/darkWorkspaceTheme';
 
 initializeTheme();
 
@@ -37,7 +37,7 @@ const ThemedRoot = defineComponent({
   name: 'ThemedRoot',
   setup() {
     const { isDark } = useTheme();
-    const antDesignTheme = computed<ThemeConfig>(() => (isDark.value ? darkAntDesignTheme : {}));
+    const antDesignTheme = computed<ThemeConfig>(() => (isDark.value ? darkAntDesignTheme : lightWorkspaceTheme));
 
     return () => h(ConfigProvider, { theme: antDesignTheme.value }, { default: () => h(App) });
   }

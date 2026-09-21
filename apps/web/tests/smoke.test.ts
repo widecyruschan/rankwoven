@@ -88,6 +88,26 @@ describe('web smoke test', () => {
     expect(siteApiSource).toContain('/analytics-settings');
   });
 
+  it('keeps the content editor aligned with the five-step editorial workflow', async () => {
+    const editorSource = await readFile(resolve('src/views/ContentOptimizerView.vue'), 'utf8');
+    const editorApiSource = await readFile(resolve('src/api/contentOptimization.ts'), 'utf8');
+
+    expect(editorSource).toContain('content-editor-steps');
+    expect(editorSource).toContain("t('contentOptimizer.steps.brief')");
+    expect(editorSource).toContain("t('contentOptimizer.steps.draft')");
+    expect(editorSource).toContain("t('contentOptimizer.steps.image')");
+    expect(editorSource).toContain("t('contentOptimizer.steps.links')");
+    expect(editorSource).toContain("t('contentOptimizer.steps.publish')");
+    expect(editorSource).toContain('getSyncedArticles');
+    expect(editorSource).toContain('createContentRewrite');
+    expect(editorSource).toContain('@click="analyzeContent"');
+    expect(editorSource).toContain("getRoutePath('app-site-media-scoped'");
+    expect(editorSource).toContain("getRoutePath('app-site-links-scoped'");
+    expect(editorSource).toContain('publishDisabled');
+    expect(editorApiSource).toContain('tone?: string;');
+    expect(editorApiSource).toContain('updateContentRewriteSuggestion');
+  });
+
   it('keeps manual URL and synced-content audits read-only', async () => {
     const auditViewSource = await readFile(resolve('src/views/SiteAuditView.vue'), 'utf8');
     const auditApiSource = await readFile(resolve('src/api/siteConnections.ts'), 'utf8');
@@ -414,7 +434,7 @@ describe('web smoke test', () => {
       "html[data-theme='dark'] .seo-markdown code:not(pre code) {\n  background: var(--color-brand-primary-mist);\n  color: var(--color-ink);\n}"
     );
     expect(mainSource).toContain('h(ConfigProvider, { theme: antDesignTheme.value }');
-    expect(mainSource).toContain('isDark.value ? darkAntDesignTheme : {}');
+    expect(mainSource).toContain('isDark.value ? darkAntDesignTheme : lightWorkspaceTheme');
     expect(chartSource).toContain(':theme="chartTheme"');
   });
 

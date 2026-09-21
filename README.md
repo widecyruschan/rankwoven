@@ -8238,3 +8238,96 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 使用既有測試帳戶於桌面及手機 viewport 走查 `/app`、`/admin`、表格和設定頁的真實資料狀態。
 - 後續若要再提升資訊密度，可按頁面優先級逐一優化 Site Audit、Keyword Research 與任務隊列的專用版面。
+
+## 會話總結（2026-09-22）— 客戶端內容編輯器五步流程
+
+### 會話主要目的
+
+依前台「內容編輯」核心流程，將客戶端後台內容編輯器整理為可操作、可審核的五步工作流。
+
+### 完成的主要任務
+
+- 將 `/app/sites/:siteId/content/optimizer` 改為內容編輯器，集中處理內容來源、內容 brief、分析、指定範圍改寫與人工審核。
+- 依序呈現：設定內容 brief、草稿與審核、配圖方向、內部連結建議、WordPress 草稿五個步驟。
+- 支援貼上草稿、選擇已同步文章或輸入公開網址；可設定焦點／次要關鍵詞、寫作語氣、讀者、內容語言、市場及漏斗階段。
+- 補齊內容改寫、草稿批准／拒絕、Claim 來源 gate 與任務輪詢；媒體與連結步驟導向既有 site-scoped 工作台。
+- 寫作語氣會保存於內容快照，並傳入內容分析與改寫的 AI 工作任務。
+- CMS 草稿建立維持 disabled，清楚反映既有後端 `CMS_WRITE_DISABLED` 邊界，不假裝可寫入 WordPress。
+
+### 關鍵決策和解決方案
+
+- 復用現有 `content-optimizations`、Rewrite Suggestion、Media Optimization 與 Link Assistant API／頁面，不建立第二套內容編輯資料流。
+- 以不可變內容快照、Claim source gate 與逐項批准維持人工控制；任何未附來源的具體主張都不能被批准。
+- 僅在可驗證的前一步完成後推進流程狀態，避免把尚未執行的配圖、連結或 CMS 草稿標記為完成。
+
+### 使用的技術棧
+
+- Vue 3、TypeScript、Vue I18n、Ant Design Vue、Lucide Vue、Fastify、Zod、PostgreSQL JSONB Snapshot、Vitest。
+
+### 新增或修改文件
+
+- `apps/web/src/views/ContentOptimizerView.vue`
+- `apps/web/src/api/contentOptimization.ts`
+- `apps/web/src/i18n.ts`
+- `apps/web/tests/smoke.test.ts`
+- `apps/api/src/phase2FeatureRoutes.ts`
+- `apps/api/tests/phase2Routes.test.ts`
+- `apps/worker/src/index.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test` 通過：API 114 passed、Web 21 passed、Worker 11 passed、共享 package 測試通過。
+- `npm run build` 通過；保留既有 Ant Design Vue bundle 大小警告。
+- `npm run security:audit` 通過，0 vulnerabilities。
+- 使用本機無憑據 mock session 完成桌面及 390px viewport UI 檢查；五步流程、分析結果、草稿審核、媒體／連結 handoff 和 CMS draft gate 均正常渲染。
+
+### 下一步行動清單
+
+- 啟用 CMS Draft API 後，將第五步接入 snapshot stale check、草稿建立與重新抓取驗證。
+- 將第三步選定的配圖方向保存至內容計劃或媒體任務，讓媒體工作台可直接帶入創作意圖。
+
+## 會話總結（2026-09-22）— 截圖配色方案重整三套 UI
+
+### 會話主要目的
+
+根據 EBond AI 類型的深淺色截圖，重新整理 RankWoven 公開網站、客戶後台及管理後台的共同視覺系統。
+
+### 完成的主要任務
+
+- 淺色主題改為冷白背景、深墨藍文字、明亮藍 primary、綠色 success 與橙色 warning。
+- 深色主題改為 `#101020` canvas、`#102030` surface、`#203040` elevated，配合藍色操作色與綠／橙狀態色。
+- Ant Design Vue light／dark token、ECharts palette、側欄、頂欄、Hero、表格、Tabs、按鈕與狀態卡同步使用同一套 token。
+- 客戶後台及管理後台保留相同 palette，但管理後台以橙色作為治理／警示識別，維持工作情境區分。
+- 更新暗色 border contrast 至最少 3:1，通過既有 accessibility smoke test。
+
+### 關鍵決策和解決方案
+
+- 參考截圖的平面 navy surface 與單一藍色行動焦點，移除原本青綠主色與不一致的 admin 琥珀 gradient。
+- 保留現有 Instrument Sans、Noto Sans TC、JetBrains Mono 與功能 layout，不重寫資料流或路由。
+- 因工作樹有使用者未提交修改，未執行 design-review 的原子 commit 流程，也未提交／推送任何文件。
+
+### 使用的技術棧
+
+- Vue 3、TypeScript、Ant Design Vue、CSS Custom Properties、ECharts、Vitest。
+
+### 新增或修改文件
+
+- `apps/web/src/styles.css`
+- `apps/web/src/theme/darkWorkspaceTheme.ts`
+- `apps/web/src/main.ts`
+- `apps/web/tests/smoke.test.ts`
+- `README.md`
+
+### 驗證結果
+
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過（21 tests）。
+- `npm run build -w @aieo/web` 通過；保留既有 Ant Design Vue bundle 大小警告。
+- 本地瀏覽器驗證 public、customer、admin 的淺色／深色 computed colors，無 console error。
+
+### 下一步行動清單
+
+- 以真實測試帳戶補做 customer／admin 的登入後桌面及手機走查。
+- 若要追求更接近截圖的數據密度，可再按頁面逐一收斂 dashboard card 間距與圖表樣式。

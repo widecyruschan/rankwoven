@@ -334,13 +334,19 @@ describe('phase 2 contract routes', () => {
       method: 'POST',
       url: '/api/v1/content-optimizations',
       headers: { authorization: `Bearer ${token}`, 'idempotency-key': 'content-run-1' },
-      payload: { siteId: site.site.id, content: '<p>內容優化教學提供可執行步驟。</p>', focusKeyword: '內容優化' }
+      payload: {
+        siteId: site.site.id,
+        content: '<p>內容優化教學提供可執行步驟。</p>',
+        focusKeyword: '內容優化',
+        tone: '專業且清晰'
+      }
     });
     expect(created.statusCode).toBe(202);
     const runId = created.json<{ data: { runId: string } }>().data.runId;
     const detail = await server.inject({ method: 'GET', url: `/api/v1/content-optimizations/${runId}`, headers: { authorization: `Bearer ${token}` } });
     expect(detail.statusCode).toBe(200);
     expect(detail.json().data.snapshot.contentText).toContain('內容優化');
+    expect(detail.json().data.snapshot.metadata.tone).toBe('專業且清晰');
     const apply = await server.inject({ method: 'POST', url: `/api/v1/content-optimizations/${runId}/apply`, headers: { authorization: `Bearer ${token}` } });
     expect(apply.statusCode).toBe(409);
     expect(apply.json().error.code).toBe('CMS_WRITE_DISABLED');
