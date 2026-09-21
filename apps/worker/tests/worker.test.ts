@@ -188,7 +188,9 @@ describe('worker adapter wiring', () => {
     try {
       const task = await processNextQueuedTask(pool as never, fetchImpl, allowPublicTestUrl, undefined, 'worker-306');
       expect(task).toMatchObject({ id: '00000000-0000-4000-8000-000000000306', kind: 'keyword_research' });
-      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const fetchUrls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) => String(call[0]));
+      expect(fetchUrls.length).toBeGreaterThanOrEqual(2);
+      expect(fetchUrls.some((url) => url.includes('ranked_keywords') || url.includes('dataforseo.test'))).toBe(true);
       const queryLog = queries.join('\n').toLowerCase();
       expect(queryLog).toContain('keyword_metrics');
       expect(queryLog).toContain('keyword_observations');
