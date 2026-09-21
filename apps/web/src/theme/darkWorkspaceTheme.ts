@@ -2,20 +2,20 @@ import { theme as antTheme } from 'ant-design-vue';
 import type { ThemeConfig } from 'ant-design-vue/es/config-provider/context';
 
 export const darkWorkspacePalette = {
-  canvas: '#121620',
-  surface: '#1D2133',
-  elevated: '#242A3D',
-  fill: '#202437',
-  border: '#626E8A',
-  borderSecondary: '#373E56',
-  primary: '#7AA2F7',
-  primaryHover: '#8AB8FF',
-  primaryActive: '#5882BD',
-  primaryText: '#111827',
-  text: '#F0F3F8',
-  textSecondary: '#C4CBD8',
-  textTertiary: '#98A3B7',
-  textDisabled: '#8290A6'
+  canvas: '#0D1715',
+  surface: '#172220',
+  elevated: '#1D2B28',
+  fill: '#1B2926',
+  border: '#5B7169',
+  borderSecondary: '#334440',
+  primary: '#54D0C3',
+  primaryHover: '#9BF2EB',
+  primaryActive: '#258C83',
+  primaryText: '#092A27',
+  text: '#EDF5F2',
+  textSecondary: '#B6C5C0',
+  textTertiary: '#9AACA6',
+  textDisabled: '#748984'
 } as const;
 
 export const darkAntDesignTheme: ThemeConfig = {
@@ -25,7 +25,7 @@ export const darkAntDesignTheme: ThemeConfig = {
     colorPrimaryHover: darkWorkspacePalette.primaryHover,
     colorPrimaryActive: darkWorkspacePalette.primaryActive,
     colorLink: darkWorkspacePalette.primaryHover,
-    colorLinkHover: '#A9CAFF',
+    colorLinkHover: '#B9FAF4',
     colorLinkActive: darkWorkspacePalette.primary,
     colorBgBase: darkWorkspacePalette.canvas,
     colorBgLayout: darkWorkspacePalette.canvas,
@@ -47,15 +47,15 @@ export const darkAntDesignTheme: ThemeConfig = {
     colorIcon: darkWorkspacePalette.textTertiary,
     colorIconHover: darkWorkspacePalette.text,
     controlItemBgHover: darkWorkspacePalette.elevated,
-    controlItemBgActive: '#2A3D60',
-    controlItemBgActiveHover: '#304970',
+    controlItemBgActive: '#163C38',
+    controlItemBgActiveHover: '#204D48',
     controlOutline: darkWorkspacePalette.primary,
     borderRadius: 8
   }
 };
 
 export const darkEChartsTheme = {
-  color: [darkWorkspacePalette.primary, '#64D2A4', '#F4C95D', '#B794F4'],
+  color: [darkWorkspacePalette.primary, '#F0AE54', '#6CCBC2', '#E27A64'],
   backgroundColor: 'transparent',
   textStyle: { color: darkWorkspacePalette.textSecondary },
   title: {

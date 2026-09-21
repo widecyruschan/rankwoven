@@ -8194,3 +8194,47 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 
 - 在 WordPress 測試站執行一次「SEO 網站檢測」，再於客戶後台刷新 `/app/site-audit`，確認來源標籤和分數一致。
 - Docker 可用後按 `plugins/wordpress/TESTING.md` 補跑 PHP lint 和插件執行期回歸。
+
+## 會話總結（2026-09-21）— 客戶端與管理員後台 UI 工作台化
+
+### 會話主要目的
+
+優化 RankWoven 前端、客戶端後台及管理員後台的視覺層級與操作辨識度。
+
+### 完成的主要任務
+
+- 建立深青綠主色、琥珀色狀態點綴與低對比網格背景的共用 UI token，降低原有半透明漸變卡片的視覺噪音。
+- 重整側欄、頂欄、指標卡、內容面板、表格及 Tabs，讓資訊密度與可掃讀性更符合 SEO 分析工作台。
+- 客戶端工作流使用深青綠 Hero；管理員後台使用石墨 Hero 與琥珀色導覽／狀態提示，清楚區分兩種工作情境。
+- 補上行動版圖示選單、鍵盤 focus 樣式、進場動效及 `prefers-reduced-motion` 支援。
+- 同步 Ant Design Vue 暗色 token 與 ECharts 色盤，避免暗色模式回退為舊藍色系。
+
+### 關鍵決策和解決方案
+
+- 沿用既有 Vue 3、Ant Design Vue、Lucide 與 Vue I18n，不新增 UI 框架或改動任何業務資料流。
+- 保留既有 Instrument Sans、JetBrains Mono 與 Noto Sans TC 字體載入，避免引入僅在個別裝置可用的新字體。
+- 視覺採「分析工作台」而非行銷卡片堆疊：使用結構性邊框、緊湊表格與有限度動畫，讓數據和待辦優先被閱讀。
+
+### 使用的技術棧
+
+- Vue 3、TypeScript、Ant Design Vue、Lucide Vue、CSS Custom Properties、Vue I18n。
+
+### 新增或修改文件
+
+- `apps/web/src/App.vue`
+- `apps/web/src/styles.css`
+- `apps/web/src/theme/darkWorkspaceTheme.ts`
+- `README.md`
+
+### 驗證結果
+
+- `git diff --check` 通過。
+- `npm run lint` 通過。
+- `npm run test -w @aieo/web` 通過（20 tests）。
+- `npm run build -w @aieo/web` 通過；保留既有 Ant Design Vue bundle 大小警告。
+- 本地前台頁面可正常載入；未使用登入憑據，因此受保護客戶端／管理員路由的真實資料流程未作登入後手動驗證。
+
+### 下一步行動清單
+
+- 使用既有測試帳戶於桌面及手機 viewport 走查 `/app`、`/admin`、表格和設定頁的真實資料狀態。
+- 後續若要再提升資訊密度，可按頁面優先級逐一優化 Site Audit、Keyword Research 與任務隊列的專用版面。

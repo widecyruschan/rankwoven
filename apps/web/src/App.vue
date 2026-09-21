@@ -13,6 +13,7 @@ import {
   ListChecks,
   LogIn,
   LogOut,
+  Menu,
   Search,
   PlugZap,
   Settings,
@@ -188,7 +189,7 @@ function logout() {
     </footer>
   </div>
 
-  <a-layout v-else class="app-shell">
+  <a-layout v-else class="app-shell" :data-workspace="isAdminLayout ? 'admin' : 'customer'">
     <a-layout-sider class="sidebar" :class="{ 'sidebar-open': isNavigationOpen }" width="272">
       <div class="brand">
         <img class="brand-logo" :src="rankwovenLogoSource" alt="RankWoven">
@@ -215,13 +216,21 @@ function logout() {
       </a-menu>
     </a-layout-sider>
 
-    <a-layout class="main-panel">
+    <a-layout :class="['main-panel', { 'main-panel--admin': isAdminLayout }]">
       <a-layout-header class="topbar">
-        <a-button class="menu-button" type="button" @click="toggleNavigation">
-          {{ t('app.menu') }}
+        <a-button
+          class="menu-button"
+          type="text"
+          :aria-label="t('app.menu')"
+          :title="t('app.menu')"
+          @click="toggleNavigation"
+        >
+          <template #icon>
+            <Menu :size="19" aria-hidden="true" />
+          </template>
         </a-button>
         <div class="topbar-context">
-          <p>{{ topbarPhase }}</p>
+          <p class="topbar-phase">{{ topbarPhase }}</p>
           <a-breadcrumb v-if="breadcrumbs.length > 0" class="app-breadcrumb">
             <a-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.id">{{ t(crumb.titleKey ?? '') }}</a-breadcrumb-item>
           </a-breadcrumb>
@@ -256,7 +265,7 @@ function logout() {
         </div>
       </a-layout-header>
 
-      <a-layout-content>
+      <a-layout-content class="workspace-content">
         <RouterView />
       </a-layout-content>
     </a-layout>
