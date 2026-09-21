@@ -8063,6 +8063,37 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 - 可選設定 `BRAVE_SEARCH_API_KEY` 強化需求交叉驗證。
 - 授權後再 commit／push／deploy。
 
+## 會話總結（2026-09-21）— 推 main 部署免費關鍵詞研究
+
+### 會話主要目的
+
+將免費長尾／競品內容缺口功能推送到 `main` 並完成生產部署。
+
+### 完成的主要任務
+
+- 提交 `c6b124d` 功能與後續測試修正 `89df91e`、`75ed09b`。
+- Production Deploy 成功：https://github.com/widecyruschan/rankwoven/actions/runs/35553301522
+- 驗證 `https://api.rankwoven.com/health` 正常。
+
+### 關鍵決策和解決方案
+
+- 首次部署因 worker fetch 次數與 ENTITLEMENT 斷言失敗；已對齊免費 Provider 行為後重推。
+
+### 新增或修改文件
+
+- `apps/worker/tests/worker.test.ts`
+- `apps/api/tests/phase2Routes.test.ts`
+- `README.md`（本會話總結）
+
+### 驗證結果
+
+- GitHub Actions Production Deploy：success
+- API health：success
+
+### 下一步行動清單
+
+- 工作區 dirty 仍有 Site Audit／WordPress／GSC 無關改動，未納入本次部署。
+
 ## 會話總結（2026-09-21）— 客戶後台 SEO 網站檢測、插件分類與 GSC 頁面數據
 
 ### 會話主要目的
