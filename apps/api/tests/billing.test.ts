@@ -15,6 +15,7 @@ import type { AuthRepository, AuthUser } from '../src/auth';
 import { createServer } from '../src/server';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
+const testCurrentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString();
 
 class TestBillingProvider implements BillingProvider {
   receivedWebhookBody = '';
@@ -25,7 +26,7 @@ class TestBillingProvider implements BillingProvider {
     priceRef: 'price_growth',
     status: 'active',
     currentPeriodStart: '2026-09-01T00:00:00.000Z',
-    currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+    currentPeriodEnd: testCurrentPeriodEnd,
     cancelAtPeriodEnd: false,
     providerUpdatedAt: '2026-09-16T00:00:00.000Z'
   };
@@ -47,7 +48,7 @@ class TestBillingProvider implements BillingProvider {
       immediateAmount: input.plan.unitAmount,
       nextPeriodAmount: input.plan.unitAmount,
       currency: input.plan.currency,
-      expiresAt: '2026-10-01T00:00:00.000Z'
+      expiresAt: testCurrentPeriodEnd
     };
   }
 
@@ -208,7 +209,7 @@ describe('PH2-11 billing routes', () => {
     expect(cancel.json().data.subscription.cancelAtPeriodEnd).toBe(true);
 
     const entitlement = await phase2Repository.findActiveEntitlement(workspaceId, 'keyword_research');
-    expect(entitlement).toMatchObject({ limitValue: 2000, expiresAt: '2026-10-01T00:00:00.000Z' });
+    expect(entitlement).toMatchObject({ limitValue: 2000, expiresAt: testCurrentPeriodEnd });
 
     const resume = await server.inject({
       method: 'POST',

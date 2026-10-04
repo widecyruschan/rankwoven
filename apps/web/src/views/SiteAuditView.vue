@@ -65,6 +65,15 @@ import type {
   SeoAuditIssue,
   OptimizationSuggestion
 } from '../api/siteConnections';
+import {
+  getSeoAuditEffort,
+  getSeoAuditHealthScore,
+  getSeoAuditImpact,
+  getSeoAuditPopulation,
+  getSeoAuditPriority,
+  getSeoAuditScope,
+  sortSeoAuditIssues
+} from '../utils/seoAuditPresentation';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -188,13 +197,14 @@ const canonicalCategoryOptions = computed(() => [
 ]);
 
 const filteredSeoIssues = computed(() => {
-  if (seoCategoryFilter.value === 'all') return latestSeoIssues.value;
-  return latestSeoIssues.value.filter((issue) => getCanonicalSeoCategory(issue.category) === seoCategoryFilter.value);
+  const activeIssues = latestSeoIssues.value.filter((issue) => issue.affectedPages !== 0);
+  if (seoCategoryFilter.value === 'all') return activeIssues;
+  return activeIssues.filter((issue) => getCanonicalSeoCategory(issue.category) === seoCategoryFilter.value);
 });
 
 const seoCategoryCounts = computed(() => {
   const counts = new Map<string, number>();
-  for (const issue of latestSeoIssues.value) {
+  for (const issue of latestSeoIssues.value.filter((item) => item.affectedPages !== 0)) {
     const category = getCanonicalSeoCategory(issue.category);
     counts.set(category, (counts.get(category) ?? 0) + 1);
   }
@@ -204,14 +214,55 @@ const seoCategoryCounts = computed(() => {
 });
 
 const seoIssueDistribution = computed(() => {
-  const counts = { error: 0, warning: 0, notice: 0, total: latestSeoIssues.value.length };
-  for (const issue of latestSeoIssues.value) {
+  const activeIssues = latestSeoIssues.value.filter((issue) => issue.affectedPages !== 0);
+  const counts = { error: 0, warning: 0, notice: 0, total: activeIssues.length };
+  for (const issue of activeIssues) {
     const providerSeverity = issue.metadata?.providerSeverity;
     if (providerSeverity === 'error' || issue.severity === 'high') counts.error += 1;
     else if (providerSeverity === 'warning' || issue.severity === 'medium') counts.warning += 1;
     else counts.notice += 1;
   }
   return counts;
+});
+
+const seoAuditScope = computed(() => {
+  return getSeoAuditScope(
+    latestSeoAudit.value?.metadata,
+    getAhrefsCrawledUrls(latestSeoAudit.value),
+    syncedContent.value.length,
+    syncedMedia.value.length
+  );
+});
+
+const prioritizedSeoIssues = computed(() =>
+  sortSeoAuditIssues(filteredSeoIssues.value, getIssuePopulation)
+);
+
+const topSeoActions = computed(() => {
+  return sortSeoAuditIssues(
+    latestSeoIssues.value.filter((issue) => issue.affectedPages !== 0),
+    getIssuePopulation
+  ).slice(0, 3);
+});
+
+const seoCategoryHealth = computed(() => {
+  const grouped = new Map<string, SeoAuditIssue[]>();
+  for (const issue of latestSeoIssues.value.filter((item) => item.affectedPages !== 0)) {
+    const category = getCanonicalSeoCategory(issue.category);
+    const current = grouped.get(category) ?? [];
+    current.push(issue);
+    grouped.set(category, current);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([category, issues]) => {
+      return {
+        category,
+        count: issues.length,
+        score: getSeoAuditHealthScore(issues, getIssuePopulation)
+      };
+    })
+    .sort((left, right) => left.score - right.score);
 });
 
 const isLatestAuditFromPlugin = computed(() =>
@@ -230,20 +281,23 @@ const ahrefsIssueDistribution = computed(() => {
 });
 
 const seoIssueColumns = computed(() => [
+  { title: tc('priority'), key: 'priority', width: 90 },
   { title: tc('category'), dataIndex: 'category', key: 'category', width: 150 },
   { title: tc('severity'), dataIndex: 'severity', key: 'severity', width: 100 },
   { title: tc('issueTitle'), dataIndex: 'message', key: 'message', ellipsis: true },
   { title: tc('recommendationSource'), dataIndex: 'source', key: 'source', width: 120 },
   { title: tc('issueAffectedUrl'), key: 'targetUrl', ellipsis: true, width: 240 },
   { title: tc('affected'), dataIndex: 'affectedPages', key: 'affectedPages', width: 110 },
+  { title: tc('impact'), key: 'impact', width: 90 },
+  { title: tc('effort'), key: 'effort', width: 90 },
   { title: tc('change'), dataIndex: 'change', key: 'change', width: 100 },
   { title: tc('issueRecommendation'), dataIndex: 'suggestedValue', key: 'suggestedValue', ellipsis: true, width: 280 },
   { title: tc('action'), key: 'action', width: 120 }
 ]);
 
-// Keep the legacy Ahrefs section compatible while the unified SEO audit table
-// becomes the primary customer-facing view.
-const ahrefsIssueColumns = seoIssueColumns;
+const ahrefsIssueColumns = computed(() => seoIssueColumns.value.filter((column) =>
+  !['priority', 'impact', 'effort'].includes(column.key)
+));
 
 const issueColumns = computed(() => [
   {
@@ -625,6 +679,22 @@ function getIssueTargetUrlForRow(record: Record<string, unknown>) {
   return getIssueTargetUrl(record as unknown as SeoAuditIssue);
 }
 
+function getIssuePopulation(issue: SeoAuditIssue) {
+  return getSeoAuditPopulation(issue, seoAuditScope.value);
+}
+
+function getSeoAuditPriorityForRow(record: Record<string, unknown>) {
+  return getSeoAuditPriority(record as unknown as SeoAuditIssue, getIssuePopulation);
+}
+
+function getSeoAuditImpactForRow(record: Record<string, unknown>) {
+  return getSeoAuditImpact(record as unknown as SeoAuditIssue, getIssuePopulation);
+}
+
+function getSeoAuditEffortForRow(record: Record<string, unknown>) {
+  return getSeoAuditEffort(record as unknown as SeoAuditIssue);
+}
+
 function handleIssueFixForRow(record: Record<string, unknown>) {
   void handleIssueFix(record as unknown as SeoAuditIssue);
 }
@@ -643,6 +713,10 @@ function expandedSeoIssueRow({ record }: { record: SeoAuditIssue }) {
   const suggestion = getSuggestionForIssue(record);
   const targetUrl = getIssueTargetUrl(record);
   return h('div', { class: 'issue-expanded-row' }, [
+    h('div', { class: 'issue-detail-section' }, [
+      h('div', { class: 'issue-detail-label' }, tc('issueEvidence')),
+      h('p', { class: 'issue-detail-text' }, `${record.ruleCode} · ${tc(`priority_${getSeoAuditPriority(record, getIssuePopulation)}`)} · ${tc('impact')} ${getSeoAuditImpact(record, getIssuePopulation)}`)
+    ]),
     h('div', { class: 'issue-detail-section' }, [
       h('div', { class: 'issue-detail-label' }, tc('issueCurrentValue')),
       h('p', { class: 'issue-detail-text' }, record.currentValue || '-')
@@ -1093,6 +1167,50 @@ onMounted(async () => {
             </Col>
           </Row>
 
+          <div class="audit-scope-strip">
+            <span class="audit-scope-label">{{ tc('auditScope') }}</span>
+            <span>{{ tc('auditScopePages') }} <strong>{{ seoAuditScope.pages }}</strong></span>
+            <span>{{ tc('auditScopeArticles') }} <strong>{{ seoAuditScope.articles }}</strong></span>
+            <span>{{ tc('auditScopeMedia') }} <strong>{{ seoAuditScope.media }}</strong></span>
+            <span>{{ tc('rulesVersion') }} <strong>{{ latestSeoAudit.rulesVersion }}</strong></span>
+          </div>
+
+          <div v-if="topSeoActions.length > 0" class="audit-action-plan">
+            <div class="audit-action-plan-header">
+              <div>
+                <h3>{{ tc('actionPlanTitle') }}</h3>
+                <p>{{ tc('actionPlanDescription') }}</p>
+              </div>
+              <Tag color="orange">{{ tc('actionPlanSorted') }}</Tag>
+            </div>
+            <div v-for="issue in topSeoActions" :key="issue.id" class="audit-action-item">
+              <Tag :color="getSeoAuditPriority(issue, getIssuePopulation) === 'P1' ? 'red' : getSeoAuditPriority(issue, getIssuePopulation) === 'P2' ? 'orange' : 'blue'">
+                {{ tc(`priority_${getSeoAuditPriority(issue, getIssuePopulation)}`) }}
+              </Tag>
+              <span class="audit-action-title" :title="issue.message">{{ issue.message }}</span>
+              <span class="audit-action-meta">
+                {{ tc('impact') }} {{ getSeoAuditImpact(issue, getIssuePopulation) }} ·
+                {{ issue.affectedPages ?? 1 }} {{ tc('affectedPagesUnit') }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="seoCategoryHealth.length > 0" class="audit-area-grid">
+            <div v-for="area in seoCategoryHealth" :key="area.category" class="audit-area-item">
+              <div class="audit-area-heading">
+                <span>{{ tc(`ahrefsCategory_${area.category}`) }}</span>
+                <strong>{{ area.score }}</strong>
+              </div>
+              <Progress
+                :percent="area.score"
+                :show-info="false"
+                size="small"
+                :stroke-color="area.score >= 80 ? '#52c41a' : area.score >= 60 ? '#faad14' : '#ff4d4f'"
+              />
+              <span class="audit-area-meta">{{ area.count }} {{ tc('issues') }}</span>
+            </div>
+          </div>
+
           <div class="audit-category-toolbar">
             <Select
               v-model:value="seoCategoryFilter"
@@ -1108,9 +1226,9 @@ onMounted(async () => {
           </div>
 
           <Table
-            v-if="filteredSeoIssues.length > 0"
+            v-if="prioritizedSeoIssues.length > 0"
             :columns="seoIssueColumns"
-            :data-source="filteredSeoIssues"
+            :data-source="prioritizedSeoIssues"
             :pagination="{ pageSize: 10 }"
             :expanded-row-render="expandedSeoIssueRow"
             :expand-row-by-click="true"
@@ -1119,6 +1237,14 @@ onMounted(async () => {
             class="issues-table"
           >
             <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'priority'">
+                <Tag
+                  :color="getSeoAuditPriorityForRow(record) === 'P1' ? 'red' : getSeoAuditPriorityForRow(record) === 'P2' ? 'orange' : 'blue'"
+                  :title="tc(`priority_${getSeoAuditPriorityForRow(record)}`)"
+                >
+                  {{ getSeoAuditPriorityForRow(record) }}
+                </Tag>
+              </template>
               <template v-if="column.key === 'category'">
                 {{ tc(`ahrefsCategory_${getCanonicalSeoCategory(record.category)}`) }}
               </template>
@@ -1154,6 +1280,12 @@ onMounted(async () => {
               </template>
               <template v-if="column.key === 'affectedPages'">
                 {{ record.affectedPages ?? (getIssueTargetUrlForRow(record) || '-') }}
+              </template>
+              <template v-if="column.key === 'impact'">
+                {{ getSeoAuditImpactForRow(record) }}
+              </template>
+              <template v-if="column.key === 'effort'">
+                {{ tc(`effort_${getSeoAuditEffortForRow(record)}`) }}
               </template>
               <template v-if="column.key === 'action'">
                 <Button
@@ -1611,6 +1743,112 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
+.audit-scope-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  background: var(--color-surface-soft);
+}
+
+.audit-scope-label {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.audit-action-plan {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+}
+
+.audit-action-plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.audit-action-plan-header h3 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 15px;
+}
+
+.audit-action-plan-header p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.audit-action-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+}
+
+.audit-action-title {
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-action-meta,
+.audit-area-meta {
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.audit-area-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.audit-area-item {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+.audit-area-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.audit-area-heading strong {
+  color: var(--color-ink);
+  font-size: 16px;
+}
+
+.audit-area-meta {
+  display: block;
+  margin-top: 4px;
+}
+
 .ahrefs-audit-notice {
   margin-bottom: 20px;
 }
@@ -1743,6 +1981,18 @@ onMounted(async () => {
 @media (max-width: 720px) {
   .manual-audit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .audit-action-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .audit-action-meta {
+    grid-column: 2;
+  }
+
+  .audit-action-title {
+    white-space: normal;
   }
 }
 
