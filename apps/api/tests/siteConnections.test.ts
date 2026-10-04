@@ -3421,7 +3421,12 @@ describe('site connection routes', () => {
 
     expect(auditResponse.statusCode).toBe(201);
     expect(auditBody.data.audit.score).toBeLessThan(100);
-    expect(auditBody.data.audit.metadata).toMatchObject({ auditSource: 'wordpress-plugin' });
+    expect(auditBody.data.audit.metadata).toMatchObject({
+      auditSource: 'wordpress-plugin',
+      articleCount: 1,
+      mediaCount: 1,
+      issueCount: auditBody.data.issues.length
+    });
     expect(auditBody.data.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ruleCode: 'ARTICLE_TITLE_LENGTH' }),

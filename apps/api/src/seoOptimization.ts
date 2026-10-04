@@ -3577,6 +3577,9 @@ export function registerSeoOptimizationRoutes(
             healthScoreSource: ahrefs.report?.healthScore === undefined ? 'rankwoven_deterministic' : 'ahrefs',
             auditSource: parsedQuery.data.source,
             auditSourceRecordedAt: new Date().toISOString(),
+            articleCount: articles.length,
+            mediaCount: media.length,
+            issueCount: issues.length,
             ahrefs: ahrefs.report
               ? {
                   projectId: ahrefs.report.projectId,
