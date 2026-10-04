@@ -1994,14 +1994,6 @@ onMounted(async () => {
   .audit-action-title {
     white-space: normal;
   }
-
-  .config-item label {
-    display: block;
-  }
-
-  .config-item .ant-radio-group {
-    margin-left: 0;
-  }
 }
 
 .config-form {
@@ -2011,15 +2003,11 @@ onMounted(async () => {
 }
 
 .config-item label {
-  display: inline-block;
+  display: block;
   font-weight: 500;
   margin-bottom: 4px;
 }
-.config-item .ant-radio-group {
-  display: inline-flex;
-  flex-wrap: wrap;
-  margin-left: 10px;
-}
+
 .config-item .hint {
   display: block;
   color: #8c8c8c;
