@@ -8447,3 +8447,54 @@ Fastify、TypeScript、Zod、Vue 3、Ant Design Vue、Vue I18n、Ahrefs API v3�
 ### 下一步行動清單
 
 - 若未來來源文章仍使用「香港本地」，重跑匯入腳本會自動轉成「香港本地」。
+
+## 會話總結（2026-10-04）— 參考 jev-seo 優化客戶端 SEO 網站檢測
+
+### 會話主要目的
+
+參考 [jev-seo](https://github.com/AgriciDaniel/jev-seo) 的證據導向、問題分級與可執行修復思路，改善 RankWoven 客戶後台的 SEO 網站檢測呈現，不改動既有插件寫回安全邊界。
+
+### 完成的主要任務
+
+- 新增 SEO 審計問題呈現層工具，按嚴重程度、受影響頁面比例與變化量計算影響分，並分為 P1/P2/P3 優先級。
+- 新增修復成本估算（低／中／高），支援既有 rule code 與 metadata，不需要新增資料表。
+- 客戶端 SEO 檢測頁新增檢查範圍、規則版本、先處理清單、分類健康度及影響／成本欄位。
+- SEO 問題表改為按優先級與影響分排序，展開詳情時顯示規則代碼與優先級證據。
+- 審計 metadata 記錄文章數、媒體數及問題總數，讓前端顯示的檢查範圍來自審計快照。
+- 補齊英文與繁體中文介面文案及純函式測試。
+
+### 關鍵決策和解決方案
+
+- 沿用現有 `SeoAuditIssue`、Ahrefs 與 WordPress 插件同步結果，不另造平行審計管線。
+- 只在前端呈現層計算優先級與影響分；資料庫 schema 不變，舊審計結果仍可正常顯示。
+- 影響分只用於排序與工作安排，不宣稱排名、流量或營收預測；外部爬蟲／Ahrefs 證據仍以原始資料為準。
+
+### 使用的技術棧
+
+- Vue 3、TypeScript、Ant Design Vue、Vue I18n、Vitest、Fastify、PostgreSQL JSON metadata。
+
+### 新增或修改文件
+
+- `apps/web/src/utils/seoAuditPresentation.ts`
+- `apps/web/tests/seoAuditPresentation.test.ts`
+- `apps/web/src/views/SiteAuditView.vue`
+- `apps/web/src/i18n.ts`
+- `apps/api/src/seoOptimization.ts`
+- `apps/api/tests/billing.test.ts`
+- `apps/api/tests/siteConnections.test.ts`
+- `package-lock.json`
+- `README.md`
+
+### 驗證結果
+
+- Web 全套測試：34 passed；全倉庫合計 206 passed、8 skipped。
+- Web build：通過；保留既有大型 Ant Design Vue bundle warning。
+- API 帳單與站點連接／審計測試：51 passed。
+- 將帳單測試的固定過期日期改為相對日期，避免測試隨日曆時間失效。
+- 依賴鎖文件升級至安全補丁版本，`npm audit --audit-level=high` 為 0 vulnerabilities。
+- 全倉庫 ESLint 與 `git diff --check`：通過。
+
+### 下一步行動清單
+
+- 在具備測試站點資料的登入環境抽查客戶後台 `/app/site-audit` 的桌面與行動版表格密度。
+- 後續可把 jev-seo 的 crawl、sitemap、canonical、結構化資料與 AI crawler 規則逐步納入 RankWoven 原生審計規則，並為每條規則補官方來源 URL。
